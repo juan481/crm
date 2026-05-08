@@ -1,0 +1,444 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Multi-tenant White-label organizations ────────────────────────────────
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  logoUrl        String?
+  primaryColor   String   @default("#6366f1")
+  secondaryColor String   @default("#8b5cf6")
+  domain         String?  @unique
+  crmName        String   @default("CRM Pro")
+  smtpHost       String?
+  smtpPort       Int?
+  smtpUser       String?
+  smtpPass       String?
+  smtpFrom       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users          User[]
+  clients        Client[]
+  plugins        PluginConfig[]
+  emailCampaigns EmailCampaign[]
+  emailTemplates EmailTemplate[]
+  services       Service[]
+  events         Event[]
+  folders        Folder[]
+  documents      Document[]
+  deals          Deal[]
+  tasks          Task[]
+  tickets        Ticket[]
+}
+
+// ─── Users & Auth ──────────────────────────────────────────────────────────
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  name                String
+  passwordHash        String
+  role                String   @default("SELLER")
+  status              String   @default("ACTIVE")
+  onboardingCompleted Boolean  @default(false)
+  forcePasswordChange Boolean  @default(false)
+  avatarUrl           String?
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  notes          Note[]
+  activityLogs   ActivityLog[]
+  sessions       Session[]
+  assignedClients Client[]     @relation("SellerClients")
+  sales          Sale[]
+  uploadedDocs   Document[]
+  emailTemplates EmailTemplate[]
+  ownedDeals     Deal[]        @relation("DealOwner")
+  assignedTasks  Task[]        @relation("TaskAssignee")
+  createdTasks   Task[]        @relation("TaskCreator")
+  assignedTickets Ticket[]     @relation("TicketAssignee")
+  createdTickets  Ticket[]     @relation("TicketCreator")
+  ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ─── Services catalog ──────────────────────────────────────────────────────
+model Service {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  price          Float    @default(0)
+  currency       String   @default("USD")
+  billingCycle   String   @default("MONTHLY")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clients        Client[]
+  sales          Sale[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ─── Clients ───────────────────────────────────────────────────────────────
+model Client {
+  id             String   @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  country        String?
+  city           String?
+  address        String?
+  postalCode     String?
+  province       String?
+  website        String?
+  status         String   @default("ACTIVE")
+  isEnabled      Boolean  @default(true)
+  clientType     String   @default("B2B")
+  serviceType    String?
+  tags           String   @default("[]")
+  mrr            Float    @default(0)
+  contractStart  DateTime?
+  contractEnd    DateTime?
+  serviceId      String?
+  service        Service?  @relation(fields: [serviceId], references: [id])
+  // Licencia
+  licenseSerial      String?
+  licenseVersion     String?
+  maxWorkstations    Int?
+  subscriptionStart  DateTime?
+  subscriptionEnd    DateTime?
+  licenseHibernated  Boolean  @default(false)
+  licenseRepurchased Boolean  @default(false)
+  isActive24x7       Boolean  @default(false)
+  // Comercial
+  distributorName  String?
+  totalInvestment  Float?
+  renewalCount     Int      @default(0)
+  assignedSellerId String?
+  assignedSeller   User?    @relation("SellerClients", fields: [assignedSellerId], references: [id])
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  invoices     Invoice[]
+  notes        Note[]
+  activityLogs ActivityLog[]
+  contacts     Contact[]
+  sales        Sale[]
+  documents    Document[]
+  deals        Deal[]
+  tasks        Task[]
+  tickets      Ticket[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([clientType])
+  @@index([assignedSellerId])
+}
+
+model Contact {
+  id        String  @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  whatsapp  String?
+  role      String?
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// ─── Invoices ──────────────────────────────────────────────────────────────
+model Invoice {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amount      Float
+  currency    String   @default("USD")
+  status      String   @default("PENDING")
+  description String?
+  dueDate     DateTime
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Timeline Notes (legacy, kept for compatibility) ──────────────────────
+model Note {
+  id        String   @id @default(cuid())
+  content   String
+  type      String   @default("NOTE")
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ─── Activity Log ──────────────────────────────────────────────────────────
+model ActivityLog {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String   @default("NOTE")
+  description String
+  metadata    String?
+  createdAt   DateTime @default(now())
+
+  @@index([clientId])
+  @@index([createdAt])
+}
+
+// ─── Sales ─────────────────────────────────────────────────────────────────
+model Sale {
+  id         String   @id @default(cuid())
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sellerId   String
+  seller     User     @relation(fields: [sellerId], references: [id])
+  serviceId  String?
+  service    Service? @relation(fields: [serviceId], references: [id])
+  amount     Float
+  currency   String   @default("USD")
+  closedAt   DateTime @default(now())
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([sellerId])
+  @@index([clientId])
+}
+
+// ─── Plugin System ─────────────────────────────────────────────────────────
+model PluginConfig {
+  id             String   @id @default(cuid())
+  pluginId       String
+  enabled        Boolean  @default(false)
+  config         String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([pluginId, organizationId])
+}
+
+// ─── Communications ────────────────────────────────────────────────────────
+model EmailCampaign {
+  id             String   @id @default(cuid())
+  name           String
+  subject        String
+  body           String
+  status         String   @default("DRAFT")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  recipients CampaignRecipient[]
+}
+
+model CampaignRecipient {
+  id         String        @id @default(cuid())
+  campaignId String
+  campaign   EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  email      String
+  name       String?
+  status     String        @default("pending")
+  sentAt     DateTime?
+  error      String?
+}
+
+// ─── Email Templates ───────────────────────────────────────────────────────
+model EmailTemplate {
+  id             String   @id @default(cuid())
+  name           String
+  subject        String
+  body           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ─── Events ────────────────────────────────────────────────────────────────
+model Event {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  eventDate      DateTime?
+  location       String?
+  isActive       Boolean  @default(true)
+  webhookSecret  String   @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  attendees EventAttendee[]
+
+  @@index([organizationId])
+}
+
+model EventAttendee {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+  company   String?
+  phone     String?
+  country   String?
+  email     String?
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+}
+
+// ─── Document Repository ───────────────────────────────────────────────────
+model Folder {
+  id             String   @id @default(cuid())
+  name           String
+  parentId       String?
+  parent         Folder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children       Folder[] @relation("FolderTree")
+  clientId       String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documents      Document[]
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model Document {
+  id             String   @id @default(cuid())
+  name           String
+  originalName   String
+  mimeType       String
+  size           Int
+  url            String
+  folderId       String?
+  folder         Folder?  @relation(fields: [folderId], references: [id])
+  clientId       String?
+  client         Client?  @relation(fields: [clientId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tags           String   @default("[]")
+  uploadedById   String
+  uploadedBy     User     @relation(fields: [uploadedById], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([clientId])
+}
+
+// ─── Sales Pipeline ────────────────────────────────────────────────────────
+model Deal {
+  id                String    @id @default(cuid())
+  title             String
+  amount            Float     @default(0)
+  currency          String    @default("USD")
+  probability       Int       @default(0)
+  stage             String    @default("LEAD")
+  expectedCloseDate DateTime?
+  closedAt          DateTime?
+  notes             String?
+  clientId          String?
+  client            Client?   @relation(fields: [clientId], references: [id])
+  ownerId           String
+  owner             User      @relation("DealOwner", fields: [ownerId], references: [id])
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([ownerId])
+  @@index([stage])
+}
+
+// ─── Tasks ─────────────────────────────────────────────────────────────────
+model Task {
+  id             String    @id @default(cuid())
+  title          String
+  description    String?
+  status         String    @default("PENDIENTE")
+  priority       String    @default("MEDIA")
+  dueDate        DateTime?
+  completedAt    DateTime?
+  assignedToId   String
+  assignedTo     User      @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdById    String
+  createdBy      User      @relation("TaskCreator", fields: [createdById], references: [id])
+  clientId       String?
+  client         Client?   @relation(fields: [clientId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+// ─── Support Tickets ───────────────────────────────────────────────────────
+model Ticket {
+  id             String    @id @default(cuid())
+  number         Int
+  title          String
+  description    String
+  status         String    @default("ABIERTO")
+  priority       String    @default("MEDIA")
+  category       String    @default("SOPORTE")
+  clientId       String?
+  client         Client?   @relation(fields: [clientId], references: [id])
+  assignedToId   String?
+  assignedTo     User?     @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  createdById    String
+  createdBy      User      @relation("TicketCreator", fields: [createdById], references: [id])
+  resolvedAt     DateTime?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       TicketMessage[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([number, organizationId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model TicketMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content    String
+  isInternal Boolean  @default(false)
+  userId     String
+  user       User     @relation("TicketMessageAuthor", fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+}
