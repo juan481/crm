@@ -32,7 +32,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }),
   ])
 
-  if (!dbUser || dbUser.status !== 'ACTIVE') redirect('/login')
+  if (!dbUser || dbUser.status !== 'ACTIVE') {
+    // Sign out so the middleware doesn't redirect back to /dashboard
+    await supabase.auth.signOut()
+    redirect('/login')
+  }
   if (!dbUser.onboardingCompleted) redirect('/onboarding')
 
   const user: User = {

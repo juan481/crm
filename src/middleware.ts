@@ -49,7 +49,13 @@ export async function middleware(req: NextRequest) {
   )
 
   // getUser() also refreshes the session if needed (updates supabaseResponse cookies)
-  const { data: { user } } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    // Supabase unavailable or env vars missing — treat as unauthenticated
+  }
 
   if (!isPublic && !user) {
     return NextResponse.redirect(new URL('/login', req.url))
