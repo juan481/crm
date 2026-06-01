@@ -10,22 +10,30 @@ export async function GET(req: NextRequest) {
     const { searchParams } = req.nextUrl
     const stage = searchParams.get('stage')
     const ownerId = searchParams.get('ownerId')
+    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit = Math.min(100, Number(searchParams.get('limit') ?? 50))
+    const skip = (page - 1) * limit
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
     if (stage) where.stage = stage
     if (ownerId) where.ownerId = ownerId
     if (payload.role === 'SELLER') where.ownerId = payload.userId
 
-    const deals = await prisma.deal.findMany({
-      where,
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        client: { select: { id: true, name: true, company: true } },
-        owner: { select: { id: true, name: true } },
-      },
-    })
+    const [deals, total] = await Promise.all([
+      prisma.deal.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          client: { select: { id: true, name: true, company: true } },
+          owner: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.deal.count({ where }),
+    ])
 
-    return NextResponse.json({ data: deals })
+    return NextResponse.json({ data: deals, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('[DEALS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

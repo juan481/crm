@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, canAccess, hashPassword } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/db'
 
 export async function GET() {
@@ -40,22 +41,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nombre, email y contraseña son requeridos' }, { status: 400 })
     }
 
+    if (role === 'SUPER_ADMIN' && payload.role !== 'SUPER_ADMIN') {
+      return NextResponse.json({ error: 'No podés crear un Super Admin' }, { status: 403 })
+    }
+
+    // Check duplicate in our DB
     const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
     if (exists) return NextResponse.json({ error: 'El email ya está registrado' }, { status: 400 })
 
-    // ADMIN cannot create SUPER_ADMIN
-    if (role === 'SUPER_ADMIN' && payload.role !== 'SUPER_ADMIN') {
-      return NextResponse.json({ error: 'No puedes crear un Super Admin' }, { status: 403 })
+    // 1. Create the user in Supabase Auth (admin API — no email verification needed)
+    const supabaseAdmin = createAdminClient()
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: email.toLowerCase(),
+      password,
+      email_confirm: true, // auto-confirm, no verification email
+    })
+    if (authError) {
+      return NextResponse.json({ error: `Supabase Auth: ${authError.message}` }, { status: 400 })
     }
 
-    const passwordHash = await hashPassword(password)
-    const user = await prisma.user.create({
+    // 2. Create the user record in our DB, linked to the Supabase user
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const user = await (prisma.user as any).create({
       data: {
-        name,
-        email: email.toLowerCase(),
-        passwordHash,
-        role: role || 'SELLER',
-        organizationId: payload.orgId,
+        supabaseId:         authData.user.id,
+        name:               name.trim(),
+        email:              email.toLowerCase(),
+        role:               role || 'SELLER',
+        organizationId:     payload.orgId,
         forcePasswordChange: true,
       },
       select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },

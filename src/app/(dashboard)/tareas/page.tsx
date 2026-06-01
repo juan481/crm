@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, CheckSquare, Square, Clock, AlertCircle, ChevronDown, Trash2,
   User, Calendar, Flag,
@@ -201,17 +200,12 @@ export default function TareasPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          <AnimatePresence initial={false}>
             {tasks.map((task) => {
               const overdue = isOverdue(task)
               return (
-                <motion.div
+                <div
                   key={task.id}
-                  layout
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className={`surface rounded-xl px-4 py-3 flex items-start gap-3 group transition-opacity ${
+                  className={`list-appear surface rounded-xl px-4 py-3 flex items-start gap-3 group transition-opacity ${
                     task.status === 'HECHA' ? 'opacity-60' : ''
                   }`}
                 >
@@ -270,10 +264,9 @@ export default function TareasPage() {
                   >
                     <Trash2 size={14} />
                   </button>
-                </motion.div>
+                </div>
               )
             })}
-          </AnimatePresence>
         </div>
       )}
 

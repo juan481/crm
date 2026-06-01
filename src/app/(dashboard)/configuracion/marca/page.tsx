@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -33,16 +33,22 @@ export default function MarcaPage() {
   const router = useRouter()
   const { user } = useAuthStore()
   const { crmName, primaryColor, secondaryColor, logoUrl, loadBranding, applyTheme } = useThemeStore()
-  const [saving, setSaving] = useState(false)
 
-  if (user && user.role !== 'SUPER_ADMIN') {
-    router.replace('/dashboard')
-    return null
-  }
+  // Todos los hooks ANTES de cualquier condicional (reglas de React)
+  const [saving, setSaving]               = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
-  const [previewPrimary, setPreviewPrimary] = useState(primaryColor)
+  const [previewPrimary, setPreviewPrimary]     = useState(primaryColor)
   const [previewSecondary, setPreviewSecondary] = useState(secondaryColor)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Redirección en useEffect, no durante render
+  useEffect(() => {
+    if (user && user.role !== 'SUPER_ADMIN') {
+      router.replace('/dashboard')
+    }
+  }, [user, router])
+
+  if (!user || user.role !== 'SUPER_ADMIN') return null
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -133,8 +139,8 @@ export default function MarcaPage() {
           <Shield size={20} className="text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">Marca Blanca</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">Personaliza el branding del CRM para tu organización</p>
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">Marca</h1>
+          <p className="text-sm text-[var(--color-text-muted)]">Personalizá el logo, nombre y colores del sistema</p>
         </div>
       </div>
 

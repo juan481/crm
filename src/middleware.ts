@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthPayload } from '@/lib/auth-edge'
+import { createServerClient } from '@supabase/ssr'
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout']
+const PUBLIC_PATHS = [
+  '/login',
+  '/forgot-password',
+  '/reset-password',
+  '/setup-cliente',
+  '/api/auth',
+]
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Allow Next.js internals and static assets
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/uploads') ||
@@ -15,25 +20,46 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow all /api/auth/* routes without token check
-  if (pathname.startsWith('/api/auth')) {
-    return NextResponse.next()
-  }
+  const isPublic = PUBLIC_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(p + '/')
+  )
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))
-  const payload = await getAuthPayload(req)
+  // Must be mutable so setAll can reassign it with updated cookies
+  let supabaseResponse = NextResponse.next({ request: req })
 
-  // Unauthenticated user trying to access protected route
-  if (!isPublic && !payload) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          // Write to the request (for subsequent middleware reads)
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+          // Write to the response (for the browser)
+          supabaseResponse = NextResponse.next({ request: req })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // getUser() also refreshes the session if needed (updates supabaseResponse cookies)
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!isPublic && !user) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  // Authenticated user trying to access login page
-  if (isPublic && payload && pathname === '/login') {
+  if (pathname === '/login' && user) {
     return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 
-  return NextResponse.next()
+  return supabaseResponse
 }
 
 export const config = {

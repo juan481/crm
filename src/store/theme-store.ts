@@ -65,9 +65,9 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       primaryColor: '#6366f1',
       secondaryColor: '#8b5cf6',
-      crmName: 'CRM Pro',
+      crmName: 'JustCRM',
       logoUrl: null,
-      darkMode: true,
+      darkMode: false,
 
       setPrimaryColor: (color) => {
         set({ primaryColor: color })

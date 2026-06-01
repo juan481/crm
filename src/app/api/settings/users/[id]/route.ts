@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, canAccess, hashPassword } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
@@ -27,7 +28,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (newPassword.length < 8) {
         return NextResponse.json({ error: 'Mínimo 8 caracteres' }, { status: 400 })
       }
-      updateData.passwordHash = await hashPassword(newPassword)
+      // Reset password in Supabase Auth via admin API
+      if (target.supabaseId) {
+        const admin = createAdminClient()
+        const { error } = await admin.auth.admin.updateUserById(target.supabaseId, {
+          password: newPassword,
+        })
+        if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      }
       updateData.forcePasswordChange = true
     }
 

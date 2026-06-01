@@ -22,14 +22,15 @@ import toast from 'react-hot-toast'
 const createSchema = z.object({
   name: z.string().min(2),
   email: z.string().email('Email inválido'),
-  role: z.enum(['ADMIN', 'SELLER']),
+  role: z.enum(['ADMIN', 'SELLER', 'TECHNICIAN']),
   password: z.string().min(8, 'Mínimo 8 caracteres'),
 })
 type CreateData = z.infer<typeof createSchema>
 
 const ROLE_OPTIONS = [
-  { value: 'SELLER', label: 'Vendedor' },
-  { value: 'ADMIN', label: 'Administrador' },
+  { value: 'SELLER',     label: 'Vendedor / Comercial' },
+  { value: 'TECHNICIAN', label: 'Técnico' },
+  { value: 'ADMIN',      label: 'Administrador' },
 ]
 
 export default function UsuariosPage() {

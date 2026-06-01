@@ -16,8 +16,8 @@ export async function GET(_: NextRequest, { params }: Params) {
     const client = await prisma.client.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       include: {
-        invoices: { orderBy: { createdAt: 'desc' } },
-        contacts: { orderBy: { createdAt: 'desc' } },
+        invoices: { orderBy: { createdAt: 'desc' }, take: 15 },
+        contacts: { orderBy: { createdAt: 'desc' }, take: 30 },
         activityLogs: {
           orderBy: { createdAt: 'desc' },
           take: 50,
@@ -25,6 +25,7 @@ export async function GET(_: NextRequest, { params }: Params) {
         },
         sales: {
           orderBy: { closedAt: 'desc' },
+          take: 20,
           include: {
             seller: { select: { id: true, name: true } },
             service: { select: { id: true, name: true, currency: true } },

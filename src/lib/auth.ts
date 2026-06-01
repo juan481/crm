@@ -1,67 +1,40 @@
-import jwt from 'jsonwebtoken'
-import bcrypt from 'bcryptjs'
-import { cookies } from 'next/headers'
-import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@/lib/db'
 import type { AuthPayload, Role } from '@/types'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret'
-const COOKIE_NAME = 'crm_token'
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
-
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12)
-}
-
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash)
-}
-
-export function signToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
-}
-
-export function verifyToken(token: string): AuthPayload | null {
-  try {
-    return jwt.verify(token, JWT_SECRET) as AuthPayload
-  } catch {
-    return null
-  }
-}
-
-export function setAuthCookie(token: string): void {
-  cookies().set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: COOKIE_MAX_AGE,
-    path: '/',
-  })
-}
-
-export function clearAuthCookie(): void {
-  cookies().set(COOKIE_NAME, '', { maxAge: 0, path: '/' })
-}
-
-export function getTokenFromCookies(): string | null {
-  try {
-    return cookies().get(COOKIE_NAME)?.value ?? null
-  } catch {
-    return null
-  }
-}
-
-export function getTokenFromRequest(req: NextRequest): string | null {
-  return req.cookies.get(COOKIE_NAME)?.value ?? null
-}
-
-export async function getCurrentUser(req?: NextRequest): Promise<AuthPayload | null> {
-  const token = req ? getTokenFromRequest(req) : getTokenFromCookies()
-  if (!token) return null
-  return verifyToken(token)
-}
-
-// Role hierarchy check
+// canAccess remains unchanged — used by all API routes
 export function canAccess(userRole: Role, requiredRole: Role): boolean {
-  const hierarchy: Record<Role, number> = { SUPER_ADMIN: 3, ADMIN: 2, SELLER: 1 }
+  const hierarchy: Record<Role, number> = {
+    SUPER_ADMIN: 3,
+    ADMIN: 2,
+    SELLER: 1,
+    TECHNICIAN: 0,
+  }
   return hierarchy[userRole] >= hierarchy[requiredRole]
+}
+
+// Returns the same AuthPayload shape as before — no changes needed in API routes
+export async function getCurrentUser(): Promise<AuthPayload | null> {
+  try {
+    const supabase = await createClient()
+    const { data: { user: supabaseUser } } = await supabase.auth.getUser()
+    if (!supabaseUser) return null
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const user = await (prisma.user as any).findUnique({
+      where: { supabaseId: supabaseUser.id },
+      select: { id: true, organizationId: true, role: true, email: true, status: true },
+    })
+
+    if (!user || user.status !== 'ACTIVE') return null
+
+    return {
+      userId: user.id,
+      orgId:  user.organizationId,
+      role:   user.role as Role,
+      email:  user.email,
+    }
+  } catch {
+    return null
+  }
 }

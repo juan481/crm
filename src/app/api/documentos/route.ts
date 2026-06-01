@@ -15,7 +15,11 @@ export async function GET(req: NextRequest) {
     const folderId = searchParams.get('folderId') ?? null
     const clientId = searchParams.get('clientId') ?? null
 
-    const [folders, documents] = await Promise.all([
+    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit = Math.min(100, Number(searchParams.get('limit') ?? 50))
+    const skip = (page - 1) * limit
+
+    const [folders, documents, total] = await Promise.all([
       prisma.folder.findMany({
         where: {
           organizationId: payload.orgId,
@@ -31,14 +35,23 @@ export async function GET(req: NextRequest) {
           folderId,
           ...(clientId && { clientId }),
         },
+        skip,
+        take: limit,
         include: { uploadedBy: { select: { name: true } } },
         orderBy: { createdAt: 'desc' },
+      }),
+      prisma.document.count({
+        where: {
+          organizationId: payload.orgId,
+          folderId,
+          ...(clientId && { clientId }),
+        },
       }),
     ])
 
     const docsWithTags = documents.map((d) => ({ ...d, tags: parseJsonArray(d.tags) }))
 
-    return NextResponse.json({ data: { folders, documents: docsWithTags } })
+    return NextResponse.json({ data: { folders, documents: docsWithTags }, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('[DOCS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

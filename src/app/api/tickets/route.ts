@@ -13,24 +13,33 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get('category')
     const clientId = searchParams.get('clientId')
 
+    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit = Math.min(100, Number(searchParams.get('limit') ?? 50))
+    const skip = (page - 1) * limit
+
     const where: Record<string, unknown> = { organizationId: payload.orgId }
     if (status) where.status = status
     if (priority) where.priority = priority
     if (category) where.category = category
     if (clientId) where.clientId = clientId
 
-    const tickets = await prisma.ticket.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        client: { select: { id: true, name: true } },
-        assignedTo: { select: { id: true, name: true } },
-        createdBy: { select: { id: true, name: true } },
-        _count: { select: { messages: true } },
-      },
-    })
+    const [tickets, total] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          client: { select: { id: true, name: true } },
+          assignedTo: { select: { id: true, name: true } },
+          createdBy: { select: { id: true, name: true } },
+          _count: { select: { messages: true } },
+        },
+      }),
+      prisma.ticket.count({ where }),
+    ])
 
-    return NextResponse.json({ data: tickets })
+    return NextResponse.json({ data: tickets, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('[TICKETS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

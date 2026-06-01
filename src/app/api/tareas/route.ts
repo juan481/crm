@@ -12,23 +12,32 @@ export async function GET(req: NextRequest) {
     const assignedToId = searchParams.get('assignedToId')
     const clientId = searchParams.get('clientId')
 
+    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit = Math.min(200, Number(searchParams.get('limit') ?? 50))
+    const skip = (page - 1) * limit
+
     const where: Record<string, unknown> = { organizationId: payload.orgId }
     if (status) where.status = status
     if (assignedToId) where.assignedToId = assignedToId
     if (clientId) where.clientId = clientId
     if (payload.role === 'SELLER') where.assignedToId = payload.userId
 
-    const tasks = await prisma.task.findMany({
-      where,
-      orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-        createdBy: { select: { id: true, name: true } },
-        client: { select: { id: true, name: true } },
-      },
-    })
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+        include: {
+          assignedTo: { select: { id: true, name: true } },
+          createdBy: { select: { id: true, name: true } },
+          client: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.task.count({ where }),
+    ])
 
-    return NextResponse.json({ data: tasks })
+    return NextResponse.json({ data: tasks, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('[TASKS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

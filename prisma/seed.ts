@@ -1,7 +1,22 @@
 import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import { createClient } from '@supabase/supabase-js'
 
 const prisma = new PrismaClient()
+
+// NOTE: For dev seed to work, set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env
+async function getOrCreateSupabaseUser(email: string, password: string) {
+  const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
+  const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  if (!supabaseUrl || !serviceKey) return null // skip Supabase creation if keys not set
+
+  const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  const { data: list } = await admin.auth.admin.listUsers()
+  const existing = list?.users?.find(u => u.email === email)
+  if (existing) return existing.id
+
+  const { data } = await admin.auth.admin.createUser({ email, password, email_confirm: true })
+  return data.user?.id ?? null
+}
 
 async function main() {
   // ─── Organización ────────────────────────────────────────────────
@@ -18,47 +33,47 @@ async function main() {
   })
 
   // ─── Usuarios ────────────────────────────────────────────────────
-  const superAdminHash = await bcrypt.hash('Admin123!', 12)
+  const superAdminSupabaseId = await getOrCreateSupabaseUser('superadmin@crmpro.com', 'Admin123!')
   const superAdmin = await prisma.user.upsert({
     where: { email: 'superadmin@crmpro.com' },
     update: {},
     create: {
       email: 'superadmin@crmpro.com',
       name: 'Carlos Méndez',
-      passwordHash: superAdminHash,
+      ...(superAdminSupabaseId && { supabaseId: superAdminSupabaseId }),
       role: 'SUPER_ADMIN',
       organizationId: org.id,
       onboardingCompleted: true,
-    },
-  })
+    } as Record<string, unknown>,
+  } as Parameters<typeof prisma.user.upsert>[0])
 
-  const adminHash = await bcrypt.hash('Admin123!', 12)
+  const adminSupabaseId = await getOrCreateSupabaseUser('admin@crmpro.com', 'Admin123!')
   const admin = await prisma.user.upsert({
     where: { email: 'admin@crmpro.com' },
     update: {},
     create: {
       email: 'admin@crmpro.com',
       name: 'Laura Gómez',
-      passwordHash: adminHash,
+      ...(adminSupabaseId && { supabaseId: adminSupabaseId }),
       role: 'ADMIN',
       organizationId: org.id,
       onboardingCompleted: true,
-    },
-  })
+    } as Record<string, unknown>,
+  } as Parameters<typeof prisma.user.upsert>[0])
 
-  const sellerHash = await bcrypt.hash('Seller123!', 12)
+  const sellerSupabaseId = await getOrCreateSupabaseUser('vendedor@crmpro.com', 'Seller123!')
   const seller = await prisma.user.upsert({
     where: { email: 'vendedor@crmpro.com' },
     update: {},
     create: {
       email: 'vendedor@crmpro.com',
       name: 'Martín Torres',
-      passwordHash: sellerHash,
+      ...(sellerSupabaseId && { supabaseId: sellerSupabaseId }),
       role: 'SELLER',
       organizationId: org.id,
       onboardingCompleted: true,
-    },
-  })
+    } as Record<string, unknown>,
+  } as Parameters<typeof prisma.user.upsert>[0])
 
   // ─── Clientes ────────────────────────────────────────────────────
   const clientsData = [

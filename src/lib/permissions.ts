@@ -31,6 +31,10 @@ type Action =
   | 'tickets:manage'
 
 const PERMISSIONS: Record<Role, Action[]> = {
+  TECHNICIAN: [
+    'tasks:view', 'tasks:create', 'tasks:edit',
+    'tickets:view', 'tickets:create',
+  ],
   SUPER_ADMIN: [
     'clients:view_all', 'clients:view_own', 'clients:create', 'clients:edit',
     'clients:delete', 'clients:bulk_delete',

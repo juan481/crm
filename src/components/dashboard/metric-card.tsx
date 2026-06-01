@@ -1,9 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 interface MetricCardProps {
   title: string
@@ -41,10 +39,12 @@ export function MetricCard({
         </div>
         {trend !== undefined && (
           <div
-            className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
-              isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-            )}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+            style={
+              isPositive
+                ? { background: '#dcfce7', color: '#16a34a' }
+                : { background: '#fee2e2', color: '#dc2626' }
+            }
           >
             {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
             {Math.abs(trend)}%
@@ -53,34 +53,42 @@ export function MetricCard({
       </div>
 
       <div className="flex-1">
-        <p className="text-2xl font-bold text-[var(--color-text)] mb-0.5">{value}</p>
-        <p className="text-sm font-medium text-[var(--color-text-muted)]">{title}</p>
+        <p className="text-2xl font-bold mb-0.5" style={{ color: 'var(--color-text)' }}>
+          {value}
+        </p>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
+          {title}
+        </p>
         {(subtitle || trendLabel) && (
-          <p className="text-xs text-[var(--color-text-subtle)] mt-1">{trendLabel ?? subtitle}</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+            {trendLabel ?? subtitle}
+          </p>
         )}
       </div>
 
       {href && (
-        <p className="flex items-center gap-1 mt-3 text-xs font-medium text-[var(--color-primary)] opacity-0 group-hover:opacity-100 transition-opacity">
+        <p
+          className="flex items-center gap-1 mt-3 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ color: 'var(--color-primary)' }}
+        >
           Ver detalle <ArrowRight size={11} />
         </p>
       )}
     </>
   )
 
-  const cls = 'surface rounded-2xl p-5 flex flex-col group hover:-translate-y-0.5 hover:shadow-card transition-all duration-200'
+  const cls =
+    'surface rounded-2xl p-5 flex flex-col group hover:-translate-y-0.5 hover:shadow-card transition-all duration-200 list-appear'
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
-    >
+    <div style={{ animationDelay: `${index * 50}ms` }}>
       {href ? (
-        <Link href={href} className={cls}>{inner}</Link>
+        <Link href={href} className={cls}>
+          {inner}
+        </Link>
       ) : (
         <div className={cls}>{inner}</div>
       )}
-    </motion.div>
+    </div>
   )
 }

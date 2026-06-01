@@ -397,7 +397,7 @@ const PRIORITY_COLORS_TASK: Record<string, string> = {
 function ClientTasksTab({ clientId }: { clientId: string }) {
   const qc = useQueryClient()
   const { data, isLoading } = useQuery<Task[]>({
-    queryKey: ['tasks', '', clientId],
+    queryKey: ['tasks', clientId],
     queryFn: async () => {
       const res = await fetch(`/api/tareas?clientId=${clientId}`)
       if (!res.ok) throw new Error('Error')
@@ -415,7 +415,7 @@ function ClientTasksTab({ clientId }: { clientId: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     })
-    if (res.ok) qc.invalidateQueries({ queryKey: ['tasks', '', clientId] })
+    if (res.ok) qc.invalidateQueries({ queryKey: ['tasks', clientId] })
     else toast.error('Error al actualizar')
   }
 

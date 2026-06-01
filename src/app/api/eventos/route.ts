@@ -2,18 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
-export async function GET(_: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const events = await prisma.event.findMany({
-      where: { organizationId: payload.orgId },
-      orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { attendees: true } } },
-    })
+    const { searchParams } = req.nextUrl
+    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit = Math.min(50, Number(searchParams.get('limit') ?? 20))
+    const skip = (page - 1) * limit
 
-    return NextResponse.json({ data: events })
+    const where = { organizationId: payload.orgId }
+
+    const [events, total] = await Promise.all([
+      prisma.event.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { attendees: true } } },
+      }),
+      prisma.event.count({ where }),
+    ])
+
+    return NextResponse.json({ data: events, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('[EVENTOS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

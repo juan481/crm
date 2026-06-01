@@ -46,8 +46,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       if (!res.ok) return { data: [] }
       return res.json()
     },
-    staleTime: 2 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,      // no re-fetches innecesarios
+    refetchInterval: 10 * 60 * 1000, // cada 10 min en lugar de 5
   })
 
   const notifications = notifData?.data ?? []

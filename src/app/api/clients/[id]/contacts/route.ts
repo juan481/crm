@@ -53,9 +53,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     const contactId = searchParams.get('contactId')
     if (!contactId) return NextResponse.json({ error: 'contactId requerido' }, { status: 400 })
 
-    await prisma.contact.deleteMany({
+    const existing = await prisma.contact.findFirst({
       where: { id: contactId, clientId: params.id },
     })
+    if (!existing) return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
+
+    await prisma.contact.delete({ where: { id: contactId } })
 
     return NextResponse.json({ message: 'Contacto eliminado' })
   } catch (error) {

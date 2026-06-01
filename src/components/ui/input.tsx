@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label htmlFor={inputId} className="text-sm font-medium text-[var(--color-text-muted)]">
+          <label htmlFor={inputId} className="text-sm font-semibold text-[var(--color-text-muted)]">
             {label}
           </label>
         )}
@@ -30,14 +30,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             ref={ref}
             className={cn(
-              'w-full bg-[var(--color-surface-raised)] border border-[var(--color-border)] rounded-xl',
+              'w-full bg-[var(--color-surface)] border border-[var(--color-border-strong)] rounded-xl',
               'px-4 py-2.5 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-subtle)]',
               'transition-all duration-200 outline-none font-poppins',
               'focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-light)]',
               'disabled:opacity-50 disabled:cursor-not-allowed',
               leftIcon && 'pl-10',
               rightIcon && 'pr-10',
-              error && 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20',
+              error && 'border-red-400 focus:border-red-500 focus:ring-red-500/20',
               className
             )}
             {...props}
@@ -70,7 +70,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label htmlFor={inputId} className="text-sm font-medium text-[var(--color-text-muted)]">
+          <label htmlFor={inputId} className="text-sm font-semibold text-[var(--color-text-muted)]">
             {label}
           </label>
         )}

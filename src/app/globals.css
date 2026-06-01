@@ -4,49 +4,56 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── CSS Custom Properties ─────────────────────────────────────────────── */
+/* ─── CSS Custom Properties (Light mode por defecto — Remax-style) ───────── */
 :root {
-  /* Dynamic brand colors (updated by theme store) */
+  /* Brand colors */
   --color-primary: #6366f1;
   --color-primary-hover: #4f46e5;
-  --color-primary-light: #6366f133;
+  --color-primary-light: #6366f120;
   --color-primary-foreground: #ffffff;
   --color-secondary: #8b5cf6;
   --color-secondary-hover: #7c3aed;
 
-  /* Dark surfaces (default theme) */
+  /* Light surfaces */
+  --color-bg: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f8fafc;
+  --color-surface-overlay: #f1f5f9;
+
+  /* Borders */
+  --color-border: rgba(0, 0, 0, 0.07);
+  --color-border-strong: rgba(0, 0, 0, 0.13);
+
+  /* Text */
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --color-text-subtle: #94a3b8;
+
+  /* Status */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #2563eb;
+
+  /* Sidebar (siempre dark navy — no usa mode toggle) */
+  --sidebar-bg: #0f172a;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-text: #cbd5e1;
+  --sidebar-text-muted: #64748b;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+}
+
+/* Dark mode opcional — toggle manual */
+.dark {
   --color-bg: #0c0c14;
   --color-surface: #13131f;
   --color-surface-raised: #1a1a2e;
   --color-surface-overlay: #1e1e32;
-
-  /* Borders */
   --color-border: rgba(255, 255, 255, 0.06);
   --color-border-strong: rgba(255, 255, 255, 0.12);
-
-  /* Text */
   --color-text: #f1f5f9;
   --color-text-muted: #94a3b8;
   --color-text-subtle: #64748b;
-
-  /* Status colors */
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #3b82f6;
-}
-
-/* Light mode */
-.light {
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-surface-raised: #f1f5f9;
-  --color-surface-overlay: #e2e8f0;
-  --color-border: rgba(0, 0, 0, 0.06);
-  --color-border-strong: rgba(0, 0, 0, 0.12);
-  --color-text: #1e293b;
-  --color-text-muted: #64748b;
-  --color-text-subtle: #94a3b8;
 }
 
 /* ─── Base Styles ───────────────────────────────────────────────────────── */
@@ -71,20 +78,10 @@ body {
 }
 
 /* ─── Scrollbar (minimal) ────────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-strong);
-  border-radius: 99px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-subtle);
-}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-subtle); }
 
 /* ─── Selection ──────────────────────────────────────────────────────────── */
 ::selection {
@@ -98,11 +95,15 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
+[data-search-container] input:focus-visible,
+.rich-editor-area:focus-visible {
+  outline: none;
+}
 
 /* ─── Utility classes ────────────────────────────────────────────────────── */
 @layer utilities {
   .glass {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--color-border);
@@ -132,26 +133,126 @@ body {
   .text-default { color: var(--color-text); }
   .text-muted { color: var(--color-text-muted); }
   .text-subtle { color: var(--color-text-subtle); }
+
+  /* Sidebar-specific utilities */
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--sidebar-text);
+    transition: all 0.15s ease;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .sidebar-item:hover {
+    background: var(--sidebar-hover);
+    color: #f1f5f9;
+  }
+  .sidebar-item.active {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
 }
+
+/* ─── Shadow utilities ───────────────────────────────────────────────────── */
+@layer utilities {
+  .shadow-card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .shadow-modal {
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .shadow-glow {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+}
+
+/* ─── Rich Text Editor ───────────────────────────────────────────────────── */
+.rich-editor-area:empty:before {
+  content: attr(data-placeholder);
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+.rich-editor-area h1 { font-size: 1.4em; font-weight: 700; margin: 0.5em 0; }
+.rich-editor-area h2 { font-size: 1.2em; font-weight: 700; margin: 0.4em 0; }
+.rich-editor-area h3 { font-size: 1.05em; font-weight: 600; margin: 0.3em 0; }
+.rich-editor-area a  { color: var(--color-primary); text-decoration: underline; }
+.rich-editor-area img { max-width: 100%; border-radius: 8px; margin: 4px 0; }
+.rich-editor-area ul, .rich-editor-area ol { padding-left: 1.5em; margin: 0.4em 0; }
+.rich-editor-area blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.rich-editor-area hr { border: none; border-top: 1px solid var(--color-border-strong); margin: 12px 0; }
 
 /* ─── Recharts overrides ──────────────────────────────────────────────────── */
 .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: var(--color-surface-raised) !important;
+  background: var(--color-surface) !important;
   border: 1px solid var(--color-border-strong) !important;
   border-radius: 10px !important;
   padding: 10px 14px !important;
   font-family: 'Poppins', sans-serif !important;
   font-size: 13px !important;
   color: var(--color-text) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important;
 }
 
-/* ─── Page transitions ───────────────────────────────────────────────────── */
-.page-enter {
-  opacity: 0;
-  transform: translateY(8px);
+/* ─── Touch performance ──────────────────────────────────────────────────── */
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.page-enter-active {
-  opacity: 1;
-  transform: translateY(0);
-  transition: all 0.3s ease-out;
+
+/* ─── List item fade ─────────────────────────────────────────────────────── */
+@keyframes listAppear {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.list-appear {
+  animation: listAppear 0.12s ease-out both;
+}
+
+/* ─── Page fade in ───────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+/* ─── Form input base style ─────────────────────────────────────────────── */
+.form-input {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 0.875rem;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+.form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+.form-input::placeholder {
+  color: #94a3b8;
+}
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.375rem;
 }

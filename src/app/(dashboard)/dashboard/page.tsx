@@ -53,8 +53,8 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[var(--color-text)]">Dashboard</h1>
-        <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Dashboard</h1>
+        <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
           Resumen de tu negocio en tiempo real
         </p>
       </div>

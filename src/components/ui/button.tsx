@@ -22,9 +22,9 @@ const variantClasses = {
   ghost:
     'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]',
   danger:
-    'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20',
+    'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100',
   success:
-    'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20',
+    'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100',
 }
 
 const sizeClasses = {

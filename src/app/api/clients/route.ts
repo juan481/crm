@@ -19,9 +19,9 @@ export async function GET(req: NextRequest) {
     const clientType = searchParams.get('clientType') ?? ''
     const assignedSellerId = searchParams.get('assignedSellerId') ?? ''
     const isEnabledParam = searchParams.get('isEnabled')
-    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
-    const limit = Math.min(100, Number(searchParams.get('limit') ?? 20))
-    const skip = (page - 1) * limit
+    const page  = Math.max(1, Number(searchParams.get('page')  ?? 1))
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 20)))
+    const skip  = (page - 1) * limit
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
 
@@ -29,12 +29,12 @@ export async function GET(req: NextRequest) {
       where.assignedSellerId = payload.userId
     }
 
-    if (search) {
+    // Require at least 2 chars to trigger a search — avoids scanning all rows on typo
+    if (search && search.length >= 2) {
       where.OR = [
-        { name: { contains: search } },
-        { email: { contains: search } },
-        { company: { contains: search } },
-        { phone: { contains: search } },
+        { name:    { contains: search, mode: 'insensitive' } },
+        { email:   { contains: search, mode: 'insensitive' } },
+        { company: { contains: search, mode: 'insensitive' } },
       ]
     }
     if (status) where.status = status

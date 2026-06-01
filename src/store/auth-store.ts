@@ -8,21 +8,24 @@ interface AuthState {
   isLoading: boolean
   isAuthenticated: boolean
 
-  setUser: (user: User | null) => void
-  setLoading: (loading: boolean) => void
-  logout: () => void
+  setUser:    (user: User | null) => void
+  setLoading: (loading: boolean)  => void
+  logout:     () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  isLoading: true,
+  user:            null,
+  isLoading:       true,
   isAuthenticated: false,
 
-  setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
+  setUser:    (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
   setLoading: (isLoading) => set({ isLoading }),
 
   logout: async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    // Import dynamically to avoid SSR issues with browser client
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    await supabase.auth.signOut()
     set({ user: null, isAuthenticated: false })
     window.location.href = '/login'
   },

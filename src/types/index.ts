@@ -1,5 +1,5 @@
 // ─── Enums ────────────────────────────────────────────────────────────────
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER'
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED'
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'PROSPECT'
 export type ClientType = 'B2B' | 'B2C'
@@ -177,6 +177,29 @@ export interface Sale {
   closedAt: string
   notes: string | null
   createdAt: string
+}
+
+// ─── Service ──────────────────────────────────────────────────────────────
+export interface Service {
+  id: string
+  name: string
+  description: string | null
+  price: number
+  currency: string
+  billingCycle: string
+  organizationId: string
+  createdAt: string
+  _count?: { clients: number }
+}
+
+// ─── Quote ────────────────────────────────────────────────────────────────
+export interface QuoteItem {
+  serviceId: string
+  name: string
+  price: number
+  currency: string
+  billingCycle: string
+  quantity: number
 }
 
 // ─── Plugin System ────────────────────────────────────────────────────────

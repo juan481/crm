@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { clearAuthCookie } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 
 export async function POST() {
-  clearAuthCookie()
-  return NextResponse.json({ message: 'Sesión cerrada' }, { status: 200 })
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+  return NextResponse.json({ message: 'Sesión cerrada' })
 }

@@ -42,9 +42,9 @@ model Organization {
 // ─── Users & Auth ──────────────────────────────────────────────────────────
 model User {
   id                  String   @id @default(cuid())
+  supabaseId          String?  @unique  // links to Supabase auth.users.id
   email               String   @unique
   name                String
-  passwordHash        String
   role                String   @default("SELLER")
   status              String   @default("ACTIVE")
   onboardingCompleted Boolean  @default(false)
@@ -55,9 +55,10 @@ model User {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  @@index([organizationId])
+
   notes          Note[]
   activityLogs   ActivityLog[]
-  sessions       Session[]
   assignedClients Client[]     @relation("SellerClients")
   sales          Sale[]
   uploadedDocs   Document[]
@@ -70,14 +71,7 @@ model User {
   ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
 }
 
-model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-}
+// Session management is now handled by Supabase Auth
 
 // ─── Services catalog ──────────────────────────────────────────────────────
 model Service {
@@ -93,6 +87,8 @@ model Service {
   sales          Sale[]
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
 }
 
 // ─── Clients ───────────────────────────────────────────────────────────────
@@ -149,9 +145,11 @@ model Client {
   tickets      Ticket[]
 
   @@index([organizationId])
+  @@index([organizationId, status])
   @@index([status])
   @@index([clientType])
   @@index([assignedSellerId])
+  @@index([serviceId])
 }
 
 model Contact {
@@ -164,21 +162,30 @@ model Contact {
   clientId  String
   client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@index([clientId])
 }
 
 // ─── Invoices ──────────────────────────────────────────────────────────────
 model Invoice {
-  id          String   @id @default(cuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  amount      Float
-  currency    String   @default("USD")
-  status      String   @default("PENDING")
-  description String?
-  dueDate     DateTime
-  paidAt      DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  organizationId String   @default("")
+  amount         Float
+  currency       String   @default("USD")
+  status         String   @default("PENDING")
+  description    String?
+  dueDate        DateTime
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([organizationId, status])
+  @@index([clientId])
+  @@index([status])
+  @@index([dueDate])
 }
 
 // ─── Timeline Notes (legacy, kept for compatibility) ──────────────────────
@@ -205,8 +212,7 @@ model ActivityLog {
   metadata    String?
   createdAt   DateTime @default(now())
 
-  @@index([clientId])
-  @@index([createdAt])
+  @@index([clientId, createdAt])
 }
 
 // ─── Sales ─────────────────────────────────────────────────────────────────
@@ -375,9 +381,8 @@ model Deal {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  @@index([organizationId])
+  @@index([organizationId, stage])
   @@index([ownerId])
-  @@index([stage])
 }
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────
@@ -400,9 +405,8 @@ model Task {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  @@index([organizationId])
+  @@index([organizationId, status])
   @@index([assignedToId])
-  @@index([status])
 }
 
 // ─── Support Tickets ───────────────────────────────────────────────────────
@@ -428,8 +432,7 @@ model Ticket {
   updatedAt      DateTime  @updatedAt
 
   @@unique([number, organizationId])
-  @@index([organizationId])
-  @@index([status])
+  @@index([organizationId, status])
 }
 
 model TicketMessage {
@@ -441,4 +444,6 @@ model TicketMessage {
   userId     String
   user       User     @relation("TicketMessageAuthor", fields: [userId], references: [id])
   createdAt  DateTime @default(now())
+
+  @@index([ticketId])
 }

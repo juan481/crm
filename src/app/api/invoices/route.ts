@@ -8,21 +8,23 @@ export async function GET(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { searchParams } = req.nextUrl
-    const status = searchParams.get('status') ?? ''
+    const status   = searchParams.get('status') ?? ''
     const clientId = searchParams.get('clientId') ?? ''
-    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
-    const limit = Math.min(100, Number(searchParams.get('limit') ?? 20))
-    const skip = (page - 1) * limit
+    const page     = Math.max(1, Number(searchParams.get('page')  ?? 1))
+    const limit    = Math.min(50, Number(searchParams.get('limit') ?? 20))
+    const skip     = (page - 1) * limit
 
-    const baseWhere = { client: { organizationId: payload.orgId } }
-    const where = {
-      ...baseWhere,
-      ...(status && { status }),
-      ...(clientId && { clientId }),
-    }
-
+    const orgId = payload.orgId
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    // Use organizationId directly — no JOIN with Client table
+    const baseWhere = { organizationId: orgId }
+    const where = {
+      ...baseWhere,
+      ...(status   && { status }),
+      ...(clientId && { clientId }),
+    }
 
     const [data, total, pendingAgg, paidAgg, overdueCount] = await Promise.all([
       prisma.invoice.findMany({
@@ -49,18 +51,21 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
-    return NextResponse.json({
-      data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-      summary: {
-        pendingTotal: pendingAgg._sum.amount ?? 0,
-        paidThisMonth: paidAgg._sum.amount ?? 0,
-        overdueCount,
+    return NextResponse.json(
+      {
+        data,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        summary: {
+          pendingTotal:   pendingAgg._sum.amount ?? 0,
+          paidThisMonth:  paidAgg._sum.amount    ?? 0,
+          overdueCount,
+        },
       },
-    })
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (error) {
     console.error('[INVOICES GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
@@ -82,6 +87,7 @@ export async function POST(req: NextRequest) {
 
     const client = await prisma.client.findFirst({
       where: { id: clientId, organizationId: payload.orgId },
+      select: { id: true, organizationId: true },
     })
     if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 
@@ -89,7 +95,8 @@ export async function POST(req: NextRequest) {
     const invoice = await prisma.invoice.create({
       data: {
         clientId,
-        amount: Number(amount),
+        organizationId: client.organizationId, // persist directly
+        amount:  Number(amount),
         currency: currency || 'USD',
         description: description || null,
         dueDate: new Date(dueDate),

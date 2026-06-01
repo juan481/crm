@@ -14,6 +14,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Modal } from '@/components/ui/modal'
 import { ClientForm } from '@/components/clients/client-form'
 import { ExportMenu } from '@/components/clients/export-menu'
+import { ImportClients } from '@/components/clients/import-clients'
 import { formatCurrency, CLIENT_STATUS_LABELS, CLIENT_STATUS_COLORS, COUNTRIES } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import type { Client, ClientFilters } from '@/types'
@@ -50,7 +51,8 @@ export default function ClientesPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
   const [filters, setFilters] = useState<ClientFilters>({ page: 1, limit: 20 })
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm]       = useState(false)
+  const [showImport, setShowImport]   = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
@@ -138,8 +140,13 @@ export default function ClientesPage() {
             {total > 0 ? `${total} clientes en total` : 'Sin clientes aún'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <ExportMenu clients={clients} />
+          {canDelete && (
+            <Button variant="outline" leftIcon={<Plus size={16} />} onClick={() => setShowImport(true)}>
+              Importar Excel
+            </Button>
+          )}
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
             Nuevo Cliente
           </Button>
@@ -303,6 +310,13 @@ export default function ClientesPage() {
 
       <Modal open={showForm} onClose={() => setShowForm(false)} title="Nuevo Cliente" size="lg">
         <ClientForm onSuccess={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ['clients'] }) }} onCancel={() => setShowForm(false)} />
+      </Modal>
+
+      <Modal open={showImport} onClose={() => setShowImport(false)} title="Importar Contactos desde Excel" size="lg">
+        <ImportClients
+          onSuccess={() => { setShowImport(false); qc.invalidateQueries({ queryKey: ['clients'] }) }}
+          onCancel={() => setShowImport(false)}
+        />
       </Modal>
 
       <Modal open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} title="Eliminar en lote" size="sm">
