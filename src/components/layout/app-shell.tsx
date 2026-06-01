@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
-import { Sidebar } from './Sidebar'
-import { AppHeader } from './AppHeader'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { AppHeader } from '@/components/layout/AppHeader'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import type { User } from '@/types'
 
