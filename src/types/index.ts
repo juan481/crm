@@ -402,10 +402,14 @@ export interface TicketMessage {
 export interface Empresa {
   id: string
   name: string
+  isCliente: boolean
+  clienteDesde: string | null
   activity: string | null
   address: string | null
+  codigoPostal: string | null
   city: string | null
   province: string | null
+  country: string | null
   website: string | null
   organizationId: string
   createdAt: string

@@ -462,6 +462,8 @@ model Empresa {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
+  isCliente      Boolean  @default(false)
+  clienteDesde   DateTime?
   activity       String?
   address        String?
   codigoPostal   String?

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
-  Briefcase, Plus, Mail, Phone, UserCircle2,
+  Briefcase, Plus, Mail, Phone, UserCircle2, UserCheck, UserX,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -26,6 +26,7 @@ export default function EmpresaDetailPage() {
   const [deleteOpen,        setDeleteOpen]        = useState(false)
   const [deleteContactoId,  setDeleteContactoId]  = useState<string | null>(null)
   const [deleting,          setDeleting]          = useState(false)
+  const [togglingCliente,   setTogglingCliente]   = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
@@ -39,6 +40,37 @@ export default function EmpresaDetailPage() {
   })
 
   const empresa: Empresa | undefined = data
+
+  const handleToggleCliente = async () => {
+    if (!empresa) return
+    setTogglingCliente(true)
+    try {
+      const res = await fetch(`/api/empresas/${id}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:      empresa.name,
+          activity:  empresa.activity,
+          address:   empresa.address,
+          city:      empresa.city,
+          province:  empresa.province,
+          country:   empresa.country,
+          website:   empresa.website,
+          isCliente: !empresa.isCliente,
+        }),
+      })
+      if (res.ok) {
+        toast.success(empresa.isCliente ? 'Empresa desmarcada como cliente' : '¡Empresa marcada como cliente!')
+        qc.invalidateQueries({ queryKey: ['empresa', id] })
+        qc.invalidateQueries({ queryKey: ['empresas'] })
+        qc.invalidateQueries({ queryKey: ['empresas-clientes'] })
+      } else {
+        const j = await res.json()
+        toast.error(j.error)
+      }
+    } catch { toast.error('Error de conexión') }
+    finally { setTogglingCliente(false) }
+  }
 
   const handleDeleteEmpresa = async () => {
     setDeleting(true)
@@ -102,7 +134,16 @@ export default function EmpresaDetailPage() {
           <ArrowLeft size={15} /> Empresas
         </button>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant={empresa?.isCliente ? 'outline' : 'secondary'}
+              onClick={handleToggleCliente}
+              disabled={togglingCliente}
+            >
+              {empresa?.isCliente
+                ? <><UserX size={14} /> Quitar cliente</>
+                : <><UserCheck size={14} /> Marcar como cliente</>}
+            </Button>
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Edit size={14} /> Editar
             </Button>
@@ -121,7 +162,15 @@ export default function EmpresaDetailPage() {
             <Building2 size={26} style={{ color: 'var(--color-primary)' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>{empresa.name}</h1>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{empresa.name}</h1>
+              {empresa.isCliente && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  <UserCheck size={11} /> Cliente
+                </span>
+              )}
+            </div>
             {empresa.activity && (
               <p className="text-sm flex items-center gap-1.5 mb-3" style={{ color: 'var(--color-text-muted)' }}>
                 <Briefcase size={13} /> {empresa.activity}
