@@ -37,9 +37,9 @@ export default function LoginPage() {
         return
       }
 
-      // Session cookie is set by Supabase SSR — redirect triggers layout auth check
-      router.push('/dashboard')
-      router.refresh()
+      // Full page reload so the middleware and Server Components read the
+      // new Supabase session cookie from scratch (router.push alone no alcanza en SSR)
+      window.location.href = '/dashboard'
     })
   }
 
