@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     // Load all empresas once for batch linking
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const empresas = await (prisma.empresa as any).findMany({
+    const empresas = await (prisma as any).empresa.findMany({
       where: { organizationId: payload.orgId },
       select: { id: true, name: true, website: true },
     })
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       const empresaId = findEmpresaMatch(email, companyRaw, empresas)
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (prisma.tecnico as any).create({
+      await (prisma as any).directorioContacto.create({
         data: {
           organizationId: payload.orgId,
           firstName,
@@ -60,13 +60,11 @@ export async function POST(req: NextRequest) {
       created++
     }
 
-    const linkedCount = created // rough — actual linking varies per row
     return NextResponse.json({
-      message: `${created} técnicos importados, ${skipped} omitidos`,
-      linkedCount,
+      message: `${created} contactos importados, ${skipped} omitidos`,
     })
   } catch (error) {
-    console.error('[TECNICOS IMPORTAR]', error)
+    console.error('[CONTACTOS IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el archivo' }, { status: 500 })
   }
 }

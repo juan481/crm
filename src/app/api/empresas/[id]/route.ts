@@ -10,10 +10,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const empresa = await (prisma.empresa as any).findFirst({
+    const empresa = await (prisma as any).empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       include: {
-        tecnicos: {
+        contactos: {
           orderBy: { lastName: 'asc' },
           select: {
             id: true, firstName: true, lastName: true, companyRaw: true,
@@ -32,10 +32,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         createdAt: empresa.createdAt.toISOString(),
         updatedAt: empresa.updatedAt.toISOString(),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tecnicos: empresa.tecnicos.map((t: any) => ({
-          ...t,
-          createdAt: t.createdAt.toISOString(),
-          updatedAt: t.updatedAt.toISOString(),
+        contactos: empresa.contactos.map((c: any) => ({
+          ...c,
+          createdAt: c.createdAt.toISOString(),
+          updatedAt: c.updatedAt.toISOString(),
         })),
       },
     })
@@ -56,14 +56,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exists = await (prisma.empresa as any).findFirst({
+    const exists = await (prisma as any).empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: { id: true },
     })
     if (!exists) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const empresa = await (prisma.empresa as any).update({
+    const empresa = await (prisma as any).empresa.update({
       where: { id: params.id },
       data: {
         name:     name.trim(),
@@ -90,14 +90,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exists = await (prisma.empresa as any).findFirst({
+    const exists = await (prisma as any).empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: { id: true },
     })
     if (!exists) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (prisma.empresa as any).delete({ where: { id: params.id } })
+    await (prisma as any).empresa.delete({ where: { id: params.id } })
 
     return NextResponse.json({ message: 'Empresa eliminada' })
   } catch (error) {

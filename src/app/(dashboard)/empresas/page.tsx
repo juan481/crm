@@ -185,7 +185,7 @@ export default function EmpresasPage() {
                   <td className="px-4 py-3 text-center">
                     <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full"
                       style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                      <Users size={11} /> {e._count?.tecnicos ?? 0}
+                      <Users size={11} /> {e._count?.contactos ?? 0}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right" onClick={ev => ev.stopPropagation()}>

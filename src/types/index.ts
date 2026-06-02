@@ -410,11 +410,11 @@ export interface Empresa {
   organizationId: string
   createdAt: string
   updatedAt: string
-  _count?: { tecnicos: number }
-  tecnicos?: Tecnico[]
+  _count?: { contactos: number }
+  contactos?: DirectorioContacto[]
 }
 
-export interface Tecnico {
+export interface DirectorioContacto {
   id: string
   firstName: string
   lastName: string

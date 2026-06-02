@@ -10,9 +10,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
-import { TecnicoForm } from '@/components/directorio/tecnico-form'
+import { ContactoForm } from '@/components/directorio/contacto-form'
 import { useAuthStore } from '@/store/auth-store'
-import type { Empresa, Tecnico } from '@/types'
+import type { DirectorioContacto, Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
 export default function EmpresaDetailPage() {
@@ -21,11 +21,11 @@ export default function EmpresaDetailPage() {
   const qc       = useQueryClient()
   const { user } = useAuthStore()
 
-  const [editOpen,         setEditOpen]         = useState(false)
-  const [addTecnicoOpen,   setAddTecnicoOpen]   = useState(false)
-  const [deleteOpen,       setDeleteOpen]       = useState(false)
-  const [deleteTecnicoId,  setDeleteTecnicoId]  = useState<string | null>(null)
-  const [deleting,         setDeleting]         = useState(false)
+  const [editOpen,          setEditOpen]          = useState(false)
+  const [addContactoOpen,   setAddContactoOpen]   = useState(false)
+  const [deleteOpen,        setDeleteOpen]        = useState(false)
+  const [deleteContactoId,  setDeleteContactoId]  = useState<string | null>(null)
+  const [deleting,          setDeleting]          = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
@@ -56,20 +56,20 @@ export default function EmpresaDetailPage() {
     finally { setDeleting(false); setDeleteOpen(false) }
   }
 
-  const handleDeleteTecnico = async () => {
-    if (!deleteTecnicoId) return
+  const handleDeleteContacto = async () => {
+    if (!deleteContactoId) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/tecnicos/${deleteTecnicoId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/contactos/${deleteContactoId}`, { method: 'DELETE' })
       if (res.ok) {
-        toast.success('Técnico eliminado')
+        toast.success('Contacto eliminado')
         qc.invalidateQueries({ queryKey: ['empresa', id] })
       } else {
         const j = await res.json()
         toast.error(j.error)
       }
     } catch { toast.error('Error de conexión') }
-    finally { setDeleting(false); setDeleteTecnicoId(null) }
+    finally { setDeleting(false); setDeleteContactoId(null) }
   }
 
   if (isLoading) {
@@ -155,19 +155,19 @@ export default function EmpresaDetailPage() {
         </div>
       </div>
 
-      {/* Técnicos section */}
+      {/* Contactos section */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-            Técnicos / Contactos
+            Contactos
             <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full"
               style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-              {empresa.tecnicos?.length ?? 0}
+              {empresa.contactos?.length ?? 0}
             </span>
           </h2>
           {canManage && (
-            <Button size="sm" onClick={() => setAddTecnicoOpen(true)}>
-              <Plus size={13} /> Agregar técnico
+            <Button size="sm" onClick={() => setAddContactoOpen(true)}>
+              <Plus size={13} /> Agregar contacto
             </Button>
           )}
         </div>
@@ -184,44 +184,45 @@ export default function EmpresaDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {!empresa.tecnicos?.length ? (
+              {!empresa.contactos?.length ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-10 text-center" style={{ color: 'var(--color-text-muted)' }}>
                     <UserCircle2 size={28} className="mx-auto mb-2 opacity-30" />
-                    <p>No hay técnicos vinculados aún</p>
+                    <p>No hay contactos vinculados aún</p>
+                    <p className="text-xs mt-0.5">Podés agregar CEOs, dueños, técnicos, administrativos...</p>
                   </td>
                 </tr>
               ) : (
-                empresa.tecnicos.map((t: Tecnico) => (
-                  <tr key={t.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                empresa.contactos.map((c: DirectorioContacto) => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <td className="px-4 py-3">
                       <span className="font-medium" style={{ color: 'var(--color-text)' }}>
-                        {t.firstName} {t.lastName}
+                        {c.firstName} {c.lastName}
                       </span>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>
-                      {t.role ?? '—'}
+                      {c.role ?? '—'}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
-                      {t.email ? (
-                        <a href={`mailto:${t.email}`} className="flex items-center gap-1.5 hover:underline"
+                      {c.email ? (
+                        <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 hover:underline"
                           style={{ color: 'var(--color-primary)' }}>
-                          <Mail size={12} /> {t.email}
+                          <Mail size={12} /> {c.email}
                         </a>
                       ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
-                      {t.phone ? (
-                        <a href={`tel:${t.phone}`} className="flex items-center gap-1.5 hover:underline"
+                      {c.phone ? (
+                        <a href={`tel:${c.phone}`} className="flex items-center gap-1.5"
                           style={{ color: 'var(--color-text-muted)' }}>
-                          <Phone size={12} /> {t.phone}
+                          <Phone size={12} /> {c.phone}
                         </a>
                       ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                     </td>
                     {canManage && (
                       <td className="px-4 py-3 text-right">
                         <button
-                          onClick={() => setDeleteTecnicoId(t.id)}
+                          onClick={() => setDeleteContactoId(c.id)}
                           className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
                           style={{ color: 'var(--color-text-muted)' }}
                         >
@@ -249,11 +250,11 @@ export default function EmpresaDetailPage() {
         />
       </Modal>
 
-      <Modal open={addTecnicoOpen} onClose={() => setAddTecnicoOpen(false)} title="Agregar técnico" size="md">
-        <TecnicoForm
+      <Modal open={addContactoOpen} onClose={() => setAddContactoOpen(false)} title="Agregar contacto" size="md">
+        <ContactoForm
           defaultEmpresaId={id}
           onSuccess={() => {
-            setAddTecnicoOpen(false)
+            setAddContactoOpen(false)
             qc.invalidateQueries({ queryKey: ['empresa', id] })
           }}
         />
@@ -261,7 +262,7 @@ export default function EmpresaDetailPage() {
 
       <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Eliminar empresa" size="sm">
         <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
-          ¿Eliminás <strong>{empresa.name}</strong>? Los técnicos vinculados quedarán sin vínculo.
+          ¿Eliminás <strong>{empresa.name}</strong>? Los contactos vinculados quedarán sin vínculo.
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancelar</Button>
@@ -271,13 +272,13 @@ export default function EmpresaDetailPage() {
         </div>
       </Modal>
 
-      <Modal open={!!deleteTecnicoId} onClose={() => setDeleteTecnicoId(null)} title="Eliminar técnico" size="sm">
+      <Modal open={!!deleteContactoId} onClose={() => setDeleteContactoId(null)} title="Eliminar contacto" size="sm">
         <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
-          ¿Confirmás la eliminación de este técnico?
+          ¿Confirmás la eliminación de este contacto?
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => setDeleteTecnicoId(null)}>Cancelar</Button>
-          <Button variant="danger" onClick={handleDeleteTecnico} disabled={deleting}>
+          <Button variant="outline" onClick={() => setDeleteContactoId(null)}>Cancelar</Button>
+          <Button variant="danger" onClick={handleDeleteContacto} disabled={deleting}>
             {deleting ? 'Eliminando...' : 'Eliminar'}
           </Button>
         </div>

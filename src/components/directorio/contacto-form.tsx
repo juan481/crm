@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ModalFooter } from '@/components/ui/modal'
-import type { Empresa, Tecnico } from '@/types'
+import type { DirectorioContacto, Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
 interface FormData {
@@ -19,12 +19,12 @@ interface FormData {
 }
 
 interface Props {
-  tecnico?:        Tecnico
+  contacto?:         DirectorioContacto
   defaultEmpresaId?: string
-  onSuccess:       (tecnico: Tecnico) => void
+  onSuccess:         (contacto: DirectorioContacto) => void
 }
 
-export function TecnicoForm({ tecnico, defaultEmpresaId, onSuccess }: Props) {
+export function ContactoForm({ contacto, defaultEmpresaId, onSuccess }: Props) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
 
   useEffect(() => {
@@ -36,31 +36,28 @@ export function TecnicoForm({ tecnico, defaultEmpresaId, onSuccess }: Props) {
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     defaultValues: {
-      firstName:  tecnico?.firstName  ?? '',
-      lastName:   tecnico?.lastName   ?? '',
-      companyRaw: tecnico?.companyRaw ?? '',
-      role:       tecnico?.role       ?? '',
-      email:      tecnico?.email      ?? '',
-      phone:      tecnico?.phone      ?? '',
-      empresaId:  tecnico?.empresaId  ?? defaultEmpresaId ?? '',
+      firstName:  contacto?.firstName  ?? '',
+      lastName:   contacto?.lastName   ?? '',
+      companyRaw: contacto?.companyRaw ?? '',
+      role:       contacto?.role       ?? '',
+      email:      contacto?.email      ?? '',
+      phone:      contacto?.phone      ?? '',
+      empresaId:  contacto?.empresaId  ?? defaultEmpresaId ?? '',
     },
   })
 
   const onSubmit = async (data: FormData) => {
-    const url    = tecnico ? `/api/tecnicos/${tecnico.id}` : '/api/tecnicos'
-    const method = tecnico ? 'PUT' : 'POST'
+    const url    = contacto ? `/api/contactos/${contacto.id}` : '/api/contactos'
+    const method = contacto ? 'PUT' : 'POST'
 
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...data,
-        empresaId: data.empresaId || null,
-      }),
+      body: JSON.stringify({ ...data, empresaId: data.empresaId || null }),
     })
     const json = await res.json()
     if (!res.ok) { toast.error(json.error ?? 'Error al guardar'); return }
-    toast.success(tecnico ? 'Técnico actualizado' : 'Técnico creado')
+    toast.success(contacto ? 'Contacto actualizado' : 'Contacto creado')
     onSuccess(json.data)
   }
 
@@ -91,42 +88,12 @@ export function TecnicoForm({ tecnico, defaultEmpresaId, onSuccess }: Props) {
 
       <div>
         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-          Empresa (texto)
+          Cargo / Rol
         </label>
         <Input
-          {...register('companyRaw')}
-          placeholder="Nombre de empresa (se usará para vincular automáticamente)"
+          {...register('role')}
+          placeholder="Ej: CEO, Dueño, Administrador técnico, Instalador..."
         />
-        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-          Si el nombre coincide con una empresa del directorio, se vinculará solo.
-        </p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-          Vincular empresa (manual)
-        </label>
-        <select
-          {...register('empresaId')}
-          className="w-full px-3 py-2 rounded-xl text-sm"
-          style={{
-            background: 'var(--color-surface-raised)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <option value="">— Sin vincular (auto-detectar) —</option>
-          {empresas.map(e => (
-            <option key={e.id} value={e.id}>{e.name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-          Cargo
-        </label>
-        <Input {...register('role')} placeholder="Ej: Administrador técnico, Dueño, Instalador..." />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -134,7 +101,7 @@ export function TecnicoForm({ tecnico, defaultEmpresaId, onSuccess }: Props) {
           <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
             Mail
           </label>
-          <Input {...register('email')} type="email" placeholder="tecnico@empresa.com" />
+          <Input {...register('email')} type="email" placeholder="contacto@empresa.com" />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
@@ -144,9 +111,48 @@ export function TecnicoForm({ tecnico, defaultEmpresaId, onSuccess }: Props) {
         </div>
       </div>
 
+      <div
+        className="rounded-xl p-3 space-y-3"
+        style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
+      >
+        <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+          Vinculación a empresa
+        </p>
+
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+            Empresa (texto libre)
+          </label>
+          <Input
+            {...register('companyRaw')}
+            placeholder="Si no la encontrás abajo, escribila aquí y se vinculará automáticamente"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+            Vincular empresa (selección directa)
+          </label>
+          <select
+            {...register('empresaId')}
+            className="w-full px-3 py-2 rounded-xl text-sm"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <option value="">— Sin vincular (auto-detectar por texto o mail) —</option>
+            {empresas.map(e => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <ModalFooter>
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Guardando...' : tecnico ? 'Guardar cambios' : 'Crear técnico'}
+          {isSubmitting ? 'Guardando...' : contacto ? 'Guardar cambios' : 'Crear contacto'}
         </Button>
       </ModalFooter>
     </form>

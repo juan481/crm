@@ -43,8 +43,8 @@ model Organization {
   deals          Deal[]
   tasks          Task[]
   tickets        Ticket[]
-  empresas       Empresa[]
-  tecnicos       Tecnico[]
+  empresas          Empresa[]
+  directorioContactos DirectorioContacto[]
 }
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────
@@ -470,13 +470,13 @@ model Empresa {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tecnicos       Tecnico[]
+  contactos      DirectorioContacto[]
 
   @@index([organizationId])
   @@index([organizationId, name])
 }
 
-model Tecnico {
+model DirectorioContacto {
   id             String   @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

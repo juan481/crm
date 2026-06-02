@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Empresas',       href: '/empresas',       icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Técnicos',       href: '/tecnicos',       icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Contactos',      href: '/contactos',      icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
 ]
 
 const settingsItems: NavItem[] = [

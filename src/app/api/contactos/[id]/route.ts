@@ -11,18 +11,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tecnico = await (prisma.tecnico as any).findFirst({
+    const contacto = await (prisma as any).directorioContacto.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       include: { empresa: { select: { id: true, name: true } } },
     })
 
-    if (!tecnico) return NextResponse.json({ error: 'Técnico no encontrado' }, { status: 404 })
+    if (!contacto) return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
 
     return NextResponse.json({
-      data: { ...tecnico, createdAt: tecnico.createdAt.toISOString(), updatedAt: tecnico.updatedAt.toISOString() }
+      data: { ...contacto, createdAt: contacto.createdAt.toISOString(), updatedAt: contacto.updatedAt.toISOString() }
     })
   } catch (error) {
-    console.error('[TECNICO GET]', error)
+    console.error('[CONTACTO GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
@@ -33,11 +33,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exists = await (prisma.tecnico as any).findFirst({
+    const exists = await (prisma as any).directorioContacto.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: { id: true },
     })
-    if (!exists) return NextResponse.json({ error: 'Técnico no encontrado' }, { status: 404 })
+    if (!exists) return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
 
     const body = await req.json()
     const { firstName, lastName, companyRaw, role, email, phone, empresaId } = body
@@ -49,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (!resolvedEmpresaId) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const empresas = await (prisma.empresa as any).findMany({
+      const empresas = await (prisma as any).empresa.findMany({
         where: { organizationId: payload.orgId },
         select: { id: true, name: true, website: true },
       })
@@ -57,7 +57,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tecnico = await (prisma.tecnico as any).update({
+    const contacto = await (prisma as any).directorioContacto.update({
       where: { id: params.id },
       data: {
         firstName:  firstName.trim(),
@@ -72,11 +72,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     })
 
     return NextResponse.json({
-      data: { ...tecnico, createdAt: tecnico.createdAt.toISOString(), updatedAt: tecnico.updatedAt.toISOString() }
+      data: { ...contacto, createdAt: contacto.createdAt.toISOString(), updatedAt: contacto.updatedAt.toISOString() }
     })
   } catch (error) {
-    console.error('[TECNICO PUT]', error)
-    return NextResponse.json({ error: 'Error al actualizar técnico' }, { status: 500 })
+    console.error('[CONTACTO PUT]', error)
+    return NextResponse.json({ error: 'Error al actualizar contacto' }, { status: 500 })
   }
 }
 
@@ -86,18 +86,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exists = await (prisma.tecnico as any).findFirst({
+    const exists = await (prisma as any).directorioContacto.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: { id: true },
     })
-    if (!exists) return NextResponse.json({ error: 'Técnico no encontrado' }, { status: 404 })
+    if (!exists) return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (prisma.tecnico as any).delete({ where: { id: params.id } })
+    await (prisma as any).directorioContacto.delete({ where: { id: params.id } })
 
-    return NextResponse.json({ message: 'Técnico eliminado' })
+    return NextResponse.json({ message: 'Contacto eliminado' })
   } catch (error) {
-    console.error('[TECNICO DELETE]', error)
-    return NextResponse.json({ error: 'Error al eliminar técnico' }, { status: 500 })
+    console.error('[CONTACTO DELETE]', error)
+    return NextResponse.json({ error: 'Error al eliminar contacto' }, { status: 500 })
   }
 }

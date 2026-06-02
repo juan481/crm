@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
           id: true, name: true, activity: true, address: true,
           city: true, province: true, website: true,
           createdAt: true, updatedAt: true,
-          _count: { select: { tecnicos: true } },
+          _count: { select: { contactos: true } },
         },
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

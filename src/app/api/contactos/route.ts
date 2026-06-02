@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     const [raw, total] = await Promise.all([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.tecnico as any).findMany({
+      (prisma as any).directorioContacto.findMany({
         where,
         skip,
         take: limit,
@@ -44,19 +44,19 @@ export async function GET(req: NextRequest) {
         },
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.tecnico as any).count({ where }),
+      (prisma as any).directorioContacto.count({ where }),
     ])
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = raw.map((t: any) => ({
-      ...t,
-      createdAt: t.createdAt.toISOString(),
-      updatedAt: t.updatedAt.toISOString(),
+    const data = raw.map((c: any) => ({
+      ...c,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
     }))
 
     return NextResponse.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
-    console.error('[TECNICOS GET]', error)
+    console.error('[CONTACTOS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
@@ -74,10 +74,9 @@ export async function POST(req: NextRequest) {
 
     let resolvedEmpresaId: string | null = empresaId ?? null
 
-    // Auto-link if not manually selected
     if (!resolvedEmpresaId) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const empresas = await (prisma.empresa as any).findMany({
+      const empresas = await (prisma as any).empresa.findMany({
         where: { organizationId: payload.orgId },
         select: { id: true, name: true, website: true },
       })
@@ -85,7 +84,7 @@ export async function POST(req: NextRequest) {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tecnico = await (prisma.tecnico as any).create({
+    const contacto = await (prisma as any).directorioContacto.create({
       data: {
         firstName:  firstName.trim(),
         lastName:   lastName.trim(),
@@ -100,10 +99,10 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({
-      data: { ...tecnico, createdAt: tecnico.createdAt.toISOString(), updatedAt: tecnico.updatedAt.toISOString() }
+      data: { ...contacto, createdAt: contacto.createdAt.toISOString(), updatedAt: contacto.updatedAt.toISOString() }
     }, { status: 201 })
   } catch (error) {
-    console.error('[TECNICOS POST]', error)
-    return NextResponse.json({ error: 'Error al crear técnico' }, { status: 500 })
+    console.error('[CONTACTOS POST]', error)
+    return NextResponse.json({ error: 'Error al crear contacto' }, { status: 500 })
   }
 }

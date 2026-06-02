@@ -73,7 +73,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
 
     // 2. Create first contact if the toggle is on and at least name was filled
     if (!empresa && addContact && data.tcFirstName.trim() && data.tcLastName.trim()) {
-      const tcRes = await fetch('/api/tecnicos', {
+      const tcRes = await fetch('/api/contactos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
