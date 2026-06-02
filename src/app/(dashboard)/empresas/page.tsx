@@ -10,8 +10,11 @@ import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
+import * as XLSX from 'xlsx'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
+
+const CHUNK = 50
 
 interface ImportProgress {
   processed: number
@@ -82,60 +85,61 @@ export default function EmpresasPage() {
     if (!file) return
     if (fileRefDir.current) fileRefDir.current.value = ''
 
-    setImporting(true)
-    setProgress({ processed: 0, total: 0, empresasCreadas: 0, empresasExistentes: 0, contactosCreados: 0, filasOmitidas: 0 })
+    // Parse Excel en el browser
+    const buffer = await file.arrayBuffer()
+    const wb   = XLSX.read(buffer, { type: 'buffer' })
+    const ws   = wb.Sheets[wb.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
 
-    const fd = new FormData()
-    fd.append('file', file)
+    if (rows.length === 0) { toast.error('El archivo está vacío'); return }
+
+    setImporting(true)
+    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, contactosCreados: 0, filasOmitidas: 0 })
+
+    let empresasCreadas    = 0
+    let empresasExistentes = 0
+    let contactosCreados   = 0
+    let filasOmitidas      = 0
 
     try {
-      const res = await fetch('/api/directorio/importar', { method: 'POST', body: fd })
-      if (!res.ok || !res.body) {
-        const j = await res.json().catch(() => ({}))
-        toast.error(j.error ?? 'Error al importar')
-        setProgress(null)
-        return
-      }
+      // Procesar en lotes de CHUNK filas para evitar timeout en Vercel
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK)
+        const res   = await fetch('/api/directorio/importar', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ rows: chunk }),
+        })
 
-      const reader  = res.body.getReader()
-      const decoder = new TextDecoder()
-      let   buffer  = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const event = JSON.parse(line.slice(6)) as ImportProgress & { type: string }
-            if (event.type === 'error') {
-              setProgress(p => p ? { ...p, error: event.error ?? 'Error desconocido' } : null)
-              break
-            }
-            setProgress({
-              processed:         event.processed,
-              total:             event.total,
-              empresasCreadas:   event.empresasCreadas,
-              empresasExistentes:event.empresasExistentes,
-              contactosCreados:  event.contactosCreados,
-              filasOmitidas:     event.filasOmitidas,
-              done:              event.type === 'done',
-            })
-            if (event.type === 'done') {
-              qc.invalidateQueries({ queryKey: ['empresas'] })
-              qc.invalidateQueries({ queryKey: ['contactos'] })
-            }
-          } catch { /* malformed event, skip */ }
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setProgress(p => p ? { ...p, error: j.error ?? 'Error en el servidor' } : null)
+          return
         }
+
+        const result = await res.json()
+        empresasCreadas    += result.empresasCreadas    ?? 0
+        empresasExistentes += result.empresasExistentes ?? 0
+        contactosCreados   += result.contactosCreados   ?? 0
+        filasOmitidas      += result.filasOmitidas      ?? 0
+
+        setProgress({
+          processed: Math.min(i + CHUNK, rows.length),
+          total: rows.length,
+          empresasCreadas,
+          empresasExistentes,
+          contactosCreados,
+          filasOmitidas,
+        })
       }
+
+      // Marcar como completado
+      setProgress(p => p ? { ...p, processed: rows.length, done: true } : null)
+      qc.invalidateQueries({ queryKey: ['empresas'] })
+      qc.invalidateQueries({ queryKey: ['contactos'] })
     } catch {
       toast.error('Error de conexión')
-      setProgress(null)
+      setProgress(p => p ? { ...p, error: 'Error de conexión' } : null)
     } finally {
       setImporting(false)
     }
