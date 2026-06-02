@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck,
+  Building2, UserCircle2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -33,6 +34,8 @@ const navItems: NavItem[] = [
   { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Empresas',       href: '/empresas',       icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Técnicos',       href: '/tecnicos',       icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
 ]
 
 const settingsItems: NavItem[] = [

@@ -398,6 +398,37 @@ export interface TicketMessage {
   createdAt: string
 }
 
+// ─── Directorio ───────────────────────────────────────────────────────────
+export interface Empresa {
+  id: string
+  name: string
+  activity: string | null
+  address: string | null
+  city: string | null
+  province: string | null
+  website: string | null
+  organizationId: string
+  createdAt: string
+  updatedAt: string
+  _count?: { tecnicos: number }
+  tecnicos?: Tecnico[]
+}
+
+export interface Tecnico {
+  id: string
+  firstName: string
+  lastName: string
+  companyRaw: string | null
+  role: string | null
+  email: string | null
+  phone: string | null
+  empresaId: string | null
+  empresa?: { id: string; name: string } | null
+  organizationId: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ─── API Response wrapper ─────────────────────────────────────────────────
 export interface ApiResponse<T = unknown> {
   data?: T

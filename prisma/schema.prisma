@@ -43,6 +43,8 @@ model Organization {
   deals          Deal[]
   tasks          Task[]
   tickets        Ticket[]
+  empresas       Empresa[]
+  tecnicos       Tecnico[]
 }
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────
@@ -452,4 +454,44 @@ model TicketMessage {
   createdAt  DateTime @default(now())
 
   @@index([ticketId])
+}
+
+// ─── Directorio de Empresas y Técnicos ────────────────────────────────────
+model Empresa {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  activity       String?
+  address        String?
+  city           String?
+  province       String?
+  website        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tecnicos       Tecnico[]
+
+  @@index([organizationId])
+  @@index([organizationId, name])
+}
+
+model Tecnico {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  firstName      String
+  lastName       String
+  companyRaw     String?
+  role           String?
+  email          String?
+  phone          String?
+  empresaId      String?
+  empresa        Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([empresaId])
+  @@index([email])
 }
