@@ -464,8 +464,10 @@ model Empresa {
   name           String
   activity       String?
   address        String?
+  codigoPostal   String?
   city           String?
   province       String?
+  country        String?
   website        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

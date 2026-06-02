@@ -17,7 +17,8 @@ export default function EmpresasPage() {
   const router     = useRouter()
   const qc         = useQueryClient()
   const { user }   = useAuthStore()
-  const fileRef    = useRef<HTMLInputElement>(null)
+  const fileRef        = useRef<HTMLInputElement>(null)
+  const fileRefCombined = useRef<HTMLInputElement>(null)
 
   const [search,     setSearch]     = useState('')
   const [page,       setPage]       = useState(1)
@@ -64,6 +65,30 @@ export default function EmpresasPage() {
     }
   }
 
+  const handleImportCombined = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const res  = await fetch('/api/directorio/importar', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
+      toast.success(
+        `${json.empresasCreadas} empresas nuevas · ${json.empresasExistentes} ya existían · ${json.contactosCreados} contactos creados`,
+        { duration: 6000 }
+      )
+      qc.invalidateQueries({ queryKey: ['empresas'] })
+      qc.invalidateQueries({ queryKey: ['contactos'] })
+    } catch {
+      toast.error('Error al importar')
+    } finally {
+      setImporting(false)
+      if (fileRefCombined.current) fileRefCombined.current.value = ''
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteId) return
     setDeleting(true)
@@ -86,11 +111,15 @@ export default function EmpresasPage() {
           </p>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
+            <input ref={fileRefCombined} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportCombined} />
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} size="sm">
+              <Upload size={14} /> Solo empresas
+            </Button>
+            <Button variant="outline" onClick={() => fileRefCombined.current?.click()} disabled={importing}>
               <Upload size={15} />
-              {importing ? 'Importando...' : 'Importar Excel'}
+              {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
             </Button>
             <Button onClick={() => setShowForm(true)}>
               <Plus size={15} /> Nueva empresa
