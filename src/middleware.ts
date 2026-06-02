@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // Static assets — skip entirely
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/uploads') ||
@@ -24,7 +25,11 @@ export async function middleware(req: NextRequest) {
     (p) => pathname === p || pathname.startsWith(p + '/')
   )
 
-  // Must be mutable so setAll can reassign it with updated cookies
+  // Public paths: serve immediately — no Supabase call, no redirect possible
+  // This is the key guard against redirect loops on /login
+  if (isPublic) return NextResponse.next()
+
+  // Protected paths: check auth via Supabase
   let supabaseResponse = NextResponse.next({ request: req })
 
   const supabase = createServerClient(
@@ -36,9 +41,7 @@ export async function middleware(req: NextRequest) {
           return req.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // Write to the request (for subsequent middleware reads)
           cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
-          // Write to the response (for the browser)
           supabaseResponse = NextResponse.next({ request: req })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -48,7 +51,6 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  // getUser() also refreshes the session if needed (updates supabaseResponse cookies)
   let user = null
   try {
     const { data } = await supabase.auth.getUser()
@@ -57,12 +59,8 @@ export async function middleware(req: NextRequest) {
     // Supabase unavailable or env vars missing — treat as unauthenticated
   }
 
-  if (!isPublic && !user) {
+  if (!user) {
     return NextResponse.redirect(new URL('/login', req.url))
-  }
-
-  if (pathname === '/login' && user) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 
   return supabaseResponse
