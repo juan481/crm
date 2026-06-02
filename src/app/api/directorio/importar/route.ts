@@ -68,7 +68,21 @@ export async function POST(req: NextRequest) {
         empresasExistentes++
       }
 
-      // ── Crear contacto vinculado ───────────────────────────────────────
+      // ── Crear contacto (solo si no existe ya) ────────────────────────
+      const email = str('Mail').toLowerCase() || null
+
+      // Buscar duplicado: mismo email en la org, o mismo nombre+apellido en la misma empresa
+      const dupWhere = email
+        ? { organizationId: orgId, email }
+        : { organizationId: orgId, firstName, lastName: lastName || '', empresaId: empresa.id }
+
+      const existing = await db.directorioContacto.findFirst({
+        where: dupWhere,
+        select: { id: true },
+      })
+
+      if (existing) { filasOmitidas++; continue }
+
       await db.directorioContacto.create({
         data: {
           organizationId: orgId,
@@ -76,7 +90,7 @@ export async function POST(req: NextRequest) {
           lastName:   lastName   || null,
           companyRaw: empresaName,
           role:       str('Cargo')    || null,
-          email:      str('Mail').toLowerCase() || null,
+          email,
           phone:      str('Telefono') || null,
           empresaId:  empresa.id,
         },
