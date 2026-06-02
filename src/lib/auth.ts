@@ -17,8 +17,10 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
 export async function getCurrentUser(): Promise<AuthPayload | null> {
   try {
     const supabase = await createClient()
-    const { data: { user: supabaseUser } } = await supabase.auth.getUser()
-    if (!supabaseUser) return null
+    // getUser() validates the token with Supabase server — more reliable than
+    // getSession() which only reads the local cookie without server validation.
+    const { data: { user: supabaseUser }, error } = await supabase.auth.getUser()
+    if (error || !supabaseUser) return null
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const user = await (prisma.user as any).findUnique({

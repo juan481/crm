@@ -9,7 +9,11 @@ export async function GET() {
 
     const org = await prisma.organization.findUnique({
       where: { id: payload.orgId },
-      select: { name: true, logoUrl: true, primaryColor: true, secondaryColor: true, crmName: true },
+      select: {
+        name: true, logoUrl: true, primaryColor: true, secondaryColor: true, crmName: true,
+        billingAddress: true, billingEmail: true, billingPhone: true,
+        billingTaxId: true, paymentInstructions: true,
+      },
     })
 
     return NextResponse.json({ data: org })
@@ -28,7 +32,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Solo Super Admin puede modificar el branding' }, { status: 403 })
     }
 
-    const { name, logoUrl, primaryColor, secondaryColor, crmName } = await req.json()
+    const {
+      name, logoUrl, primaryColor, secondaryColor, crmName,
+      billingAddress, billingEmail, billingPhone, billingTaxId, paymentInstructions,
+    } = await req.json()
 
     const org = await prisma.organization.update({
       where: { id: payload.orgId },
@@ -38,13 +45,22 @@ export async function PATCH(req: NextRequest) {
         ...(logoUrl !== undefined && { logoUrl }),
         ...(primaryColor && { primaryColor }),
         ...(secondaryColor && { secondaryColor }),
+        ...(billingAddress !== undefined && { billingAddress: billingAddress || null }),
+        ...(billingEmail !== undefined && { billingEmail: billingEmail || null }),
+        ...(billingPhone !== undefined && { billingPhone: billingPhone || null }),
+        ...(billingTaxId !== undefined && { billingTaxId: billingTaxId || null }),
+        ...(paymentInstructions !== undefined && { paymentInstructions: paymentInstructions || null }),
       },
-      select: { name: true, logoUrl: true, primaryColor: true, secondaryColor: true, crmName: true },
+      select: {
+        name: true, logoUrl: true, primaryColor: true, secondaryColor: true, crmName: true,
+        billingAddress: true, billingEmail: true, billingPhone: true,
+        billingTaxId: true, paymentInstructions: true,
+      },
     })
 
-    return NextResponse.json({ data: org, message: 'Branding actualizado' })
+    return NextResponse.json({ data: org, message: 'Configuración actualizada' })
   } catch (error) {
     console.error('[BRANDING PATCH]', error)
-    return NextResponse.json({ error: 'Error al actualizar branding' }, { status: 500 })
+    return NextResponse.json({ error: 'Error al actualizar configuración' }, { status: 500 })
   }
 }

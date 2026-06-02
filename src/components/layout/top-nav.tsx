@@ -7,7 +7,7 @@ import Image from 'next/image'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Users, TrendingUp, CheckSquare, Calculator,
-  Headphones, CalendarDays, Mail, CreditCard, FolderOpen,
+  LifeBuoy, CalendarDays, Mail, CreditCard, FolderOpen,
   Settings, LogOut, Sun, Moon, Bell, Search, Menu, X,
   AlertCircle, AlertTriangle, Info, CalendarCheck, ChevronDown,
   Shield, UserCog, Tag, Puzzle,
@@ -35,7 +35,7 @@ const primaryNav: NavItem[] = [
   { label: 'Pipeline',       href: '/pipeline',       icon: <TrendingUp size={16} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Tareas',         href: '/tareas',         icon: <CheckSquare size={16} /> },
   { label: 'Cotizador',      href: '/cotizador',      icon: <Calculator size={16} /> },
-  { label: 'Tickets',        href: '/tickets',        icon: <Headphones size={16} /> },
+  { label: 'Tickets',        href: '/tickets',        icon: <LifeBuoy size={16} /> },
 ]
 
 const secondaryNav: NavItem[] = [

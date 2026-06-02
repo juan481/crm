@@ -46,7 +46,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       aria-modal="true"
       role="dialog"
     >
@@ -59,17 +59,18 @@ export function Modal({
       {/* Panel */}
       <div
         className={cn(
-          // Mobile: slides up from bottom, full-width, rounded top only
-          'relative w-full rounded-t-2xl sm:rounded-2xl z-10',
-          // Desktop: centered, max-width by size, full rounded
+          'relative w-full z-10',
+          // Mobile: slides up, full-width, rounded top only
+          'rounded-t-2xl sm:rounded-2xl',
+          // Desktop: max-width per size
           sizeClasses[size],
-          // Height: never exceed 90vh, scroll inside
-          'max-h-[90vh] flex flex-col',
+          // Height: cap at 90vh and enable internal scroll
+          'max-h-[90vh] flex flex-col overflow-hidden',
         )}
         style={{
           background: 'var(--color-surface)',
           border: '1px solid var(--color-border-strong)',
-          boxShadow: '0 -4px 24px rgba(0,0,0,0.12), 0 20px 60px rgba(0,0,0,0.2)',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.10), 0 20px 60px rgba(0,0,0,0.18)',
         }}
       >
         {/* Header — fixed, never scrolls */}
@@ -80,10 +81,7 @@ export function Modal({
           >
             <div className="min-w-0 flex-1">
               {title && (
-                <h2
-                  className="text-base font-semibold truncate"
-                  style={{ color: 'var(--color-text)' }}
-                >
+                <h2 className="text-base font-semibold truncate" style={{ color: 'var(--color-text)' }}>
                   {title}
                 </h2>
               )}
@@ -96,10 +94,8 @@ export function Modal({
             {showClose && (
               <button
                 onClick={onClose}
-                className="shrink-0 p-1.5 rounded-lg transition-all"
+                className="shrink-0 p-1.5 rounded-lg transition-colors hover:bg-[var(--color-surface-raised)]"
                 style={{ color: 'var(--color-text-muted)' }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-surface-raised)')}
-                onMouseLeave={e => (e.currentTarget.style.background = '')}
               >
                 <X size={17} />
               </button>
@@ -107,8 +103,8 @@ export function Modal({
           </div>
         )}
 
-        {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 p-5">
+        {/* Scrollable content — min-h-0 is critical for flex children to scroll */}
+        <div className="overflow-y-auto flex-1 min-h-0 p-5">
           {children}
         </div>
       </div>
@@ -119,8 +115,15 @@ export function Modal({
 export function ModalFooter({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={cn('flex justify-end gap-3 pt-4 mt-2', className)}
-      style={{ borderTop: '1px solid var(--color-border)' }}
+      className={cn('flex justify-end gap-3 pt-4 mt-4 sticky bottom-0', className)}
+      style={{
+        borderTop: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+        marginLeft: '-1.25rem',
+        marginRight: '-1.25rem',
+        marginBottom: '-1.25rem',
+        padding: '1rem 1.25rem 1.25rem',
+      }}
     >
       {children}
     </div>

@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Upload, Save, RotateCcw, Shield, X } from 'lucide-react'
+import { Upload, Save, RotateCcw, Shield, X, Receipt } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeStore } from '@/store/theme-store'
 import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
@@ -17,6 +18,11 @@ const schema = z.object({
   crmName: z.string().min(2, 'Mínimo 2 caracteres').max(40),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido'),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido'),
+  billingAddress: z.string().optional(),
+  billingEmail: z.string().optional(),
+  billingPhone: z.string().optional(),
+  billingTaxId: z.string().optional(),
+  paymentInstructions: z.string().optional(),
 })
 type FormData = z.infer<typeof schema>
 
@@ -34,26 +40,44 @@ export default function MarcaPage() {
   const { user } = useAuthStore()
   const { crmName, primaryColor, secondaryColor, logoUrl, loadBranding, applyTheme } = useThemeStore()
 
-  // Todos los hooks ANTES de cualquier condicional (reglas de React)
-  const [saving, setSaving]               = useState(false)
+  const [saving, setSaving] = useState(false)
   const [uploadingLogo, setUploadingLogo] = useState(false)
-  const [previewPrimary, setPreviewPrimary]     = useState(primaryColor)
+  const [previewPrimary, setPreviewPrimary] = useState(primaryColor)
   const [previewSecondary, setPreviewSecondary] = useState(secondaryColor)
+  const [loadingBilling, setLoadingBilling] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Redirección en useEffect, no durante render
   useEffect(() => {
-    if (user && user.role !== 'SUPER_ADMIN') {
-      router.replace('/dashboard')
-    }
+    if (user && user.role !== 'SUPER_ADMIN') router.replace('/dashboard')
   }, [user, router])
 
-  if (!user || user.role !== 'SUPER_ADMIN') return null
-
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { crmName, primaryColor, secondaryColor },
   })
+
+  useEffect(() => {
+    fetch('/api/settings/branding')
+      .then((r) => r.json())
+      .then(({ data }) => {
+        if (!data) return
+        reset({
+          crmName: data.crmName ?? crmName,
+          primaryColor: data.primaryColor ?? primaryColor,
+          secondaryColor: data.secondaryColor ?? secondaryColor,
+          billingAddress: data.billingAddress ?? '',
+          billingEmail: data.billingEmail ?? '',
+          billingPhone: data.billingPhone ?? '',
+          billingTaxId: data.billingTaxId ?? '',
+          paymentInstructions: data.paymentInstructions ?? '',
+        })
+      })
+      .catch(() => {})
+      .finally(() => setLoadingBilling(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!user || user.role !== 'SUPER_ADMIN') return null
 
   const applyPreset = (primary: string, secondary: string) => {
     setValue('primaryColor', primary)
@@ -63,31 +87,18 @@ export default function MarcaPage() {
     applyTheme(primary, secondary)
   }
 
-  const handleLogoClick = () => {
-    fileInputRef.current?.click()
-  }
-
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('El archivo debe ser menor a 2MB')
-      return
-    }
+    if (file.size > 2 * 1024 * 1024) { toast.error('El archivo debe ser menor a 2MB'); return }
 
     setUploadingLogo(true)
     try {
-      const formData = new FormData()
-      formData.append('logo', file)
-
-      const res = await fetch('/api/settings/branding/logo', {
-        method: 'POST',
-        body: formData,
-      })
+      const fd = new FormData()
+      fd.append('logo', file)
+      const res = await fetch('/api/settings/branding/logo', { method: 'POST', body: fd })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al subir logo'); return }
-
       loadBranding({ crmName, primaryColor, secondaryColor, logoUrl: json.data.logoUrl })
       toast.success('Logo actualizado correctamente')
     } catch {
@@ -108,9 +119,7 @@ export default function MarcaPage() {
       if (!res.ok) throw new Error()
       loadBranding({ crmName, primaryColor, secondaryColor, logoUrl: null })
       toast.success('Logo eliminado')
-    } catch {
-      toast.error('Error al eliminar logo')
-    }
+    } catch { toast.error('Error al eliminar logo') }
   }
 
   const onSubmit = async (data: FormData) => {
@@ -124,7 +133,7 @@ export default function MarcaPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
       loadBranding({ crmName: data.crmName, primaryColor: data.primaryColor, secondaryColor: data.secondaryColor, logoUrl })
-      toast.success('Branding actualizado correctamente')
+      toast.success('Configuración guardada correctamente')
     } catch {
       toast.error('Error al guardar')
     } finally {
@@ -139,12 +148,13 @@ export default function MarcaPage() {
           <Shield size={20} className="text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">Marca</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">Personalizá el logo, nombre y colores del sistema</p>
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">Marca y Configuración</h1>
+          <p className="text-sm text-[var(--color-text-muted)]">Logo, colores y datos de facturación</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        {/* Identidad */}
         <Card>
           <CardHeader>
             <CardTitle>Identidad</CardTitle>
@@ -152,28 +162,19 @@ export default function MarcaPage() {
           </CardHeader>
           <div className="space-y-4">
             <Input label="Nombre del CRM" placeholder="Mi CRM" error={errors.crmName?.message} {...register('crmName')} />
-
             <div>
               <label className="text-sm font-medium text-[var(--color-text-muted)] block mb-1.5">Logo</label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept="image/png,image/jpeg,image/svg+xml"
-                onChange={handleLogoChange}
-              />
+              <input ref={fileInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/svg+xml" onChange={handleLogoChange} />
               <div
-                onClick={handleLogoClick}
+                onClick={() => fileInputRef.current?.click()}
                 className="border-2 border-dashed border-[var(--color-border-strong)] rounded-2xl p-8 flex flex-col items-center gap-3 hover:border-[var(--color-primary)] transition-colors cursor-pointer"
               >
                 {logoUrl ? (
                   <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={logoUrl} alt="Logo" className="h-12 object-contain" />
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleRemoveLogo() }}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white"
-                    >
+                    <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveLogo() }}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white">
                       <X size={10} />
                     </button>
                   </div>
@@ -183,12 +184,11 @@ export default function MarcaPage() {
                   </div>
                 )}
                 <div className="text-center">
-                  <p className="text-sm font-medium text-[var(--color-text)]">
-                    {uploadingLogo ? 'Subiendo...' : 'Clic para subir logo'}
-                  </p>
+                  <p className="text-sm font-medium text-[var(--color-text)]">{uploadingLogo ? 'Subiendo...' : 'Clic para subir logo'}</p>
                   <p className="text-xs text-[var(--color-text-subtle)]">PNG, SVG o JPG — Máx 2MB</p>
                 </div>
-                <Button variant="secondary" size="sm" type="button" leftIcon={<Upload size={14} />} loading={uploadingLogo} onClick={(e) => { e.stopPropagation(); handleLogoClick() }}>
+                <Button variant="secondary" size="sm" type="button" leftIcon={<Upload size={14} />} loading={uploadingLogo}
+                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}>
                   Seleccionar archivo
                 </Button>
               </div>
@@ -196,6 +196,7 @@ export default function MarcaPage() {
           </div>
         </Card>
 
+        {/* Colores */}
         <Card>
           <CardHeader>
             <CardTitle>Paleta de Colores</CardTitle>
@@ -238,9 +239,52 @@ export default function MarcaPage() {
           </div>
         </Card>
 
+        {/* Datos de Facturación */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Receipt size={16} />
+              Datos de Facturación
+            </CardTitle>
+            <CardDescription>Estos datos aparecen en las facturas generadas</CardDescription>
+          </CardHeader>
+          {loadingBilling ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-xl" />)}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label="Email de facturación" type="email" placeholder="facturacion@empresa.com" error={errors.billingEmail?.message} {...register('billingEmail')} />
+                <Input label="Teléfono" placeholder="+54 11 0000-0000" {...register('billingPhone')} />
+              </div>
+              <Input label="Dirección fiscal" placeholder="Av. San Martín 1234, Buenos Aires" {...register('billingAddress')} />
+              <Input label="CUIT / RUT / Tax ID" placeholder="30-00000000-0" {...register('billingTaxId')} />
+              <div>
+                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
+                  Instrucciones de pago
+                </label>
+                <textarea
+                  {...register('paymentInstructions')}
+                  rows={3}
+                  placeholder="Ej: Transferencia bancaria al CBU 0000000000000000000000, titular: Empresa S.A."
+                  className="w-full rounded-xl px-3 py-2.5 text-sm resize-none outline-none transition-all"
+                  style={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--color-primary)' }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
+                />
+              </div>
+            </div>
+          )}
+        </Card>
+
         <div className="flex justify-end gap-3">
           <Button type="button" variant="ghost" leftIcon={<RotateCcw size={14} />} onClick={() => applyPreset('#6366f1', '#8b5cf6')}>
-            Restaurar predeterminado
+            Restaurar colores
           </Button>
           <Button type="submit" loading={saving} leftIcon={<Save size={15} />}>Guardar Cambios</Button>
         </div>

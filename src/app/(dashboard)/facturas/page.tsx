@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw } from 'lucide-react'
+import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import { Table } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
+import { InvoicePreview } from '@/components/invoices/invoice-preview'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
@@ -107,6 +108,7 @@ export default function FacturasPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showRecurring, setShowRecurring] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [previewInvoice, setPreviewInvoice] = useState<InvoiceRow | null>(null)
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
   const params = new URLSearchParams({ page: String(page), limit: '20' })
@@ -187,12 +189,19 @@ export default function FacturasPage() {
           { key: 'amount', header: 'Monto', align: 'right', render: (row) => <span className="font-semibold text-[var(--color-text)]">{formatCurrency(row.amount, row.currency)}</span> },
           { key: 'dueDate', header: 'Vencimiento', render: (row) => <span className={isOverdue(row) && row.status !== 'PAID' ? 'text-red-400 font-medium' : 'text-[var(--color-text-muted)]'}>{formatDate(row.dueDate)}</span> },
           { key: 'status', header: 'Estado', align: 'center', render: (row) => { const v = isOverdue(row) && row.status !== 'PAID' && row.status !== 'CANCELLED' ? 'danger' : STATUS_VARIANTS[row.status] ?? 'neutral'; const l = isOverdue(row) && row.status === 'PENDING' ? 'Vencida' : STATUS_LABELS[row.status] ?? row.status; return <Badge variant={v} dot size="sm">{l}</Badge> } },
-          ...(canManage ? [{ key: 'actions' as keyof InvoiceRow, header: 'Acciones', align: 'right' as const, render: (row: InvoiceRow) => (
+          { key: 'actions' as keyof InvoiceRow, header: 'Acciones', align: 'right' as const, render: (row: InvoiceRow) => (
             <div className="flex items-center gap-2 justify-end">
-              {row.status !== 'PAID' && row.status !== 'CANCELLED' && <button onClick={(e) => { e.stopPropagation(); markAsPaid(row.id) }} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all">Marcar pagada</button>}
-              <button onClick={(e) => { e.stopPropagation(); setDeletingId(row.id) }} className="text-xs text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400 px-2.5 py-1 rounded-lg transition-all">Eliminar</button>
+              <button onClick={(e) => { e.stopPropagation(); setPreviewInvoice(row) }} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                <Eye size={11} /> Ver
+              </button>
+              {canManage && row.status !== 'PAID' && row.status !== 'CANCELLED' && (
+                <button onClick={(e) => { e.stopPropagation(); markAsPaid(row.id) }} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all">Marcar pagada</button>
+              )}
+              {canManage && (
+                <button onClick={(e) => { e.stopPropagation(); setDeletingId(row.id) }} className="text-xs text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400 px-2.5 py-1 rounded-lg transition-all">Eliminar</button>
+              )}
             </div>
-          ) }] : []),
+          ) },
         ]}
       />
 
@@ -201,12 +210,16 @@ export default function FacturasPage() {
         <InvoiceForm onSuccess={() => { setShowCreate(false); qc.invalidateQueries({ queryKey: ['invoices'] }) }} onCancel={() => setShowCreate(false)} />
       </Modal>
       <Modal open={!!deletingId} onClose={() => setDeletingId(null)} title="Eliminar Factura" size="sm">
-        <p className="text-sm text-[var(--color-text-muted)] mb-6">¿Estás seguro de eliminar esta factura?</p>
+        <p className="text-sm text-[var(--color-text-muted)] mb-6">¿Estás seguro de eliminar esta factura? Esta acción no se puede deshacer.</p>
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={() => setDeletingId(null)}>Cancelar</Button>
-          <Button variant="danger" onClick={() => deletingId && deleteInvoice(deletingId)}>Eliminar</Button>
+          <Button variant="danger" onClick={() => { if (deletingId) deleteInvoice(deletingId) }}>Eliminar</Button>
         </div>
       </Modal>
+
+      {previewInvoice && (
+        <InvoicePreview invoice={previewInvoice} onClose={() => setPreviewInvoice(null)} />
+      )}
     </div>
   )
 }

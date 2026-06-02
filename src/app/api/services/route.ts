@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { unstable_cache } from 'next/cache'
 
 // Row returned by the raw query
 interface ServiceRow {
@@ -45,22 +44,16 @@ async function fetchServicesWithCount(orgId: string) {
   }))
 }
 
-const getCachedServices = unstable_cache(
-  fetchServicesWithCount,
-  ['services-with-count'],
-  { revalidate: 120 } // 2 min — services change infrequently
-)
-
 export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const services = await getCachedServices(payload.orgId)
+    const services = await fetchServicesWithCount(payload.orgId)
 
     return NextResponse.json(
       { data: services },
-      { headers: { 'Cache-Control': 's-maxage=120, stale-while-revalidate=600' } }
+      { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (error) {
     console.error('[SERVICES GET]', error)

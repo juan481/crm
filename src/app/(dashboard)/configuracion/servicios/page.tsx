@@ -63,8 +63,8 @@ function ServiceForm({ service, onSuccess, onCancel }: { service?: Service; onSu
   }
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <Input label="Nombre del servicio" placeholder="SEO + Google Ads" error={errors.name?.message} {...register('name')} />
-      <Input label="Descripción (opcional)" placeholder="Descripción breve" {...register('description')} />
+      <Input label="Nombre del servicio" placeholder="Ej: Monitoreo 24hs, Instalación, Mantenimiento..." error={errors.name?.message} {...register('name')} />
+      <Input label="Descripción (opcional)" placeholder="Descripción del servicio (opcional)" {...register('description')} />
       <div className="grid grid-cols-2 gap-3">
         <Input label="Precio" type="number" step="0.01" placeholder="0" error={errors.price?.message} {...register('price')} />
         <Select label="Moneda" options={CURRENCY_OPTIONS} {...register('currency')} />

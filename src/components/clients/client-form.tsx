@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { ModalFooter } from '@/components/ui/modal'
+import { Combobox } from '@/components/ui/combobox'
 import { COUNTRIES } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import type { Client } from '@/types'
@@ -62,18 +63,6 @@ const STATUS_OPTIONS = [
   { value: 'EXPIRED', label: 'Vencido' },
 ]
 
-const SERVICE_OPTIONS = [
-  { value: '', label: 'Sin asignar' },
-  { value: 'SEO', label: 'SEO' },
-  { value: 'Ads', label: 'Publicidad Digital' },
-  { value: 'Social Media', label: 'Social Media' },
-  { value: 'Web Design', label: 'Diseño Web' },
-  { value: 'Content', label: 'Contenidos' },
-  { value: 'Full Service', label: 'Full Service' },
-  { value: 'SEO + Ads', label: 'SEO + Ads' },
-  { value: 'Otro', label: 'Otro' },
-]
-
 const CLIENT_TYPE_OPTIONS = [
   { value: 'B2B', label: 'B2B (Empresa)' },
   { value: 'B2C', label: 'B2C (Consumidor)' },
@@ -111,6 +100,14 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 
 export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('info')
+  const [serviceTypeOptions, setServiceTypeOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/clients/service-types')
+      .then((r) => r.json())
+      .then((json) => { if (json.data) setServiceTypeOptions(json.data) })
+      .catch(() => {})
+  }, [])
 
   const {
     register,
@@ -235,7 +232,20 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
           <Input label="Sitio Web" placeholder="https://empresa.com" {...register('website')} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select label="Estado" options={STATUS_OPTIONS} {...register('status')} />
-            <Select label="Tipo de Servicio" options={SERVICE_OPTIONS} {...register('serviceType')} />
+            <Controller
+              control={control}
+              name="serviceType"
+              render={({ field }) => (
+                <Combobox
+                  label="Tipo de Servicio"
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  options={serviceTypeOptions}
+                  placeholder="Seleccioná o escribí uno nuevo..."
+                  allowCustom
+                />
+              )}
+            />
             <Input label="MRR (USD)" type="number" min="0" step="0.01" placeholder="0.00" {...register('mrr')} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
