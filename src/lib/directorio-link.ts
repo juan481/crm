@@ -54,3 +54,28 @@ export function findEmpresaMatch(
 
   return null
 }
+
+export async function relinkContactos(
+  db: Record<string, unknown>,
+  empresaId: string,
+  empresaName: string,
+  orgId: string
+): Promise<number> {
+  const unlinkeds = await (db as any).directorioContacto.findMany({
+    where: { organizationId: orgId, empresaId: null },
+    select: { id: true, companyRaw: true, email: true },
+  })
+
+  const toLink: string[] = unlinkeds
+    .filter((c: any) => findEmpresaMatch(c.email, c.companyRaw, [{ id: empresaId, name: empresaName, website: null }]) === empresaId)
+    .map((c: any) => c.id)
+
+  if (toLink.length === 0) return 0
+
+  await (db as any).directorioContacto.updateMany({
+    where: { id: { in: toLink } },
+    data: { empresaId },
+  })
+
+  return toLink.length
+}

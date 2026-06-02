@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { relinkContactos } from '@/lib/directorio-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,6 +78,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const empresa = await db.empresa.update({ where: { id: params.id }, data: updateData })
+
+    // When empresa is newly marked as cliente, link any matching unlinked contacts
+    if (isCliente === true && !exists.isCliente) {
+      await relinkContactos(db, params.id, empresa.name, payload.orgId)
+    }
 
     return NextResponse.json({
       data: {

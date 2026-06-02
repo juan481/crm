@@ -72,6 +72,13 @@ export function AppShell({ user, branding, children }: AppShellProps) {
       <div className="flex-1 flex flex-col overflow-hidden">
         <AppHeader user={user} onMenuToggle={() => setSidebarOpen(v => !v)} />
 
+        {/* Beta environment notice */}
+        <div className="px-4 py-2 text-xs text-center font-medium shrink-0"
+          style={{ background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid rgba(245,158,11,0.25)', color: 'rgb(180,120,20)' }}>
+          Entorno de prueba (Beta) — podés experimentar lentitud o algún bug ocasional.
+          Si encontrás algún problema, reportalo al administrador.
+        </div>
+
         <main className="flex-1 overflow-y-auto">
           <ErrorBoundary>
             <AnimatePresence mode="wait">

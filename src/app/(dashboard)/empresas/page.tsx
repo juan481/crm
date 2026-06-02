@@ -3,7 +3,10 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2, CheckCircle2, XCircle } from 'lucide-react'
+import {
+  Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2,
+  CheckCircle2, XCircle, Merge, Filter, X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -34,27 +37,55 @@ export default function EmpresasPage() {
   const fileRef     = useRef<HTMLInputElement>(null)
   const fileRefDir  = useRef<HTMLInputElement>(null)
 
-  const [search,    setSearch]    = useState('')
-  const [page,      setPage]      = useState(1)
-  const [showForm,  setShowForm]  = useState(false)
-  const [importing, setImporting] = useState(false)
-  const [deleteId,  setDeleteId]  = useState<string | null>(null)
-  const [deleting,  setDeleting]  = useState(false)
-  const [progress,  setProgress]  = useState<ImportProgress | null>(null)
+  const [search,          setSearch]          = useState('')
+  const [filterActividad, setFilterActividad] = useState('')
+  const [filterCiudad,    setFilterCiudad]    = useState('')
+  const [tieneWeb,        setTieneWeb]        = useState('')
+  const [showFilters,     setShowFilters]     = useState(false)
+  const [page,            setPage]            = useState(1)
+  const [showForm,        setShowForm]        = useState(false)
+  const [importing,       setImporting]       = useState(false)
+  const [deleteId,        setDeleteId]        = useState<string | null>(null)
+  const [deleting,        setDeleting]        = useState(false)
+  const [progress,        setProgress]        = useState<ImportProgress | null>(null)
+
+  // Merge state
+  const [showMerge,    setShowMerge]    = useState(false)
+  const [mergePrimary, setMergePrimary] = useState('')
+  const [mergeSecond,  setMergeSecond]  = useState('')
+  const [merging,      setMerging]      = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
+  const activeFilters = [filterActividad, filterCiudad, tieneWeb].filter(Boolean).length
+
   const { data, isLoading } = useQuery({
-    queryKey: ['empresas', search, page],
+    queryKey: ['empresas', search, filterActividad, filterCiudad, tieneWeb, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
-      if (search.length >= 2) p.set('search', search)
+      if (search.length >= 2)          p.set('search', search)
+      if (filterActividad.length >= 2) p.set('filterActividad', filterActividad)
+      if (filterCiudad.length >= 2)    p.set('filterCiudad', filterCiudad)
+      if (tieneWeb)                    p.set('tieneWeb', tieneWeb)
       const res = await fetch(`/api/empresas?${p}`)
       if (!res.ok) throw new Error('Error al cargar empresas')
       return res.json()
     },
     staleTime: 30_000,
   })
+
+  // All empresas for merge selects (only loaded when merge modal is open)
+  const { data: allEmpresasData } = useQuery({
+    queryKey: ['empresas-all'],
+    queryFn: async () => {
+      const res = await fetch('/api/empresas?limit=200')
+      if (!res.ok) throw new Error('Error')
+      return res.json()
+    },
+    enabled: showMerge,
+    staleTime: 60_000,
+  })
+  const allEmpresas: Empresa[] = allEmpresasData?.data ?? []
 
   const empresas: Empresa[] = data?.data ?? []
   const total: number       = data?.total ?? 0
@@ -85,7 +116,6 @@ export default function EmpresasPage() {
     if (!file) return
     if (fileRefDir.current) fileRefDir.current.value = ''
 
-    // Parse Excel en el browser
     const buffer = await file.arrayBuffer()
     const wb   = XLSX.read(buffer, { type: 'buffer' })
     const ws   = wb.Sheets[wb.SheetNames[0]]
@@ -102,7 +132,6 @@ export default function EmpresasPage() {
     let filasOmitidas      = 0
 
     try {
-      // Procesar en lotes de CHUNK filas para evitar timeout en Vercel
       for (let i = 0; i < rows.length; i += CHUNK) {
         const chunk = rows.slice(i, i + CHUNK)
         const res   = await fetch('/api/directorio/importar', {
@@ -132,11 +161,9 @@ export default function EmpresasPage() {
           filasOmitidas,
         })
 
-        // Pequeña pausa entre lotes para no saturar el pool de DB
         if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
       }
 
-      // Marcar como completado
       setProgress(p => p ? { ...p, processed: rows.length, done: true } : null)
       qc.invalidateQueries({ queryKey: ['empresas'] })
       qc.invalidateQueries({ queryKey: ['contactos'] })
@@ -157,6 +184,34 @@ export default function EmpresasPage() {
       else { const j = await res.json(); toast.error(j.error) }
     } catch { toast.error('Error de conexión') }
     finally { setDeleting(false); setDeleteId(null) }
+  }
+
+  const handleMerge = async () => {
+    if (!mergePrimary || !mergeSecond) { toast.error('Seleccioná las dos empresas'); return }
+    setMerging(true)
+    try {
+      const res = await fetch('/api/empresas/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryId: mergePrimary, secondaryId: mergeSecond }),
+      })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error); return }
+      toast.success(j.message)
+      qc.invalidateQueries({ queryKey: ['empresas'] })
+      qc.invalidateQueries({ queryKey: ['empresas-all'] })
+      setShowMerge(false)
+      setMergePrimary('')
+      setMergeSecond('')
+    } catch { toast.error('Error de conexión') }
+    finally { setMerging(false) }
+  }
+
+  const clearFilters = () => {
+    setFilterActividad('')
+    setFilterCiudad('')
+    setTieneWeb('')
+    setPage(1)
   }
 
   const pct = progress && progress.total > 0
@@ -184,6 +239,9 @@ export default function EmpresasPage() {
               <Upload size={15} />
               {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
             </Button>
+            <Button variant="outline" onClick={() => setShowMerge(true)}>
+              <Merge size={14} /> Unificar duplicados
+            </Button>
             <Button onClick={() => setShowForm(true)}>
               <Plus size={15} /> Nueva empresa
             </Button>
@@ -191,15 +249,83 @@ export default function EmpresasPage() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="max-w-sm">
-        <Input
-          placeholder="Buscar por nombre, actividad, ciudad..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }}
-          leftIcon={<Search size={15} />}
-        />
+      {/* Search + filter toggle */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 min-w-[220px] max-w-sm">
+          <Input
+            placeholder="Buscar por nombre, actividad, ciudad, contacto..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            leftIcon={<Search size={15} />}
+          />
+        </div>
+        <button
+          onClick={() => setShowFilters(v => !v)}
+          className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl transition-colors border"
+          style={{
+            border: '1px solid var(--color-border-strong)',
+            background: showFilters || activeFilters > 0 ? 'var(--color-primary)' : 'var(--color-surface)',
+            color: showFilters || activeFilters > 0 ? '#fff' : 'var(--color-text-muted)',
+          }}
+        >
+          <Filter size={14} />
+          Filtros
+          {activeFilters > 0 && (
+            <span className="ml-1 bg-white text-[var(--color-primary)] text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              {activeFilters}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Filtros específicos</span>
+            {activeFilters > 0 && (
+              <button onClick={clearFilters} className="flex items-center gap-1 text-xs hover:opacity-80" style={{ color: 'var(--color-primary)' }}>
+                <X size={12} /> Limpiar filtros
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Actividad</label>
+              <Input
+                placeholder="Ej: Seguridad electrónica"
+                value={filterActividad}
+                onChange={e => { setFilterActividad(e.target.value); setPage(1) }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Localidad</label>
+              <Input
+                placeholder="Ej: Córdoba, Rosario..."
+                value={filterCiudad}
+                onChange={e => { setFilterCiudad(e.target.value); setPage(1) }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>¿Tiene web?</label>
+              <select
+                value={tieneWeb}
+                onChange={e => { setTieneWeb(e.target.value); setPage(1) }}
+                className="w-full appearance-none rounded-xl px-3 py-2 text-sm outline-none transition-all"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border-strong)',
+                  color: 'var(--color-text)',
+                }}
+              >
+                <option value="">Todos</option>
+                <option value="si">Sí (tiene web)</option>
+                <option value="no">No (sin web)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
@@ -319,6 +445,80 @@ export default function EmpresasPage() {
         </div>
       </Modal>
 
+      {/* Merge modal */}
+      <Modal open={showMerge} onClose={() => { setShowMerge(false); setMergePrimary(''); setMergeSecond('') }} title="Unificar empresas duplicadas" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Seleccioná las dos empresas a unificar. La <strong>empresa principal</strong> conserva su nombre y sus datos tienen prioridad. Los contactos de la empresa a eliminar pasan a la principal.
+          </p>
+
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Empresa principal (se conserva)
+            </label>
+            <select
+              value={mergePrimary}
+              onChange={e => setMergePrimary(e.target.value)}
+              className="w-full appearance-none rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border-strong)',
+                color: 'var(--color-text)',
+              }}
+            >
+              <option value="">— Seleccionar empresa principal —</option>
+              {allEmpresas.map(e => (
+                <option key={e.id} value={e.id} disabled={e.id === mergeSecond}>
+                  {e.name} {e._count?.contactos ? `(${e._count.contactos} contacto${e._count.contactos !== 1 ? 's' : ''})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              Empresa a eliminar (se fusiona en la principal)
+            </label>
+            <select
+              value={mergeSecond}
+              onChange={e => setMergeSecond(e.target.value)}
+              className="w-full appearance-none rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border-strong)',
+                color: 'var(--color-text)',
+              }}
+            >
+              <option value="">— Seleccionar empresa a eliminar —</option>
+              {allEmpresas.map(e => (
+                <option key={e.id} value={e.id} disabled={e.id === mergePrimary}>
+                  {e.name} {e._count?.contactos ? `(${e._count.contactos} contacto${e._count.contactos !== 1 ? 's' : ''})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {mergePrimary && mergeSecond && (
+            <div className="rounded-xl p-3 text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+              La empresa "{allEmpresas.find(e => e.id === mergeSecond)?.name}" será <strong>eliminada permanentemente</strong>. Sus contactos pasarán a "{allEmpresas.find(e => e.id === mergePrimary)?.name}".
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="outline" onClick={() => { setShowMerge(false); setMergePrimary(''); setMergeSecond('') }}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleMerge}
+              disabled={merging || !mergePrimary || !mergeSecond}
+            >
+              {merging ? 'Unificando...' : 'Unificar empresas'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Import progress modal */}
       <Modal
         open={!!progress}
@@ -329,7 +529,6 @@ export default function EmpresasPage() {
       >
         {progress && (
           <div className="space-y-5">
-            {/* Progress bar */}
             <div>
               <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>
                 <span>{progress.done ? 'Completado' : `Procesando fila ${progress.processed} de ${progress.total}...`}</span>
@@ -340,17 +539,12 @@ export default function EmpresasPage() {
                   className="h-full rounded-full transition-all duration-300"
                   style={{
                     width: `${pct}%`,
-                    background: progress.error
-                      ? '#ef4444'
-                      : progress.done
-                      ? '#10b981'
-                      : 'var(--color-primary)',
+                    background: progress.error ? '#ef4444' : progress.done ? '#10b981' : 'var(--color-primary)',
                   }}
                 />
               </div>
             </div>
 
-            {/* Live counters */}
             <div className="grid grid-cols-2 gap-3">
               {[
                 { label: 'Empresas nuevas',     value: progress.empresasCreadas,    color: '#10b981' },
@@ -368,18 +562,14 @@ export default function EmpresasPage() {
 
             {progress.done && (
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
-                <CheckCircle2 size={16} />
-                Importación completada exitosamente
+                <CheckCircle2 size={16} /> Importación completada exitosamente
               </div>
             )}
-
             {progress.error && (
               <div className="flex items-center gap-2 text-sm font-medium text-red-500">
-                <XCircle size={16} />
-                {progress.error}
+                <XCircle size={16} /> {progress.error}
               </div>
             )}
-
             {!progress.done && !progress.error && (
               <p className="text-xs text-center" style={{ color: 'var(--color-text-muted)' }}>
                 No cierres esta ventana mientras se importa...

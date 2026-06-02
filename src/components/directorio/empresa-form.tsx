@@ -4,20 +4,20 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { ModalFooter } from '@/components/ui/modal'
 import { UserPlus, ChevronDown, ChevronUp } from 'lucide-react'
+import { ARGENTINA_PROVINCES, CITIES_BY_PROVINCE } from '@/lib/argentina-geo'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
 interface FormData {
-  // Empresa
   name:     string
   activity: string
   address:  string
   city:     string
   province: string
   website:  string
-  // Primer contacto (opcional)
   tcFirstName: string
   tcLastName:  string
   tcRole:      string
@@ -30,10 +30,15 @@ interface Props {
   onSuccess: (empresa: Empresa) => void
 }
 
+const PROVINCE_OPTIONS = [
+  { value: '', label: '— Seleccionar provincia —' },
+  ...ARGENTINA_PROVINCES.map(p => ({ value: p, label: p })),
+]
+
 export function EmpresaForm({ empresa, onSuccess }: Props) {
   const [addContact, setAddContact] = useState(false)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     defaultValues: {
       name:        empresa?.name     ?? '',
       activity:    empresa?.activity ?? '',
@@ -49,8 +54,20 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
     },
   })
 
+  const selectedProvince = watch('province')
+
+  // Build city options for the selected province. If editing and city isn't in the list, add it.
+  const provinceCities = selectedProvince ? (CITIES_BY_PROVINCE[selectedProvince] ?? []) : []
+  const existingCity   = empresa?.city ?? ''
+  const cityList       = (existingCity && !provinceCities.includes(existingCity))
+    ? [existingCity, ...provinceCities]
+    : provinceCities
+  const CITY_OPTIONS   = [
+    { value: '', label: selectedProvince ? '— Seleccionar localidad —' : '— Primero seleccioná provincia —' },
+    ...cityList.map(c => ({ value: c, label: c })),
+  ]
+
   const onSubmit = async (data: FormData) => {
-    // 1. Create / update empresa
     const url    = empresa ? `/api/empresas/${empresa.id}` : '/api/empresas'
     const method = empresa ? 'PUT' : 'POST'
 
@@ -71,7 +88,6 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
 
     const savedEmpresa: Empresa = json.data
 
-    // 2. Create first contact if the toggle is on and at least name was filled
     if (!empresa && addContact && data.tcFirstName.trim() && data.tcLastName.trim()) {
       const tcRes = await fetch('/api/contactos', {
         method: 'POST',
@@ -102,7 +118,6 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {/* ── Empresa ── */}
       <div>
         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
           Empresa <span className="text-red-400">*</span>
@@ -123,12 +138,19 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Localidad</label>
-          <Input {...register('city')} placeholder="Ciudad" />
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Provincia</label>
+          <Select
+            {...register('province')}
+            options={PROVINCE_OPTIONS}
+          />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Provincia</label>
-          <Input {...register('province')} placeholder="Provincia" />
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Localidad</label>
+          <Select
+            {...register('city')}
+            options={CITY_OPTIONS}
+            disabled={!selectedProvince}
+          />
         </div>
       </div>
 
@@ -142,12 +164,9 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         <Input {...register('website')} placeholder="https://empresa.com" />
       </div>
 
-      {/* ── Primer técnico (solo en alta nueva) ── */}
+      {/* Primer contacto (solo en alta nueva) */}
       {!empresa && (
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ border: '1px solid var(--color-border)' }}
-        >
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
           <button
             type="button"
             onClick={() => setAddContact(v => !v)}
@@ -196,9 +215,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-                  Cargo
-                </label>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>Cargo</label>
                 <Input
                   {...register('tcRole')}
                   placeholder="Ej: Administrador técnico, Dueño, Instalador..."
@@ -207,23 +224,12 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-                    Mail
-                  </label>
-                  <Input
-                    {...register('tcEmail')}
-                    type="email"
-                    placeholder="tecnico@empresa.com"
-                  />
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>Mail</label>
+                  <Input {...register('tcEmail')} type="email" placeholder="tecnico@empresa.com" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-                    Teléfono
-                  </label>
-                  <Input
-                    {...register('tcPhone')}
-                    placeholder="+54 11 1234-5678"
-                  />
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text)' }}>Teléfono</label>
+                  <Input {...register('tcPhone')} placeholder="+54 11 1234-5678" />
                 </div>
               </div>
             </div>

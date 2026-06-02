@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { relinkContactos } from '@/lib/directorio-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,11 +19,14 @@ export async function GET(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { searchParams } = req.nextUrl
-    const search    = searchParams.get('search')    ?? ''
-    const isCliente = searchParams.get('isCliente') // 'true' | 'false' | null
-    const page      = Math.max(1, Number(searchParams.get('page')  ?? 1))
-    const limit     = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 20)))
-    const skip      = (page - 1) * limit
+    const search          = searchParams.get('search')          ?? ''
+    const isCliente       = searchParams.get('isCliente')
+    const filterActividad = searchParams.get('filterActividad') ?? ''
+    const filterCiudad    = searchParams.get('filterCiudad')    ?? ''
+    const tieneWeb        = searchParams.get('tieneWeb')        // 'si' | 'no' | null
+    const page            = Math.max(1, Number(searchParams.get('page')  ?? 1))
+    const limit           = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 20)))
+    const skip            = (page - 1) * limit
 
     const db = prisma as any
     const where: Record<string, unknown> = { organizationId: payload.orgId }
@@ -30,11 +34,22 @@ export async function GET(req: NextRequest) {
     if (isCliente === 'true')  where.isCliente = true
     if (isCliente === 'false') where.isCliente = false
 
+    // Dedicated field filters
+    if (filterActividad.length >= 2) where.activity = { contains: filterActividad, mode: 'insensitive' }
+    if (filterCiudad.length    >= 2) where.city     = { contains: filterCiudad,    mode: 'insensitive' }
+    if (tieneWeb === 'si')  where.website = { not: null }
+    if (tieneWeb === 'no')  where.website = null
+
+    // General search: name, activity, city + bidirectional (contact names)
     if (search.length >= 2) {
       where.OR = [
         { name:     { contains: search, mode: 'insensitive' } },
         { activity: { contains: search, mode: 'insensitive' } },
         { city:     { contains: search, mode: 'insensitive' } },
+        { contactos: { some: { OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName:  { contains: search, mode: 'insensitive' } },
+        ] } } },
       ]
     }
 
@@ -67,7 +82,9 @@ export async function POST(req: NextRequest) {
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
-    const empresa = await (prisma as any).empresa.create({
+    const db = prisma as any
+
+    const empresa = await db.empresa.create({
       data: {
         name:         name.trim(),
         activity:     activity?.trim()     || null,
@@ -81,6 +98,9 @@ export async function POST(req: NextRequest) {
       },
       select: SELECT,
     })
+
+    // Link any existing unlinked contacts that match this empresa
+    await relinkContactos(db, empresa.id, empresa.name, payload.orgId)
 
     return NextResponse.json({
       data: {

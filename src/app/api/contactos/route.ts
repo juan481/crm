@@ -21,11 +21,12 @@ export async function GET(req: NextRequest) {
     if (empresaId) where.empresaId = empresaId
     if (search.length >= 2) {
       where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName:  { contains: search, mode: 'insensitive' } },
-        { email:     { contains: search, mode: 'insensitive' } },
-        { role:      { contains: search, mode: 'insensitive' } },
-        { companyRaw:{ contains: search, mode: 'insensitive' } },
+        { firstName:  { contains: search, mode: 'insensitive' } },
+        { lastName:   { contains: search, mode: 'insensitive' } },
+        { email:      { contains: search, mode: 'insensitive' } },
+        { role:       { contains: search, mode: 'insensitive' } },
+        { companyRaw: { contains: search, mode: 'insensitive' } },
+        { empresa:    { name: { contains: search, mode: 'insensitive' } } },
       ]
     }
 
