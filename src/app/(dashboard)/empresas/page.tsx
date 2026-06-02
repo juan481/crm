@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2 } from 'lucide-react'
+import { Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -13,19 +13,31 @@ import { useAuthStore } from '@/store/auth-store'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
-export default function EmpresasPage() {
-  const router     = useRouter()
-  const qc         = useQueryClient()
-  const { user }   = useAuthStore()
-  const fileRef        = useRef<HTMLInputElement>(null)
-  const fileRefCombined = useRef<HTMLInputElement>(null)
+interface ImportProgress {
+  processed: number
+  total: number
+  empresasCreadas: number
+  empresasExistentes: number
+  contactosCreados: number
+  filasOmitidas: number
+  done?: boolean
+  error?: string
+}
 
-  const [search,     setSearch]     = useState('')
-  const [page,       setPage]       = useState(1)
-  const [showForm,   setShowForm]   = useState(false)
-  const [importing,  setImporting]  = useState(false)
-  const [deleteId,   setDeleteId]   = useState<string | null>(null)
-  const [deleting,   setDeleting]   = useState(false)
+export default function EmpresasPage() {
+  const router      = useRouter()
+  const qc          = useQueryClient()
+  const { user }    = useAuthStore()
+  const fileRef     = useRef<HTMLInputElement>(null)
+  const fileRefDir  = useRef<HTMLInputElement>(null)
+
+  const [search,    setSearch]    = useState('')
+  const [page,      setPage]      = useState(1)
+  const [showForm,  setShowForm]  = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [deleteId,  setDeleteId]  = useState<string | null>(null)
+  const [deleting,  setDeleting]  = useState(false)
+  const [progress,  setProgress]  = useState<ImportProgress | null>(null)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
@@ -65,27 +77,67 @@ export default function EmpresasPage() {
     }
   }
 
-  const handleImportCombined = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportDirectorio = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (fileRefDir.current) fileRefDir.current.value = ''
+
     setImporting(true)
+    setProgress({ processed: 0, total: 0, empresasCreadas: 0, empresasExistentes: 0, contactosCreados: 0, filasOmitidas: 0 })
+
     const fd = new FormData()
     fd.append('file', file)
+
     try {
-      const res  = await fetch('/api/directorio/importar', { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!res.ok) { toast.error(json.error); return }
-      toast.success(
-        `${json.empresasCreadas} empresas nuevas · ${json.empresasExistentes} ya existían · ${json.contactosCreados} contactos creados`,
-        { duration: 6000 }
-      )
-      qc.invalidateQueries({ queryKey: ['empresas'] })
-      qc.invalidateQueries({ queryKey: ['contactos'] })
+      const res = await fetch('/api/directorio/importar', { method: 'POST', body: fd })
+      if (!res.ok || !res.body) {
+        const j = await res.json().catch(() => ({}))
+        toast.error(j.error ?? 'Error al importar')
+        setProgress(null)
+        return
+      }
+
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let   buffer  = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const event = JSON.parse(line.slice(6)) as ImportProgress & { type: string }
+            if (event.type === 'error') {
+              setProgress(p => p ? { ...p, error: event.error ?? 'Error desconocido' } : null)
+              break
+            }
+            setProgress({
+              processed:         event.processed,
+              total:             event.total,
+              empresasCreadas:   event.empresasCreadas,
+              empresasExistentes:event.empresasExistentes,
+              contactosCreados:  event.contactosCreados,
+              filasOmitidas:     event.filasOmitidas,
+              done:              event.type === 'done',
+            })
+            if (event.type === 'done') {
+              qc.invalidateQueries({ queryKey: ['empresas'] })
+              qc.invalidateQueries({ queryKey: ['contactos'] })
+            }
+          } catch { /* malformed event, skip */ }
+        }
+      }
     } catch {
-      toast.error('Error al importar')
+      toast.error('Error de conexión')
+      setProgress(null)
     } finally {
       setImporting(false)
-      if (fileRefCombined.current) fileRefCombined.current.value = ''
     }
   }
 
@@ -100,6 +152,10 @@ export default function EmpresasPage() {
     finally { setDeleting(false); setDeleteId(null) }
   }
 
+  const pct = progress && progress.total > 0
+    ? Math.round((progress.processed / progress.total) * 100)
+    : 0
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -107,17 +163,17 @@ export default function EmpresasPage() {
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Empresas</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-            Directorio de empresas y sus técnicos vinculados
+            Directorio de empresas y sus contactos vinculados
           </p>
         </div>
         {canManage && (
           <div className="flex gap-2 flex-wrap">
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
-            <input ref={fileRefCombined} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportCombined} />
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} size="sm">
+            <input ref={fileRef}    type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
+            <input ref={fileRefDir} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportDirectorio} />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
               <Upload size={14} /> Solo empresas
             </Button>
-            <Button variant="outline" onClick={() => fileRefCombined.current?.click()} disabled={importing}>
+            <Button variant="outline" onClick={() => fileRefDir.current?.click()} disabled={importing}>
               <Upload size={15} />
               {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
             </Button>
@@ -147,7 +203,7 @@ export default function EmpresasPage() {
               <th className="px-4 py-3 text-left font-semibold hidden md:table-cell" style={{ color: 'var(--color-text-muted)' }}>Actividad</th>
               <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell" style={{ color: 'var(--color-text-muted)' }}>Localidad</th>
               <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell" style={{ color: 'var(--color-text-muted)' }}>Web</th>
-              <th className="px-4 py-3 text-center font-semibold" style={{ color: 'var(--color-text-muted)' }}>Técnicos</th>
+              <th className="px-4 py-3 text-center font-semibold" style={{ color: 'var(--color-text-muted)' }}>Contactos</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -201,8 +257,7 @@ export default function EmpresasPage() {
                     {e.website ? (
                       <a
                         href={e.website.startsWith('http') ? e.website : `https://${e.website}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        target="_blank" rel="noopener noreferrer"
                         onClick={ev => ev.stopPropagation()}
                         className="flex items-center gap-1 hover:underline"
                         style={{ color: 'var(--color-primary)' }}
@@ -247,7 +302,7 @@ export default function EmpresasPage() {
       {/* Delete confirm */}
       <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Eliminar empresa" size="sm">
         <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
-          ¿Eliminás esta empresa? Los técnicos vinculados quedarán sin vínculo.
+          ¿Eliminás esta empresa? Los contactos vinculados quedarán sin vínculo.
         </p>
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Button>
@@ -255,6 +310,76 @@ export default function EmpresasPage() {
             {deleting ? 'Eliminando...' : 'Eliminar'}
           </Button>
         </div>
+      </Modal>
+
+      {/* Import progress modal */}
+      <Modal
+        open={!!progress}
+        onClose={() => { if (progress?.done || progress?.error) setProgress(null) }}
+        title="Importando directorio"
+        size="sm"
+        showClose={!!(progress?.done || progress?.error)}
+      >
+        {progress && (
+          <div className="space-y-5">
+            {/* Progress bar */}
+            <div>
+              <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>
+                <span>{progress.done ? 'Completado' : `Procesando fila ${progress.processed} de ${progress.total}...`}</span>
+                <span>{pct}%</span>
+              </div>
+              <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${pct}%`,
+                    background: progress.error
+                      ? '#ef4444'
+                      : progress.done
+                      ? '#10b981'
+                      : 'var(--color-primary)',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Live counters */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Empresas nuevas',     value: progress.empresasCreadas,    color: '#10b981' },
+                { label: 'Empresas existentes', value: progress.empresasExistentes, color: 'var(--color-text-muted)' },
+                { label: 'Contactos creados',   value: progress.contactosCreados,   color: 'var(--color-primary)' },
+                { label: 'Filas omitidas',      value: progress.filasOmitidas,      color: 'var(--color-text-muted)' },
+              ].map(s => (
+                <div key={s.label} className="rounded-xl p-3 text-center"
+                  style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                  <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {progress.done && (
+              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
+                <CheckCircle2 size={16} />
+                Importación completada exitosamente
+              </div>
+            )}
+
+            {progress.error && (
+              <div className="flex items-center gap-2 text-sm font-medium text-red-500">
+                <XCircle size={16} />
+                {progress.error}
+              </div>
+            )}
+
+            {!progress.done && !progress.error && (
+              <p className="text-xs text-center" style={{ color: 'var(--color-text-muted)' }}>
+                No cierres esta ventana mientras se importa...
+              </p>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   )
