@@ -8,7 +8,13 @@ import type { User } from '@/types'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const { data: { user: supabaseUser } } = await supabase.auth.getUser()
+  let supabaseUser = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    supabaseUser = data.user
+  } catch (e) {
+    console.error('[LAYOUT] Supabase auth error:', e)
+  }
 
   if (!supabaseUser) redirect('/login')
 

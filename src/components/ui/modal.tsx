@@ -15,10 +15,10 @@ interface ModalProps {
 }
 
 const sizeClasses = {
-  sm: 'sm:max-w-md',
-  md: 'sm:max-w-lg',
-  lg: 'sm:max-w-2xl',
-  xl: 'sm:max-w-4xl',
+  sm: 'max-w-md',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
 }
 
 export function Modal({
@@ -46,7 +46,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       aria-modal="true"
       role="dialog"
     >
@@ -59,24 +59,20 @@ export function Modal({
       {/* Panel */}
       <div
         className={cn(
-          'relative w-full z-10',
-          // Mobile: slides up, full-width, rounded top only
-          'rounded-t-2xl sm:rounded-2xl',
-          // Desktop: max-width per size
+          'relative w-full z-10 rounded-2xl flex flex-col',
           sizeClasses[size],
-          // Height: cap at 90vh and enable internal scroll
-          'max-h-[90vh] flex flex-col overflow-hidden',
+          'max-h-[90vh]',
         )}
         style={{
           background: 'var(--color-surface)',
           border: '1px solid var(--color-border-strong)',
-          boxShadow: '0 -4px 24px rgba(0,0,0,0.10), 0 20px 60px rgba(0,0,0,0.18)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
         }}
       >
-        {/* Header — fixed, never scrolls */}
+        {/* Header */}
         {(title || showClose) && (
           <div
-            className="flex items-center justify-between gap-3 px-5 py-4 shrink-0"
+            className="flex items-center justify-between gap-3 px-5 py-4 shrink-0 rounded-t-2xl"
             style={{ borderBottom: '1px solid var(--color-border)' }}
           >
             <div className="min-w-0 flex-1">
@@ -103,7 +99,7 @@ export function Modal({
           </div>
         )}
 
-        {/* Scrollable content — min-h-0 is critical for flex children to scroll */}
+        {/* Scrollable content */}
         <div className="overflow-y-auto flex-1 min-h-0 p-5">
           {children}
         </div>
@@ -115,15 +111,8 @@ export function Modal({
 export function ModalFooter({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={cn('flex justify-end gap-3 pt-4 mt-4 sticky bottom-0', className)}
-      style={{
-        borderTop: '1px solid var(--color-border)',
-        background: 'var(--color-surface)',
-        marginLeft: '-1.25rem',
-        marginRight: '-1.25rem',
-        marginBottom: '-1.25rem',
-        padding: '1rem 1.25rem 1.25rem',
-      }}
+      className={cn('flex justify-end gap-3 pt-4 mt-2', className)}
+      style={{ borderTop: '1px solid var(--color-border)' }}
     >
       {children}
     </div>

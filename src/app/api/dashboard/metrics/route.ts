@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { unstable_cache } from 'next/cache'
 
 interface MonthRow {
   n: unknown
@@ -114,23 +113,16 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
   }
 }
 
-// Cache per-org for 60 seconds — avoids repeated round-trips to Supabase US West
-const getCachedMetrics = unstable_cache(
-  fetchMetrics,
-  ['dashboard-metrics'],
-  { revalidate: 60 }
-)
-
 export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const data = await getCachedMetrics(payload.orgId)
+    const data = await fetchMetrics(payload.orgId)
 
     return NextResponse.json(
       { data },
-      { headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' } }
+      { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (error) {
     console.error('[DASHBOARD/METRICS]', error)
