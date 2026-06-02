@@ -17,14 +17,15 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
 export async function getCurrentUser(): Promise<AuthPayload | null> {
   try {
     const supabase = await createClient()
-    // getUser() validates the token with Supabase server — more reliable than
-    // getSession() which only reads the local cookie without server validation.
-    const { data: { user: supabaseUser }, error } = await supabase.auth.getUser()
-    if (error || !supabaseUser) return null
+    // getSession() reads the JWT from the cookie locally — fast, no Supabase network call.
+    // The middleware already calls getUser() on every request and refreshes the token,
+    // so the session in the cookie is always fresh when this runs.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return null
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const user = await (prisma.user as any).findUnique({
-      where: { supabaseId: supabaseUser.id },
+      where: { supabaseId: session.user.id },
       select: { id: true, organizationId: true, role: true, email: true, status: true },
     })
 
