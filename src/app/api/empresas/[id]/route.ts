@@ -10,7 +10,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const empresa = await (prisma as any).empresa.findFirst({
+    const db = prisma as any
+    const empresa = await db.empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       include: {
         contactos: {
@@ -56,14 +57,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exists = await (prisma as any).empresa.findFirst({
+    const db = prisma as any
+    const exists = await db.empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: { id: true },
     })
     if (!exists) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const empresa = await (prisma as any).empresa.update({
+    const empresa = await db.empresa.update({
       where: { id: params.id },
       data: {
         name:     name.trim(),
@@ -90,14 +91,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exists = await (prisma as any).empresa.findFirst({
+    const db = prisma as any
+    const exists = await db.empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: { id: true },
     })
     if (!exists) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (prisma as any).empresa.delete({ where: { id: params.id } })
+    await db.empresa.delete({ where: { id: params.id } })
 
     return NextResponse.json({ message: 'Empresa eliminada' })
   } catch (error) {

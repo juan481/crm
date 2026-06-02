@@ -24,9 +24,11 @@ export async function GET(req: NextRequest) {
       ]
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = prisma as any
+
     const [raw, total] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.empresa as any).findMany({
+      db.empresa.findMany({
         where,
         skip,
         take: limit,
@@ -38,11 +40,11 @@ export async function GET(req: NextRequest) {
           _count: { select: { contactos: true } },
         },
       }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.empresa as any).count({ where }),
+      db.empresa.count({ where }),
     ])
 
-    const data = raw.map((e: Record<string, unknown> & { createdAt: Date; updatedAt: Date }) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = raw.map((e: any) => ({
       ...e,
       createdAt: e.createdAt.toISOString(),
       updatedAt: e.updatedAt.toISOString(),
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const empresa = await (prisma.empresa as any).create({
+    const empresa = await (prisma as any).empresa.create({
       data: {
         name:     name.trim(),
         activity: activity?.trim() || null,
@@ -79,7 +81,12 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({
-      data: { ...empresa, createdAt: empresa.createdAt.toISOString(), updatedAt: empresa.updatedAt.toISOString() }
+      data: {
+        ...empresa,
+        createdAt: empresa.createdAt.toISOString(),
+        updatedAt: empresa.updatedAt.toISOString(),
+        _count: { contactos: 0 },
+      }
     }, { status: 201 })
   } catch (error) {
     console.error('[EMPRESAS POST]', error)

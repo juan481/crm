@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { Sidebar } from '@/components/layout/sidebar'
@@ -21,10 +23,16 @@ interface AppShellProps {
   children: React.ReactNode
 }
 
+const pageVariants = {
+  hidden:  { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.14, ease: 'easeOut' } },
+}
+
 export function AppShell({ user, branding, children }: AppShellProps) {
   const { setUser } = useAuthStore()
   const { loadBranding } = useThemeStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     setUser(user)
@@ -66,9 +74,17 @@ export function AppShell({ user, branding, children }: AppShellProps) {
 
         <main className="flex-1 overflow-y-auto">
           <ErrorBoundary>
-            <div className="p-4 lg:p-6 max-w-7xl mx-auto w-full page-enter">
-              {children}
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pathname}
+                variants={pageVariants}
+                initial="hidden"
+                animate="visible"
+                className="p-4 lg:p-6 max-w-7xl mx-auto w-full"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
           </ErrorBoundary>
         </main>
       </div>
