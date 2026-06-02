@@ -14,7 +14,7 @@ import * as XLSX from 'xlsx'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
-const CHUNK = 50
+const CHUNK = 20
 
 interface ImportProgress {
   processed: number
@@ -131,6 +131,9 @@ export default function EmpresasPage() {
           contactosCreados,
           filasOmitidas,
         })
+
+        // Pequeña pausa entre lotes para no saturar el pool de DB
+        if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
       }
 
       // Marcar como completado

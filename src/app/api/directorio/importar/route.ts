@@ -40,63 +40,69 @@ export async function POST(req: NextRequest) {
     let filasOmitidas      = 0
 
     for (const row of rows) {
-      const str = (key: string) => (row[key] ?? '').toString().trim()
+      try {
+        const str = (key: string) => (row[key] ?? '').toString().trim()
 
-      const empresaName = str('Empresa')
-      const firstName   = str('Nombre')
+        const empresaName = str('Empresa')
+        const firstName   = str('Nombre')
 
-      if (!empresaName || !firstName) { filasOmitidas++; continue }
+        if (!empresaName || !firstName) { filasOmitidas++; continue }
 
-      // Upsert empresa
-      let empresa = await db.empresa.findFirst({
-        where: { organizationId: orgId, name: { equals: empresaName, mode: 'insensitive' } },
-        select: { id: true },
-      })
-
-      if (!empresa) {
-        empresa = await db.empresa.create({
-          data: {
-            organizationId: orgId,
-            name:         empresaName,
-            activity:     str('Actividad')         || null,
-            address:      str('Domicilio Laboral') || null,
-            codigoPostal: str('Codigo Postal')     || null,
-            city:         str('Localidad')         || null,
-            province:     str('Provincia')         || null,
-            country:      str('Pais')              || null,
-            website:      str('Web')               || null,
-          },
+        // Upsert empresa
+        let empresa = await db.empresa.findFirst({
+          where: { organizationId: orgId, name: { equals: empresaName, mode: 'insensitive' } },
           select: { id: true },
         })
-        empresasCreadas++
-      } else {
-        empresasExistentes++
+
+        if (!empresa) {
+          empresa = await db.empresa.create({
+            data: {
+              organizationId: orgId,
+              name:         empresaName,
+              activity:     str('Actividad')         || null,
+              address:      str('Domicilio Laboral') || null,
+              codigoPostal: str('Codigo Postal')     || null,
+              city:         str('Localidad')         || null,
+              province:     str('Provincia')         || null,
+              country:      str('Pais')              || null,
+              website:      str('Web')               || null,
+            },
+            select: { id: true },
+          })
+          empresasCreadas++
+        } else {
+          empresasExistentes++
+        }
+
+        // Dedup contacto
+        const email    = str('Mail').toLowerCase() || null
+        const lastName = str('Apellido') || null
+        const dupWhere = email
+          ? { organizationId: orgId, email }
+          : { organizationId: orgId, firstName, lastName: lastName ?? '', empresaId: empresa.id }
+
+        const existing = await db.directorioContacto.findFirst({ where: dupWhere, select: { id: true } })
+
+        if (existing) { filasOmitidas++; continue }
+
+        await db.directorioContacto.create({
+          data: {
+            organizationId: orgId,
+            firstName,
+            lastName,
+            companyRaw:  empresaName,
+            role:        str('Cargo')    || null,
+            email,
+            phone:       str('Telefono') || null,
+            empresaId:   empresa.id,
+          },
+        })
+        contactosCreados++
+      } catch (rowErr) {
+        // Fila individual falla → omitir y continuar con el resto
+        console.error('[DIRECTORIO IMPORTAR] row error:', rowErr)
+        filasOmitidas++
       }
-
-      // Dedup contacto
-      const email    = str('Mail').toLowerCase() || null
-      const lastName = str('Apellido') || null
-      const dupWhere = email
-        ? { organizationId: orgId, email }
-        : { organizationId: orgId, firstName, lastName: lastName ?? '', empresaId: empresa.id }
-
-      const existing = await db.directorioContacto.findFirst({ where: dupWhere, select: { id: true } })
-
-      if (existing) { filasOmitidas++; continue }
-
-      await db.directorioContacto.create({
-        data: {
-          organizationId: orgId,
-          firstName,
-          lastName,
-          companyRaw:  empresaName,
-          role:        str('Cargo')    || null,
-          email,
-          phone:       str('Telefono') || null,
-          empresaId:   empresa.id,
-        },
-      })
-      contactosCreados++
     }
 
     return NextResponse.json({ empresasCreadas, empresasExistentes, contactosCreados, filasOmitidas })
