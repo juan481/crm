@@ -7,8 +7,10 @@ import { AppShell } from '@/components/layout/app-shell'
 import type { User } from '@/types'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // createClient outside try so it's accessible in the catch for signOut
+  const supabase = await createClient()
+
   try {
-    const supabase = await createClient()
     const { data: { user: supabaseUser } } = await supabase.auth.getUser()
 
     if (!supabaseUser) redirect('/login')
@@ -59,13 +61,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </AppShell>
     )
   } catch (error: unknown) {
-    // If redirect() was called inside the try block, it throws a special Next.js
-    // error that must be re-thrown — don't swallow it.
     const isRedirect =
       error instanceof Error && error.message === 'NEXT_REDIRECT'
     if (isRedirect) throw error
 
     console.error('[DashboardLayout] Error:', error)
+
+    // Sign out BEFORE redirecting — without this, the middleware sees a valid
+    // Supabase session and immediately redirects back to /dashboard, creating
+    // an infinite redirect loop.
+    try { await supabase.auth.signOut() } catch { /* ignore */ }
+
     redirect('/login')
   }
 }
