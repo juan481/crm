@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { ContactoForm } from '@/components/directorio/contacto-form'
+import { EmpresaNotas } from '@/components/directorio/empresa-notas'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto, Empresa } from '@/types'
 import toast from 'react-hot-toast'
@@ -203,6 +204,9 @@ export default function EmpresaDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Activity / Notas section */}
+      <EmpresaNotas empresaId={id} empresaNombre={empresa.name} />
 
       {/* Contactos section */}
       <div>

@@ -45,6 +45,7 @@ model Organization {
   tickets        Ticket[]
   empresas          Empresa[]
   directorioContactos DirectorioContacto[]
+  empresaNotas      EmpresaNota[]
 }
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ model User {
   assignedTickets Ticket[]     @relation("TicketAssignee")
   createdTickets  Ticket[]     @relation("TicketCreator")
   ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
+  empresaNotas    EmpresaNota[]
 }
 
 // Session management is now handled by Supabase Auth
@@ -475,6 +477,7 @@ model Empresa {
   updatedAt      DateTime @updatedAt
 
   contactos      DirectorioContacto[]
+  notas          EmpresaNota[]
 
   @@index([organizationId])
   @@index([organizationId, name])
@@ -498,4 +501,21 @@ model DirectorioContacto {
   @@index([organizationId])
   @@index([empresaId])
   @@index([email])
+}
+
+// ─── Actividad / Notas de Empresa ─────────────────────────────────────────
+model EmpresaNota {
+  id             String   @id @default(cuid())
+  empresaId      String
+  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  tipo           String   @default("NOTA") // NOTA | LLAMADA | REUNION
+  content        String
+  createdAt      DateTime @default(now())
+
+  @@index([empresaId])
+  @@index([organizationId])
 }
