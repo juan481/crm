@@ -65,7 +65,7 @@ export default function TicketDetailPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const [message, setMessage] = useState('')
-  const [isInternal, setIsInternal] = useState(false)
+  const [isInternal, setIsInternal] = useState(true)
   const [sending, setSending] = useState(false)
   const [updating, setUpdating] = useState(false)
 
@@ -81,9 +81,9 @@ export default function TicketDetailPage() {
   })
 
   const { data: usersData } = useQuery({
-    queryKey: ['users-list'],
+    queryKey: ['usuarios-internos'],
     queryFn: async () => {
-      const res = await fetch('/api/settings/users')
+      const res = await fetch('/api/usuarios')
       if (!res.ok) return { data: [] }
       return res.json()
     },
@@ -218,7 +218,7 @@ export default function TicketDetailPage() {
             <form onSubmit={handleSend} className="surface rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-[var(--color-text)]">
-                  {isInternal ? 'Nota interna' : 'Responder al cliente'}
+                  Agregar actualización o nota
                 </span>
                 <button
                   type="button"
@@ -230,19 +230,19 @@ export default function TicketDetailPage() {
                   }`}
                 >
                   {isInternal ? <Lock size={11} /> : <Unlock size={11} />}
-                  {isInternal ? 'Nota interna' : 'Público'}
+                  {isInternal ? 'Solo equipo' : 'Público (notifica al cliente)'}
                 </button>
               </div>
               <textarea
                 className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"
                 rows={3}
-                placeholder={isInternal ? 'Nota solo visible para el equipo...' : 'Escribe tu respuesta...'}
+                placeholder="Descripción del avance, diagnóstico, acción tomada..."
                 value={message}
                 onChange={e => setMessage(e.target.value)}
               />
               <div className="flex justify-end">
                 <Button type="submit" loading={sending} leftIcon={<Send size={14} />}>
-                  {isInternal ? 'Guardar nota' : 'Enviar respuesta'}
+                  Guardar Nota
                 </Button>
               </div>
             </form>
