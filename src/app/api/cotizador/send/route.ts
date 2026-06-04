@@ -60,25 +60,17 @@ function buildQuoteEmail(opts: {
 </head>
 <body style="font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;margin:0;padding:0">
   <div style="max-width:580px;margin:32px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-
-    <!-- Header -->
     <div style="background:linear-gradient(135deg,${primaryColor} 0%,#8b5cf6 100%);padding:36px 40px">
       <p style="color:rgba(255,255,255,0.75);font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin:0 0 8px">Presupuesto de Servicios</p>
       <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:-0.5px">${orgName}</h1>
       <p style="color:rgba(255,255,255,0.75);margin:6px 0 0;font-size:13px">${today}</p>
     </div>
-
-    <!-- Body -->
     <div style="padding:36px 40px">
-
-      <!-- Ref + Greeting -->
       <p style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin:0 0 20px">Ref: ${quoteRef}</p>
       <p style="font-size:15px;color:#1e293b;margin:0 0 6px;font-weight:500">Estimado/a <strong>${recipientName}</strong>,</p>
       <p style="font-size:14px;color:#64748b;margin:0 0 28px;line-height:1.6">
         A continuación encontrará el detalle de los servicios cotizados. Quedamos a su disposición ante cualquier consulta.
       </p>
-
-      <!-- Table -->
       <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
         <thead>
           <tr>
@@ -95,23 +87,16 @@ function buildQuoteEmail(opts: {
           </tr>
         </tfoot>
       </table>
-
       ${notesSection}
-
-      <!-- CTA -->
       <p style="font-size:14px;color:#64748b;margin:24px 0 28px;line-height:1.6">
         Si desea avanzar con la contratación o tiene alguna pregunta, comuníquese con nosotros.
-        Estaremos encantados de atenderle.
       </p>
-
       <div style="border-top:1px solid #e2e8f0;padding-top:20px;margin-top:8px">
         <p style="font-size:12px;color:#94a3b8;margin:0">
           Presupuesto preparado por <strong style="color:#64748b">${agentName}</strong> · ${orgName}
         </p>
       </div>
     </div>
-
-    <!-- Footer -->
     <div style="background:#f8fafc;padding:18px 40px;text-align:center;border-top:1px solid #e2e8f0">
       <p style="font-size:12px;color:#94a3b8;margin:0">
         Este presupuesto es de carácter informativo y no constituye un contrato.
@@ -128,9 +113,9 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, total, currency } = body as {
+    const { items, recipientEmail, recipientName, notes, total, currency, empresaId } = body as {
       items: QuoteItem[]
-      clientId?: string | null
+      empresaId?: string | null
       recipientEmail: string
       recipientName: string
       notes?: string
@@ -138,27 +123,19 @@ export async function POST(req: NextRequest) {
       currency: string
     }
 
-    if (!items?.length)      return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
-    if (!recipientEmail)     return NextResponse.json({ error: 'Email destinatario requerido' }, { status: 400 })
+    if (!items?.length)  return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
+    if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
+
+    const db = prisma as any
 
     // Fetch org data
     const org = await prisma.organization.findUnique({
-      where: { id: payload.orgId },
-      select: {
-        name: true,
-        crmName: true,
-        primaryColor: true,
-        smtpHost: true,
-        smtpPort: true,
-        smtpUser: true,
-        smtpPass: true,
-        smtpFrom: true,
-      },
+      where:  { id: payload.orgId },
+      select: { name: true, crmName: true, primaryColor: true, logoUrl: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true },
     })
 
-    // Fetch agent name
     const agent = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where:  { id: payload.userId },
       select: { name: true },
     })
 
@@ -167,37 +144,55 @@ export async function POST(req: NextRequest) {
     const agentName    = agent?.name || 'El equipo'
     const quoteRef     = `PRESUP-${Date.now().toString(36).toUpperCase()}`
 
-    const html = buildQuoteEmail({
-      orgName,
-      primaryColor,
-      recipientName: recipientName || 'Cliente',
-      items,
-      total,
-      currency,
-      notes,
-      quoteRef,
-      agentName,
+    // ── 1. Persist cotizacion to DB ──────────────────────────────────────────
+    await db.cotizacion.create({
+      data: {
+        ref:           quoteRef,
+        organizationId: payload.orgId,
+        userId:        payload.userId,
+        empresaId:     empresaId || null,
+        recipientEmail,
+        recipientName: recipientName || 'Cliente',
+        items:         items as any,
+        total,
+        currency,
+        notes:         notes || null,
+        status:        'ENVIADA',
+      },
     })
 
-    // Build SMTP config from org settings (falls back to env vars via sendEmail)
+    // ── 2. Create EmpresaNota for the company timeline ───────────────────────
+    if (empresaId) {
+      const serviceNames = items.map(i => i.name).join(', ')
+      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 0 }).format(total)
+      await db.empresaNota.create({
+        data: {
+          empresaId,
+          organizationId: payload.orgId,
+          userId:         payload.userId,
+          tipo:           'NOTA',
+          content:        `Cotización ${quoteRef} enviada a ${recipientName || recipientEmail} por ${agentName}. Total: ${totalStr} ${currency}. Servicios: ${serviceNames}.`,
+        },
+      })
+    }
+
+    // ── 3. Send email ────────────────────────────────────────────────────────
+    const html = buildQuoteEmail({ orgName, primaryColor, recipientName: recipientName || 'Cliente', items, total, currency, notes, quoteRef, agentName })
+
     const smtpConfig = org?.smtpHost && org.smtpUser && org.smtpPass
-      ? {
-          host: org.smtpHost,
-          port: org.smtpPort ?? 587,
-          user: org.smtpUser,
-          pass: org.smtpPass,
-          from: org.smtpFrom || org.smtpUser,
-        }
+      ? { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser, pass: org.smtpPass, from: org.smtpFrom || org.smtpUser }
       : undefined
 
-    await sendEmail({
-      to:      recipientEmail,
-      subject: `Presupuesto de Servicios — ${orgName}`,
-      html,
-      smtpConfig,
-    })
+    await sendEmail({ to: recipientEmail, subject: `Presupuesto de Servicios — ${orgName}`, html, smtpConfig })
 
-    return NextResponse.json({ message: 'Presupuesto enviado', ref: quoteRef })
+    return NextResponse.json({
+      message: 'Presupuesto enviado',
+      ref:          quoteRef,
+      orgName,
+      primaryColor,
+      logoUrl:      org?.logoUrl ?? null,
+      agentName,
+    })
   } catch (error) {
     console.error('[COTIZADOR SEND]', error)
     return NextResponse.json({ error: 'Error al enviar el presupuesto' }, { status: 500 })

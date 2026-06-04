@@ -46,6 +46,7 @@ model Organization {
   empresas          Empresa[]
   directorioContactos DirectorioContacto[]
   empresaNotas      EmpresaNota[]
+  cotizaciones      Cotizacion[]
 }
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ model User {
   createdTickets  Ticket[]     @relation("TicketCreator")
   ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
   empresaNotas    EmpresaNota[]
+  cotizaciones    Cotizacion[]
 }
 
 // Session management is now handled by Supabase Auth
@@ -478,6 +480,7 @@ model Empresa {
 
   contactos      DirectorioContacto[]
   notas          EmpresaNota[]
+  cotizaciones   Cotizacion[]
 
   @@index([organizationId])
   @@index([organizationId, name])
@@ -518,4 +521,29 @@ model EmpresaNota {
 
   @@index([empresaId])
   @@index([organizationId])
+}
+
+// ─── Historial de Cotizaciones ────────────────────────────────────────────
+model Cotizacion {
+  id             String    @id @default(cuid())
+  ref            String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id])
+  empresaId      String?
+  empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  recipientEmail String
+  recipientName  String
+  items          Json
+  total          Float
+  currency       String    @default("USD")
+  notes          String?
+  status         String    @default("ENVIADA")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([empresaId])
+  @@index([userId])
 }
