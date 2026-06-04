@@ -20,18 +20,26 @@ function createTransporter(cfg?: SmtpConfig) {
   })
 }
 
+interface EmailAttachment {
+  filename: string
+  content: Buffer | string
+  contentType?: string
+  encoding?: string
+}
+
 interface SendEmailOptions {
   to: string | string[]
   subject: string
   html: string
   from?: string
   smtpConfig?: SmtpConfig
+  attachments?: EmailAttachment[]
 }
 
-export async function sendEmail({ to, subject, html, from, smtpConfig }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, from, smtpConfig, attachments }: SendEmailOptions) {
   const transporter = createTransporter(smtpConfig)
   const fromAddress = from ?? smtpConfig?.from ?? process.env.SMTP_FROM ?? 'CRM Pro <noreply@crmpro.com>'
-  await transporter.sendMail({ from: fromAddress, to, subject, html })
+  await transporter.sendMail({ from: fromAddress, to, subject, html, attachments })
 }
 
 export async function testSmtp(cfg: SmtpConfig): Promise<{ ok: boolean; error?: string }> {
