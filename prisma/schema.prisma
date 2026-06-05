@@ -386,6 +386,8 @@ model Deal {
   notes             String?
   clientId          String?
   client            Client?   @relation(fields: [clientId], references: [id])
+  empresaId         String?
+  empresa           Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   ownerId           String
   owner             User      @relation("DealOwner", fields: [ownerId], references: [id])
   organizationId    String
@@ -481,6 +483,7 @@ model Empresa {
   contactos      DirectorioContacto[]
   notas          EmpresaNota[]
   cotizaciones   Cotizacion[]
+  deals          Deal[]
 
   @@index([organizationId])
   @@index([organizationId, name])

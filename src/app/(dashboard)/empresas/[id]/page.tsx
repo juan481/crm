@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { ContactoForm } from '@/components/directorio/contacto-form'
 import { EmpresaNotas } from '@/components/directorio/empresa-notas'
+import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto, Empresa } from '@/types'
 import toast from 'react-hot-toast'
@@ -207,6 +208,9 @@ export default function EmpresaDetailPage() {
 
       {/* Activity / Notas section */}
       <EmpresaNotas empresaId={id} empresaNombre={empresa.name} />
+
+      {/* Cotizaciones / historial */}
+      <EmpresaCotizaciones empresaId={id} />
 
       {/* Contactos section */}
       <div>

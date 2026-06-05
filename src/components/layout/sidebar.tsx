@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck,
-  Building2, UserCircle2,
+  Building2, UserCircle2, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -29,6 +29,7 @@ const navItems: NavItem[] = [
   { label: 'Pipeline',       href: '/pipeline',       icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Tareas',         href: '/tareas',         icon: <CheckSquare size={17} /> },
   { label: 'Cotizador',      href: '/cotizador',      icon: <Calculator size={17} /> },
+  { label: 'Cotizaciones',   href: '/cotizaciones',   icon: <FileText size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Tickets',        href: '/tickets',        icon: <LifeBuoy size={17} /> },
   { label: 'Eventos',        href: '/eventos',        icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },

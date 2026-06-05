@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Minus, MessageCircle, ChevronRight, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
+  TrendingUp, CheckCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +54,8 @@ export default function CotizadorPage() {
   const [saving,      setSaving]                = useState(false)
   const [sendingEmail, setSendingEmail]         = useState(false)
   const [showArs,     setShowArs]               = useState(false)
+  const [addingToPipeline, setAddingToPipeline] = useState(false)
+  const [pipelineAdded,    setPipelineAdded]    = useState(false)
 
   // Post-save state
   const [savedQuote, setSavedQuote]   = useState<SavedQuote | null>(null)
@@ -340,13 +343,41 @@ export default function CotizadorPage() {
     return `https://wa.me/?text=${encodeURIComponent(t)}`
   }
 
+  // ── Add to Pipeline ───────────────────────────────────────────────────────
+  const addToPipeline = async () => {
+    if (!savedQuote) return
+    setAddingToPipeline(true)
+    try {
+      const res = await fetch('/api/deals', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:       `${savedQuote.empresaName ?? savedQuote.recipientName} — Cotización ${savedQuote.ref}`,
+          amount:      savedQuote.total,
+          currency:    savedQuote.currency,
+          probability: 50,
+          stage:       'PROPUESTA',
+          notes:       `Generado automáticamente desde cotización ${savedQuote.ref}`,
+          empresaId:   clientMode === 'existing' ? selectedEmpresaId || null : null,
+        }),
+      })
+      if (!res.ok) { const j = await res.json(); toast.error(j.error ?? 'Error'); return }
+      setPipelineAdded(true)
+      toast.success('Deal creado en Pipeline → Propuesta')
+    } catch {
+      toast.error('Error al crear el deal')
+    } finally {
+      setAddingToPipeline(false)
+    }
+  }
+
   // ── Reset ─────────────────────────────────────────────────────────────────
   const reset = () => {
     if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
     setSavedQuote(null); setPdfBlobUrl(null); setPdfBase64(null); setShowPreview(false)
     setCart({}); setManualEmail(''); setManualName(''); setNotes('')
     setSelectedEmpresaId(''); setSelectedContactEmail(''); setSelectedContactName('')
-    setManualContactInput(false)
+    setManualContactInput(false); setPipelineAdded(false)
   }
 
   // ── PDF Preview Modal ─────────────────────────────────────────────────────
@@ -438,6 +469,45 @@ export default function CotizadorPage() {
             </div>
           </a>
         </div>
+
+        {/* Pipeline prompt */}
+        {!pipelineAdded ? (
+          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'rgba(99,102,241,0.12)' }}>
+                <TrendingUp size={16} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  ¿Agregar esta cotización al Pipeline?
+                </p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Se creará un deal en etapa <strong>Propuesta</strong>
+                  {savedQuote.empresaName && ` para ${savedQuote.empresaName}`}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" onClick={addToPipeline} loading={addingToPipeline}
+                leftIcon={<TrendingUp size={13} />}>
+                Sí, agregar
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setPipelineAdded(true)}>
+                No
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm"
+            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
+            <CheckCircle size={15} />
+            {pipelineAdded && !addingToPipeline
+              ? 'Deal agregado al Pipeline en etapa Propuesta.'
+              : 'No agregado al Pipeline.'}
+          </div>
+        )}
 
         <button onClick={reset} className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
           + Nuevo presupuesto

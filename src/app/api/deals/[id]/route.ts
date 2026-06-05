@@ -4,6 +4,12 @@ import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
 
+const INCLUDE = {
+  empresa: { select: { id: true, name: true, city: true } },
+  client:  { select: { id: true, name: true, company: true } },
+  owner:   { select: { id: true, name: true } },
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
@@ -14,26 +20,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     })
     if (!existing) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
 
-    const { title, amount, currency, probability, stage, expectedCloseDate, notes, clientId, ownerId, closedAt } = await req.json()
+    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, ownerId, closedAt } = await req.json()
 
-    const deal = await prisma.deal.update({
+    const db = prisma as any
+    const deal = await db.deal.update({
       where: { id: params.id },
       data: {
-        ...(title && { title }),
-        ...(amount !== undefined && { amount: Number(amount) }),
-        ...(currency && { currency }),
+        ...(title !== undefined      && { title }),
+        ...(amount !== undefined     && { amount: Number(amount) }),
+        ...(currency                 && { currency }),
         ...(probability !== undefined && { probability: Number(probability) }),
-        ...(stage !== undefined && { stage }),
+        ...(stage !== undefined      && { stage }),
         ...(expectedCloseDate !== undefined && { expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null }),
-        ...(notes !== undefined && { notes: notes || null }),
-        ...(clientId !== undefined && { clientId: clientId || null }),
-        ...(ownerId && { ownerId }),
-        ...(closedAt !== undefined && { closedAt: closedAt ? new Date(closedAt) : null }),
+        ...(notes !== undefined      && { notes: notes || null }),
+        ...(empresaId !== undefined  && { empresaId: empresaId || null }),
+        ...(clientId !== undefined   && { clientId: clientId || null }),
+        ...(ownerId                  && { ownerId }),
+        ...(closedAt !== undefined   && { closedAt: closedAt ? new Date(closedAt) : null }),
       },
-      include: {
-        client: { select: { id: true, name: true, company: true } },
-        owner: { select: { id: true, name: true } },
-      },
+      include: INCLUDE,
     })
 
     return NextResponse.json({ data: deal })
@@ -47,9 +52,8 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-    }
 
     await prisma.deal.deleteMany({ where: { id: params.id, organizationId: payload.orgId } })
     return NextResponse.json({ message: 'Deal eliminado' })

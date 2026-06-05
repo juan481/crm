@@ -336,6 +336,8 @@ export interface Deal {
   expectedCloseDate: string | null
   closedAt: string | null
   notes: string | null
+  empresaId: string | null
+  empresa?: { id: string; name: string; city?: string | null } | null
   clientId: string | null
   client?: { id: string; name: string; company: string | null } | null
   ownerId: string
