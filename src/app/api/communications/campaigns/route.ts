@@ -3,13 +3,98 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, type SmtpConfig } from '@/lib/email'
 
+// ─── Personalization ──────────────────────────────────────────────────────────
+// Replaces {{nombre}}, {{empresa}}, {{email}} (and any other {{key}}) with the
+// recipient's actual data. Applied to both subject and body before each send.
+function mergeVars(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '')
+}
+
+// ─── Batch sending ────────────────────────────────────────────────────────────
+// Sends in groups of BATCH_SIZE with a delay between batches to avoid SMTP
+// rate limits (Gmail caps at ~20-30 msgs/s; 15/batch + 1.2s delay is safe).
+const BATCH_SIZE    = 15
+const BATCH_DELAY   = 1200 // ms
+
+interface Recipient {
+  recipientId: string    // CampaignRecipient row id for status updates
+  email:       string
+  name:        string
+  empresa:     string
+}
+
+async function sendBatched(opts: {
+  recipients:    Recipient[]
+  subjectTpl:    string
+  bodyTpl:       string    // raw HTML from rich editor (with {{vars}})
+  orgName:       string
+  smtpConfig:    SmtpConfig | undefined
+  campaignId:    string
+}) {
+  const { recipients, subjectTpl, bodyTpl, orgName, smtpConfig, campaignId } = opts
+  const db = prisma as any
+
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    const batch = recipients.slice(i, i + BATCH_SIZE)
+
+    await Promise.allSettled(
+      batch.map(async (r) => {
+        const vars: Record<string, string> = {
+          nombre:  r.name,
+          empresa: r.empresa,
+          email:   r.email,
+        }
+        const subject  = mergeVars(subjectTpl, vars)
+        const bodyHtml = mergeVars(bodyTpl, vars)
+        const html     = buildEmailHtml(subject, bodyHtml, orgName)
+
+        try {
+          await sendEmail({ to: r.email, subject, html, smtpConfig })
+          await db.campaignRecipient.update({
+            where: { id: r.recipientId },
+            data:  { status: 'sent', sentAt: new Date() },
+          })
+        } catch (err) {
+          await db.campaignRecipient.update({
+            where: { id: r.recipientId },
+            data:  { status: 'failed', error: String((err as Error).message).slice(0, 250) },
+          })
+        }
+      })
+    )
+
+    // Delay between batches (skip delay after the last batch)
+    if (i + BATCH_SIZE < recipients.length) {
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY))
+    }
+  }
+
+  // Set final campaign status based on recipient outcomes
+  const results = await db.campaignRecipient.groupBy({
+    by:    ['status'],
+    where: { campaignId },
+    _count: true,
+  })
+  const sentCount   = results.find((r: any) => r.status === 'sent')?._count   ?? 0
+  const failedCount = results.find((r: any) => r.status === 'failed')?._count ?? 0
+
+  const finalStatus = sentCount === 0 ? 'FAILED' : 'SENT'
+  await db.emailCampaign.update({
+    where: { id: campaignId },
+    data:  { status: finalStatus, sentAt: new Date() },
+  })
+
+  console.log(`[CAMPAIGN ${campaignId}] Done: ${sentCount} sent, ${failedCount} failed`)
+}
+
+// ─── GET /api/communications/campaigns ───────────────────────────────────────
 export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const campaigns = await prisma.emailCampaign.findMany({
-      where: { organizationId: payload.orgId },
+      where:   { organizationId: payload.orgId },
       include: { _count: { select: { recipients: true } } },
       orderBy: { createdAt: 'desc' },
     })
@@ -21,6 +106,14 @@ export async function GET() {
   }
 }
 
+// ─── POST /api/communications/campaigns ──────────────────────────────────────
+// Body: {
+//   name:       string
+//   subject:    string           — may contain {{nombre}}, {{empresa}}, {{email}}
+//   body:       string           — rich HTML, may contain same vars
+//   recipients: { email: string; name: string; empresa?: string }[]
+//   sendNow:    boolean
+// }
 export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
@@ -29,24 +122,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const { name, subject, body, recipientIds, sendNow } = await req.json()
-    if (!name || !subject || !body) {
-      return NextResponse.json({ error: 'Nombre, asunto y cuerpo son requeridos' }, { status: 400 })
+    const { name, subject, body, recipients, sendNow } = await req.json() as {
+      name:       string
+      subject:    string
+      body:       string
+      recipients: Array<{ email: string; name: string; empresa?: string }>
+      sendNow:    boolean
     }
 
-    // Fetch org SMTP config and branding in parallel
-    const [org, clients] = await Promise.all([
-      prisma.organization.findUnique({
-        where: { id: payload.orgId },
-        select: { smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, crmName: true },
-      }),
-      recipientIds?.length > 0
-        ? prisma.client.findMany({
-            where: { id: { in: recipientIds }, organizationId: payload.orgId },
-            select: { email: true, name: true },
-          })
-        : Promise.resolve([]),
-    ])
+    if (!name || !subject || !body)
+      return NextResponse.json({ error: 'Nombre, asunto y cuerpo son requeridos' }, { status: 400 })
+    if (!recipients?.length)
+      return NextResponse.json({ error: 'Seleccioná al menos un destinatario' }, { status: 400 })
+
+    // Deduplicate by email (case-insensitive)
+    const seen   = new Set<string>()
+    const unique = recipients.filter(r => {
+      const key = r.email.toLowerCase().trim()
+      if (!key || seen.has(key)) return false
+      seen.add(key); return true
+    })
+
+    const org = await prisma.organization.findUnique({
+      where:  { id: payload.orgId },
+      select: { smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, crmName: true },
+    })
 
     if (sendNow && (!org?.smtpHost || !org?.smtpUser || !org?.smtpPass)) {
       return NextResponse.json(
@@ -56,54 +156,57 @@ export async function POST(req: NextRequest) {
     }
 
     const smtpConfig: SmtpConfig | undefined = org?.smtpHost
-      ? {
-          host: org.smtpHost,
-          port: org.smtpPort ?? 587,
-          user: org.smtpUser ?? '',
-          pass: org.smtpPass ?? '',
-          from: org.smtpFrom ?? org.smtpUser ?? '',
-        }
+      ? { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser ?? '', pass: org.smtpPass ?? '', from: org.smtpFrom ?? org.smtpUser ?? '' }
       : undefined
 
-    const campaign = await prisma.emailCampaign.create({
+    const db = prisma as any
+
+    // Create campaign + recipients
+    const campaign = await db.emailCampaign.create({
       data: {
         name,
         subject,
         body,
-        status: sendNow ? 'SENDING' : 'DRAFT',
+        status:         sendNow ? 'SENDING' : 'DRAFT',
         organizationId: payload.orgId,
         recipients: {
-          create: (clients as { email: string; name: string }[]).map((r) => ({ email: r.email, name: r.name })),
+          create: unique.map(r => ({ email: r.email.trim(), name: r.name.trim() })),
         },
       },
-      include: { _count: { select: { recipients: true } } },
+      include: {
+        _count:     { select: { recipients: true } },
+        recipients: { select: { id: true, email: true } },
+      },
     })
 
-    if (sendNow && clients.length > 0) {
-      const html = buildEmailHtml(subject, body, org?.crmName ?? 'CRM Pro')
-      Promise.allSettled(
-        (clients as { email: string; name: string }[]).map((r) =>
-          sendEmail({ to: r.email, subject, html, smtpConfig })
-        )
-      ).then(async (results) => {
-        const failed = results.filter((r) => r.status === 'rejected').length
-        await prisma.emailCampaign.update({
-          where: { id: campaign.id },
-          data: {
-            status: failed === results.length ? 'FAILED' : 'SENT',
-            sentAt: new Date(),
-          },
-        })
-      }).catch((err) => {
-        console.error('[CAMPAIGN SEND]', err)
-        prisma.emailCampaign.update({
-          where: { id: campaign.id },
-          data: { status: 'FAILED' },
-        }).catch(() => {})
+    // Return immediately, send async
+    if (sendNow && unique.length > 0) {
+      const recipientRows: Recipient[] = campaign.recipients.map((row: any) => {
+        const match = unique.find(u => u.email.toLowerCase() === row.email.toLowerCase())
+        return {
+          recipientId: row.id,
+          email:       row.email,
+          name:        match?.name    ?? row.email,
+          empresa:     match?.empresa ?? '',
+        }
+      })
+
+      sendBatched({
+        recipients: recipientRows,
+        subjectTpl: subject,
+        bodyTpl:    body,
+        orgName:    org?.crmName ?? 'CRM Pro',
+        smtpConfig,
+        campaignId: campaign.id,
+      }).catch(err => {
+        console.error('[CAMPAIGN SEND FATAL]', err)
+        db.emailCampaign.update({ where: { id: campaign.id }, data: { status: 'FAILED' } }).catch(() => {})
       })
     }
 
-    return NextResponse.json({ data: campaign }, { status: 201 })
+    return NextResponse.json({
+      data: { ...campaign, recipients: undefined }   // strip recipients array from response
+    }, { status: 201 })
   } catch (error) {
     console.error('[CAMPAIGNS POST]', error)
     return NextResponse.json({ error: 'Error al crear campaña' }, { status: 500 })
