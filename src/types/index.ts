@@ -238,6 +238,8 @@ export interface DashboardMetrics {
   activeDealsCount: number
   pipelineValue: number
   dealsByStage: Record<string, number>
+  cotizacionesEnviadas: number
+  cotizacionesAceptadas: number
 }
 
 // ─── Email Campaign ────────────────────────────────────────────────────────
@@ -362,6 +364,8 @@ export interface Task {
   createdBy?: { id: string; name: string }
   clientId: string | null
   client?: { id: string; name: string } | null
+  empresaId: string | null
+  empresa?: { id: string; name: string } | null
   organizationId: string
   createdAt: string
   updatedAt: string
@@ -378,6 +382,8 @@ export interface Ticket {
   category: TicketCategory
   clientId: string | null
   client?: { id: string; name: string } | null
+  empresaId: string | null
+  empresa?: { id: string; name: string } | null
   assignedToId: string | null
   assignedTo?: { id: string; name: string } | null
   createdById: string

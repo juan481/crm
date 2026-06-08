@@ -2,39 +2,45 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
+const INCLUDE = {
+  assignedTo: { select: { id: true, name: true } },
+  createdBy:  { select: { id: true, name: true } },
+  client:     { select: { id: true, name: true } },
+  empresa:    { select: { id: true, name: true } },
+}
+
 export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { searchParams } = req.nextUrl
-    const status = searchParams.get('status')
+    const search       = searchParams.get('search')       ?? ''
+    const status       = searchParams.get('status')
     const assignedToId = searchParams.get('assignedToId')
-    const clientId = searchParams.get('clientId')
-
-    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const empresaId    = searchParams.get('empresaId')
+    const page  = Math.max(1, Number(searchParams.get('page')  ?? 1))
     const limit = Math.min(200, Number(searchParams.get('limit') ?? 50))
-    const skip = (page - 1) * limit
+    const skip  = (page - 1) * limit
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
-    if (status) where.status = status
+    if (status)       where.status       = status
     if (assignedToId) where.assignedToId = assignedToId
-    if (clientId) where.clientId = clientId
+    if (empresaId)    where.empresaId    = empresaId
     if (payload.role === 'SELLER') where.assignedToId = payload.userId
+    if (search.length >= 2) {
+      where.OR = [
+        { title:       { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ]
+    }
 
+    const db = prisma as any
     const [tasks, total] = await Promise.all([
-      prisma.task.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-        include: {
-          assignedTo: { select: { id: true, name: true } },
-          createdBy: { select: { id: true, name: true } },
-          client: { select: { id: true, name: true } },
-        },
-      }),
-      prisma.task.count({ where }),
+      db.task.findMany({ where, skip, take: limit, orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }], include: INCLUDE }),
+      db.task.count({ where }),
     ])
 
     return NextResponse.json({ data: tasks, total, page, limit, totalPages: Math.ceil(total / limit) })
@@ -49,25 +55,23 @@ export async function POST(req: NextRequest) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { title, description, priority, dueDate, assignedToId, clientId } = await req.json()
+    const { title, description, priority, dueDate, assignedToId, clientId, empresaId } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
-    const task = await prisma.task.create({
+    const db = prisma as any
+    const task = await db.task.create({
       data: {
-        title: title.trim(),
-        description: description || null,
-        priority: priority || 'MEDIA',
-        dueDate: dueDate ? new Date(dueDate) : null,
-        assignedToId: assignedToId || payload.userId,
-        createdById: payload.userId,
-        clientId: clientId || null,
+        title:          title.trim(),
+        description:    description || null,
+        priority:       priority    || 'MEDIA',
+        dueDate:        dueDate ? new Date(dueDate) : null,
+        assignedToId:   assignedToId || payload.userId,
+        createdById:    payload.userId,
+        clientId:       clientId  || null,
+        empresaId:      empresaId || null,
         organizationId: payload.orgId,
       },
-      include: {
-        assignedTo: { select: { id: true, name: true } },
-        createdBy: { select: { id: true, name: true } },
-        client: { select: { id: true, name: true } },
-      },
+      include: INCLUDE,
     })
 
     return NextResponse.json({ data: task }, { status: 201 })

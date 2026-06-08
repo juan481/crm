@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 const INCLUDE = {
   empresa: { select: { id: true, name: true, city: true } },
   client:  { select: { id: true, name: true, company: true } },

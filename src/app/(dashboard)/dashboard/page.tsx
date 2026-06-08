@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { Users, DollarSign, AlertCircle, Clock, UserPlus, TrendingUp, CheckSquare, Headphones } from 'lucide-react'
+import { Users, DollarSign, AlertCircle, Clock, UserPlus, TrendingUp, CheckSquare, Headphones, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { RevenueChart } from '@/components/dashboard/revenue-chart'
@@ -71,7 +71,7 @@ export default function DashboardPage() {
               icon={<Users size={20} />}
               trend={data?.mrrGrowth}
               trendLabel="vs mes anterior"
-              href="/clients?status=ACTIVE"
+              href="/clientes"
               index={0}
             />
             <MetricCard
@@ -81,7 +81,7 @@ export default function DashboardPage() {
               trend={data?.mrrGrowth}
               trendLabel="crecimiento mensual"
               accentColor="#22c55e"
-              href="/invoices"
+              href="/facturas"
               index={1}
             />
             <MetricCard
@@ -90,7 +90,7 @@ export default function DashboardPage() {
               icon={<Clock size={20} />}
               subtitle="clientes con pago pendiente"
               accentColor="#f59e0b"
-              href="/clients?status=PENDING_PAYMENT"
+              href="/clientes"
               index={2}
             />
             <MetricCard
@@ -99,7 +99,7 @@ export default function DashboardPage() {
               icon={<AlertCircle size={20} />}
               subtitle="requieren atención"
               accentColor="#ef4444"
-              href="/clients?status=EXPIRED"
+              href="/clientes"
               index={3}
             />
           </>
@@ -162,16 +162,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Pipeline / Tasks / Tickets summary */}
+      {/* Pipeline / Tasks / Tickets / Cotizaciones summary */}
       {!isLoading && data && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Link href="/pipeline" className="surface rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-border-strong)] transition-colors group">
             <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0 group-hover:bg-indigo-500/20 transition-colors">
               <TrendingUp size={20} />
             </div>
             <div>
               <p className="text-xl font-bold text-[var(--color-text)]">{data.activeDealsCount}</p>
-              <p className="text-sm text-[var(--color-text-muted)]">Deals activos · {formatCurrency(data.pipelineValue)} esperados</p>
+              <p className="text-sm text-[var(--color-text-muted)]">Deals activos · {formatCurrency(data.pipelineValue)} esp.</p>
             </div>
           </Link>
           <Link href="/tareas" className="surface rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-border-strong)] transition-colors group">
@@ -190,6 +190,15 @@ export default function DashboardPage() {
             <div>
               <p className="text-xl font-bold text-[var(--color-text)]">{data.openTickets}</p>
               <p className="text-sm text-[var(--color-text-muted)]">Tickets abiertos</p>
+            </div>
+          </Link>
+          <Link href="/cotizaciones" className="surface rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-border-strong)] transition-colors group">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0 group-hover:bg-violet-500/20 transition-colors">
+              <FileText size={20} />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-[var(--color-text)]">{data.cotizacionesEnviadas}</p>
+              <p className="text-sm text-[var(--color-text-muted)]">Cotizaciones enviadas · {data.cotizacionesAceptadas} aceptadas</p>
             </div>
           </Link>
         </div>

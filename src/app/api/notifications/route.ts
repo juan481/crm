@@ -65,7 +65,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       type: 'pending_payment',
       title: 'Pago pendiente',
       body: `${c.name} tiene un pago pendiente`,
-      href: `/clientes/${c.id}`,
+      href: `/clients/${c.id}`,
       severity: 'warning',
     })
   }
@@ -75,7 +75,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       type: 'expired_service',
       title: 'Servicio expirado',
       body: `${c.name} — servicio expirado`,
-      href: `/clientes/${c.id}`,
+      href: `/clients/${c.id}`,
       severity: 'warning',
     })
   }

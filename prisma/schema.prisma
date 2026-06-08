@@ -414,6 +414,8 @@ model Task {
   createdBy      User      @relation("TaskCreator", fields: [createdById], references: [id])
   clientId       String?
   client         Client?   @relation(fields: [clientId], references: [id])
+  empresaId      String?
+  empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime  @default(now())
@@ -421,6 +423,7 @@ model Task {
 
   @@index([organizationId, status])
   @@index([assignedToId])
+  @@index([empresaId])
 }
 
 // ─── Support Tickets ───────────────────────────────────────────────────────
@@ -434,6 +437,8 @@ model Ticket {
   category       String    @default("SOPORTE")
   clientId       String?
   client         Client?   @relation(fields: [clientId], references: [id])
+  empresaId      String?
+  empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   assignedToId   String?
   assignedTo     User?     @relation("TicketAssignee", fields: [assignedToId], references: [id])
   createdById    String
@@ -484,6 +489,8 @@ model Empresa {
   notas          EmpresaNota[]
   cotizaciones   Cotizacion[]
   deals          Deal[]
+  tasks          Task[]
+  tickets        Ticket[]
 
   @@index([organizationId])
   @@index([organizationId, name])

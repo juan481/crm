@@ -22,6 +22,8 @@ interface MetricsData {
   activeDealsCount: number
   pipelineValue: number
   dealsByStage: Record<string, number>
+  cotizacionesEnviadas: number
+  cotizacionesAceptadas: number
 }
 
 async function fetchMetrics(orgId: string): Promise<MetricsData> {
@@ -29,7 +31,7 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
 
-  // 6 parallel queries (down from 16 original, now cached)
+  // 7 parallel queries
   const [
     statusGroups,
     newClientsThisMonth,
@@ -37,6 +39,7 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
     pendingTasks,
     openTickets,
     activeDeals,
+    cotizacionGroups,
   ] = await Promise.all([
     // All client status counts + MRR sums in ONE groupBy
     prisma.client.groupBy({
@@ -71,6 +74,11 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       where: { organizationId: orgId, stage: { notIn: ['GANADO', 'PERDIDO'] } },
       select: { amount: true, probability: true, stage: true },
     }),
+    (prisma as any).cotizacion.groupBy({
+      by: ['status'],
+      where: { organizationId: orgId },
+      _count: { _all: true },
+    }),
   ])
 
   const getCount = (s: string) => statusGroups.find((g) => g.status === s)?._count._all ?? 0
@@ -103,6 +111,10 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
     return acc
   }, {})
 
+  const getCotizCount = (s: string) =>
+    (cotizacionGroups as Array<{ status: string; _count: { _all: number } }>)
+      .find((g) => g.status === s)?._count._all ?? 0
+
   return {
     activeClients, pendingPayment, expiredServices,
     mrr: currentMrr, mrrGrowth, newClientsThisMonth,
@@ -110,6 +122,8 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
     pendingTasks, openTickets,
     activeDealsCount: activeDeals.length,
     pipelineValue, dealsByStage,
+    cotizacionesEnviadas: getCotizCount('ENVIADA'),
+    cotizacionesAceptadas: getCotizCount('ACEPTADA'),
   }
 }
 

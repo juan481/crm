@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { searchParams } = req.nextUrl
-    const status   = searchParams.get('status') ?? ''
+    const search   = searchParams.get('search')   ?? ''
+    const status   = searchParams.get('status')   ?? ''
     const clientId = searchParams.get('clientId') ?? ''
     const page     = Math.max(1, Number(searchParams.get('page')  ?? 1))
     const limit    = Math.min(50, Number(searchParams.get('limit') ?? 20))
@@ -18,12 +21,17 @@ export async function GET(req: NextRequest) {
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-    // Use organizationId directly — no JOIN with Client table
     const baseWhere = { organizationId: orgId }
-    const where = {
+
+    // Build client filter: text search takes priority over direct clientId
+    const clientFilter: Record<string, unknown> = {}
+    if (search.length >= 2) clientFilter.name = { contains: search, mode: 'insensitive' }
+    if (clientId)           clientFilter.id   = clientId
+
+    const where: Record<string, unknown> = {
       ...baseWhere,
-      ...(status   && { status }),
-      ...(clientId && { clientId }),
+      ...(status && { status }),
+      ...(Object.keys(clientFilter).length > 0 && { client: clientFilter }),
     }
 
     const [data, total, pendingAgg, paidAgg, overdueCount] = await Promise.all([

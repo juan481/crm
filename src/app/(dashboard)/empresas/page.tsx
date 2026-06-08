@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -37,12 +37,30 @@ export default function EmpresasPage() {
   const fileRef     = useRef<HTMLInputElement>(null)
   const fileRefDir  = useRef<HTMLInputElement>(null)
 
-  const [search,          setSearch]          = useState('')
-  const [filterActividad, setFilterActividad] = useState('')
-  const [filterCiudad,    setFilterCiudad]    = useState('')
-  const [tieneWeb,        setTieneWeb]        = useState('')
-  const [showFilters,     setShowFilters]     = useState(false)
-  const [page,            setPage]            = useState(1)
+  const [searchInput,         setSearchInput]         = useState('')
+  const [search,              setSearch]              = useState('')
+  const [filterActividadInput,setFilterActividadInput]= useState('')
+  const [filterActividad,     setFilterActividad]     = useState('')
+  const [filterCiudadInput,   setFilterCiudadInput]   = useState('')
+  const [filterCiudad,        setFilterCiudad]        = useState('')
+  const [tieneWeb,            setTieneWeb]            = useState('')
+  const [showFilters,         setShowFilters]         = useState(false)
+  const [page,                setPage]                = useState(1)
+
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  useEffect(() => {
+    const t = setTimeout(() => { setFilterActividad(filterActividadInput); setPage(1) }, 400)
+    return () => clearTimeout(t)
+  }, [filterActividadInput])
+
+  useEffect(() => {
+    const t = setTimeout(() => { setFilterCiudad(filterCiudadInput); setPage(1) }, 400)
+    return () => clearTimeout(t)
+  }, [filterCiudadInput])
   const [showForm,        setShowForm]        = useState(false)
   const [importing,       setImporting]       = useState(false)
   const [deleteId,        setDeleteId]        = useState<string | null>(null)
@@ -57,16 +75,16 @@ export default function EmpresasPage() {
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
-  const activeFilters = [filterActividad, filterCiudad, tieneWeb].filter(Boolean).length
+  const activeFilters = [filterActividadInput, filterCiudadInput, tieneWeb].filter(Boolean).length
 
   const { data, isLoading } = useQuery({
     queryKey: ['empresas', search, filterActividad, filterCiudad, tieneWeb, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
-      if (search.length >= 2)          p.set('search', search)
+      if (search.length >= 2)          p.set('search',          search)
       if (filterActividad.length >= 2) p.set('filterActividad', filterActividad)
-      if (filterCiudad.length >= 2)    p.set('filterCiudad', filterCiudad)
-      if (tieneWeb)                    p.set('tieneWeb', tieneWeb)
+      if (filterCiudad.length >= 2)    p.set('filterCiudad',    filterCiudad)
+      if (tieneWeb)                    p.set('tieneWeb',         tieneWeb)
       const res = await fetch(`/api/empresas?${p}`)
       if (!res.ok) throw new Error('Error al cargar empresas')
       return res.json()
@@ -208,7 +226,9 @@ export default function EmpresasPage() {
   }
 
   const clearFilters = () => {
+    setFilterActividadInput('')
     setFilterActividad('')
+    setFilterCiudadInput('')
     setFilterCiudad('')
     setTieneWeb('')
     setPage(1)
@@ -254,8 +274,8 @@ export default function EmpresasPage() {
         <div className="flex-1 min-w-[220px] max-w-sm">
           <Input
             placeholder="Buscar por nombre, actividad, ciudad, contacto..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
             leftIcon={<Search size={15} />}
           />
         </div>
@@ -294,16 +314,16 @@ export default function EmpresasPage() {
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Actividad</label>
               <Input
                 placeholder="Ej: Seguridad electrónica"
-                value={filterActividad}
-                onChange={e => { setFilterActividad(e.target.value); setPage(1) }}
+                value={filterActividadInput}
+                onChange={e => setFilterActividadInput(e.target.value)}
               />
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Localidad</label>
               <Input
                 placeholder="Ej: Córdoba, Rosario..."
-                value={filterCiudad}
-                onChange={e => { setFilterCiudad(e.target.value); setPage(1) }}
+                value={filterCiudadInput}
+                onChange={e => setFilterCiudadInput(e.target.value)}
               />
             </div>
             <div>

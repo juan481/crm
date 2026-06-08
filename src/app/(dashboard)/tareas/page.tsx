@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, CheckSquare, Square, Clock, AlertCircle, ChevronDown, Trash2,
-  User, Calendar, Flag,
+  User, Calendar, Flag, Building2, Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,11 +46,11 @@ interface TaskFormState {
   priority: TaskPriority
   dueDate: string
   assignedToId: string
-  clientId: string
+  empresaId: string
 }
 
 const EMPTY_FORM: TaskFormState = {
-  title: '', description: '', priority: 'MEDIA', dueDate: '', assignedToId: '', clientId: '',
+  title: '', description: '', priority: 'MEDIA', dueDate: '', assignedToId: '', empresaId: '',
 }
 
 function isOverdue(task: Task): boolean {
@@ -62,14 +63,21 @@ export default function TareasPage() {
   const { user } = useAuthStore()
 
   const [statusFilter, setStatusFilter] = useState('')
+  const [searchInput,  setSearchInput]  = useState('')
+  const [search,       setSearch]       = useState('')
   const [showForm, setShowForm] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
   const [form, setForm] = useState<TaskFormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
   const { data: usersData } = useQuery({
-    queryKey: ['users-list'],
+    queryKey: ['usuarios-internos'],
     queryFn: async () => {
-      const res = await fetch('/api/settings/users')
+      const res = await fetch('/api/usuarios')
       if (!res.ok) return { data: [] }
       return res.json()
     },
@@ -81,25 +89,26 @@ export default function TareasPage() {
     ...users.map(u => ({ value: u.id, label: u.name })),
   ]
 
-  const { data: clientsData } = useQuery({
-    queryKey: ['clients-list'],
+  const { data: empresasData } = useQuery({
+    queryKey: ['empresas-tareas'],
     queryFn: async () => {
-      const res = await fetch('/api/clients?limit=100')
+      const res = await fetch('/api/empresas?limit=200')
       if (!res.ok) return { data: [] }
       return res.json()
     },
     staleTime: 5 * 60 * 1000,
   })
-  const clientOptions = [
-    { value: '', label: 'Sin cliente' },
-    ...((clientsData?.data ?? []) as Array<{ id: string; name: string }>).map(c => ({ value: c.id, label: c.name })),
+  const empresaOptions = [
+    { value: '', label: 'Sin empresa' },
+    ...((empresasData?.data ?? []) as Array<{ id: string; name: string }>).map(e => ({ value: e.id, label: e.name })),
   ]
 
   const { data, isLoading } = useQuery<Task[]>({
-    queryKey: ['tasks', statusFilter],
+    queryKey: ['tasks', statusFilter, search],
     queryFn: async () => {
       const params = new URLSearchParams()
-      if (statusFilter) params.set('status', statusFilter)
+      if (statusFilter)    params.set('status', statusFilter)
+      if (search.length >= 2) params.set('search', search)
       const res = await fetch(`/api/tareas?${params}`)
       if (!res.ok) throw new Error('Error al cargar tareas')
       return res.json().then(j => j.data)
@@ -142,7 +151,7 @@ export default function TareasPage() {
           priority: form.priority,
           dueDate: form.dueDate || null,
           assignedToId: form.assignedToId || user?.id,
-          clientId: form.clientId || null,
+          empresaId: form.empresaId || null,
         }),
       })
       const json = await res.json()
@@ -172,7 +181,17 @@ export default function TareasPage() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar tareas..."
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              className="pl-8 pr-3 py-2 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 w-44"
+            />
+          </div>
           <Select
             options={STATUS_FILTER_OPTIONS}
             value={statusFilter}
@@ -193,7 +212,7 @@ export default function TareasPage() {
       ) : tasks.length === 0 ? (
         <div className="surface rounded-2xl p-16 text-center">
           <CheckSquare className="mx-auto mb-3 text-[var(--color-text-subtle)]" size={40} />
-          <p className="text-[var(--color-text-muted)]">No hay tareas{statusFilter ? ' con este filtro' : ' aún'}</p>
+          <p className="text-[var(--color-text-muted)]">No hay tareas{statusFilter || search ? ' con estos filtros' : ' aún'}</p>
           <Button className="mt-4" leftIcon={<Plus size={14} />} onClick={() => setShowForm(true)}>
             Crear primera tarea
           </Button>
@@ -250,9 +269,9 @@ export default function TareasPage() {
                           <Calendar size={9} />{formatDate(task.dueDate)}
                         </span>
                       )}
-                      {task.client && (
+                      {(task.empresa || task.client) && (
                         <span className="text-[10px] text-[var(--color-text-subtle)] flex items-center gap-1">
-                          <Flag size={9} />{task.client.name}
+                          <Building2 size={9} />{task.empresa?.name ?? task.client?.name}
                         </span>
                       )}
                     </div>
@@ -310,10 +329,10 @@ export default function TareasPage() {
               onChange={e => setForm(f => ({ ...f, assignedToId: e.target.value }))}
             />
             <Select
-              label="Cliente (opcional)"
-              options={clientOptions}
-              value={form.clientId}
-              onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}
+              label="Empresa (opcional)"
+              options={empresaOptions}
+              value={form.empresaId}
+              onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
             />
           </div>
           <div className="flex justify-end gap-2 pt-1">

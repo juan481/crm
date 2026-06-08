@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, MessageSquare, User, Clock, AlertCircle, Filter } from 'lucide-react'
+import { Plus, MessageSquare, User, Clock, AlertCircle, Filter, Building2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -56,43 +56,51 @@ interface TicketFormState {
   description: string
   priority: TaskPriority
   category: TicketCategory
-  clientId: string
+  empresaId: string
 }
 
 const EMPTY_FORM: TicketFormState = {
-  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', clientId: '',
+  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '',
 }
 
 export default function TicketsPage() {
   const router = useRouter()
   const qc = useQueryClient()
 
-  const [statusFilter, setStatusFilter] = useState('')
+  const [statusFilter,   setStatusFilter]   = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [searchInput,    setSearchInput]    = useState('')
+  const [search,         setSearch]         = useState('')
   const [showForm, setShowForm] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
   const [form, setForm] = useState<TicketFormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
-  const { data: clientsData } = useQuery({
-    queryKey: ['clients-list'],
+  const { data: empresasData } = useQuery({
+    queryKey: ['empresas-tickets'],
     queryFn: async () => {
-      const res = await fetch('/api/clients?limit=100')
+      const res = await fetch('/api/empresas?limit=200')
       if (!res.ok) return { data: [] }
       return res.json()
     },
     staleTime: 5 * 60 * 1000,
   })
-  const clientOptions = [
-    { value: '', label: 'Sin cliente' },
-    ...((clientsData?.data ?? []) as Array<{ id: string; name: string }>).map(c => ({ value: c.id, label: c.name })),
+  const empresaOptions = [
+    { value: '', label: 'Sin empresa' },
+    ...((empresasData?.data ?? []) as Array<{ id: string; name: string }>).map(e => ({ value: e.id, label: e.name })),
   ]
 
   const { data, isLoading } = useQuery<Ticket[]>({
-    queryKey: ['tickets', statusFilter, categoryFilter],
+    queryKey: ['tickets', statusFilter, categoryFilter, search],
     queryFn: async () => {
       const params = new URLSearchParams()
-      if (statusFilter) params.set('status', statusFilter)
-      if (categoryFilter) params.set('category', categoryFilter)
+      if (statusFilter)       params.set('status',   statusFilter)
+      if (categoryFilter)     params.set('category', categoryFilter)
+      if (search.length >= 2) params.set('search',   search)
       const res = await fetch(`/api/tickets?${params}`)
       if (!res.ok) throw new Error('Error al cargar tickets')
       return res.json().then(j => j.data)
@@ -112,7 +120,7 @@ export default function TicketsPage() {
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, clientId: form.clientId || undefined }),
+        body: JSON.stringify({ ...form, empresaId: form.empresaId || undefined }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
@@ -133,7 +141,17 @@ export default function TicketsPage() {
             {openCount} ticket{openCount !== 1 ? 's' : ''} abierto{openCount !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)] pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar tickets..."
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              className="pl-8 pr-3 py-2 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 w-44"
+            />
+          </div>
           <Select options={STATUS_OPTIONS} value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-40" />
           <Select options={CATEGORY_OPTIONS} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-40" />
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
@@ -150,7 +168,7 @@ export default function TicketsPage() {
       ) : tickets.length === 0 ? (
         <div className="surface rounded-2xl p-16 text-center">
           <MessageSquare className="mx-auto mb-3 text-[var(--color-text-subtle)]" size={40} />
-          <p className="text-[var(--color-text-muted)]">No hay tickets{statusFilter || categoryFilter ? ' con estos filtros' : ' aún'}</p>
+          <p className="text-[var(--color-text-muted)]">No hay tickets{statusFilter || categoryFilter || search ? ' con estos filtros' : ' aún'}</p>
           <Button className="mt-4" leftIcon={<Plus size={14} />} onClick={() => setShowForm(true)}>
             Crear primer ticket
           </Button>
@@ -183,9 +201,9 @@ export default function TicketsPage() {
                   </div>
                   <p className="text-xs text-[var(--color-text-subtle)] line-clamp-1">{ticket.description}</p>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                    {ticket.client && (
+                    {(ticket.empresa || ticket.client) && (
                       <span className="text-[10px] text-[var(--color-text-subtle)] flex items-center gap-1">
-                        <User size={9} />{ticket.client.name}
+                        <Building2 size={9} />{ticket.empresa?.name ?? ticket.client?.name}
                       </span>
                     )}
                     {ticket.assignedTo && (
@@ -243,10 +261,10 @@ export default function TicketsPage() {
             />
           </div>
           <Select
-            label="Cliente (opcional)"
-            options={clientOptions}
-            value={form.clientId}
-            onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}
+            label="Empresa (opcional)"
+            options={empresaOptions}
+            value={form.empresaId}
+            onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
           />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" type="button" onClick={() => setShowForm(false)}>Cancelar</Button>

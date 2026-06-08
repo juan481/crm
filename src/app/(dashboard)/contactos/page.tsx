@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off } from 'lucide-react'
@@ -19,8 +19,14 @@ export default function ContactosPage() {
   const { user } = useAuthStore()
   const fileRef  = useRef<HTMLInputElement>(null)
 
-  const [search,    setSearch]    = useState('')
-  const [page,      setPage]      = useState(1)
+  const [searchInput, setSearchInput] = useState('')
+  const [search,      setSearch]      = useState('')
+  const [page,        setPage]        = useState(1)
+
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
   const [showForm,  setShowForm]  = useState(false)
   const [importing, setImporting] = useState(false)
   const [deleteId,  setDeleteId]  = useState<string | null>(null)
@@ -101,8 +107,8 @@ export default function ContactosPage() {
       <div className="max-w-sm">
         <Input
           placeholder="Buscar por nombre, mail, cargo, empresa..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
           leftIcon={<Search size={15} />}
         />
       </div>

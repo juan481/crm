@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Building2, Users, Globe, MapPin, UserCheck } from 'lucide-react'
@@ -10,8 +10,14 @@ import type { Empresa } from '@/types'
 
 export default function ClientesPage() {
   const router = useRouter()
-  const [search, setSearch] = useState('')
-  const [page,   setPage]   = useState(1)
+  const [searchInput, setSearchInput] = useState('')
+  const [search,      setSearch]      = useState('')
+  const [page,        setPage]        = useState(1)
+
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const { data, isLoading } = useQuery({
     queryKey: ['empresas-clientes', search, page],
@@ -41,8 +47,8 @@ export default function ClientesPage() {
       <div className="max-w-sm">
         <Input
           placeholder="Buscar cliente..."
-          value={search}
-          onChange={e => { setSearch(e.target.value); setPage(1) }}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
           leftIcon={<Search size={15} />}
         />
       </div>

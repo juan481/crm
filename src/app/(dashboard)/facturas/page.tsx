@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye } from 'lucide-react'
+import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { Table } from '@/components/ui/table'
@@ -104,6 +105,8 @@ export default function FacturasPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
   const [statusFilter, setStatusFilter] = useState('')
+  const [searchInput,  setSearchInput]  = useState('')
+  const [search,       setSearch]       = useState('')
   const [page, setPage] = useState(1)
   const [showCreate, setShowCreate] = useState(false)
   const [showRecurring, setShowRecurring] = useState(false)
@@ -111,12 +114,21 @@ export default function FacturasPage() {
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRow | null>(null)
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
-  const params = new URLSearchParams({ page: String(page), limit: '20' })
-  if (statusFilter) params.set('status', statusFilter)
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const { data, isLoading } = useQuery<InvoicesResponse>({
-    queryKey: ['invoices', statusFilter, page],
-    queryFn: async () => { const res = await fetch(`/api/invoices?${params}`); if (!res.ok) throw new Error(); return res.json() },
+    queryKey: ['invoices', statusFilter, search, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: '20' })
+      if (statusFilter)       params.set('status', statusFilter)
+      if (search.length >= 2) params.set('search', search)
+      const res = await fetch(`/api/invoices?${params}`)
+      if (!res.ok) throw new Error()
+      return res.json()
+    },
     staleTime: 60 * 1000,
   })
 
@@ -174,7 +186,17 @@ export default function FacturasPage() {
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)] pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar cliente..."
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            className="pl-8 pr-3 py-2 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 w-48"
+          />
+        </div>
         <Filter size={15} className="text-[var(--color-text-subtle)]" />
         <Select options={STATUS_OPTIONS} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className="max-w-[200px]" />
       </div>
