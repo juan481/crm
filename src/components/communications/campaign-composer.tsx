@@ -215,7 +215,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
     if (allSelected) {
       setSelectedIds(prev => { const n = new Set(prev); filteredIds.forEach(id => n.delete(id)); return n })
     } else {
-      setSelectedIds(prev => new Set([...prev, ...filteredIds]))
+      setSelectedIds(prev => new Set(Array.from(prev).concat(filteredIds)))
     }
   }
 
@@ -229,7 +229,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       const client = (clientsData ?? []).find(cl => `c:${cl.id}` === c.id)
       return client?.status === status
     }).map(c => c.id)
-    setSelectedIds(prev => new Set([...prev, ...ids]))
+    setSelectedIds(prev => new Set(Array.from(prev).concat(ids)))
   }
 
   const statusCounts = useMemo(() => {
