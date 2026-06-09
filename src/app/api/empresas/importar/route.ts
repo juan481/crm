@@ -24,11 +24,23 @@ export async function POST(req: NextRequest) {
     let created = 0
     let skipped = 0
 
-    for (const row of rows) {
-      const name = (row['Empresa'] ?? row['empresa'] ?? row['EMPRESA'] ?? '').toString().trim()
+    // Normalize a row's keys to lowercase+trimmed for case-insensitive column matching
+    const normalizeRow = (row: Record<string, string>): Record<string, string> => {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(row)) out[k.toLowerCase().trim()] = String(v ?? '')
+      return out
+    }
+
+    // Pick first truthy value from a list of possible column names (already normalized to lowercase)
+    const col = (r: Record<string, string>, ...keys: string[]) =>
+      keys.map(k => r[k]).find(v => v?.trim()) ?? ''
+
+    for (const rawRow of rows) {
+      const row = normalizeRow(rawRow)
+
+      const name = col(row, 'empresa', 'company', 'razon social', 'razón social', 'nombre').trim()
       if (!name) { skipped++; continue }
 
-      // Skip if already exists (by name + org)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existing = await (prisma.empresa as any).findFirst({
         where: { organizationId: payload.orgId, name: { equals: name, mode: 'insensitive' } },
@@ -41,11 +53,11 @@ export async function POST(req: NextRequest) {
         data: {
           organizationId: payload.orgId,
           name,
-          activity: (row['Actividad'] ?? row['actividad'] ?? '').toString().trim() || null,
-          address:  (row['Domicilio'] ?? row['domicilio'] ?? '').toString().trim() || null,
-          city:     (row['Localidad'] ?? row['localidad'] ?? '').toString().trim() || null,
-          province: (row['Provincia'] ?? row['provincia'] ?? '').toString().trim() || null,
-          website:  (row['Web']       ?? row['web']       ?? '').toString().trim() || null,
+          activity: col(row, 'actividad', 'rubro', 'actividad comercial', 'sector', 'industry').trim() || null,
+          address:  col(row, 'domicilio', 'direccion', 'dirección', 'address').trim() || null,
+          city:     col(row, 'localidad', 'ciudad', 'city').trim() || null,
+          province: col(row, 'provincia', 'province').trim() || null,
+          website:  col(row, 'web', 'website', 'sitio web', 'url').trim() || null,
         },
       })
       created++
