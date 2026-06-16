@@ -130,7 +130,10 @@ export default function CotizacionesPage() {
                 const date = new Date(c.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
 
                 return (
-                  <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <tr key={c.id}
+                    onClick={() => router.push(`/cotizaciones/${c.id}`)}
+                    className="cursor-pointer hover:bg-[var(--color-surface-raised)] transition-colors"
+                    style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
                         {c.ref}
