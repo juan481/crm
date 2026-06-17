@@ -39,9 +39,17 @@ interface SendEmailOptions {
   attachments?: EmailAttachment[]
 }
 
+// If smtpFrom is only a display name (no @), combine it with smtpUser as the actual address
+function resolveFrom(smtpFrom: string | undefined, smtpUser: string | undefined): string {
+  const fallback = smtpUser || 'noreply@crmpro.com'
+  if (!smtpFrom) return fallback
+  if (smtpFrom.includes('@')) return smtpFrom          // already a valid address or "Name <email>"
+  return `${smtpFrom} <${fallback}>`                   // "Abba Seguridad" → "Abba Seguridad <user@smtp-brevo.com>"
+}
+
 export async function sendEmail({ to, subject, html, from, smtpConfig, attachments }: SendEmailOptions) {
   const transporter = createTransporter(smtpConfig)
-  const fromAddress = from ?? smtpConfig?.from ?? process.env.SMTP_FROM ?? 'CRM Pro <noreply@crmpro.com>'
+  const fromAddress = from ?? resolveFrom(smtpConfig?.from, smtpConfig?.user) ?? process.env.SMTP_FROM ?? 'CRM Pro <noreply@crmpro.com>'
   await transporter.sendMail({ from: fromAddress, to, subject, html, attachments })
 }
 

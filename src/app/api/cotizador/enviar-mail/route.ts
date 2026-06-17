@@ -159,6 +159,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Email enviado con el presupuesto adjunto' })
   } catch (error) {
     console.error('[COTIZADOR ENVIAR-MAIL]', error)
-    return NextResponse.json({ error: 'Error al enviar el email' }, { status: 500 })
+    const msg = (error as Error).message ?? 'Error al enviar el email'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
