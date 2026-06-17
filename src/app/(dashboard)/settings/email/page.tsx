@@ -20,12 +20,13 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 const PROVIDERS = [
-  { label: 'Gmail', host: 'smtp.gmail.com', port: 587, note: 'Requiere contraseña de aplicación (no tu contraseña de Gmail)' },
+  { label: 'Brevo',            host: 'smtp-relay.brevo.com',   port: 587, note: 'Recomendado · Usá una API Key de Brevo (xkeysib-...) en el campo Contraseña — evita el problema de IPs bloqueadas.' },
+  { label: 'Gmail',            host: 'smtp.gmail.com',          port: 587, note: 'Requiere contraseña de aplicación (no tu contraseña de Gmail)' },
   { label: 'Outlook / Hotmail', host: 'smtp-mail.outlook.com', port: 587, note: '' },
-  { label: 'Yahoo', host: 'smtp.mail.yahoo.com', port: 587, note: '' },
-  { label: 'SendGrid', host: 'smtp.sendgrid.net', port: 587, note: 'Usuario: apikey / Contraseña: tu API Key' },
-  { label: 'Mailgun', host: 'smtp.mailgun.org', port: 587, note: '' },
-  { label: 'Custom', host: '', port: 587, note: '' },
+  { label: 'Yahoo',            host: 'smtp.mail.yahoo.com',     port: 587, note: '' },
+  { label: 'SendGrid',         host: 'smtp.sendgrid.net',       port: 587, note: 'Usuario: apikey / Contraseña: tu API Key' },
+  { label: 'Mailgun',          host: 'smtp.mailgun.org',        port: 587, note: '' },
+  { label: 'Custom',           host: '',                        port: 587, note: '' },
 ]
 
 export default function EmailSettingsPage() {
@@ -154,19 +155,39 @@ export default function EmailSettingsPage() {
         )}
       </Card>
 
+      {/* Brevo API key tip */}
+      {watch('smtpHost') === 'smtp-relay.brevo.com' && (
+        <div className="surface rounded-2xl p-4 border-l-4 border-violet-500 bg-violet-500/5">
+          <div className="flex gap-3">
+            <Info size={16} className="text-violet-400 mt-0.5 shrink-0" />
+            <div className="text-sm text-violet-300 space-y-1">
+              <p className="font-medium">Brevo: usá API Key para evitar bloqueos de IP</p>
+              <p>En Brevo → <strong>Configuración → API Keys</strong> → creá una nueva clave. Copiá la clave <code className="bg-violet-500/20 px-1 rounded text-xs">xkeysib-...</code> y pegala en el campo <strong>Contraseña</strong> de abajo.</p>
+              <p className="text-violet-400/70">El campo &quot;Email / Usuario&quot; puede ser cualquier email verificado en Brevo. La API Key reemplaza la contraseña SMTP.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SMTP Form */}
-      <form onSubmit={handleSubmit(onSubmit)}>
+      {/* autoComplete="off" prevents browsers from treating this as a login form and autofilling with CRM credentials */}
+      <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
         <Card>
           <CardHeader>
             <CardTitle>Datos del Servidor SMTP</CardTitle>
           </CardHeader>
           <div className="space-y-4">
+            {/* Hidden dummy fields trick some browsers into not autofilling the real fields */}
+            <input type="text" name="fake-user" style={{ display: 'none' }} autoComplete="username" readOnly />
+            <input type="password" name="fake-pass" style={{ display: 'none' }} autoComplete="new-password" readOnly />
+
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <Input
                   label="Host SMTP"
                   placeholder="smtp.gmail.com"
                   error={errors.smtpHost?.message}
+                  autoComplete="off"
                   {...register('smtpHost')}
                 />
               </div>
@@ -175,23 +196,26 @@ export default function EmailSettingsPage() {
                 type="number"
                 placeholder="587"
                 error={errors.smtpPort?.message}
+                autoComplete="off"
                 {...register('smtpPort')}
               />
             </div>
 
             <Input
-              label="Email / Usuario"
-              type="email"
-              placeholder="tu@email.com"
+              label="Email / Usuario SMTP"
+              type="text"
+              placeholder="usuario@dominio.com"
               error={errors.smtpUser?.message}
+              autoComplete="off"
               {...register('smtpUser')}
             />
 
             <div className="relative">
               <Input
-                label={hasPassword ? 'Contraseña (dejar vacío para mantener la actual)' : 'Contraseña / API Key'}
+                label={hasPassword ? 'Contraseña / API Key (dejar vacío para mantener la actual)' : 'Contraseña / API Key'}
                 type={showPass ? 'text' : 'password'}
-                placeholder={hasPassword ? '••••••••••••' : 'Contraseña de aplicación'}
+                placeholder={hasPassword ? '••••••••••••' : 'xkeysib-... o contraseña de aplicación'}
+                autoComplete="new-password"
                 {...register('smtpPass')}
               />
               <button
@@ -206,6 +230,7 @@ export default function EmailSettingsPage() {
             <Input
               label="Nombre del remitente (opcional)"
               placeholder="Mi Agencia <hola@miagencia.com>"
+              autoComplete="off"
               {...register('smtpFrom')}
             />
 
