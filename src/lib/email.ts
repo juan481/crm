@@ -9,14 +9,17 @@ export interface SmtpConfig {
 }
 
 function createTransporter(cfg?: SmtpConfig) {
+  const port = cfg?.port ?? (Number(process.env.SMTP_PORT) || 587)
   return nodemailer.createTransport({
-    host: cfg?.host || process.env.SMTP_HOST,
-    port: cfg?.port ?? (Number(process.env.SMTP_PORT) || 587),
-    secure: false,
+    host:       cfg?.host || process.env.SMTP_HOST,
+    port,
+    secure:     port === 465,
+    requireTLS: port !== 465,
     auth: {
       user: cfg?.user || process.env.SMTP_USER,
       pass: cfg?.pass || process.env.SMTP_PASS,
     },
+    tls: { rejectUnauthorized: false },
   })
 }
 
