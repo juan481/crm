@@ -11,10 +11,11 @@ function mergeVars(template: string, vars: Record<string, string>): string {
 }
 
 // ─── Batch sending ────────────────────────────────────────────────────────────
-// Sends in groups of BATCH_SIZE with a delay between batches to avoid SMTP
-// rate limits (Gmail caps at ~20-30 msgs/s; 15/batch + 1.2s delay is safe).
-const BATCH_SIZE    = 15
-const BATCH_DELAY   = 1200 // ms
+// Sends one at a time with EMAIL_DELAY between each to avoid SMTP/API rate limits.
+// Every BATCH_SIZE emails, uses a longer BATCH_DELAY to let the relay recover.
+const BATCH_SIZE    = 10
+const BATCH_DELAY   = 3000  // ms — longer pause every N emails
+const EMAIL_DELAY   =  800  // ms — pause between every individual send
 
 interface Recipient {
   recipientId: string    // CampaignRecipient row id for status updates
@@ -58,9 +59,10 @@ async function sendBatched(opts: {
       })
     }
 
-    // Small delay every BATCH_SIZE emails to respect API rate limits
-    if ((i + 1) % BATCH_SIZE === 0 && i + 1 < recipients.length) {
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY))
+    // Pause between every email; longer pause every BATCH_SIZE to let relay recover
+    if (i + 1 < recipients.length) {
+      const delay = (i + 1) % BATCH_SIZE === 0 ? BATCH_DELAY : EMAIL_DELAY
+      await new Promise(resolve => setTimeout(resolve, delay))
     }
   }
 
