@@ -34,37 +34,32 @@ async function sendBatched(opts: {
   const { recipients, subjectTpl, bodyTpl, orgName, smtpConfig, campaignId } = opts
   const db = prisma as any
 
-  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-    const batch = recipients.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < recipients.length; i++) {
+    const r = recipients[i]
+    const vars: Record<string, string> = {
+      nombre:  r.name,
+      empresa: r.empresa,
+      email:   r.email,
+    }
+    const subject  = mergeVars(subjectTpl, vars)
+    const bodyHtml = mergeVars(bodyTpl, vars)
+    const html     = buildEmailHtml(subject, bodyHtml, orgName)
 
-    await Promise.allSettled(
-      batch.map(async (r) => {
-        const vars: Record<string, string> = {
-          nombre:  r.name,
-          empresa: r.empresa,
-          email:   r.email,
-        }
-        const subject  = mergeVars(subjectTpl, vars)
-        const bodyHtml = mergeVars(bodyTpl, vars)
-        const html     = buildEmailHtml(subject, bodyHtml, orgName)
-
-        try {
-          await sendEmail({ to: r.email, subject, html, smtpConfig })
-          await db.campaignRecipient.update({
-            where: { id: r.recipientId },
-            data:  { status: 'sent', sentAt: new Date() },
-          })
-        } catch (err) {
-          await db.campaignRecipient.update({
-            where: { id: r.recipientId },
-            data:  { status: 'failed', error: String((err as Error).message).slice(0, 250) },
-          })
-        }
+    try {
+      await sendEmail({ to: r.email, subject, html, smtpConfig })
+      await db.campaignRecipient.update({
+        where: { id: r.recipientId },
+        data:  { status: 'sent', sentAt: new Date() },
       })
-    )
+    } catch (err) {
+      await db.campaignRecipient.update({
+        where: { id: r.recipientId },
+        data:  { status: 'failed', error: String((err as Error).message).slice(0, 250) },
+      })
+    }
 
-    // Delay between batches (skip delay after the last batch)
-    if (i + BATCH_SIZE < recipients.length) {
+    // Small delay every BATCH_SIZE emails to respect API rate limits
+    if ((i + 1) % BATCH_SIZE === 0 && i + 1 < recipients.length) {
       await new Promise(resolve => setTimeout(resolve, BATCH_DELAY))
     }
   }
