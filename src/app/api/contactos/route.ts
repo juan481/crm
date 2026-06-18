@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const search    = searchParams.get('search')    ?? ''
     const empresaId = searchParams.get('empresaId') ?? ''
     const page      = Math.max(1, Number(searchParams.get('page')  ?? 1))
-    const limit     = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 20)))
+    const limit     = Math.min(2000, Math.max(1, Number(searchParams.get('limit') ?? 20)))
     const skip      = (page - 1) * limit
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }

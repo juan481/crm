@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const filterCiudad    = searchParams.get('filterCiudad')    ?? ''
     const tieneWeb        = searchParams.get('tieneWeb')        // 'si' | 'no' | null
     const page            = Math.max(1, Number(searchParams.get('page')  ?? 1))
-    const limit           = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 20)))
+    const limit           = Math.min(2000, Math.max(1, Number(searchParams.get('limit') ?? 20)))
     const skip            = (page - 1) * limit
 
     const db = prisma as any

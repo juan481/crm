@@ -78,14 +78,16 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
 
   const { data: clientsData } = useQuery({
     queryKey: ['clients-all'],
-    queryFn:  async () => ((await (await fetch('/api/clients?limit=1000')).json()).data ?? []) as Client[],
+    queryFn:  async () => ((await (await fetch('/api/clients?limit=2000')).json()).data ?? []) as Client[],
     enabled:  source === 'clients' || source === 'todos',
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const { data: contactosData } = useQuery({
     queryKey: ['directorio-all'],
     queryFn:  async () => {
-      const r = await fetch('/api/contactos?limit=1000')
+      const r = await fetch('/api/contactos?limit=2000')
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Array<{
         id: string; firstName: string; lastName: string
@@ -95,16 +97,20 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       }>
     },
     enabled: source === 'directorio' || source === 'todos' || source === 'empresas',
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-campaign-all'],
     queryFn:  async () => {
-      const r = await fetch('/api/empresas?limit=1000')
+      const r = await fetch('/api/empresas?limit=2000')
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Empresa[]
     },
     enabled: source === 'empresas',
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
@@ -173,6 +179,15 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
     })
   }, [allContacts, statusFilter, searchFilter, clientsData])
 
+  // Lookup companyRaw → empresa.id for contacts not formally linked via empresaId
+  const empresaNameMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const e of (empresasData ?? [])) {
+      map[e.name.toLowerCase().trim()] = e.id
+    }
+    return map
+  }, [empresasData])
+
   // ── Empresa-level list ─────────────────────────────────────────────────────
   const filteredEmpresas = useMemo(() => {
     if (source !== 'empresas') return []
@@ -187,21 +202,25 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const contactsPerEmpresa = useMemo(() => {
     const map: Record<string, number> = {}
     for (const c of (contactosData ?? [])) {
-      if (!c.email || !c.empresa?.id) continue
-      map[c.empresa.id] = (map[c.empresa.id] ?? 0) + 1
+      if (!c.email) continue
+      const eid = c.empresa?.id ?? (c.companyRaw ? empresaNameMap[c.companyRaw.toLowerCase().trim()] : undefined)
+      if (!eid) continue
+      map[eid] = (map[eid] ?? 0) + 1
     }
     return map
-  }, [contactosData])
+  }, [contactosData, empresaNameMap])
 
   const empresaRecipientCount = useMemo(() => {
     if (source !== 'empresas') return 0
     const emails = new Set<string>()
     for (const c of (contactosData ?? [])) {
-      if (!c.email || !c.empresa?.id || !selectedIds.has(c.empresa.id)) continue
+      if (!c.email) continue
+      const eid = c.empresa?.id ?? (c.companyRaw ? empresaNameMap[c.companyRaw.toLowerCase().trim()] : undefined)
+      if (!eid || !selectedIds.has(eid)) continue
       emails.add(c.email.toLowerCase())
     }
     return emails.size
-  }, [contactosData, selectedIds, source])
+  }, [contactosData, empresaNameMap, selectedIds, source])
 
   // ── Selection ──────────────────────────────────────────────────────────────
   const filteredIds = source === 'empresas'
@@ -264,8 +283,16 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
     if (source === 'empresas') {
       if (selectedIds.size === 0) { toast.error('Seleccioná al menos una empresa'); return }
       const raw = (contactosData ?? [])
-        .filter(c => c.email && c.empresa?.id && selectedIds.has(c.empresa.id))
-        .map(c => ({ email: c.email!, name: `${c.firstName} ${c.lastName}`.trim(), empresa: c.empresa?.name ?? '' }))
+        .filter(c => {
+          if (!c.email) return false
+          const eid = c.empresa?.id ?? (c.companyRaw ? empresaNameMap[c.companyRaw.toLowerCase().trim()] : undefined)
+          return eid ? selectedIds.has(eid) : false
+        })
+        .map(c => ({
+          email:   c.email!,
+          name:    `${c.firstName} ${c.lastName}`.trim(),
+          empresa: c.empresa?.name ?? c.companyRaw ?? '',
+        }))
       const seen = new Set<string>()
       recipients = raw.filter(r => {
         const k = r.email.toLowerCase()
