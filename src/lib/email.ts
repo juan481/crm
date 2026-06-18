@@ -119,7 +119,13 @@ export async function testSmtp(cfg: SmtpConfig): Promise<{ ok: boolean; error?: 
   }
 }
 
-export function buildEmailHtml(subject: string, body: string, orgName = 'CRM Pro'): string {
+export function buildEmailHtml(
+  subject: string,
+  body: string,
+  orgName      = 'CRM Pro',
+  primaryColor = '#6366f1',
+  secondaryColor = '#8b5cf6',
+): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -127,7 +133,7 @@ export function buildEmailHtml(subject: string, body: string, orgName = 'CRM Pro
   <style>
     body{font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:0}
     .container{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-    .header{background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:32px 40px}
+    .header{background:linear-gradient(135deg,${primaryColor} 0%,${secondaryColor} 100%);padding:32px 40px}
     .header h1{color:#fff;margin:0;font-size:22px;font-weight:600}
     .body{padding:40px;color:#1e293b;line-height:1.7;font-size:15px}
     .footer{background:#f1f5f9;padding:20px 40px;text-align:center;color:#94a3b8;font-size:13px}

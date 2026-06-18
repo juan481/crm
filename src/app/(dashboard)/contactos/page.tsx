@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil } from 'lucide-react'
+import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -11,7 +11,20 @@ import { ContactoForm } from '@/components/directorio/contacto-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto } from '@/types'
+import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
+
+const CHUNK = 20
+
+interface ImportProgress {
+  processed: number
+  total:     number
+  created:   number
+  dupes:     number
+  skipped:   number
+  done?:     boolean
+  error?:    string
+}
 
 export default function ContactosPage() {
   const router   = useRouter()
@@ -30,6 +43,7 @@ export default function ContactosPage() {
   const [showForm,     setShowForm]     = useState(false)
   const [editContact,  setEditContact]  = useState<DirectorioContacto | null>(null)
   const [importing,    setImporting]    = useState(false)
+  const [progress,     setProgress]     = useState<ImportProgress | null>(null)
   const [deleteId,     setDeleteId]     = useState<string | null>(null)
   const [deleting,     setDeleting]     = useState(false)
 
@@ -54,20 +68,54 @@ export default function ContactosPage() {
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (fileRef.current) fileRef.current.value = ''
+
+    const buffer = await file.arrayBuffer()
+    const wb   = XLSX.read(buffer, { type: 'buffer' })
+    const ws   = wb.Sheets[wb.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+
+    if (rows.length === 0) { toast.error('El archivo está vacío'); return }
+
     setImporting(true)
-    const fd = new FormData()
-    fd.append('file', file)
+    setProgress({ processed: 0, total: rows.length, created: 0, dupes: 0, skipped: 0 })
+
+    let created = 0
+    let dupes   = 0
+    let skipped = 0
+
     try {
-      const res  = await fetch('/api/contactos/importar', { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!res.ok) { toast.error(json.error); return }
-      toast.success(json.message)
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK)
+        const res   = await fetch('/api/contactos/importar', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ rows: chunk }),
+        })
+
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setProgress(p => p ? { ...p, error: j.error ?? 'Error en el servidor' } : null)
+          return
+        }
+
+        const result = await res.json()
+        created += result.created ?? 0
+        dupes   += result.dupes   ?? 0
+        skipped += result.skipped ?? 0
+
+        setProgress({ processed: Math.min(i + CHUNK, rows.length), total: rows.length, created, dupes, skipped })
+
+        if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
+      }
+
+      setProgress(p => p ? { ...p, processed: rows.length, done: true } : null)
       qc.invalidateQueries({ queryKey: ['contactos'] })
     } catch {
-      toast.error('Error al importar')
+      toast.error('Error de conexión')
+      setProgress(p => p ? { ...p, error: 'Error de conexión' } : null)
     } finally {
       setImporting(false)
-      if (fileRef.current) fileRef.current.value = ''
     }
   }
 
@@ -81,6 +129,10 @@ export default function ContactosPage() {
     } catch { toast.error('Error de conexión') }
     finally { setDeleting(false); setDeleteId(null) }
   }
+
+  const pct = progress && progress.total > 0
+    ? Math.round((progress.processed / progress.total) * 100)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -232,6 +284,61 @@ export default function ContactosPage() {
             contacto={editContact}
             onSuccess={() => { setEditContact(null); qc.invalidateQueries({ queryKey: ['contactos'] }) }}
           />
+        )}
+      </Modal>
+
+      {/* Import progress modal */}
+      <Modal
+        open={!!progress}
+        onClose={() => { if (progress?.done || progress?.error) setProgress(null) }}
+        title="Importando contactos"
+        size="sm"
+        showClose={!!(progress?.done || progress?.error)}
+      >
+        {progress && (
+          <div className="space-y-5">
+            <div>
+              <div className="flex justify-between text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>
+                <span>{progress.done ? 'Completado' : `Procesando fila ${progress.processed} de ${progress.total}...`}</span>
+                <span>{pct}%</span>
+              </div>
+              <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${pct}%`,
+                    background: progress.error ? '#ef4444' : progress.done ? '#10b981' : 'var(--color-primary)',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Contactos creados', value: progress.created, color: 'var(--color-primary)' },
+                { label: 'Duplicados',         value: progress.dupes,   color: 'var(--color-text-muted)' },
+                { label: 'Filas omitidas',     value: progress.skipped, color: 'var(--color-text-muted)' },
+              ].map(s => (
+                <div key={s.label} className="rounded-xl p-3 text-center"
+                  style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                  <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {progress.done && (
+              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
+                <CheckCircle2 size={16} /> Importación completada exitosamente
+              </div>
+            )}
+
+            {progress.error && (
+              <div className="text-sm" style={{ color: '#ef4444' }}>
+                Error: {progress.error}
+              </div>
+            )}
+          </div>
         )}
       </Modal>
 

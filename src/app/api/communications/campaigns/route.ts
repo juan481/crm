@@ -25,14 +25,16 @@ interface Recipient {
 }
 
 async function sendBatched(opts: {
-  recipients:    Recipient[]
-  subjectTpl:    string
-  bodyTpl:       string    // raw HTML from rich editor (with {{vars}})
-  orgName:       string
-  smtpConfig:    SmtpConfig | undefined
-  campaignId:    string
+  recipients:     Recipient[]
+  subjectTpl:     string
+  bodyTpl:        string    // raw HTML from rich editor (with {{vars}})
+  orgName:        string
+  primaryColor:   string
+  secondaryColor: string
+  smtpConfig:     SmtpConfig | undefined
+  campaignId:     string
 }) {
-  const { recipients, subjectTpl, bodyTpl, orgName, smtpConfig, campaignId } = opts
+  const { recipients, subjectTpl, bodyTpl, orgName, primaryColor, secondaryColor, smtpConfig, campaignId } = opts
   const db = prisma as any
 
   for (let i = 0; i < recipients.length; i++) {
@@ -44,7 +46,7 @@ async function sendBatched(opts: {
     }
     const subject  = mergeVars(subjectTpl, vars)
     const bodyHtml = mergeVars(bodyTpl, vars)
-    const html     = buildEmailHtml(subject, bodyHtml, orgName)
+    const html     = buildEmailHtml(subject, bodyHtml, orgName, primaryColor, secondaryColor)
 
     try {
       await sendEmail({ to: r.email, subject, html, smtpConfig })
@@ -142,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     const org = await prisma.organization.findUnique({
       where:  { id: payload.orgId },
-      select: { smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, crmName: true },
+      select: { smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, crmName: true, primaryColor: true, secondaryColor: true },
     })
 
     if (sendNow && (!org?.smtpHost || !org?.smtpUser || !org?.smtpPass)) {
@@ -189,10 +191,12 @@ export async function POST(req: NextRequest) {
       })
 
       sendBatched({
-        recipients: recipientRows,
-        subjectTpl: subject,
-        bodyTpl:    body,
-        orgName:    org?.crmName ?? 'CRM Pro',
+        recipients:     recipientRows,
+        subjectTpl:     subject,
+        bodyTpl:        body,
+        orgName:        org?.crmName        ?? 'CRM Pro',
+        primaryColor:   org?.primaryColor   ?? '#6366f1',
+        secondaryColor: org?.secondaryColor ?? '#8b5cf6',
         smtpConfig,
         campaignId: campaign.id,
       }).catch(err => {
