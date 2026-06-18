@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off } from 'lucide-react'
+import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -27,10 +27,11 @@ export default function ContactosPage() {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
     return () => clearTimeout(t)
   }, [searchInput])
-  const [showForm,  setShowForm]  = useState(false)
-  const [importing, setImporting] = useState(false)
-  const [deleteId,  setDeleteId]  = useState<string | null>(null)
-  const [deleting,  setDeleting]  = useState(false)
+  const [showForm,     setShowForm]     = useState(false)
+  const [editContact,  setEditContact]  = useState<DirectorioContacto | null>(null)
+  const [importing,    setImporting]    = useState(false)
+  const [deleteId,     setDeleteId]     = useState<string | null>(null)
+  const [deleting,     setDeleting]     = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
@@ -190,13 +191,24 @@ export default function ContactosPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     {canManage && (
-                      <button
-                        onClick={() => setDeleteId(c.id)}
-                        className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
-                        style={{ color: 'var(--color-text-muted)' }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setEditContact(c)}
+                          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
+                          style={{ color: 'var(--color-text-muted)' }}
+                          title="Editar"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteId(c.id)}
+                          className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
+                          style={{ color: 'var(--color-text-muted)' }}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -212,6 +224,15 @@ export default function ContactosPage() {
 
       <Modal open={showForm} onClose={() => setShowForm(false)} title="Nuevo contacto" size="md">
         <ContactoForm onSuccess={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ['contactos'] }) }} />
+      </Modal>
+
+      <Modal open={!!editContact} onClose={() => setEditContact(null)} title="Editar contacto" size="md">
+        {editContact && (
+          <ContactoForm
+            contacto={editContact}
+            onSuccess={() => { setEditContact(null); qc.invalidateQueries({ queryKey: ['contactos'] }) }}
+          />
+        )}
       </Modal>
 
       <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Eliminar contacto" size="sm">
