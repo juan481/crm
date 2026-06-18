@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
       select: { id: true, name: true, website: true },
     })
 
-    let created = 0
-    let skipped = 0
+    let created  = 0
+    let skipped  = 0
+    let dupes    = 0
 
     for (const row of rows) {
       const firstName = (row['Nombre']   ?? row['nombre']   ?? '').toString().trim()
@@ -42,10 +43,20 @@ export async function POST(req: NextRequest) {
       const email      = (row['Mail']     ?? row['mail']     ?? row['Email'] ?? '').toString().trim().toLowerCase() || null
       const phone      = (row['Teléfono'] ?? row['Telefono'] ?? row['telefono'] ?? '').toString().trim() || null
 
+      // Duplicate check: same email in this org, or same first+last name if no email
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const db = prisma as any
+      const existing = await db.directorioContacto.findFirst({
+        where: email
+          ? { organizationId: payload.orgId, email }
+          : { organizationId: payload.orgId, firstName, lastName },
+        select: { id: true },
+      })
+      if (existing) { dupes++; continue }
+
       const empresaId = findEmpresaMatch(email, companyRaw, empresas)
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (prisma as any).directorioContacto.create({
+      await db.directorioContacto.create({
         data: {
           organizationId: payload.orgId,
           firstName,
@@ -60,9 +71,10 @@ export async function POST(req: NextRequest) {
       created++
     }
 
-    return NextResponse.json({
-      message: `${created} contactos importados, ${skipped} omitidos`,
-    })
+    const parts = [`${created} contactos importados`]
+    if (dupes   > 0) parts.push(`${dupes} duplicados omitidos`)
+    if (skipped > 0) parts.push(`${skipped} filas sin nombre omitidas`)
+    return NextResponse.json({ message: parts.join(', ') })
   } catch (error) {
     console.error('[CONTACTOS IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el archivo' }, { status: 500 })
