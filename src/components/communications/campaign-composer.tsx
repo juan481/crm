@@ -62,6 +62,8 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const [selectedIds,    setSelectedIds]    = useState<Set<string>>(new Set())
   const [sendNow,        setSendNow]        = useState(false)
   const [submitting,     setSubmitting]     = useState(false)
+  const [sending,        setSending]        = useState(false)
+  const [sendProgress,   setSendProgress]   = useState<{ sent: number; failed: number; total: number } | null>(null)
   const [showFilters,    setShowFilters]    = useState(false)
   const [statusFilter,   setStatusFilter]   = useState('')
   const [searchFilter,   setSearchFilter]   = useState('')
@@ -319,7 +321,38 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
-      toast.success(sendNow ? `Enviando campaña a ${recipients.length} destinatarios…` : 'Campaña guardada como borrador')
+
+      if (!sendNow) {
+        toast.success('Campaña guardada como borrador')
+        onSuccess()
+        return
+      }
+
+      // Client-driven sending: call /send in a loop until done
+      const campaignId = json.data.id
+      const total      = recipients.length
+      setSendProgress({ sent: 0, failed: 0, total })
+      setSending(true)
+      setSubmitting(false)
+
+      let sent   = 0
+      let failed = 0
+      let done   = false
+
+      while (!done) {
+        const batchRes = await fetch(`/api/communications/campaigns/${campaignId}/send`, { method: 'POST' })
+        if (!batchRes.ok) { toast.error('Error al enviar lote'); break }
+        const batch = await batchRes.json()
+        sent   += batch.sent   ?? 0
+        failed += batch.failed ?? 0
+        done    = batch.done   ?? false
+        setSendProgress({ sent, failed, total })
+        if (!done) await new Promise(r => setTimeout(r, 300))
+      }
+
+      toast.success(`Campaña enviada: ${sent} emails entregados${failed > 0 ? `, ${failed} fallidos` : ''}`)
+      setSending(false)
+      setSendProgress(null)
       onSuccess()
     } catch {
       toast.error('Error al crear campaña')
@@ -602,16 +635,36 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
         )}
       </div>
 
-      <ModalFooter className="flex-col sm:flex-row items-start sm:items-center gap-3">
-        <label className="flex items-center gap-2 cursor-pointer mr-auto">
-          <input type="checkbox" checked={sendNow} onChange={e => setSendNow(e.target.checked)}
-            className="w-4 h-4 accent-[var(--color-primary)] rounded" />
-          <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Enviar ahora</span>
-        </label>
-        <Button variant="ghost" onClick={onCancel} type="button">Cancelar</Button>
-        <Button type="submit" loading={submitting} leftIcon={sendNow ? <Send size={15} /> : <Save size={15} />}>
-          {sendNow ? 'Enviar Campaña' : 'Guardar Borrador'}
-        </Button>
+      <ModalFooter className="flex-col gap-3">
+        {sending && sendProgress && (
+          <div className="w-full space-y-2">
+            <div className="flex justify-between text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <span>Enviando... {sendProgress.sent + sendProgress.failed} de {sendProgress.total}</span>
+              <span>{sendProgress.sent} enviados · {sendProgress.failed} fallidos</span>
+            </div>
+            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${Math.round(((sendProgress.sent + sendProgress.failed) / sendProgress.total) * 100)}%`,
+                  background: 'var(--color-primary)',
+                }}
+              />
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-3 w-full sm:flex-row flex-col">
+          <label className="flex items-center gap-2 cursor-pointer mr-auto">
+            <input type="checkbox" checked={sendNow} onChange={e => setSendNow(e.target.checked)}
+              disabled={sending}
+              className="w-4 h-4 accent-[var(--color-primary)] rounded" />
+            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Enviar ahora</span>
+          </label>
+          <Button variant="ghost" onClick={onCancel} type="button" disabled={sending}>Cancelar</Button>
+          <Button type="submit" loading={submitting || sending} leftIcon={sendNow ? <Send size={15} /> : <Save size={15} />}>
+            {sending ? 'Enviando...' : sendNow ? 'Enviar Campaña' : 'Guardar Borrador'}
+          </Button>
+        </div>
       </ModalFooter>
     </form>
   )
