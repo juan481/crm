@@ -12,6 +12,7 @@ import { CampaignComposer } from '@/components/communications/campaign-composer'
 import { TemplateManager } from '@/components/communications/template-manager'
 import { formatDateTime } from '@/lib/utils'
 import type { EmailCampaign } from '@/types'
+import toast from 'react-hot-toast'
 
 const STATUS_CONFIG = {
   DRAFT:   { label: 'Borrador', variant: 'neutral' as const, icon: <FileText size={14} /> },
@@ -30,7 +31,35 @@ interface CampaignDetail extends EmailCampaign {
 export default function ComunicacionesPage() {
   const [composerOpen,  setComposerOpen]  = useState(false)
   const [detailId,      setDetailId]      = useState<string | null>(null)
+  const [resending,     setResending]     = useState(false)
+  const [resendProg,    setResendProg]    = useState<{ sent: number; failed: number; total: number } | null>(null)
   const qc = useQueryClient()
+
+  const handleResend = async (campaignId: string, pendingCount: number) => {
+    setResending(true)
+    setResendProg({ sent: 0, failed: 0, total: pendingCount })
+    let sent = 0, failed = 0, done = false
+    try {
+      while (!done) {
+        const res = await fetch(`/api/communications/campaigns/${campaignId}/send`, { method: 'POST' })
+        if (!res.ok) { toast.error('Error al enviar lote'); break }
+        const batch = await res.json()
+        sent   += batch.sent   ?? 0
+        failed += batch.failed ?? 0
+        done    = batch.done   ?? false
+        setResendProg({ sent, failed, total: pendingCount })
+        if (!done) await new Promise(r => setTimeout(r, 300))
+      }
+      toast.success(`${sent} emails enviados${failed > 0 ? `, ${failed} fallidos` : ''}`)
+      qc.invalidateQueries({ queryKey: ['campaigns'] })
+      qc.invalidateQueries({ queryKey: ['campaign-detail', campaignId] })
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setResending(false)
+      setResendProg(null)
+    }
+  }
 
   const { data: detailData, isLoading: detailLoading } = useQuery<CampaignDetail>({
     queryKey: ['campaign-detail', detailId],
@@ -154,7 +183,7 @@ export default function ComunicacionesPage() {
       </Modal>
 
       {/* Campaign detail modal */}
-      <Modal open={!!detailId} onClose={() => setDetailId(null)} title="Detalle de campaña" size="lg">
+      <Modal open={!!detailId} onClose={() => { if (!resending) setDetailId(null) }} title="Detalle de campaña" size="lg">
         {detailLoading || !detailData ? (
           <div className="flex items-center justify-center py-10 gap-2 text-[var(--color-text-muted)]">
             <Loader size={16} className="animate-spin" /> Cargando...
@@ -162,34 +191,73 @@ export default function ComunicacionesPage() {
         ) : (
           <div className="space-y-4">
             {/* Summary */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Enviados',   value: detailData.recipients.filter(r => r.status === 'sent').length,    color: 'text-emerald-400' },
-                { label: 'Fallidos',   value: detailData.recipients.filter(r => r.status === 'failed').length,  color: 'text-red-400' },
-                { label: 'Pendientes', value: detailData.recipients.filter(r => r.status === 'pending').length, color: 'text-amber-400' },
-              ].map(s => (
-                <div key={s.label} className="surface-raised rounded-xl p-3 text-center">
-                  <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                  <p className="text-xs text-[var(--color-text-muted)]">{s.label}</p>
-                </div>
-              ))}
-            </div>
+            {(() => {
+              const pendingCount = detailData.recipients.filter(r => r.status === 'pending').length
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: 'Enviados',   value: detailData.recipients.filter(r => r.status === 'sent').length,   color: 'text-emerald-400' },
+                      { label: 'Fallidos',   value: detailData.recipients.filter(r => r.status === 'failed').length, color: 'text-red-400' },
+                      { label: 'Pendientes', value: pendingCount,                                                     color: 'text-amber-400' },
+                    ].map(s => (
+                      <div key={s.label} className="surface-raised rounded-xl p-3 text-center">
+                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                        <p className="text-xs text-[var(--color-text-muted)]">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Resend section */}
+                  {pendingCount > 0 && (
+                    <div className="rounded-xl p-4 space-y-3" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                      {resending && resendProg ? (
+                        <>
+                          <div className="flex justify-between text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            <span>Enviando... {resendProg.sent + resendProg.failed} de {resendProg.total}</span>
+                            <span>{resendProg.sent} enviados · {resendProg.failed} fallidos</span>
+                          </div>
+                          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                            <div
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{
+                                width: `${Math.round(((resendProg.sent + resendProg.failed) / resendProg.total) * 100)}%`,
+                                background: 'var(--color-primary)',
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                            {pendingCount} email{pendingCount !== 1 ? 's' : ''} pendiente{pendingCount !== 1 ? 's' : ''} sin enviar
+                          </p>
+                          <Button
+                            size="sm"
+                            leftIcon={<Send size={14} />}
+                            onClick={() => handleResend(detailData.id, pendingCount)}
+                          >
+                            Reenviar pendientes
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
 
             {/* Recipient list */}
-            <div className="rounded-xl overflow-hidden max-h-80 overflow-y-auto" style={{ border: '1px solid var(--color-border)' }}>
+            <div className="rounded-xl overflow-hidden max-h-72 overflow-y-auto" style={{ border: '1px solid var(--color-border)' }}>
               {detailData.recipients.map(r => (
                 <div key={r.id} className="flex items-start gap-3 px-4 py-3 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
-                  {r.status === 'sent'    && <CheckCircle  size={14} className="text-emerald-400 mt-0.5 shrink-0" />}
-                  {r.status === 'failed'  && <XCircle      size={14} className="text-red-400 mt-0.5 shrink-0" />}
-                  {r.status === 'pending' && <Loader       size={14} className="text-amber-400 mt-0.5 shrink-0 animate-spin" />}
+                  {r.status === 'sent'    && <CheckCircle size={14} className="text-emerald-400 mt-0.5 shrink-0" />}
+                  {r.status === 'failed'  && <XCircle     size={14} className="text-red-400 mt-0.5 shrink-0" />}
+                  {r.status === 'pending' && <Loader      size={14} className="text-amber-400 mt-0.5 shrink-0 animate-spin" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.email}</p>
-                    {r.error && (
-                      <p className="text-xs mt-0.5 text-red-400 break-words">{r.error}</p>
-                    )}
-                    {r.sentAt && !r.error && (
-                      <p className="text-xs text-[var(--color-text-muted)]">{formatDateTime(r.sentAt)}</p>
-                    )}
+                    {r.error && <p className="text-xs mt-0.5 text-red-400 break-words">{r.error}</p>}
+                    {r.sentAt && !r.error && <p className="text-xs text-[var(--color-text-muted)]">{formatDateTime(r.sentAt)}</p>}
                   </div>
                 </div>
               ))}
