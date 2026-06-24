@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 interface Params { params: { id: string } }
 
-const TIPOS_VALIDOS = ['NOTA', 'LLAMADA', 'REUNION'] as const
+const TIPOS_VALIDOS = ['NOTA', 'LLAMADA', 'REUNION', 'CHAT'] as const
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {

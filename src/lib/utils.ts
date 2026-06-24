@@ -76,6 +76,7 @@ export const NOTE_TYPE_LABELS: Record<string, string> = {
   EMAIL: 'Email',
   MEETING: 'Reunión',
   TASK: 'Tarea',
+  CHAT: 'Chat',
 }
 
 export const NOTE_TYPE_ICONS: Record<string, string> = {
@@ -84,6 +85,12 @@ export const NOTE_TYPE_ICONS: Record<string, string> = {
   EMAIL: 'Mail',
   MEETING: 'Users',
   TASK: 'CheckSquare',
+  CHAT: 'MessageCircle',
+}
+
+export function toWhatsappUrl(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  return `https://wa.me/${digits}`
 }
 
 export const ROLE_LABELS: Record<string, string> = {

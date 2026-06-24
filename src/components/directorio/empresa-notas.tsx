@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FileText, Phone, Video, Send, ClipboardList } from 'lucide-react'
+import { FileText, Phone, Video, Send, ClipboardList, MessageCircle } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { timeAgo, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
 
-type Tipo = 'NOTA' | 'LLAMADA' | 'REUNION'
+type Tipo = 'NOTA' | 'LLAMADA' | 'REUNION' | 'CHAT'
 
 interface EmpresaNotaItem {
   id:        string
@@ -46,6 +46,13 @@ const TIPOS: { value: Tipo; label: string; icon: React.ReactNode; color: string;
     icon:  <Video size={13} />,
     color: '#a855f7',
     bg:    'rgba(168,85,247,0.12)',
+  },
+  {
+    value: 'CHAT',
+    label: 'Chat',
+    icon:  <MessageCircle size={13} />,
+    color: '#14b8a6',
+    bg:    'rgba(20,184,166,0.12)',
   },
 ]
 
@@ -177,9 +184,10 @@ export function EmpresaNotas({ empresaId }: Props) {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave(e as any)
           }}
           placeholder={
-            tipo === 'LLAMADA'  ? 'Resumen de la llamada, temas tratados...' :
-            tipo === 'REUNION'  ? 'Acuerdos de la reunión, próximos pasos...' :
-                                  'Nota sobre la empresa, observación, seguimiento...'
+            tipo === 'LLAMADA' ? 'Resumen de la llamada, temas tratados...' :
+            tipo === 'REUNION' ? 'Acuerdos de la reunión, próximos pasos...' :
+            tipo === 'CHAT'    ? 'Resumen del chat (WhatsApp, Telegram, etc.)...' :
+                                 'Nota sobre la empresa, observación, seguimiento...'
           }
           className="w-full rounded-xl text-sm resize-none outline-none transition-all px-3 py-2.5"
           style={{

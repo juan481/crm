@@ -4,7 +4,7 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED'
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'PROSPECT'
 export type ClientType = 'B2B' | 'B2C'
 export type InvoiceStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED'
-export type NoteType = 'NOTE' | 'CALL' | 'EMAIL' | 'MEETING' | 'TASK'
+export type NoteType = 'NOTE' | 'CALL' | 'EMAIL' | 'MEETING' | 'TASK' | 'CHAT'
 export type ActivityAction =
   | 'NOTE' | 'CALL' | 'EMAIL' | 'MEETING' | 'TASK'
   | 'CLIENT_CREATED' | 'CLIENT_UPDATED' | 'CLIENT_DELETED'
@@ -141,11 +141,12 @@ export interface Invoice {
   createdAt: string
 }
 
-// ─── Note / Timeline (legacy) ─────────────────────────────────────────────
+// ─── Note / Timeline ──────────────────────────────────────────────────────
 export interface Note {
   id: string
   content: string
   type: NoteType
+  metadata?: string | null
   clientId: string
   userId: string
   user?: { name: string; avatarUrl: string | null }

@@ -131,8 +131,13 @@ export function ContactsManager({ clientId, contacts, onUpdate }: ContactsManage
                     </a>
                   )}
                   {contact.phone && (
-                    <a href={`tel:${contact.phone}`} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] flex items-center gap-1 transition-colors">
-                      <Phone size={11} />{contact.phone}
+                    <a
+                      href={`https://wa.me/${contact.phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-green-500 hover:text-green-400 flex items-center gap-1 transition-colors"
+                    >
+                      <MessageCircle size={11} />{contact.phone}
                     </a>
                   )}
                   {contact.whatsapp && (

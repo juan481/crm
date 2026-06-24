@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { content, type = 'NOTE' } = await req.json()
+    const { content, type = 'NOTE', metadata } = await req.json()
     if (!content?.trim()) {
       return NextResponse.json({ error: 'El contenido es requerido' }, { status: 400 })
     }
@@ -20,10 +20,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     })
     if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 
-    const note = await prisma.note.create({
+    const db = prisma as any
+    const note = await db.note.create({
       data: {
         content: content.trim(),
         type,
+        metadata: metadata ?? null,
         clientId: params.id,
         userId: payload.userId,
       },

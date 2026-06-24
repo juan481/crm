@@ -285,7 +285,7 @@ export default function ClienteDetailPage() {
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>{c.firstName} {c.lastName}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>{c.role ?? '—'}</td>
                   <td className="px-4 py-3">{c.email?<a href={`mailto:${c.email}`} className="flex items-center gap-1 text-xs hover:underline" style={{ color: 'var(--color-primary)' }}><Mail size={11} />{c.email}</a>:<span style={{ color: 'var(--color-text-muted)' }}>—</span>}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>{c.phone?<a href={`tel:${c.phone}`}>{c.phone}</a>:'—'}</td>
+                  <td className="px-4 py-3 text-xs">{c.phone?<a href={`https://wa.me/${c.phone.replace(/\D/g,'')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-500 hover:text-green-400 transition-colors">{c.phone}</a>:'—'}</td>
                 </tr>
               ))}
             </tbody>

@@ -20,7 +20,7 @@ import { ClientTimeline } from '@/components/clients/client-timeline'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
 import {
   formatCurrency, formatDate, CLIENT_STATUS_LABELS, CLIENT_STATUS_COLORS,
-  INVOICE_STATUS_LABELS,
+  INVOICE_STATUS_LABELS, toWhatsappUrl,
 } from '@/lib/utils'
 import { usePlugin } from '@/hooks/use-plugin'
 import type { Client, Invoice, Note } from '@/types'
@@ -155,7 +155,7 @@ export default function ClientDetailPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 { icon: <Mail size={15} />, label: 'Email', value: data.email, href: `mailto:${data.email}` },
-                { icon: <Phone size={15} />, label: 'Teléfono', value: data.phone },
+                { icon: <Phone size={15} />, label: 'Teléfono', value: data.phone, href: data.phone ? toWhatsappUrl(data.phone) : undefined },
                 { icon: <Building size={15} />, label: 'Empresa', value: data.company },
                 { icon: <MapPin size={15} />, label: 'Ubicación', value: [data.city, data.country].filter(Boolean).join(', ') || null },
                 { icon: <Globe size={15} />, label: 'Sitio web', value: data.website, href: data.website ?? undefined },
@@ -269,8 +269,13 @@ export default function ClientDetailPage() {
                         </a>
                       )}
                       {contact.phone && (
-                        <a href={`tel:${contact.phone}`} className="text-xs text-[var(--color-text-muted)]">
-                          {contact.phone}
+                        <a
+                          href={toWhatsappUrl(contact.phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-green-500 hover:text-green-400 flex items-center gap-1 transition-colors"
+                        >
+                          <MessageCircle size={11} />{contact.phone}
                         </a>
                       )}
                     </div>

@@ -200,11 +200,12 @@ model Invoice {
   @@index([dueDate])
 }
 
-// ─── Timeline Notes (legacy, kept for compatibility) ──────────────────────
+// ─── Timeline Notes ────────────────────────────────────────────────────────
 model Note {
   id        String   @id @default(cuid())
   content   String
-  type      String   @default("NOTE")
+  type      String   @default("NOTE") // NOTE | CALL | EMAIL | MEETING | TASK | CHAT
+  metadata  String?  // JSON: { estimatedHours?, estimatedMinutes?, complexity?, estimatedCost?, imageUrl? }
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId    String
