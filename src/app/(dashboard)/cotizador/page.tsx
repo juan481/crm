@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Minus, MessageCircle, ChevronRight, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
-  TrendingUp, CheckCircle,
+  TrendingUp, CheckCircle, Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,6 +62,8 @@ export default function CotizadorPage() {
   const [pdfBlobUrl, setPdfBlobUrl]   = useState<string | null>(null)
   const [pdfBase64,  setPdfBase64]    = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  const [serviceSearch, setServiceSearch]         = useState('')
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false)
 
   // Cleanup blob URL on unmount
   useEffect(() => {
@@ -146,67 +148,99 @@ export default function CotizadorPage() {
   const buildPdf = async (quote: SavedQuote) => {
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pw = 210, mg = 20, cw = pw - mg * 2
+    const pw = 210, mg = 18, cw = pw - mg * 2
 
-    const hex = quote.primaryColor.replace('#', '')
+    const hex = (quote.primaryColor ?? '#6366f1').replace('#', '').padEnd(6, '0')
     const pr  = parseInt(hex.slice(0, 2), 16)
     const pg  = parseInt(hex.slice(2, 4), 16)
     const pb  = parseInt(hex.slice(4, 6), 16)
 
-    // Header
+    // Try to load logo as base64 (non-fatal if fails)
+    let logoBase64: string | null = null
+    let logoType: 'PNG' | 'JPEG' = 'PNG'
+    if (quote.logoUrl) {
+      try {
+        const resp  = await fetch(quote.logoUrl)
+        const buf   = await resp.arrayBuffer()
+        const bytes = new Uint8Array(buf)
+        let bin = ''
+        bytes.forEach(b => { bin += String.fromCharCode(b) })
+        logoBase64 = btoa(bin)
+        logoType   = quote.logoUrl.toLowerCase().includes('.png') ? 'PNG' : 'JPEG'
+      } catch { /* logo load failed, proceed without */ }
+    }
+
+    // ── Header band ─────────────────────────────────────────────────────────
     doc.setFillColor(pr, pg, pb)
-    doc.rect(0, 0, pw, 42, 'F')
+    doc.rect(0, 0, pw, 44, 'F')
     doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.text('PRESUPUESTO DE SERVICIOS', mg, 13)
-    doc.setFontSize(20)
-    doc.text(quote.orgName, mg, 25)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.text(new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }), mg, 35)
+
+    if (logoBase64) {
+      try { doc.addImage(logoBase64, logoType, mg, 8, 32, 16) } catch { /* skip broken logo */ }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16)
+      doc.text(quote.orgName, mg + 36, 19)
+    } else {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
+      doc.text(quote.orgName, mg, 22)
+    }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
+    doc.text('PRESUPUESTO DE SERVICIOS', mg, 36)
+    doc.setFontSize(8)
+    doc.text(
+      new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
+      pw - mg, 36, { align: 'right' }
+    )
 
     let y = 56
-    doc.setTextColor(148, 163, 184); doc.setFontSize(8)
-    doc.text(`REF: ${quote.ref}`, mg, y); y += 10
+    // REF line
+    doc.setTextColor(148, 163, 184); doc.setFontSize(7.5)
+    doc.text(`Ref: ${quote.ref}`, mg, y); y += 10
 
+    // Greeting
     doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
     doc.text(`Estimado/a ${quote.recipientName}:`, mg, y); y += 7
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 116, 139)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139)
     doc.text('A continuación encontrará el detalle de los servicios cotizados.', mg, y); y += 12
 
-    // Table header
-    doc.setFillColor(241, 245, 249); doc.rect(mg, y, cw, 8, 'F')
-    doc.setTextColor(148, 163, 184); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
-    doc.text('SERVICIO', mg + 2, y + 5.5)
-    doc.text('PERÍODO',  mg + cw * 0.6, y + 5.5, { align: 'center' })
-    doc.text('PRECIO',   mg + cw - 2,   y + 5.5, { align: 'right' })
-    y += 8
+    // ── Table header (primary color background) ──────────────────────────────
+    doc.setFillColor(pr, pg, pb)
+    doc.rect(mg, y, cw, 8.5, 'F')
+    doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
+    doc.text('SERVICIO',  mg + 3,       y + 5.8)
+    doc.text('PERÍODO',   mg + cw * 0.6, y + 5.8, { align: 'center' })
+    doc.text('TOTAL',     mg + cw - 2,   y + 5.8, { align: 'right' })
+    y += 8.5
 
     quote.cartItems.forEach((item, idx) => {
-      if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 9, 'F') }
+      const rowH    = 9.5
+      if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
       const lineTotal = item.service.price * item.quantity
-      const label  = item.quantity > 1 ? `${item.service.name}  ×${item.quantity}` : item.service.name
-      const period = BILLING_LABELS[item.service.billingCycle] ?? 'mes'
-      const price  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.service.currency, minimumFractionDigits: 0 }).format(lineTotal)
+      const label     = item.quantity > 1 ? `${item.service.name}  ×${item.quantity}` : item.service.name
+      const period    = BILLING_LABELS[item.service.billingCycle] ?? 'mes'
+      const priceStr  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.service.currency, minimumFractionDigits: 0 }).format(lineTotal)
 
       doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-      doc.text(label, mg + 2, y + 6)
+      doc.text(label, mg + 3, y + 6.5)
       doc.setTextColor(100, 116, 139); doc.setFontSize(8.5)
-      doc.text(period, mg + cw * 0.6, y + 6, { align: 'center' })
+      doc.text(period, mg + cw * 0.6, y + 6.5, { align: 'center' })
       doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold')
-      doc.text(price, mg + cw - 2, y + 6, { align: 'right' })
-      doc.setFont('helvetica', 'normal'); y += 9
+      doc.text(priceStr, mg + cw - 2, y + 6.5, { align: 'right' })
+      doc.setFont('helvetica', 'normal'); y += rowH
     })
 
-    // Total
-    y += 2
-    doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
-    doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59)
-    doc.text('Total', mg + 2, y)
+    // ── Totals box (left border in primary color) ────────────────────────────
+    y += 4
     const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(quote.total)
-    doc.setTextColor(pr, pg, pb); doc.setFontSize(13)
-    doc.text(totalStr, mg + cw - 2, y, { align: 'right' }); y += 12
+    const boxW = 60, boxX = mg + cw - boxW
+    doc.setFillColor(246, 248, 252)
+    doc.roundedRect(boxX, y, boxW, 16, 1.5, 1.5, 'F')
+    doc.setFillColor(pr, pg, pb)
+    doc.rect(boxX, y, 3, 16, 'F')
+    doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal')
+    doc.text('TOTAL', boxX + 7, y + 6)
+    doc.setFontSize(14); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
+    doc.text(totalStr, boxX + boxW - 4, y + 13, { align: 'right' })
+    y += 22
 
     // Notes
     if (quote.notes) {
@@ -219,12 +253,18 @@ export default function CotizadorPage() {
       y += 22
     }
 
-    // Footer
-    y += 6
-    doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
-    doc.setTextColor(148, 163, 184); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-    doc.text(`Presupuesto preparado por ${quote.agentName} · ${quote.orgName}`, mg, y); y += 5
-    doc.text('Este presupuesto es de carácter informativo y no constituye un contrato.', mg, y)
+    // ── Footer ───────────────────────────────────────────────────────────────
+    const pageH  = 297
+    const footerY = pageH - 18
+    doc.setDrawColor(226, 232, 240)
+    doc.line(mg, footerY, pw - mg, footerY)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
+    doc.setTextColor(148, 163, 184)
+    doc.text(`${quote.agentName} · ${new Date().toLocaleDateString('es-AR')}`, mg, footerY + 6)
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(pr, pg, pb)
+    doc.text('Enviado desde JustCRM', pw / 2, footerY + 6, { align: 'center' })
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184)
+    doc.text('Pág. 1 / 1', pw - mg, footerY + 6, { align: 'right' })
 
     return doc
   }
@@ -571,7 +611,7 @@ export default function CotizadorPage() {
         </div>
 
         {loadingServices ? (
-          <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-20 surface rounded-2xl animate-pulse" />)}</div>
+          <div className="h-12 surface rounded-2xl animate-pulse" />
         ) : services.length === 0 ? (
           <div className="surface rounded-2xl p-8 text-center">
             <FileText size={32} className="mx-auto mb-3 text-[var(--color-text-subtle)]" />
@@ -579,57 +619,111 @@ export default function CotizadorPage() {
             <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Configurá los servicios en Ajustes → Servicios</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {services.map(service => {
-              const qty      = cart[service.id]?.quantity ?? 0
-              const selected = qty > 0
-              return (
-                <div key={service.id}
-                  className={`rounded-2xl p-4 flex items-center gap-4 transition-all duration-150 border ${
-                    selected ? 'bg-[var(--color-primary)]/8 border-[var(--color-primary)]/30'
-                             : 'bg-[var(--color-surface)] border-[var(--color-border)]'
-                  }`}>
+          <div className="space-y-3">
+            {/* Search input + dropdown */}
+            <div className="relative">
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}>
+                <Search size={14} style={{ color: 'var(--color-text-subtle)' }} />
+                <input
+                  type="text"
+                  placeholder="Buscar servicio por nombre..."
+                  value={serviceSearch}
+                  onChange={e => { setServiceSearch(e.target.value); setShowServiceDropdown(true) }}
+                  onFocus={() => setShowServiceDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowServiceDropdown(false), 150)}
+                  className="flex-1 text-sm bg-transparent outline-none"
+                  style={{ color: 'var(--color-text)' }}
+                />
+                {serviceSearch && (
+                  <button onClick={() => { setServiceSearch(''); setShowServiceDropdown(false) }}
+                    style={{ color: 'var(--color-text-subtle)' }}>
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Results dropdown */}
+              <AnimatePresence>
+                {showServiceDropdown && (
+                  <motion.ul
+                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.1 }}
+                    className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-lg max-h-56 overflow-y-auto"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
+                  >
+                    {services
+                      .filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
+                      .map(s => (
+                        <li key={s.id}>
+                          <button
+                            className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[var(--color-surface-raised)] transition-colors"
+                            onMouseDown={() => {
+                              addItem(s)
+                              setServiceSearch('')
+                              setShowServiceDropdown(false)
+                            }}
+                          >
+                            <span>
+                              <span className="text-sm font-medium block" style={{ color: 'var(--color-text)' }}>{s.name}</span>
+                              {s.description && <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>{s.description}</span>}
+                            </span>
+                            <span className="text-sm font-bold shrink-0 ml-3" style={{ color: 'var(--color-primary)' }}>
+                              {formatPrice(s.price, s.currency)}/{BILLING_LABELS[s.billingCycle] ?? 'mes'}
+                            </span>
+                          </button>
+                        </li>
+                      ))
+                    }
+                    {services.filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
+                      <li className="px-4 py-3 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                        Sin resultados para "{serviceSearch}"
+                      </li>
+                    )}
+                  </motion.ul>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Cart items list */}
+            <AnimatePresence>
+              {cartItems.map(item => (
+                <motion.div
+                  key={item.service.id}
+                  initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                  style={{ background: 'var(--color-primary-light, rgba(99,102,241,0.07))', border: '1px solid var(--color-primary, rgba(99,102,241,0.3))', borderColor: 'rgba(99,102,241,0.25)' }}
+                >
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[15px]" style={{ color: 'var(--color-text)' }}>{service.name}</p>
-                    {service.description && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-text-muted)' }}>{service.description}</p>}
-                    <p className="mt-1.5 flex items-baseline gap-1">
-                      <span className={`text-base font-bold ${selected ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]'}`}>
-                        {formatPrice(service.price, service.currency)}
-                      </span>
-                      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>/{BILLING_LABELS[service.billingCycle] ?? 'mes'}</span>
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{item.service.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                      {formatPrice(item.service.price * item.quantity, item.service.currency)}/{BILLING_LABELS[item.service.billingCycle] ?? 'mes'}
                     </p>
                   </div>
-
-                  {/* [ − ] [input] [ + ] */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <AnimatePresence>
-                      {selected && (
-                        <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-                          className="flex items-center gap-1.5">
-                          <button onClick={() => removeItem(service.id)}
-                            className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-all"
-                            style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                            <Minus size={14} />
-                          </button>
-                          <input type="number" min="1" value={qty}
-                            onChange={e => setQuantity(service.id, parseInt(e.target.value))}
-                            className="w-14 text-center text-sm font-bold rounded-lg border outline-none py-1.5"
-                            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                    <button onClick={() => addItem(service)}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-all font-bold ${
-                        selected ? 'gradient-bg text-white shadow-glow'
-                                 : 'bg-[var(--color-surface-raised)] text-[var(--color-text-muted)] hover:bg-[var(--color-primary)]/15 hover:text-[var(--color-primary)]'
-                      }`}>
-                      <Plus size={18} />
+                    <button onClick={() => removeItem(item.service.id)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90"
+                      style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                      <Minus size={12} />
+                    </button>
+                    <input type="number" min="1" value={item.quantity}
+                      onChange={e => setQuantity(item.service.id, parseInt(e.target.value))}
+                      className="w-10 text-center text-sm font-bold rounded-lg border outline-none py-0.5"
+                      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+                    />
+                    <button onClick={() => addItem(item.service)}
+                      className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 gradient-bg text-white">
+                      <Plus size={12} />
+                    </button>
+                    <button onClick={() => setCart(p => { const n = { ...p }; delete n[item.service.id]; return n })}
+                      className="ml-1 p-1 rounded transition-colors hover:text-red-400"
+                      style={{ color: 'var(--color-text-subtle)' }}>
+                      <X size={13} />
                     </button>
                   </div>
-                </div>
-              )
-            })}
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </section>

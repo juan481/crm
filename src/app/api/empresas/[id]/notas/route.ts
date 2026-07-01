@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 interface Params { params: { id: string } }
 
-const TIPOS_VALIDOS = ['NOTA', 'LLAMADA', 'REUNION', 'CHAT'] as const
+const TIPOS_VALIDOS = ['NOTA', 'LLAMADA', 'REUNION', 'CHAT', 'ENVIO_COTIZACION', 'CONVERSACION', 'SOPORTE'] as const
 
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
@@ -25,10 +25,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
       where: { empresaId: params.id, organizationId: payload.orgId },
       orderBy: { createdAt: 'desc' },
       select: {
-        id:        true,
-        tipo:      true,
-        content:   true,
-        createdAt: true,
+        id:               true,
+        tipo:             true,
+        content:          true,
+        estimatedMinutes: true,
+        metadata:         true,
+        createdAt:        true,
         user: { select: { id: true, name: true, avatarUrl: true } },
       },
     })
@@ -58,23 +60,27 @@ export async function POST(req: NextRequest, { params }: Params) {
     })
     if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
-    const { content, tipo = 'NOTA' } = await req.json()
+    const { content, tipo = 'NOTA', estimatedMinutes = 0, metadata } = await req.json()
     if (!content?.trim()) return NextResponse.json({ error: 'El contenido es requerido' }, { status: 400 })
     if (!TIPOS_VALIDOS.includes(tipo)) return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
 
     const nota = await db.empresaNota.create({
       data: {
-        empresaId:      params.id,
-        organizationId: payload.orgId,
-        userId:         payload.userId,
+        empresaId:        params.id,
+        organizationId:   payload.orgId,
+        userId:           payload.userId,
         tipo,
-        content: content.trim(),
+        content:          content.trim(),
+        estimatedMinutes: Number(estimatedMinutes) || 0,
+        metadata:         metadata ?? null,
       },
       select: {
-        id:        true,
-        tipo:      true,
-        content:   true,
-        createdAt: true,
+        id:               true,
+        tipo:             true,
+        content:          true,
+        estimatedMinutes: true,
+        metadata:         true,
+        createdAt:        true,
         user: { select: { id: true, name: true, avatarUrl: true } },
       },
     })

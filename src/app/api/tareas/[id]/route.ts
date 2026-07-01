@@ -35,8 +35,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const existing = await db.task.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
     if (!existing) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
 
-    const { title, description, status, priority, dueDate, assignedToId, clientId, empresaId } = await req.json()
+    const { title, description, status, priority, dueDate, assignedToId, clientId, empresaId, viewed } = await req.json()
     const isCompleting = status === 'HECHA' && existing.status !== 'HECHA'
+    const shouldMarkViewed = viewed === true && payload.userId === existing.assignedToId && !existing.viewedAt
 
     const task = await db.task.update({
       where: { id: params.id },
@@ -51,6 +52,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(empresaId !== undefined   && { empresaId: empresaId || null }),
         ...(isCompleting              && { completedAt: new Date() }),
         ...(!isCompleting && status && status !== 'HECHA' && { completedAt: null }),
+        ...(shouldMarkViewed          && { viewedAt: new Date() }),
       },
       include: INCLUDE,
     })

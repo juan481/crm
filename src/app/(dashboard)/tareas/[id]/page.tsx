@@ -89,6 +89,19 @@ export default function TareaDetailPage() {
     }
   }, [task, dirty])
 
+  // Auto-mark as viewed when the assignee opens the task
+  useEffect(() => {
+    if (!task || !user) return
+    if (task.assignedToId === user.id && !(task as any).viewedAt) {
+      fetch(`/api/tareas/${id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ viewed: true }),
+      }).then(() => qc.invalidateQueries({ queryKey: ['tasks'] }))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id, user?.id])
+
   const handleSave = async () => {
     if (!form.title?.trim()) { toast.error('El título es requerido'); return }
     setSaving(true)

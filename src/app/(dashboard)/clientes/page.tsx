@@ -92,7 +92,7 @@ export default function ClientesPage() {
                   key={e.id}
                   className="cursor-pointer transition-colors hover:bg-[var(--color-surface-raised)]"
                   style={{ borderBottom: '1px solid var(--color-border)' }}
-                  onClick={() => router.push(`/empresas/${e.id}`)}
+                  onClick={() => router.push(`/clientes/${e.id}`)}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

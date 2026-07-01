@@ -359,6 +359,7 @@ export interface Task {
   priority: TaskPriority
   dueDate: string | null
   completedAt: string | null
+  viewedAt: string | null
   assignedToId: string
   assignedTo?: { id: string; name: string }
   createdById: string

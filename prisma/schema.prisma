@@ -409,6 +409,7 @@ model Task {
   priority       String    @default("MEDIA")
   dueDate        DateTime?
   completedAt    DateTime?
+  viewedAt       DateTime?
   assignedToId   String
   assignedTo     User      @relation("TaskAssignee", fields: [assignedToId], references: [id])
   createdById    String
@@ -519,16 +520,18 @@ model DirectorioContacto {
 
 // ─── Actividad / Notas de Empresa ─────────────────────────────────────────
 model EmpresaNota {
-  id             String   @id @default(cuid())
-  empresaId      String
-  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
-  tipo           String   @default("NOTA") // NOTA | LLAMADA | REUNION
-  content        String
-  createdAt      DateTime @default(now())
+  id               String   @id @default(cuid())
+  empresaId        String
+  empresa          Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  tipo             String   @default("NOTA") // NOTA | LLAMADA | REUNION | CHAT | ENVIO_COTIZACION | CONVERSACION | SOPORTE
+  content          String
+  estimatedMinutes Int      @default(0)
+  metadata         String?  // JSON: { imageUrl? }
+  createdAt        DateTime @default(now())
 
   @@index([empresaId])
   @@index([organizationId])

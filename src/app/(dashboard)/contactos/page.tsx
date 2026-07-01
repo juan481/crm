@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2 } from 'lucide-react'
+import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -235,9 +235,14 @@ export default function ContactosPage() {
                   </td>
                   <td className="px-4 py-3 hidden xl:table-cell">
                     {c.phone ? (
-                      <a href={`tel:${c.phone}`} className="flex items-center gap-1.5"
-                        style={{ color: 'var(--color-text-muted)' }}>
-                        <Phone size={12} /> {c.phone}
+                      <a
+                        href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 hover:underline"
+                        style={{ color: '#22c55e' }}
+                      >
+                        <MessageCircle size={12} /> {c.phone}
                       </a>
                     ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                   </td>

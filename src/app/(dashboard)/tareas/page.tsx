@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, CheckSquare, Square, Clock, AlertCircle, ChevronDown, Trash2,
-  User, Calendar, Flag, Building2, Search,
+  User, Calendar, Flag, Building2, Search, Eye, EyeOff, Activity,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -276,6 +276,25 @@ export default function TareasPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Read/active indicators (visible to task creator) */}
+                  {task.createdById === user?.id && task.assignedToId !== user?.id && task.status !== 'HECHA' && (
+                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                      {task.status === 'EN_CURSO' ? (
+                        <span title="Asignado trabajando activamente" className="text-emerald-400 animate-pulse">
+                          <Activity size={13} />
+                        </span>
+                      ) : (task as any).viewedAt ? (
+                        <span title={`Visto · ${timeAgo((task as any).viewedAt)}`} className="text-blue-400">
+                          <Eye size={13} />
+                        </span>
+                      ) : (
+                        <span title="Aún no visto por el asignado" style={{ color: 'var(--color-text-subtle)' }}>
+                          <EyeOff size={13} />
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <button
                     onClick={() => handleDelete(task.id)}

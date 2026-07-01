@@ -3,10 +3,11 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import {
   Bold, Italic, Underline, List, ListOrdered,
-  Link2, Image, AlignLeft, AlignCenter, AlignRight,
-  Minus,
+  Link2, ImagePlus, AlignLeft, AlignCenter, AlignRight,
+  Minus, Image,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import toast from 'react-hot-toast'
 
 export interface RichEditorHandle {
   getHTML: () => string
@@ -41,7 +42,8 @@ const TOOLBAR = [
 
 export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
   function RichEditor({ placeholder = 'Escribí el contenido del email...', minHeight = 220, className, onChange }, ref) {
-    const editorRef = useRef<HTMLDivElement>(null)
+    const editorRef  = useRef<HTMLDivElement>(null)
+    const imgInputRef = useRef<HTMLInputElement>(null)
 
     useImperativeHandle(ref, () => ({
       getHTML: () => editorRef.current?.innerHTML ?? '',
@@ -68,6 +70,35 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     }
 
     const handleInsertHR = () => exec('insertHorizontalRule')
+
+    const handleImageUpload = useCallback(async (file: File) => {
+      const img = document.createElement('img') as HTMLImageElement
+      const objectUrl = URL.createObjectURL(file)
+      img.src = objectUrl
+      await new Promise(res => { img.onload = res })
+      URL.revokeObjectURL(objectUrl)
+
+      const MAX = 800
+      const canvas = document.createElement('canvas')
+      const ratio = Math.min(1, MAX / img.naturalWidth, MAX / img.naturalHeight)
+      canvas.width  = Math.round(img.naturalWidth  * ratio)
+      canvas.height = Math.round(img.naturalHeight * ratio)
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+      const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.75))
+      if (!blob) { toast.error('No se pudo procesar la imagen'); return }
+      if (blob.size > 150 * 1024) { toast.error('Imagen demasiado grande (máx 150 KB comprimida)'); return }
+
+      const fd = new FormData()
+      fd.append('file', new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }))
+      const res  = await fetch('/api/documentos/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al subir imagen'); return }
+
+      editorRef.current?.focus()
+      document.execCommand('insertHTML', false, `<img src="${json.data.url}" style="max-width:100%;border-radius:8px;" />`)
+      onChange?.(editorRef.current?.innerHTML ?? '')
+    }, [onChange])
 
     return (
       <div className={cn('rounded-xl border border-[var(--color-border)] overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-primary)]/30 focus-within:border-[var(--color-primary)] transition-all', className)}>
@@ -100,12 +131,31 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
           </button>
           <button
             type="button"
-            title="Insertar imagen (URL)"
+            title="Insertar imagen por URL"
             onMouseDown={e => { e.preventDefault(); handleInsertImage() }}
             className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-text)] transition-colors"
           >
             <Image size={14} />
           </button>
+          <button
+            type="button"
+            title="Subir imagen (máx 800px, 150KB)"
+            onMouseDown={e => { e.preventDefault(); imgInputRef.current?.click() }}
+            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-text)] transition-colors"
+          >
+            <ImagePlus size={14} />
+          </button>
+          <input
+            ref={imgInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0]
+              if (f) handleImageUpload(f)
+              e.target.value = ''
+            }}
+          />
           <button
             type="button"
             title="Separador horizontal"
