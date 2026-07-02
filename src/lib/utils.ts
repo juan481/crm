@@ -95,9 +95,10 @@ export function toWhatsappUrl(phone: string): string {
 
 export const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
-  ADMIN: 'Administrador',
-  SELLER: 'Vendedor',
-  TECHNICIAN: 'Técnico',
+  ADMIN:       'Administrador',
+  SELLER:      'Vendedor',
+  TECHNICIAN:  'Técnico',
+  HR:          'RRHH',
 }
 
 // Country list
