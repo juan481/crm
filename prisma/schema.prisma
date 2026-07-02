@@ -37,6 +37,7 @@ model Organization {
   emailCampaigns EmailCampaign[]
   emailTemplates EmailTemplate[]
   services       Service[]
+  products       Product[]
   events         Event[]
   folders        Folder[]
   documents      Document[]
@@ -47,6 +48,7 @@ model Organization {
   directorioContactos DirectorioContacto[]
   empresaNotas      EmpresaNota[]
   cotizaciones      Cotizacion[]
+  asistencias       Asistencia[]
 }
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ model User {
   ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
   empresaNotas    EmpresaNota[]
   cotizaciones    Cotizacion[]
+  asistencias     Asistencia[]
 }
 
 // Session management is now handled by Supabase Auth
@@ -537,6 +540,22 @@ model EmpresaNota {
   @@index([organizationId])
 }
 
+// ─── Catálogo de Productos (venta única) ──────────────────────────────────
+model Product {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  price          Float    @default(0)
+  currency       String   @default("USD")
+  unit           String   @default("unidad")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
 // ─── Historial de Cotizaciones ────────────────────────────────────────────
 model Cotizacion {
   id             String    @id @default(cuid())
@@ -551,6 +570,8 @@ model Cotizacion {
   recipientName  String
   items          Json
   total          Float
+  discount       Float     @default(0)
+  finalTotal     Float     @default(0)
   currency       String    @default("USD")
   notes          String?
   status         String    @default("ENVIADA")
@@ -560,4 +581,27 @@ model Cotizacion {
   @@index([organizationId])
   @@index([empresaId])
   @@index([userId])
+}
+
+// ─── Módulo RRHH: Asistencia ──────────────────────────────────────────────
+model Asistencia {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fecha          DateTime  @db.Date
+  horaEntrada    DateTime?
+  horaSalida     DateTime?
+  ausente        Boolean   @default(false)
+  tardanza       Boolean   @default(false)
+  observaciones  String?
+  creadoPorId    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, fecha, organizationId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([fecha])
 }

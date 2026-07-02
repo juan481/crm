@@ -8,6 +8,7 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
     SUPER_ADMIN: 3,
     ADMIN: 2,
     SELLER: 1,
+    HR: 1,
     TECHNICIAN: 0,
   }
   return hierarchy[userRole] >= hierarchy[requiredRole]

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck,
-  Building2, UserCircle2, FileText,
+  Building2, UserCircle2, FileText, ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -23,24 +23,26 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard',      href: '/dashboard',      icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Mi Día',         href: '/mi-dia',         icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'] },
-  { label: 'Clientes',       href: '/clientes',       icon: <Users size={17} />,                        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Pipeline',       href: '/pipeline',       icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Tareas',         href: '/tareas',         icon: <CheckSquare size={17} /> },
-  { label: 'Cotizador',      href: '/cotizador',      icon: <Calculator size={17} /> },
-  { label: 'Cotizaciones',   href: '/cotizaciones',   icon: <FileText size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Tickets',        href: '/tickets',        icon: <LifeBuoy size={17} /> },
-  { label: 'Eventos',        href: '/eventos',        icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'] },
-  { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Empresas',       href: '/empresas',       icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Contactos',      href: '/contactos',      icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Dashboard',      href: '/dashboard',        icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Mi Día',         href: '/mi-dia',           icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'] },
+  { label: 'Clientes',       href: '/clientes',         icon: <Users size={17} />,                        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Pipeline',       href: '/pipeline',         icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Tareas',         href: '/tareas',           icon: <CheckSquare size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'] },
+  { label: 'Cotizador',      href: '/cotizador',        icon: <Calculator size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Cotizaciones',   href: '/cotizaciones',     icon: <FileText size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Tickets',        href: '/tickets',          icon: <LifeBuoy size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'] },
+  { label: 'Eventos',        href: '/eventos',          icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Comunicaciones', href: '/comunicaciones',   icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Facturación',    href: '/facturas',         icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Documentos',     href: '/documentos',       icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Empresas',       href: '/empresas',         icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Contactos',      href: '/contactos',        icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'RRHH',           href: '/rrhh',             icon: <ClipboardList size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'HR'] },
+  { label: 'Mi Asistencia',  href: '/mi-asistencia',    icon: <CalendarCheck size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'] },
 ]
 
 const settingsItems: NavItem[] = [
-  { label: 'Configuración', href: '/configuracion',           icon: <Settings size={16} />,  exact: true,  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
+  { label: 'Configuración', href: '/configuracion',           icon: <Settings size={16} />,  exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Usuarios',      href: '/configuracion/usuarios',  icon: <UserCog size={16} />,   exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Servicios',     href: '/configuracion/servicios', icon: <Tag size={16} />,        exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Email SMTP',    href: '/configuracion/correo',    icon: <Mail size={16} />,      exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
@@ -75,7 +77,7 @@ export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: Sid
     >
       <div className="flex items-center justify-between h-16 px-5 shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <Link href={user.role === 'TECHNICIAN' ? '/mi-dia' : '/dashboard'} className="flex items-center gap-3 group">
+        <Link href={user.role === 'TECHNICIAN' ? '/mi-dia' : user.role === 'HR' ? '/rrhh' : '/dashboard'} className="flex items-center gap-3 group">
           {logoUrl ? (
             <Image src={logoUrl} alt={crmName} width={32} height={32} className="rounded-lg object-contain" />
           ) : (

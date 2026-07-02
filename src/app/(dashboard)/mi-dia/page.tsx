@@ -6,7 +6,7 @@ import { AnimatePresence } from 'framer-motion' // solo para modal
 import {
   CheckSquare, Square, Headphones, Plus, Calculator,
   AlertCircle, Clock, CheckCircle2, Zap, ChevronRight,
-  Calendar, Flag, User,
+  Calendar, Flag, User, LogIn, LogOut, CheckCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -66,6 +66,51 @@ export default function MiDiaPage() {
   const [ticketOpen, setTicketOpen] = useState(false)
   const [ticketForm, setTicketForm] = useState<TicketForm>(EMPTY_TICKET)
   const [saving, setSaving] = useState(false)
+
+  // Check-in widget state
+  const [checkingIn,  setCheckingIn]  = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
+  const hoy = new Date().toISOString().slice(0, 10)
+  const mesCurrent = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+
+  const { data: asistenciaHoy, refetch: refetchAsistencia } = useQuery({
+    queryKey: ['asistencia-hoy'],
+    queryFn:  async () => {
+      const r = await fetch(`/api/asistencia?mes=${mesCurrent}`)
+      if (!r.ok) return null
+      const records = ((await r.json()).data ?? []) as Array<{ fecha: string; horaEntrada: string | null; horaSalida: string | null; tardanza: boolean }>
+      return records.find(r => r.fecha.slice(0, 10) === hoy) ?? null
+    },
+    staleTime: 30_000,
+  })
+
+  const handleCheckIn = async () => {
+    setCheckingIn(true)
+    try {
+      const res  = await fetch('/api/asistencia/check-in', { method: 'POST' })
+      const json = await res.json()
+      if (res.status === 409) { toast.error(json.error); refetchAsistencia(); return }
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success(json.tardanza ? '⚠️ Entrada con tardanza' : '✅ Entrada registrada')
+      refetchAsistencia()
+    } catch { toast.error('Error de conexión') }
+    finally { setCheckingIn(false) }
+  }
+
+  const handleCheckOut = async () => {
+    setCheckingOut(true)
+    try {
+      const res  = await fetch('/api/asistencia/check-out', { method: 'POST' })
+      const json = await res.json()
+      if (res.status === 409) { toast.error(json.error); refetchAsistencia(); return }
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success(`Hasta luego! ${json.horasTrabajadas}`)
+      refetchAsistencia()
+    } catch { toast.error('Error de conexión') }
+    finally { setCheckingOut(false) }
+  }
+
+  const formatHora = (dt: string | null) => dt ? new Date(dt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—'
 
   const today = new Date()
   const dayName  = format(today, 'EEEE', { locale: es })
@@ -188,6 +233,37 @@ export default function MiDiaPage() {
             <p className="text-[10px] text-[var(--color-text-muted)]">{stat.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* ── Check-in widget ──────────────────────────────────────────────── */}
+      <div className="surface rounded-2xl p-4 flex items-center gap-4"
+        style={{ border: asistenciaHoy?.horaSalida ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--color-border)' }}>
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: asistenciaHoy?.horaSalida ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.1)' }}>
+          {asistenciaHoy?.horaSalida
+            ? <CheckCircle size={20} style={{ color: '#10b981' }} />
+            : asistenciaHoy?.horaEntrada
+              ? <LogOut size={20} style={{ color: 'var(--color-primary)' }} />
+              : <LogIn size={20} style={{ color: 'var(--color-primary)' }} />
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
+            {asistenciaHoy?.horaSalida ? '¡Jornada completa!' : asistenciaHoy?.horaEntrada ? 'En jornada' : 'Asistencia'}
+          </p>
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            {asistenciaHoy?.horaEntrada
+              ? `Entrada: ${formatHora(asistenciaHoy.horaEntrada)}${asistenciaHoy.horaSalida ? ` · Salida: ${formatHora(asistenciaHoy.horaSalida)}` : ''}`
+              : 'No registraste entrada hoy'
+            }
+            {asistenciaHoy?.tardanza && <span className="ml-2" style={{ color: '#f59e0b' }}>Tardanza</span>}
+          </p>
+        </div>
+        {!asistenciaHoy?.horaSalida && (
+          asistenciaHoy?.horaEntrada
+            ? <Button size="sm" variant="outline" leftIcon={<LogOut size={13} />} onClick={handleCheckOut} loading={checkingOut}>Salida</Button>
+            : <Button size="sm" leftIcon={<LogIn size={13} />} onClick={handleCheckIn} loading={checkingIn}>Entrada</Button>
+        )}
       </div>
 
       {/* ── Acceso rápido cotizador ─────────────────────────────────────── */}

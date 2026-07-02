@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
-  Briefcase, Plus, Mail, Phone, UserCircle2, UserCheck, UserX, MessageCircle,
+  Briefcase, Plus, Mail, UserCircle2, UserCheck, UserX, MessageCircle,
+  Send, X, CheckSquare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Modal } from '@/components/ui/modal'
+import { Input } from '@/components/ui/input'
+import { Modal, ModalFooter } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { ContactoForm } from '@/components/directorio/contacto-form'
 import { EmpresaNotas } from '@/components/directorio/empresa-notas'
@@ -30,7 +33,15 @@ export default function EmpresaDetailPage() {
   const [deleting,          setDeleting]          = useState(false)
   const [togglingCliente,   setTogglingCliente]   = useState(false)
 
+  // Email selectivo
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set())
+  const [emailModalOpen,     setEmailModalOpen]     = useState(false)
+  const [emailSubject,       setEmailSubject]       = useState('')
+  const [emailBody,          setEmailBody]          = useState('')
+  const [sendingEmail,       setSendingEmail]       = useState(false)
+
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const canSell   = canManage || user?.role === 'SELLER'
 
   const { data, isLoading } = useQuery({
     queryKey: ['empresa', id],
@@ -106,6 +117,57 @@ export default function EmpresaDetailPage() {
     finally { setDeleting(false); setDeleteContactoId(null) }
   }
 
+  const toggleContact = (contactId: string) => {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev)
+      if (next.has(contactId)) next.delete(contactId)
+      else next.add(contactId)
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelectedContactIds(new Set())
+
+  const openEmailModal = () => {
+    setEmailSubject('')
+    setEmailBody('')
+    setEmailModalOpen(true)
+  }
+
+  const handleSendEmail = async () => {
+    if (!emailSubject.trim()) { toast.error('El asunto es requerido'); return }
+    if (!emailBody.trim())    { toast.error('El mensaje es requerido'); return }
+
+    setSendingEmail(true)
+    try {
+      const res  = await fetch(`/api/empresas/${id}/send-email`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactIds: Array.from(selectedContactIds),
+          subject:    emailSubject.trim(),
+          body:       emailBody.trim(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al enviar'); return }
+
+      toast.success(`Email enviado a ${json.sent} contacto${json.sent !== 1 ? 's' : ''}`)
+      if (json.failed?.length > 0) toast.error(`Fallaron: ${json.failed.join(', ')}`)
+
+      setEmailModalOpen(false)
+      clearSelection()
+      qc.invalidateQueries({ queryKey: ['empresa-notas', id] })
+    } catch { toast.error('Error de conexión') }
+    finally { setSendingEmail(false) }
+  }
+
+  // Contacts with email (only those can be selected)
+  const emailableContacts = (empresa?.contactos ?? []).filter((c: DirectorioContacto) => c.email)
+  const selectedCount     = selectedContactIds.size
+  const selectedWithEmail = Array.from(selectedContactIds)
+    .map(cid => emailableContacts.find((c: DirectorioContacto) => c.id === cid))
+    .filter(Boolean) as DirectorioContacto[]
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -125,7 +187,7 @@ export default function EmpresaDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       {/* Header */}
       <div className="flex items-center gap-4 flex-wrap justify-between">
         <button
@@ -215,24 +277,53 @@ export default function EmpresaDetailPage() {
       {/* Contactos section */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-            Contactos
-            <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full"
-              style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-              {empresa.contactos?.length ?? 0}
-            </span>
-          </h2>
-          {canManage && (
-            <Button size="sm" onClick={() => setAddContactoOpen(true)}>
-              <Plus size={13} /> Agregar contacto
-            </Button>
-          )}
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+              Contactos
+              <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                {empresa.contactos?.length ?? 0}
+              </span>
+            </h2>
+            {selectedCount > 0 && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                <CheckSquare size={11} /> {selectedCount} seleccionado{selectedCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedCount > 0 && canSell && (
+              <Button size="sm" leftIcon={<Mail size={13} />} onClick={openEmailModal}>
+                Enviar Email
+              </Button>
+            )}
+            {canManage && (
+              <Button size="sm" onClick={() => setAddContactoOpen(true)}>
+                <Plus size={13} /> Agregar contacto
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--color-surface-raised)', borderBottom: '1px solid var(--color-border)' }}>
+                {emailableContacts.length > 0 && canSell && (
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded"
+                      checked={selectedCount > 0 && emailableContacts.every((c: DirectorioContacto) => selectedContactIds.has(c.id))}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedContactIds(new Set(emailableContacts.map((c: DirectorioContacto) => c.id)))
+                        else clearSelection()
+                      }}
+                      title="Seleccionar todos"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--color-text-muted)' }}>Nombre</th>
                 <th className="px-4 py-3 text-left font-semibold hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>Cargo</th>
                 <th className="px-4 py-3 text-left font-semibold hidden md:table-cell" style={{ color: 'var(--color-text-muted)' }}>Mail</th>
@@ -243,62 +334,113 @@ export default function EmpresaDetailPage() {
             <tbody>
               {!empresa.contactos?.length ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                  <td colSpan={6} className="px-4 py-10 text-center" style={{ color: 'var(--color-text-muted)' }}>
                     <UserCircle2 size={28} className="mx-auto mb-2 opacity-30" />
                     <p>No hay contactos vinculados aún</p>
                     <p className="text-xs mt-0.5">Podés agregar CEOs, dueños, técnicos, administrativos...</p>
                   </td>
                 </tr>
               ) : (
-                empresa.contactos.map((c: DirectorioContacto) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="px-4 py-3">
-                      <span className="font-medium" style={{ color: 'var(--color-text)' }}>
-                        {c.firstName} {c.lastName}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>
-                      {c.role ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      {c.email ? (
-                        <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 hover:underline"
-                          style={{ color: 'var(--color-primary)' }}>
-                          <Mail size={12} /> {c.email}
-                        </a>
-                      ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {c.phone ? (
-                        <a
-                          href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 hover:underline"
-                          style={{ color: '#22c55e' }}
-                        >
-                          <MessageCircle size={12} /> {c.phone}
-                        </a>
-                      ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
-                    </td>
-                    {canManage && (
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => setDeleteContactoId(c.id)}
-                          className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
-                          style={{ color: 'var(--color-text-muted)' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                empresa.contactos.map((c: DirectorioContacto) => {
+                  const isSelected = selectedContactIds.has(c.id)
+                  const hasEmail   = !!c.email
+                  return (
+                    <tr key={c.id}
+                      className={`transition-colors ${isSelected ? 'bg-[var(--color-primary)]/5' : 'hover:bg-[var(--color-surface-raised)]'}`}
+                      style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      {emailableContacts.length > 0 && canSell && (
+                        <td className="px-3 py-3">
+                          {hasEmail ? (
+                            <input
+                              type="checkbox"
+                              className="rounded cursor-pointer"
+                              checked={isSelected}
+                              onChange={() => toggleContact(c.id)}
+                            />
+                          ) : (
+                            <span className="w-4 h-4 block" />
+                          )}
+                        </td>
+                      )}
+                      <td className="px-4 py-3">
+                        <span className="font-medium" style={{ color: 'var(--color-text)' }}>
+                          {c.firstName} {c.lastName}
+                        </span>
                       </td>
-                    )}
-                  </tr>
-                ))
+                      <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>
+                        {c.role ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        {c.email ? (
+                          <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 hover:underline"
+                            style={{ color: 'var(--color-primary)' }}>
+                            <Mail size={12} /> {c.email}
+                          </a>
+                        ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {c.phone ? (
+                          <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 hover:underline"
+                            style={{ color: '#22c55e' }}>
+                            <MessageCircle size={12} /> {c.phone}
+                          </a>
+                        ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
+                      </td>
+                      {canManage && (
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => setDeleteContactoId(c.id)}
+                            className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
+                            style={{ color: 'var(--color-text-muted)' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
         </div>
+
+        {emailableContacts.length > 0 && canSell && (
+          <p className="text-xs mt-2" style={{ color: 'var(--color-text-subtle)' }}>
+            Seleccioná contactos con email para enviarles un mensaje directo.
+          </p>
+        )}
       </div>
+
+      {/* Floating selection bar */}
+      <AnimatePresence>
+        {selectedCount > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 gradient-bg rounded-full flex items-center justify-center text-xs font-bold text-white">{selectedCount}</span>
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                contacto{selectedCount !== 1 ? 's' : ''} seleccionado{selectedCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="w-px h-5" style={{ background: 'var(--color-border)' }} />
+            <Button size="sm" leftIcon={<Mail size={13} />} onClick={openEmailModal}>
+              Enviar Email
+            </Button>
+            <button onClick={clearSelection}
+              className="p-1.5 rounded-lg hover:bg-[var(--color-surface-raised)] transition-colors"
+              style={{ color: 'var(--color-text-muted)' }}>
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar empresa" size="md">
@@ -343,6 +485,65 @@ export default function EmpresaDetailPage() {
           <Button variant="danger" onClick={handleDeleteContacto} disabled={deleting}>
             {deleting ? 'Eliminando...' : 'Eliminar'}
           </Button>
+        </div>
+      </Modal>
+
+      {/* Email compose modal */}
+      <Modal open={emailModalOpen} onClose={() => setEmailModalOpen(false)} title="Enviar Email" size="md">
+        <div className="space-y-4">
+          {/* Recipients */}
+          <div>
+            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-text-muted)' }}>Para:</label>
+            <div className="flex flex-wrap gap-2">
+              {selectedWithEmail.map(c => (
+                <span key={c.id} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  <Mail size={10} />
+                  {c.firstName} {c.lastName}
+                  <button onClick={() => toggleContact(c.id)} className="ml-0.5 opacity-70 hover:opacity-100">
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+              {selectedWithEmail.length === 0 && (
+                <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Seleccioná al menos un contacto con email</p>
+              )}
+            </div>
+          </div>
+
+          <Input
+            label="Asunto *"
+            placeholder="Ej: Propuesta de mantenimiento preventivo"
+            value={emailSubject}
+            onChange={e => setEmailSubject(e.target.value)}
+          />
+
+          <div>
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Mensaje *</label>
+            <textarea
+              rows={7}
+              placeholder={`Hola {nombre},\n\nEsperamos que estés muy bien.\n\n...`}
+              value={emailBody}
+              onChange={e => setEmailBody(e.target.value)}
+              className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-all"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+              Usá <code className="px-1 rounded text-[11px]" style={{ background: 'var(--color-surface-raised)' }}>{'{nombre}'}</code> para personalizar con el nombre del contacto.
+            </p>
+          </div>
+
+          <ModalFooter>
+            <Button variant="ghost" onClick={() => setEmailModalOpen(false)}>Cancelar</Button>
+            <Button
+              leftIcon={<Send size={14} />}
+              onClick={handleSendEmail}
+              loading={sendingEmail}
+              disabled={selectedWithEmail.length === 0 || !emailSubject.trim() || !emailBody.trim()}
+            >
+              Enviar a {selectedWithEmail.length} contacto{selectedWithEmail.length !== 1 ? 's' : ''}
+            </Button>
+          </ModalFooter>
         </div>
       </Modal>
     </div>

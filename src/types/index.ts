@@ -1,5 +1,5 @@
 // ─── Enums ────────────────────────────────────────────────────────────────
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN'
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN' | 'HR'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED'
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'PROSPECT'
 export type ClientType = 'B2B' | 'B2C'
@@ -193,14 +193,46 @@ export interface Service {
   _count?: { clients: number }
 }
 
+// ─── Product catalog ──────────────────────────────────────────────────────
+export interface Product {
+  id:             string
+  name:           string
+  description:    string | null
+  price:          number
+  currency:       string
+  unit:           string
+  organizationId: string
+  createdAt:      string
+}
+
 // ─── Quote ────────────────────────────────────────────────────────────────
 export interface QuoteItem {
-  serviceId: string
-  name: string
-  price: number
-  currency: string
-  billingCycle: string
-  quantity: number
+  type:          'SERVICE' | 'PRODUCT'
+  serviceId?:    string
+  productId?:    string
+  name:          string
+  price:         number
+  currency:      string
+  billingCycle?: string
+  unit?:         string
+  quantity:      number
+}
+
+// ─── RRHH ─────────────────────────────────────────────────────────────────
+export interface Asistencia {
+  id:             string
+  userId:         string
+  user?:          { id: string; name: string; role: string; avatarUrl: string | null }
+  organizationId: string
+  fecha:          string
+  horaEntrada:    string | null
+  horaSalida:     string | null
+  ausente:        boolean
+  tardanza:       boolean
+  observaciones:  string | null
+  creadoPorId:    string | null
+  createdAt:      string
+  updatedAt:      string
 }
 
 // ─── Plugin System ────────────────────────────────────────────────────────

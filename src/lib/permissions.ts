@@ -29,8 +29,14 @@ type Action =
   | 'tickets:view'
   | 'tickets:create'
   | 'tickets:manage'
+  | 'hr:view'
+  | 'hr:manage'
 
 const PERMISSIONS: Record<Role, Action[]> = {
+  HR: [
+    'tasks:view',
+    'hr:view', 'hr:manage',
+  ],
   TECHNICIAN: [
     'tasks:view', 'tasks:create', 'tasks:edit',
     'tickets:view', 'tickets:create',
@@ -48,6 +54,7 @@ const PERMISSIONS: Record<Role, Action[]> = {
     'deals:view', 'deals:create', 'deals:edit', 'deals:delete',
     'tasks:view', 'tasks:create', 'tasks:edit', 'tasks:delete',
     'tickets:view', 'tickets:create', 'tickets:manage',
+    'hr:view', 'hr:manage',
   ],
   ADMIN: [
     'clients:view_all', 'clients:view_own', 'clients:create', 'clients:edit',
@@ -61,6 +68,7 @@ const PERMISSIONS: Record<Role, Action[]> = {
     'deals:view', 'deals:create', 'deals:edit', 'deals:delete',
     'tasks:view', 'tasks:create', 'tasks:edit', 'tasks:delete',
     'tickets:view', 'tickets:create', 'tickets:manage',
+    'hr:view', 'hr:manage',
   ],
   SELLER: [
     'clients:view_own', 'clients:create', 'clients:edit',

@@ -6,15 +6,16 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Minus, MessageCircle, ChevronRight, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
-  TrendingUp, CheckCircle, Search,
+  TrendingUp, CheckCircle, Search, Package, Wrench, Tag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { Modal } from '@/components/ui/modal'
 import { formatCurrency } from '@/lib/utils'
-import type { Service } from '@/types'
+import type { Service, Product } from '@/types'
 import toast from 'react-hot-toast'
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const BILLING_LABELS: Record<string, string> = {
   MONTHLY:  'mes',
@@ -22,99 +23,120 @@ const BILLING_LABELS: Record<string, string> = {
   ONE_TIME: 'único',
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface ExchangeRate { venta: number; compra: number; updatedAt: string }
-interface CartItem      { service: Service; quantity: number }
+
+type ItemType = 'SERVICE' | 'PRODUCT'
+interface CartItem {
+  type:     ItemType
+  item:     Service | Product
+  quantity: number
+}
+
+const itemKey  = (type: ItemType, id: string) => `${type}_${id}`
+const getPrice = (ci: CartItem) => ci.item.price
+const getCurrency = (ci: CartItem) => ci.item.currency
 
 interface SavedQuote {
-  cotizacionId: string
-  ref:          string
-  orgName:      string
-  primaryColor: string
-  logoUrl:      string | null
-  agentName:    string
+  cotizacionId:   string
+  ref:            string
+  orgName:        string
+  primaryColor:   string
+  logoUrl:        string | null
+  agentName:      string
   recipientName:  string
   recipientEmail: string
   empresaName?:   string
-  cartItems:    CartItem[]
-  total:        number
-  currency:     string
-  notes:        string
+  cartItems:      CartItem[]
+  subtotal:       number
+  discount:       number
+  finalTotal:     number
+  currency:       string
+  notes:          string
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function CotizadorPage() {
-  const [cart, setCart]                         = useState<Record<string, CartItem>>({})
-  const [clientMode, setClientMode]             = useState<'existing' | 'manual'>('existing')
-  const [selectedEmpresaId, setSelectedEmpresaId] = useState('')
-  const [selectedContactEmail, setSelectedContactEmail] = useState('')
-  const [selectedContactName,  setSelectedContactName]  = useState('')
-  const [manualContactInput,   setManualContactInput]   = useState(false)  // "ingresar otro email"
-  const [manualEmail, setManualEmail]           = useState('')
-  const [manualName,  setManualName]            = useState('')
-  const [notes,       setNotes]                 = useState('')
-  const [saving,      setSaving]                = useState(false)
-  const [sendingEmail, setSendingEmail]         = useState(false)
-  const [showArs,     setShowArs]               = useState(false)
-  const [addingToPipeline, setAddingToPipeline] = useState(false)
-  const [pipelineAdded,    setPipelineAdded]    = useState(false)
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [cart,       setCart]       = useState<Record<string, CartItem>>({})
+  const [activeTab,  setActiveTab]  = useState<ItemType>('SERVICE')
+  const [discount,   setDiscount]   = useState(0)
+  const [itemSearch, setItemSearch] = useState('')
+  const [showDropdown, setShowDropdown] = useState(false)
 
-  // Post-save state
-  const [savedQuote, setSavedQuote]   = useState<SavedQuote | null>(null)
-  const [pdfBlobUrl, setPdfBlobUrl]   = useState<string | null>(null)
-  const [pdfBase64,  setPdfBase64]    = useState<string | null>(null)
+  const [clientMode,              setClientMode]              = useState<'existing' | 'manual'>('existing')
+  const [selectedEmpresaId,       setSelectedEmpresaId]       = useState('')
+  const [selectedContactEmail,    setSelectedContactEmail]    = useState('')
+  const [selectedContactName,     setSelectedContactName]     = useState('')
+  const [manualContactInput,      setManualContactInput]      = useState(false)
+  const [manualEmail,             setManualEmail]             = useState('')
+  const [manualName,              setManualName]              = useState('')
+  const [notes,                   setNotes]                   = useState('')
+  const [saving,                  setSaving]                  = useState(false)
+  const [sendingEmail,            setSendingEmail]            = useState(false)
+  const [showArs,                 setShowArs]                 = useState(false)
+  const [addingToPipeline,        setAddingToPipeline]        = useState(false)
+  const [pipelineAdded,           setPipelineAdded]           = useState(false)
+
+  const [savedQuote,  setSavedQuote]  = useState<SavedQuote | null>(null)
+  const [pdfBlobUrl,  setPdfBlobUrl]  = useState<string | null>(null)
+  const [pdfBase64,   setPdfBase64]   = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const [serviceSearch, setServiceSearch]         = useState('')
-  const [showServiceDropdown, setShowServiceDropdown] = useState(false)
 
-  // Cleanup blob URL on unmount
-  useEffect(() => {
-    return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) }
-  }, [pdfBlobUrl])
+  useEffect(() => { return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) } }, [pdfBlobUrl])
 
-  // ── Queries ───────────────────────────────────────────────────────────────
+  // ── Queries ────────────────────────────────────────────────────────────────
   const { data: servicesData, isLoading: loadingServices } = useQuery({
     queryKey: ['services'],
-    queryFn: async () => (await (await fetch('/api/services')).json()).data as Service[],
+    queryFn:  async () => (await fetch('/api/services')).json().then(j => j.data as Service[]),
   })
-
+  const { data: productsData, isLoading: loadingProducts } = useQuery({
+    queryKey: ['products'],
+    queryFn:  async () => (await fetch('/api/products')).json().then(j => j.data as Product[]),
+  })
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-cotizador'],
-    queryFn: async () => {
+    queryFn:  async () => {
       const r = await fetch('/api/empresas?limit=200')
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Array<{ id: string; name: string; city?: string | null }>
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5 * 60_000,
   })
-
   const { data: contactsData } = useQuery({
     queryKey: ['contactos-empresa-cot', selectedEmpresaId],
-    queryFn: async () => {
+    queryFn:  async () => {
       const r = await fetch(`/api/contactos?empresaId=${selectedEmpresaId}&limit=50`)
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Array<{ id: string; firstName: string; lastName: string; email: string | null }>
     },
-    enabled: !!selectedEmpresaId && clientMode === 'existing',
-    staleTime: 2 * 60 * 1000,
+    enabled:   !!selectedEmpresaId && clientMode === 'existing',
+    staleTime: 2 * 60_000,
   })
-
   const { data: rateData, isLoading: loadingRate, refetch: refetchRate } = useQuery({
     queryKey: ['exchange-rate'],
-    queryFn: async () => {
+    queryFn:  async () => {
       const r = await fetch('/api/exchange-rate')
       if (!r.ok) return null
       return (await r.json()).data as ExchangeRate
     },
-    staleTime: 30 * 60 * 1000,
+    staleTime: 30 * 60_000,
     refetchOnWindowFocus: false,
   })
 
-  const arsRate   = rateData?.venta ?? null
-  const services  = servicesData ?? []
-  const empresas  = Array.isArray(empresasData) ? empresasData : []
-  const contacts  = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
-  const cartItems = Object.values(cart)
-  const total     = cartItems.reduce((s, i) => s + i.service.price * i.quantity, 0)
-  const currency  = cartItems[0]?.service.currency ?? 'USD'
+  const arsRate  = rateData?.venta ?? null
+  const services = servicesData ?? []
+  const products = productsData ?? []
+  const empresas = Array.isArray(empresasData) ? empresasData : []
+  const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
+
+  const cartItems  = Object.values(cart)
+  const subtotal   = cartItems.reduce((s, i) => s + getPrice(i) * i.quantity, 0)
+  const discountAmt = subtotal * (discount / 100)
+  const finalTotal = subtotal - discountAmt
+  const currency   = cartItems[0] ? getCurrency(cartItems[0]) : 'USD'
 
   const selectedEmpresa = empresas.find(e => e.id === selectedEmpresaId)
 
@@ -123,20 +145,33 @@ export default function CotizadorPage() {
     return `${formatCurrency(usd, 'USD')} (${formatCurrency(usd * arsRate, 'ARS')})`
   }
 
-  // ── Cart ──────────────────────────────────────────────────────────────────
-  const addItem    = (s: Service) => setCart(p => ({ ...p, [s.id]: { service: s, quantity: (p[s.id]?.quantity ?? 0) + 1 } }))
-  const removeItem = (id: string) => setCart(p => {
-    const item = p[id]; if (!item) return p
-    if (item.quantity <= 1) { const n = { ...p }; delete n[id]; return n }
-    return { ...p, [id]: { ...item, quantity: item.quantity - 1 } }
-  })
-  const setQuantity = (id: string, qty: number) => {
-    const n = Math.max(1, isNaN(qty) ? 1 : qty)
-    setCart(p => p[id] ? { ...p, [id]: { ...p[id], quantity: n } } : p)
+  // ── Cart ops ───────────────────────────────────────────────────────────────
+  const addItem = (type: ItemType, item: Service | Product) => {
+    const k = itemKey(type, item.id)
+    setCart(p => ({ ...p, [k]: { type, item, quantity: (p[k]?.quantity ?? 0) + 1 } }))
   }
-  const clearCart  = () => setCart({})
+  const removeItem = (key: string) => setCart(p => {
+    const ci = p[key]; if (!ci) return p
+    if (ci.quantity <= 1) { const n = { ...p }; delete n[key]; return n }
+    return { ...p, [key]: { ...ci, quantity: ci.quantity - 1 } }
+  })
+  const setQty = (key: string, qty: number) => {
+    const n = Math.max(1, isNaN(qty) ? 1 : qty)
+    setCart(p => p[key] ? { ...p, [key]: { ...p[key], quantity: n } } : p)
+  }
+  const clearCart = () => setCart({})
 
-  // ── Recipient ─────────────────────────────────────────────────────────────
+  // Current catalog filtered by tab + search
+  const catalog: Array<{ type: ItemType; item: Service | Product }> =
+    activeTab === 'SERVICE'
+      ? services.map(s => ({ type: 'SERVICE' as const, item: s }))
+      : products.map(p => ({ type: 'PRODUCT' as const, item: p }))
+
+  const filteredCatalog = catalog.filter(({ item }) =>
+    !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
+  )
+
+  // ── Recipient ──────────────────────────────────────────────────────────────
   const recipientEmail = clientMode === 'existing'
     ? (manualContactInput ? manualEmail : selectedContactEmail)
     : manualEmail
@@ -144,18 +179,18 @@ export default function CotizadorPage() {
     ? (manualContactInput ? manualName : selectedContactName)
     : manualName
 
-  // ── PDF generation ────────────────────────────────────────────────────────
+  // ── PDF ────────────────────────────────────────────────────────────────────
   const buildPdf = async (quote: SavedQuote) => {
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pw = 210, mg = 18, cw = pw - mg * 2
 
     const hex = (quote.primaryColor ?? '#6366f1').replace('#', '').padEnd(6, '0')
-    const pr  = parseInt(hex.slice(0, 2), 16)
-    const pg  = parseInt(hex.slice(2, 4), 16)
-    const pb  = parseInt(hex.slice(4, 6), 16)
+    const pr = parseInt(hex.slice(0, 2), 16)
+    const pg = parseInt(hex.slice(2, 4), 16)
+    const pb = parseInt(hex.slice(4, 6), 16)
 
-    // Try to load logo as base64 (non-fatal if fails)
+    // Load logo
     let logoBase64: string | null = null
     let logoType: 'PNG' | 'JPEG' = 'PNG'
     if (quote.logoUrl) {
@@ -163,21 +198,19 @@ export default function CotizadorPage() {
         const resp  = await fetch(quote.logoUrl)
         const buf   = await resp.arrayBuffer()
         const bytes = new Uint8Array(buf)
-        let bin = ''
-        bytes.forEach(b => { bin += String.fromCharCode(b) })
+        let bin = ''; bytes.forEach(b => { bin += String.fromCharCode(b) })
         logoBase64 = btoa(bin)
         logoType   = quote.logoUrl.toLowerCase().includes('.png') ? 'PNG' : 'JPEG'
-      } catch { /* logo load failed, proceed without */ }
+      } catch { /* proceed without logo */ }
     }
 
-    // ── Header band ─────────────────────────────────────────────────────────
+    // Header band
     doc.setFillColor(pr, pg, pb)
     doc.rect(0, 0, pw, 44, 'F')
     doc.setTextColor(255, 255, 255)
 
     if (logoBase64) {
       try {
-        // Calculate proportional dimensions to avoid stretching
         const logoEl = new window.Image()
         logoEl.src   = `data:image/${logoType.toLowerCase()};base64,${logoBase64}`
         await new Promise<void>(r => { logoEl.onload = () => r(); logoEl.onerror = () => r() })
@@ -197,63 +230,90 @@ export default function CotizadorPage() {
       doc.text(quote.orgName, mg, 22)
     }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
-    doc.text('PRESUPUESTO DE SERVICIOS', mg, 36)
-    doc.setFontSize(8)
-    doc.text(
-      new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
-      pw - mg, 36, { align: 'right' }
-    )
+    doc.text('PRESUPUESTO DE SERVICIOS Y PRODUCTOS', mg, 36)
+    doc.text(new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }), pw - mg, 36, { align: 'right' })
 
     let y = 56
-    // REF line
     doc.setTextColor(148, 163, 184); doc.setFontSize(7.5)
     doc.text(`Ref: ${quote.ref}`, mg, y); y += 10
 
-    // Greeting
     doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
     doc.text(`Estimado/a ${quote.recipientName}:`, mg, y); y += 7
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139)
-    doc.text('A continuación encontrará el detalle de los servicios cotizados.', mg, y); y += 12
+    doc.text('A continuación encontrará el detalle de los ítems cotizados.', mg, y); y += 12
 
-    // ── Table header (primary color background) ──────────────────────────────
+    // Table header
     doc.setFillColor(pr, pg, pb)
     doc.rect(mg, y, cw, 8.5, 'F')
     doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
-    doc.text('SERVICIO',  mg + 3,       y + 5.8)
-    doc.text('PERÍODO',   mg + cw * 0.6, y + 5.8, { align: 'center' })
-    doc.text('TOTAL',     mg + cw - 2,   y + 5.8, { align: 'right' })
+    doc.text('ÍTEM',     mg + 3,        y + 5.8)
+    doc.text('TIPO',     mg + cw * 0.52, y + 5.8, { align: 'center' })
+    doc.text('CANT.',    mg + cw * 0.70, y + 5.8, { align: 'center' })
+    doc.text('TOTAL',    mg + cw - 2,   y + 5.8, { align: 'right' })
     y += 8.5
 
-    quote.cartItems.forEach((item, idx) => {
-      const rowH    = 9.5
+    quote.cartItems.forEach((ci, idx) => {
+      const rowH     = 10
       if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
-      const lineTotal = item.service.price * item.quantity
-      const label     = item.quantity > 1 ? `${item.service.name}  ×${item.quantity}` : item.service.name
-      const period    = BILLING_LABELS[item.service.billingCycle] ?? 'mes'
-      const priceStr  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.service.currency, minimumFractionDigits: 0 }).format(lineTotal)
+      const lineTotal = getPrice(ci) * ci.quantity
+      const priceStr  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(lineTotal)
+      const typeLabel = ci.type === 'SERVICE'
+        ? (BILLING_LABELS[((ci.item as Service).billingCycle ?? 'MONTHLY')] ?? 'mes')
+        : `× ${(ci.item as Product).unit}`
 
       doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-      doc.text(label, mg + 3, y + 6.5)
-      doc.setTextColor(100, 116, 139); doc.setFontSize(8.5)
-      doc.text(period, mg + cw * 0.6, y + 6.5, { align: 'center' })
-      doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold')
-      doc.text(priceStr, mg + cw - 2, y + 6.5, { align: 'right' })
+      doc.text(ci.item.name, mg + 3, y + 7)
+
+      // Type badge
+      doc.setFillColor(ci.type === 'SERVICE' ? pr : 245, ci.type === 'SERVICE' ? pg : 158, ci.type === 'SERVICE' ? pb : 11)
+      doc.roundedRect(mg + cw * 0.44, y + 2.5, 22, 5, 1, 1, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFontSize(7)
+      doc.text(ci.type === 'SERVICE' ? 'SERVICIO' : 'PRODUCTO', mg + cw * 0.55, y + 6.3, { align: 'center' })
+
+      doc.setTextColor(100, 116, 139); doc.setFontSize(8)
+      doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.70, y + 7, { align: 'center' })
+      doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
+      doc.text(priceStr, mg + cw - 2, y + 7, { align: 'right' })
       doc.setFont('helvetica', 'normal'); y += rowH
     })
 
-    // ── Totals box (left border in primary color) ────────────────────────────
+    // Totals section
     y += 4
-    const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(quote.total)
-    const boxW = 60, boxX = mg + cw - boxW
+    doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
+
+    const subtotalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(quote.subtotal)
+    const finalStr    = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(quote.finalTotal)
+
+    const boxW = 74, boxX = mg + cw - boxW
     doc.setFillColor(246, 248, 252)
-    doc.roundedRect(boxX, y, boxW, 16, 1.5, 1.5, 'F')
+    doc.roundedRect(boxX, y, boxW, quote.discount > 0 ? 28 : 16, 2, 2, 'F')
     doc.setFillColor(pr, pg, pb)
-    doc.rect(boxX, y, 3, 16, 'F')
+    doc.rect(boxX, y, 3, quote.discount > 0 ? 28 : 16, 'F')
+
     doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal')
-    doc.text('TOTAL', boxX + 7, y + 6)
-    doc.setFontSize(14); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
-    doc.text(totalStr, boxX + boxW - 4, y + 13, { align: 'right' })
-    y += 22
+    doc.text('Subtotal', boxX + 7, y + 6)
+    doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold')
+    doc.text(subtotalStr, boxX + boxW - 4, y + 6, { align: 'right' })
+
+    if (quote.discount > 0) {
+      const discAmt = quote.subtotal - quote.finalTotal
+      const discStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(discAmt)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(16, 185, 129); doc.setFontSize(8)
+      doc.text(`Descuento (${quote.discount}%)`, boxX + 7, y + 13)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`-${discStr}`, boxX + boxW - 4, y + 13, { align: 'right' })
+
+      doc.setDrawColor(226, 232, 240); doc.line(boxX + 4, y + 16, boxX + boxW - 2, y + 16)
+      doc.setFontSize(11); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
+      doc.text('TOTAL', boxX + 7, y + 24)
+      doc.text(finalStr, boxX + boxW - 4, y + 24, { align: 'right' })
+      y += 36
+    } else {
+      doc.setFontSize(12); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
+      doc.text('TOTAL', boxX + 7, y + 13)
+      doc.text(finalStr, boxX + boxW - 4, y + 13, { align: 'right' })
+      y += 24
+    }
 
     // Notes
     if (quote.notes) {
@@ -266,13 +326,10 @@ export default function CotizadorPage() {
       y += 22
     }
 
-    // ── Footer ───────────────────────────────────────────────────────────────
-    const pageH  = 297
-    const footerY = pageH - 18
-    doc.setDrawColor(226, 232, 240)
-    doc.line(mg, footerY, pw - mg, footerY)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
-    doc.setTextColor(148, 163, 184)
+    // Footer
+    const footerY = 297 - 18
+    doc.setDrawColor(226, 232, 240); doc.line(mg, footerY, pw - mg, footerY)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184)
     doc.text(`${quote.agentName} · ${new Date().toLocaleDateString('es-AR')}`, mg, footerY + 6)
     doc.setFont('helvetica', 'bold'); doc.setTextColor(pr, pg, pb)
     doc.text('Enviado desde JustCRM', pw / 2, footerY + 6, { align: 'center' })
@@ -282,240 +339,191 @@ export default function CotizadorPage() {
     return doc
   }
 
-  // ── Save + generate PDF ───────────────────────────────────────────────────
+  // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (cartItems.length === 0) { toast.error('Seleccioná al menos un servicio'); return }
+    if (cartItems.length === 0) { toast.error('Seleccioná al menos un ítem'); return }
     if (!recipientEmail)        { toast.error('Ingresá el email del destinatario'); return }
 
     setSaving(true)
     try {
-      const res = await fetch('/api/cotizador/send', {
+      const items = cartItems.map(ci => ({
+        type:         ci.type,
+        serviceId:    ci.type === 'SERVICE' ? ci.item.id : undefined,
+        productId:    ci.type === 'PRODUCT' ? ci.item.id : undefined,
+        name:         ci.item.name,
+        price:        ci.item.price,
+        currency:     ci.item.currency,
+        billingCycle: ci.type === 'SERVICE' ? (ci.item as Service).billingCycle : undefined,
+        unit:         ci.type === 'PRODUCT' ? (ci.item as Product).unit : undefined,
+        quantity:     ci.quantity,
+      }))
+
+      const res  = await fetch('/api/cotizador/send', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: cartItems.map(i => ({
-            serviceId:    i.service.id,
-            name:         i.service.name,
-            price:        i.service.price,
-            currency:     i.service.currency,
-            billingCycle: i.service.billingCycle,
-            quantity:     i.quantity,
-          })),
-          empresaId:     clientMode === 'existing' ? selectedEmpresaId || null : null,
-          recipientEmail,
-          recipientName: recipientName || 'Cliente',
-          notes,
-          total,
-          currency,
+          items, empresaId: clientMode === 'existing' ? selectedEmpresaId || null : null,
+          recipientEmail, recipientName: recipientName || 'Cliente',
+          notes, total: subtotal, discount, currency,
         }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al guardar'); return }
 
       const quote: SavedQuote = {
-        cotizacionId:  json.cotizacionId,
-        ref:           json.ref,
-        orgName:       json.orgName,
-        primaryColor:  json.primaryColor,
-        logoUrl:       json.logoUrl,
-        agentName:     json.agentName,
+        cotizacionId: json.cotizacionId,
+        ref:          json.ref,
+        orgName:      json.orgName,
+        primaryColor: json.primaryColor,
+        logoUrl:      json.logoUrl,
+        agentName:    json.agentName,
         recipientName: recipientName || 'Cliente',
         recipientEmail,
-        empresaName:   selectedEmpresa?.name,
-        cartItems:     [...cartItems],
-        total,
+        empresaName:  selectedEmpresa?.name,
+        cartItems:    [...cartItems],
+        subtotal,
+        discount:     json.discount,
+        finalTotal:   json.finalTotal,
         currency,
         notes,
       }
 
-      // Generate PDF immediately
-      const doc        = await buildPdf(quote)
-      const blobUrl    = doc.output('bloburl') as unknown as string
-      const dataUri    = doc.output('datauristring') as unknown as string
+      const doc     = await buildPdf(quote)
+      const blobUrl = doc.output('bloburl') as unknown as string
+      const dataUri = doc.output('datauristring') as unknown as string
 
-      setSavedQuote(quote)
-      setPdfBlobUrl(blobUrl)
-      setPdfBase64(dataUri)
-      setShowPreview(true)
+      setSavedQuote(quote); setPdfBlobUrl(blobUrl); setPdfBase64(dataUri); setShowPreview(true)
     } catch (err) {
-      console.error(err)
-      toast.error('Error al generar el presupuesto')
-    } finally {
-      setSaving(false)
-    }
+      console.error(err); toast.error('Error al generar el presupuesto')
+    } finally { setSaving(false) }
   }
 
-  // ── Download PDF ──────────────────────────────────────────────────────────
   const downloadPdf = () => {
     if (!pdfBlobUrl || !savedQuote) return
-    const a = document.createElement('a')
-    a.href     = pdfBlobUrl
-    a.download = `${savedQuote.ref}.pdf`
-    a.click()
+    const a = document.createElement('a'); a.href = pdfBlobUrl; a.download = `${savedQuote.ref}.pdf`; a.click()
   }
 
-  // ── Send by email ─────────────────────────────────────────────────────────
   const sendByEmail = async () => {
     if (!savedQuote || !pdfBase64) return
     setSendingEmail(true)
     try {
-      const res = await fetch('/api/cotizador/enviar-mail', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res  = await fetch('/api/cotizador/enviar-mail', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cotizacionId: savedQuote.cotizacionId, pdfBase64 }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al enviar'); return }
       toast.success(`Email enviado a ${savedQuote.recipientEmail}`)
-    } catch {
-      toast.error('Error de conexión')
-    } finally {
-      setSendingEmail(false)
-    }
+    } catch { toast.error('Error de conexión') } finally { setSendingEmail(false) }
   }
 
-  // ── WhatsApp ──────────────────────────────────────────────────────────────
   const buildWhatsApp = (quote?: SavedQuote) => {
-    const src = quote ?? { recipientName: recipientName || '', cartItems, total, currency, notes: notes || '', ref: '' }
+    const src = quote ?? { recipientName: recipientName || '', cartItems, subtotal, finalTotal, discount, currency, notes: notes || '', ref: '' }
     let t = `*Presupuesto de Servicios*`
-    if (src.ref) t += ` · ${src.ref}`
+    if ((src as any).ref) t += ` · ${(src as any).ref}`
     t += `\n\n`
     if (src.recipientName) t += `Hola ${src.recipientName},\n\nTe comparto el detalle:\n\n`
-    src.cartItems.forEach(i => {
-      const lt = i.service.price * i.quantity
-      let l = `• ${i.service.name}`
-      if (i.quantity > 1) l += ` ×${i.quantity}`
-      l += ` — ${formatCurrency(lt, i.service.currency)}/${BILLING_LABELS[i.service.billingCycle] ?? 'mes'}`
-      if (showArs && arsRate && i.service.currency === 'USD') l += ` (${formatCurrency(lt * arsRate, 'ARS')})`
+    src.cartItems.forEach(ci => {
+      const lt = getPrice(ci) * ci.quantity
+      let l = `• ${ci.item.name}`
+      if (ci.quantity > 1) l += ` ×${ci.quantity}`
+      if (ci.type === 'SERVICE') {
+        const bl = BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'
+        l += ` — ${formatCurrency(lt, ci.item.currency)}/${bl}`
+      } else {
+        l += ` — ${formatCurrency(lt, ci.item.currency)} (${(ci.item as Product).unit})`
+      }
+      if (showArs && arsRate && ci.item.currency === 'USD') l += ` (${formatCurrency(lt * arsRate, 'ARS')})`
       t += l + '\n'
     })
-    t += `\n*Total: ${formatCurrency(src.total, src.currency)}*`
-    if (showArs && arsRate && src.currency === 'USD') t += ` (ARS ${formatCurrency(src.total * arsRate, 'ARS')})`
+    t += `\n*Subtotal: ${formatCurrency(src.subtotal, src.currency)}*`
+    if (src.discount > 0) {
+      const da = src.subtotal * (src.discount / 100)
+      t += `\nDescuento (${src.discount}%): -${formatCurrency(da, src.currency)}`
+      t += `\n*Total: ${formatCurrency(src.finalTotal, src.currency)}*`
+    }
+    if (showArs && arsRate && src.currency === 'USD') t += ` (ARS ${formatCurrency(src.finalTotal * arsRate, 'ARS')})`
     if (src.notes) t += `\n\n📝 ${src.notes}`
     t += `\n\nCualquier consulta, estamos a disposición.`
     return `https://wa.me/?text=${encodeURIComponent(t)}`
   }
 
-  // ── Add to Pipeline ───────────────────────────────────────────────────────
   const addToPipeline = async () => {
     if (!savedQuote) return
     setAddingToPipeline(true)
     try {
       const res = await fetch('/api/deals', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title:       `${savedQuote.empresaName ?? savedQuote.recipientName} — Cotización ${savedQuote.ref}`,
-          amount:      savedQuote.total,
+          title:       `${savedQuote.empresaName ?? savedQuote.recipientName} — ${savedQuote.ref}`,
+          amount:      savedQuote.finalTotal,
           currency:    savedQuote.currency,
-          probability: 50,
-          stage:       'PROPUESTA',
-          notes:       `Generado automáticamente desde cotización ${savedQuote.ref}`,
+          probability: 50, stage: 'PROPUESTA',
+          notes:       `Generado desde cotización ${savedQuote.ref}`,
           empresaId:   clientMode === 'existing' ? selectedEmpresaId || null : null,
         }),
       })
       if (!res.ok) { const j = await res.json(); toast.error(j.error ?? 'Error'); return }
-      setPipelineAdded(true)
-      toast.success('Deal creado en Pipeline → Propuesta')
-    } catch {
-      toast.error('Error al crear el deal')
-    } finally {
-      setAddingToPipeline(false)
-    }
+      setPipelineAdded(true); toast.success('Deal creado en Pipeline → Propuesta')
+    } catch { toast.error('Error al crear el deal') } finally { setAddingToPipeline(false) }
   }
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
   const reset = () => {
     if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
     setSavedQuote(null); setPdfBlobUrl(null); setPdfBase64(null); setShowPreview(false)
-    setCart({}); setManualEmail(''); setManualName(''); setNotes('')
+    setCart({}); setManualEmail(''); setManualName(''); setNotes(''); setDiscount(0)
     setSelectedEmpresaId(''); setSelectedContactEmail(''); setSelectedContactName('')
     setManualContactInput(false); setPipelineAdded(false)
   }
 
-  // ── PDF Preview Modal ─────────────────────────────────────────────────────
+  // ── Preview ────────────────────────────────────────────────────────────────
   if (showPreview && savedQuote) {
     return (
       <div className="space-y-5">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Vista previa del presupuesto</h2>
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              {savedQuote.ref} · {savedQuote.recipientName} · {formatCurrency(savedQuote.total, savedQuote.currency)}
+              {savedQuote.ref} · {savedQuote.recipientName} ·{' '}
+              {savedQuote.discount > 0
+                ? <><s className="opacity-60">{formatCurrency(savedQuote.subtotal, savedQuote.currency)}</s>{' '}<strong>{formatCurrency(savedQuote.finalTotal, savedQuote.currency)}</strong></>
+                : formatCurrency(savedQuote.finalTotal, savedQuote.currency)
+              }
               {savedQuote.empresaName && ` · ${savedQuote.empresaName}`}
             </p>
           </div>
-          <button onClick={reset} className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-raised)]"
+          <button onClick={reset} className="p-2 rounded-lg hover:bg-[var(--color-surface-raised)]"
             style={{ color: 'var(--color-text-muted)' }}>
             <X size={18} />
           </button>
         </div>
 
-        {/* PDF iframe preview */}
         <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)', height: '520px' }}>
-          {pdfBlobUrl ? (
-            <iframe
-              src={pdfBlobUrl}
-              title="Vista previa del presupuesto"
-              className="w-full h-full"
-              style={{ border: 'none' }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--color-text-muted)' }}>
-              Generando vista previa...
-            </div>
-          )}
+          {pdfBlobUrl
+            ? <iframe src={pdfBlobUrl} title="Vista previa" className="w-full h-full" style={{ border: 'none' }} />
+            : <div className="w-full h-full flex items-center justify-center" style={{ color: 'var(--color-text-muted)' }}>Generando...</div>
+          }
         </div>
 
-        {/* Action buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Descargar */}
-          <button
-            onClick={downloadPdf}
-            className="flex items-center gap-3 px-4 py-4 rounded-2xl border transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5"
-            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
-          >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: 'var(--color-primary)' }}>
-              <Download size={18} className="text-white" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Descargar Presupuesto</p>
-              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{savedQuote.ref}.pdf</p>
-            </div>
-          </button>
-
-          {/* Enviar por Mail */}
-          <button
-            onClick={sendByEmail}
-            disabled={sendingEmail}
-            className="flex items-center gap-3 px-4 py-4 rounded-2xl border transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 disabled:opacity-60"
-            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
-          >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: '#6366f1' }}>
-              <Mail size={18} className="text-white" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                {sendingEmail ? 'Enviando...' : 'Enviar por Mail'}
-              </p>
-              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Con PDF adjunto</p>
-            </div>
-          </button>
-
-          {/* WhatsApp */}
-          <a
-            href={buildWhatsApp(savedQuote)}
-            target="_blank"
-            rel="noopener noreferrer"
+          {[
+            { onClick: downloadPdf, bg: 'var(--color-primary)', icon: <Download size={18} className="text-white" />, label: 'Descargar Presupuesto', sub: `${savedQuote.ref}.pdf` },
+            { onClick: sendByEmail, disabled: sendingEmail, bg: '#6366f1', icon: <Mail size={18} className="text-white" />, label: sendingEmail ? 'Enviando...' : 'Enviar por Mail', sub: 'Con PDF adjunto' },
+          ].map((btn, i) => (
+            <button key={i} onClick={btn.onClick} disabled={(btn as any).disabled}
+              className="flex items-center gap-3 px-4 py-4 rounded-2xl border transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 disabled:opacity-60"
+              style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: btn.bg }}>{btn.icon}</div>
+              <div className="text-left">
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{btn.label}</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{btn.sub}</p>
+              </div>
+            </button>
+          ))}
+          <a href={buildWhatsApp(savedQuote)} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-3 px-4 py-4 rounded-2xl border transition-all hover:border-[#25D366] hover:bg-[#25D366]/5"
-            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
-          >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#25D366' }}>
-              <MessageCircle size={18} className="text-white" />
-            </div>
+            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#25D366' }}><MessageCircle size={18} className="text-white" /></div>
             <div className="text-left">
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Enviar por WhatsApp</p>
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Con resumen y totales</p>
@@ -523,53 +531,41 @@ export default function CotizadorPage() {
           </a>
         </div>
 
-        {/* Pipeline prompt */}
         {!pipelineAdded ? (
           <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: 'rgba(99,102,241,0.12)' }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(99,102,241,0.12)' }}>
                 <TrendingUp size={16} style={{ color: 'var(--color-primary)' }} />
               </div>
               <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                  ¿Agregar esta cotización al Pipeline?
-                </p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>¿Agregar esta cotización al Pipeline?</p>
                 <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  Se creará un deal en etapa <strong>Propuesta</strong>
-                  {savedQuote.empresaName && ` para ${savedQuote.empresaName}`}
+                  Deal en etapa <strong>Propuesta</strong> por {formatCurrency(savedQuote.finalTotal, savedQuote.currency)}
+                  {savedQuote.empresaName && ` · ${savedQuote.empresaName}`}
                 </p>
               </div>
             </div>
             <div className="flex gap-2 shrink-0">
-              <Button size="sm" onClick={addToPipeline} loading={addingToPipeline}
-                leftIcon={<TrendingUp size={13} />}>
-                Sí, agregar
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setPipelineAdded(true)}>
-                No
-              </Button>
+              <Button size="sm" onClick={addToPipeline} loading={addingToPipeline} leftIcon={<TrendingUp size={13} />}>Sí, agregar</Button>
+              <Button size="sm" variant="ghost" onClick={() => setPipelineAdded(true)}>No</Button>
             </div>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm"
             style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
-            <CheckCircle size={15} />
-            {pipelineAdded && !addingToPipeline
-              ? 'Deal agregado al Pipeline en etapa Propuesta.'
-              : 'No agregado al Pipeline.'}
+            <CheckCircle size={15} /> Deal agregado al Pipeline en etapa Propuesta.
           </div>
         )}
 
-        <button onClick={reset} className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          + Nuevo presupuesto
-        </button>
+        <button onClick={reset} className="text-sm" style={{ color: 'var(--color-text-muted)' }}>+ Nuevo presupuesto</button>
       </div>
     )
   }
 
-  // ── Main form ─────────────────────────────────────────────────────────────
+  // ── Main form ──────────────────────────────────────────────────────────────
+  const loadingCatalog = activeTab === 'SERVICE' ? loadingServices : loadingProducts
+
   return (
     <div className="pb-44 lg:pb-32">
       {/* Header */}
@@ -577,12 +573,10 @@ export default function CotizadorPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center">
-                <Zap size={17} className="text-white" />
-              </div>
+              <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center"><Zap size={17} className="text-white" /></div>
               <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Cotizador</h1>
             </div>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Armá un presupuesto en segundos</p>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Armá un presupuesto mixto en segundos</p>
           </div>
 
           {/* Dólar widget */}
@@ -599,16 +593,13 @@ export default function CotizadorPage() {
                 ${arsRate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             ) : <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>N/A</span>}
-            <button onClick={() => refetchRate()} className="p-1 rounded-lg hover:bg-[var(--color-surface-raised)]"
-              style={{ color: 'var(--color-text-subtle)' }}>
+            <button onClick={() => refetchRate()} className="p-1 rounded-lg hover:bg-[var(--color-surface-raised)]" style={{ color: 'var(--color-text-subtle)' }}>
               <RefreshCw size={12} />
             </button>
             {arsRate && (
               <button onClick={() => setShowArs(v => !v)}
                 className="px-2 py-1 rounded-lg text-xs font-semibold transition-all"
-                style={showArs
-                  ? { background: 'var(--color-primary)', color: '#fff' }
-                  : { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                style={showArs ? { background: 'var(--color-primary)', color: '#fff' } : { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
                 {showArs ? 'ARS ✓' : 'Ver ARS'}
               </button>
             )}
@@ -616,146 +607,201 @@ export default function CotizadorPage() {
         </div>
       </div>
 
-      {/* ── STEP 1: Servicios ─────────────────────────────────────────── */}
-      <section className="mb-7">
+      {/* ── STEP 1: Ítems ─────────────────────────────────────────────────── */}
+      <section className="mb-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full gradient-bg flex items-center justify-center text-[10px] font-bold text-white shrink-0">1</span>
-          <p className="text-xs font-semibold text-[var(--color-text-subtle)] uppercase tracking-widest">Elegí los servicios</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>Elegí los ítems</p>
         </div>
 
-        {loadingServices ? (
-          <div className="h-12 surface rounded-2xl animate-pulse" />
-        ) : services.length === 0 ? (
-          <div className="surface rounded-2xl p-8 text-center">
-            <FileText size={32} className="mx-auto mb-3 text-[var(--color-text-subtle)]" />
-            <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Sin servicios configurados</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Configurá los servicios en Ajustes → Servicios</p>
+        {/* Tab selector */}
+        <div className="flex rounded-xl overflow-hidden p-0.5 mb-3 w-fit"
+          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+          {([
+            { type: 'SERVICE' as ItemType, label: 'Servicios', icon: <Wrench size={13} /> },
+            { type: 'PRODUCT' as ItemType, label: 'Productos', icon: <Package size={13} /> },
+          ]).map(tab => (
+            <button key={tab.type} onClick={() => { setActiveTab(tab.type); setItemSearch(''); setShowDropdown(false) }}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                activeTab === tab.type ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+              }`}>
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {loadingCatalog ? (
+          <div className="h-11 rounded-xl animate-pulse" style={{ background: 'var(--color-surface)' }} />
+        ) : catalog.length === 0 ? (
+          <div className="rounded-2xl p-6 text-center" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {activeTab === 'SERVICE' ? <Wrench size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />
+              : <Package size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />}
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              {activeTab === 'SERVICE' ? 'Sin servicios configurados' : 'Sin productos configurados'}
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+              {activeTab === 'SERVICE' ? 'Configurá en Ajustes → Servicios' : 'Configurá en Ajustes → Catálogo de Productos'}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {/* Search input + dropdown */}
+            {/* Search dropdown */}
             <div className="relative">
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                 style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}>
                 <Search size={14} style={{ color: 'var(--color-text-subtle)' }} />
                 <input
                   type="text"
-                  placeholder="Buscar servicio por nombre..."
-                  value={serviceSearch}
-                  onChange={e => { setServiceSearch(e.target.value); setShowServiceDropdown(true) }}
-                  onFocus={() => setShowServiceDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowServiceDropdown(false), 150)}
+                  placeholder={`Buscar ${activeTab === 'SERVICE' ? 'servicio' : 'producto'}...`}
+                  value={itemSearch}
+                  onChange={e => { setItemSearch(e.target.value); setShowDropdown(true) }}
+                  onFocus={() => setShowDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                   className="flex-1 text-sm bg-transparent outline-none"
                   style={{ color: 'var(--color-text)' }}
                 />
-                {serviceSearch && (
-                  <button onClick={() => { setServiceSearch(''); setShowServiceDropdown(false) }}
-                    style={{ color: 'var(--color-text-subtle)' }}>
-                    <X size={13} />
-                  </button>
-                )}
+                {itemSearch && <button onClick={() => { setItemSearch(''); setShowDropdown(false) }} style={{ color: 'var(--color-text-subtle)' }}><X size={13} /></button>}
               </div>
 
-              {/* Results dropdown */}
               <AnimatePresence>
-                {showServiceDropdown && (
+                {showDropdown && (
                   <motion.ul
                     initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.1 }}
-                    className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-lg max-h-56 overflow-y-auto"
+                    className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-lg max-h-60 overflow-y-auto"
                     style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
                   >
-                    {services
-                      .filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
-                      .map(s => (
-                        <li key={s.id}>
-                          <button
-                            className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[var(--color-surface-raised)] transition-colors"
-                            onMouseDown={() => {
-                              addItem(s)
-                              setServiceSearch('')
-                              setShowServiceDropdown(false)
-                            }}
-                          >
+                    {filteredCatalog.length === 0 ? (
+                      <li className="px-4 py-3 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                        Sin resultados para "{itemSearch}"
+                      </li>
+                    ) : filteredCatalog.map(({ type, item }) => {
+                      const k = itemKey(type, item.id)
+                      const inCart = cart[k]?.quantity ?? 0
+                      const priceLabel = type === 'SERVICE'
+                        ? `${formatPrice(item.price, item.currency)}/${BILLING_LABELS[(item as Service).billingCycle] ?? 'mes'}`
+                        : `${formatPrice(item.price, item.currency)}/${(item as Product).unit}`
+                      return (
+                        <li key={k}>
+                          <button className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[var(--color-surface-raised)] transition-colors"
+                            onMouseDown={() => { addItem(type, item); setItemSearch(''); setShowDropdown(false) }}>
                             <span>
-                              <span className="text-sm font-medium block" style={{ color: 'var(--color-text)' }}>{s.name}</span>
-                              {s.description && <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>{s.description}</span>}
+                              <span className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+                                {type === 'SERVICE' ? <Wrench size={11} style={{ color: 'var(--color-primary)' }} /> : <Package size={11} style={{ color: '#f59e0b' }} />}
+                                {item.name}
+                                {inCart > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full ml-1" style={{ background: 'var(--color-primary)', color: 'white' }}>{inCart}</span>}
+                              </span>
+                              {(item as any).description && <span className="text-xs block mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>{(item as any).description}</span>}
                             </span>
-                            <span className="text-sm font-bold shrink-0 ml-3" style={{ color: 'var(--color-primary)' }}>
-                              {formatPrice(s.price, s.currency)}/{BILLING_LABELS[s.billingCycle] ?? 'mes'}
-                            </span>
+                            <span className="text-sm font-bold shrink-0 ml-3" style={{ color: 'var(--color-primary)' }}>{priceLabel}</span>
                           </button>
                         </li>
-                      ))
-                    }
-                    {services.filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
-                      <li className="px-4 py-3 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
-                        Sin resultados para "{serviceSearch}"
-                      </li>
-                    )}
+                      )
+                    })}
                   </motion.ul>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Cart items list */}
+            {/* Cart items */}
             <AnimatePresence>
-              {cartItems.map(item => (
-                <motion.div
-                  key={item.service.id}
-                  initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl"
-                  style={{ background: 'var(--color-primary-light, rgba(99,102,241,0.07))', border: '1px solid var(--color-primary, rgba(99,102,241,0.3))', borderColor: 'rgba(99,102,241,0.25)' }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{item.service.name}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                      {formatPrice(item.service.price * item.quantity, item.service.currency)}/{BILLING_LABELS[item.service.billingCycle] ?? 'mes'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => removeItem(item.service.id)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90"
-                      style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                      <Minus size={12} />
-                    </button>
-                    <input type="number" min="1" value={item.quantity}
-                      onChange={e => setQuantity(item.service.id, parseInt(e.target.value))}
-                      className="w-10 text-center text-sm font-bold rounded-lg border outline-none py-0.5"
-                      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
-                    />
-                    <button onClick={() => addItem(item.service)}
-                      className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 gradient-bg text-white">
-                      <Plus size={12} />
-                    </button>
-                    <button onClick={() => setCart(p => { const n = { ...p }; delete n[item.service.id]; return n })}
-                      className="ml-1 p-1 rounded transition-colors hover:text-red-400"
-                      style={{ color: 'var(--color-text-subtle)' }}>
-                      <X size={13} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
+              {cartItems.map(ci => {
+                const k = itemKey(ci.type, ci.item.id)
+                const isService = ci.type === 'SERVICE'
+                const priceLabel = isService
+                  ? `${formatPrice(ci.item.price * ci.quantity, ci.item.currency)}/${BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'}`
+                  : `${formatPrice(ci.item.price * ci.quantity, ci.item.currency)}/${(ci.item as Product).unit}`
+                return (
+                  <motion.div key={k}
+                    initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                    style={{ background: isService ? 'rgba(99,102,241,0.07)' : 'rgba(245,158,11,0.07)',
+                             border: `1px solid ${isService ? 'rgba(99,102,241,0.25)' : 'rgba(245,158,11,0.3)'}` }}>
+                    <div className="shrink-0">
+                      {isService
+                        ? <Wrench size={14} style={{ color: 'var(--color-primary)' }} />
+                        : <Package size={14} style={{ color: '#f59e0b' }} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{ci.item.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{priceLabel}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => removeItem(k)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90"
+                        style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                        <Minus size={12} />
+                      </button>
+                      <input type="number" min="1" value={ci.quantity} onChange={e => setQty(k, parseInt(e.target.value))}
+                        className="w-10 text-center text-sm font-bold rounded-lg border outline-none py-0.5"
+                        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }} />
+                      <button onClick={() => addItem(ci.type, ci.item)}
+                        className="w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 gradient-bg text-white">
+                        <Plus size={12} />
+                      </button>
+                      <button onClick={() => setCart(p => { const n = { ...p }; delete n[k]; return n })}
+                        className="ml-1 p-1 rounded transition-colors hover:text-red-400"
+                        style={{ color: 'var(--color-text-subtle)' }}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
             </AnimatePresence>
           </div>
         )}
       </section>
 
-      {/* ── STEP 2: Destinatario ──────────────────────────────────────── */}
-      <section className="mb-7">
+      {/* ── Descuento ─────────────────────────────────────────────────────── */}
+      {cartItems.length > 0 && (
+        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+              style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>%</span>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+              Descuento <span className="normal-case font-normal">(opcional)</span>
+            </p>
+          </div>
+          <div className="rounded-2xl px-4 py-3 flex items-center gap-4"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <div className="flex items-center gap-3 flex-1">
+              <Tag size={15} style={{ color: 'var(--color-text-muted)' }} />
+              <input
+                type="number" min="0" max="100" step="0.5"
+                value={discount || ''}
+                onChange={e => setDiscount(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                placeholder="0"
+                className="w-20 text-center text-lg font-bold rounded-xl border outline-none py-1.5 transition-all focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+              />
+              <span className="text-lg font-bold" style={{ color: 'var(--color-text-muted)' }}>%</span>
+            </div>
+            {discount > 0 && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-right">
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Ahorro: <span className="font-semibold text-emerald-400">{formatCurrency(discountAmt, currency)}</span>
+                </p>
+                <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
+                  Total: {formatCurrency(finalTotal, currency)}
+                </p>
+              </motion.div>
+            )}
+          </div>
+        </motion.section>
+      )}
+
+      {/* ── STEP 2: Destinatario ──────────────────────────────────────────── */}
+      <section className="mb-5">
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full gradient-bg flex items-center justify-center text-[10px] font-bold text-white shrink-0">2</span>
-          <p className="text-xs font-semibold text-[var(--color-text-subtle)] uppercase tracking-widest">Destinatario</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>Destinatario</p>
         </div>
-
-        <div className="surface rounded-2xl p-4 space-y-3">
-          {/* Mode toggle */}
-          <div className="flex rounded-xl overflow-hidden border border-[var(--color-border)] p-0.5 bg-[var(--color-surface-raised)]">
+        <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <div className="flex rounded-xl overflow-hidden border p-0.5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-raised)' }}>
             {(['existing', 'manual'] as const).map(mode => (
               <button key={mode} onClick={() => { setClientMode(mode); setManualContactInput(false) }}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-                  clientMode === mode ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-                }`}>
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${clientMode === mode ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>
                 {mode === 'existing' ? 'Empresa del CRM' : 'Email directo'}
               </button>
             ))}
@@ -763,32 +809,17 @@ export default function CotizadorPage() {
 
           {clientMode === 'existing' ? (
             <div className="space-y-3">
-              {/* Empresa selector */}
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                  <Building2 size={11} className="inline mr-1" />Empresa
-                </label>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}><Building2 size={11} className="inline mr-1" />Empresa</label>
                 <Select
-                  options={[
-                    { value: '', label: 'Seleccionar empresa...' },
-                    ...empresas.map(e => ({ value: e.id, label: e.city ? `${e.name}  (${e.city})` : e.name })),
-                  ]}
+                  options={[{ value: '', label: 'Seleccionar empresa...' }, ...empresas.map(e => ({ value: e.id, label: e.city ? `${e.name}  (${e.city})` : e.name }))]}
                   value={selectedEmpresaId}
-                  onChange={e => {
-                    setSelectedEmpresaId(e.target.value)
-                    setSelectedContactEmail(''); setSelectedContactName('')
-                    setManualContactInput(false); setManualEmail(''); setManualName('')
-                  }}
+                  onChange={e => { setSelectedEmpresaId(e.target.value); setSelectedContactEmail(''); setSelectedContactName(''); setManualContactInput(false); setManualEmail(''); setManualName('') }}
                 />
               </div>
-
-              {/* Contact picker */}
               {selectedEmpresaId && (
                 <div>
-                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
-                    <User size={11} className="inline mr-1" />Contacto destinatario
-                  </label>
-
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}><User size={11} className="inline mr-1" />Contacto</label>
                   {contacts.length > 0 && !manualContactInput ? (
                     <Select
                       options={[
@@ -798,28 +829,15 @@ export default function CotizadorPage() {
                       ]}
                       value={selectedContactEmail ? `${selectedContactEmail}||${selectedContactName}` : ''}
                       onChange={e => {
-                        if (e.target.value === '__manual__') {
-                          setManualContactInput(true)
-                          setSelectedContactEmail(''); setSelectedContactName('')
-                        } else {
-                          const [email, name] = e.target.value.split('||')
-                          setSelectedContactEmail(email ?? '')
-                          setSelectedContactName(name ?? '')
-                        }
+                        if (e.target.value === '__manual__') { setManualContactInput(true); setSelectedContactEmail(''); setSelectedContactName('') }
+                        else { const [em, nm] = e.target.value.split('||'); setSelectedContactEmail(em ?? ''); setSelectedContactName(nm ?? '') }
                       }}
                     />
                   ) : (
                     <div className="space-y-2">
-                      {contacts.length > 0 && (
-                        <button onClick={() => setManualContactInput(false)}
-                          className="text-xs" style={{ color: 'var(--color-primary)' }}>
-                          ← Volver a los contactos registrados
-                        </button>
-                      )}
-                      <Input placeholder="Nombre del contacto" value={manualName}
-                        onChange={e => setManualName(e.target.value)} leftIcon={<User size={14} />} />
-                      <Input type="email" placeholder="email@empresa.com" value={manualEmail}
-                        onChange={e => setManualEmail(e.target.value)} />
+                      {contacts.length > 0 && <button onClick={() => setManualContactInput(false)} className="text-xs" style={{ color: 'var(--color-primary)' }}>← Volver a los contactos</button>}
+                      <Input placeholder="Nombre del contacto" value={manualName} onChange={e => setManualName(e.target.value)} leftIcon={<User size={14} />} />
+                      <Input type="email" placeholder="email@empresa.com" value={manualEmail} onChange={e => setManualEmail(e.target.value)} />
                     </div>
                   )}
                 </div>
@@ -827,14 +845,11 @@ export default function CotizadorPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <Input placeholder="Nombre del destinatario" value={manualName}
-                onChange={e => setManualName(e.target.value)} leftIcon={<User size={14} />} />
-              <Input type="email" placeholder="email@empresa.com" value={manualEmail}
-                onChange={e => setManualEmail(e.target.value)} />
+              <Input placeholder="Nombre del destinatario" value={manualName} onChange={e => setManualName(e.target.value)} leftIcon={<User size={14} />} />
+              <Input type="email" placeholder="email@empresa.com" value={manualEmail} onChange={e => setManualEmail(e.target.value)} />
             </div>
           )}
 
-          {/* Preview chip */}
           {recipientEmail && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
               className="flex items-center gap-2 px-3 py-2 rounded-xl"
@@ -847,18 +862,18 @@ export default function CotizadorPage() {
         </div>
       </section>
 
-      {/* ── STEP 3: Notas ─────────────────────────────────────────────── */}
-      <section className="mb-7">
+      {/* ── STEP 3: Notas ─────────────────────────────────────────────────── */}
+      <section className="mb-5">
         <div className="flex items-center gap-2 mb-3">
-          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-[var(--color-text-subtle)] shrink-0"
-            style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)' }}>3</span>
-          <p className="text-xs font-semibold text-[var(--color-text-subtle)] uppercase tracking-widest">
+          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+            style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>3</span>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
             Notas <span className="normal-case font-normal">(opcional)</span>
           </p>
         </div>
         <textarea
-          className="w-full surface rounded-2xl px-4 py-3.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 transition-all"
-          style={{ color: 'var(--color-text)' }}
+          className="w-full rounded-2xl px-4 py-3.5 text-sm resize-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 transition-all"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
           rows={3}
           placeholder="Condiciones especiales, validez del presupuesto, próximos pasos..."
           value={notes}
@@ -866,7 +881,7 @@ export default function CotizadorPage() {
         />
       </section>
 
-      {/* ── Sticky bottom bar ─────────────────────────────────────────── */}
+      {/* ── Sticky bottom bar ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {cartItems.length > 0 && (
           <motion.div
@@ -876,30 +891,42 @@ export default function CotizadorPage() {
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
           >
             <div className="max-w-2xl mx-auto px-4 py-3">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {cartItems.length} servicio{cartItems.length !== 1 ? 's' : ''}
-                  </p>
-                  <div className="flex gap-1 flex-wrap">
-                    {cartItems.map(i => (
-                      <span key={i.service.id} className="text-[10px] px-2 py-0.5 rounded-full"
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{cartItems.length} ítem{cartItems.length !== 1 ? 's' : ''}</p>
+                  {cartItems.map(ci => {
+                    const k = itemKey(ci.type, ci.item.id)
+                    return (
+                      <span key={k} className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1"
                         style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                        {i.service.name}{i.quantity > 1 && ` ×${i.quantity}`}
+                        {ci.type === 'SERVICE' ? <Wrench size={9} /> : <Package size={9} />}
+                        {ci.item.name}{ci.quantity > 1 && ` ×${ci.quantity}`}
                       </span>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
                 <button onClick={clearCart} className="p-1.5 rounded-lg hover:text-red-400 hover:bg-red-500/10 transition-all"
-                  style={{ color: 'var(--color-text-subtle)' }} title="Vaciar selección">
+                  style={{ color: 'var(--color-text-subtle)' }} title="Vaciar">
                   <Trash2 size={13} />
                 </button>
               </div>
 
               <div className="flex items-center gap-3">
                 <div className="shrink-0">
-                  <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Total</p>
-                  <p className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{formatPrice(total, currency)}</p>
+                  {discount > 0 ? (
+                    <>
+                      <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Total final</p>
+                      <p className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
+                        {formatPrice(finalTotal, currency)}
+                        <span className="text-xs font-normal ml-1.5 text-emerald-400">-{discount}%</span>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Total</p>
+                      <p className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{formatPrice(subtotal, currency)}</p>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2 flex-1">
                   <Button className="flex-1" onClick={handleSave} loading={saving} leftIcon={<Send size={15} />}>
@@ -918,11 +945,11 @@ export default function CotizadorPage() {
         )}
       </AnimatePresence>
 
-      {cartItems.length === 0 && services.length > 0 && (
+      {cartItems.length === 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-6 flex items-center gap-2 rounded-full px-4 py-2 text-xs pointer-events-none shadow-card"
           style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
           <ChevronRight size={12} style={{ color: 'var(--color-primary)' }} />
-          Tocá <span className="font-semibold mx-1" style={{ color: 'var(--color-primary)' }}>+</span> para agregar servicios
+          Buscá un <span className="font-semibold mx-1" style={{ color: 'var(--color-primary)' }}>servicio o producto</span> para empezar
         </div>
       )}
     </div>

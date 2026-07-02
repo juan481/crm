@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle } from 'lucide-react'
+import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { useAuthStore } from '@/store/auth-store'
@@ -35,6 +35,14 @@ const settingsSections = [
     description: 'Activá o desactivá módulos del CRM como campañas de email e integraciones.',
     roles: ['SUPER_ADMIN'],
     color: '#8b5cf6',
+  },
+  {
+    href: '/configuracion/productos',
+    icon: <Package size={24} />,
+    title: 'Catálogo de Productos',
+    description: 'Administrá los productos físicos (cámaras, kits, equipos) disponibles en el cotizador.',
+    roles: ['SUPER_ADMIN', 'ADMIN'],
+    color: '#f59e0b',
   },
 ]
 

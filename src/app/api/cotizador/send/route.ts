@@ -11,15 +11,18 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, total, currency, empresaId } = body as {
+    const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       recipientEmail: string
       recipientName: string
       notes?: string
       total: number
+      discount?: number
       currency: string
     }
+    const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
+    const finalTotal   = total * (1 - discountPct / 100)
 
     if (!items?.length)  return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
     if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
@@ -53,6 +56,8 @@ export async function POST(req: NextRequest) {
         recipientName:  recipientName || 'Cliente',
         items:          items as any,
         total,
+        discount:       discountPct,
+        finalTotal,
         currency,
         notes:          notes || null,
         status:         'GUARDADA',
@@ -82,6 +87,8 @@ export async function POST(req: NextRequest) {
       primaryColor,
       logoUrl:      org?.logoUrl ?? null,
       agentName,
+      discount:     discountPct,
+      finalTotal,
       smtpConfigured: !!(org?.smtpHost && org?.smtpUser && org?.smtpPass),
     })
   } catch (error) {

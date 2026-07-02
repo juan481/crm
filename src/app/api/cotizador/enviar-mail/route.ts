@@ -30,7 +30,7 @@ function buildQuoteHtml(opts: {
         ${item.name}${item.quantity > 1 ? ` <span style="color:#64748b">×${item.quantity}</span>` : ''}
       </td>
       <td style="padding:12px 0;color:#64748b;font-size:13px;border-bottom:1px solid #f1f5f9;text-align:center">
-        ${BILLING_LABELS[item.billingCycle] ?? 'mes'}
+        ${BILLING_LABELS[item.billingCycle ?? ''] ?? (item.unit ?? 'mes')}
       </td>
       <td style="padding:12px 0;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #f1f5f9;text-align:right">
         ${formatMoney(item.price * item.quantity, item.currency)}
