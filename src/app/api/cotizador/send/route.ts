@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       }),
     ])
 
-    const orgName      = org?.crmName || org?.name || 'CRM Pro'
+    const orgName      = org?.name || org?.crmName || 'CRM Pro'
     const primaryColor = org?.primaryColor || '#6366f1'
     const agentName    = agent?.name || 'El equipo'
     const quoteRef     = `PRESUP-${Date.now().toString(36).toUpperCase()}`

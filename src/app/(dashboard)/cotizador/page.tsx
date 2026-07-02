@@ -176,9 +176,22 @@ export default function CotizadorPage() {
     doc.setTextColor(255, 255, 255)
 
     if (logoBase64) {
-      try { doc.addImage(logoBase64, logoType, mg, 8, 32, 16) } catch { /* skip broken logo */ }
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(16)
-      doc.text(quote.orgName, mg + 36, 19)
+      try {
+        // Calculate proportional dimensions to avoid stretching
+        const logoEl = new window.Image()
+        logoEl.src   = `data:image/${logoType.toLowerCase()};base64,${logoBase64}`
+        await new Promise<void>(r => { logoEl.onload = () => r(); logoEl.onerror = () => r() })
+        const maxW = 40, maxH = 22
+        const r    = Math.min(maxW / (logoEl.naturalWidth || 1), maxH / (logoEl.naturalHeight || 1), 1)
+        const lW   = (logoEl.naturalWidth  || 40) * r
+        const lH   = (logoEl.naturalHeight || 16) * r
+        doc.addImage(logoBase64, logoType, mg, (44 - lH) / 2, lW, lH)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16)
+        doc.text(quote.orgName, mg + lW + 4, 24)
+      } catch {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
+        doc.text(quote.orgName, mg, 22)
+      }
     } else {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
       doc.text(quote.orgName, mg, 22)

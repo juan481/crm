@@ -182,6 +182,15 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
           </select>
         </div>
 
+        {/* Image guidelines hint */}
+        <div className="px-3 py-1.5 text-[10px] flex gap-4 flex-wrap border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]"
+          style={{ color: 'var(--color-text-subtle)' }}>
+          <span>📐 Ancho máx: <strong>600px</strong></span>
+          <span>⚖️ Peso: <strong>&lt;150KB</strong> por imagen</span>
+          <span>🎨 Formatos: JPG, PNG</span>
+          <span>💡 Imágenes pesadas caen en spam</span>
+        </div>
+
         {/* Editable area */}
         <div
           ref={editorRef}

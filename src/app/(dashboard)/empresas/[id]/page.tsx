@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
-  Briefcase, Plus, Mail, Phone, UserCircle2, UserCheck, UserX,
+  Briefcase, Plus, Mail, Phone, UserCircle2, UserCheck, UserX, MessageCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
@@ -270,9 +270,14 @@ export default function EmpresaDetailPage() {
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       {c.phone ? (
-                        <a href={`tel:${c.phone}`} className="flex items-center gap-1.5"
-                          style={{ color: 'var(--color-text-muted)' }}>
-                          <Phone size={12} /> {c.phone}
+                        <a
+                          href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 hover:underline"
+                          style={{ color: '#22c55e' }}
+                        >
+                          <MessageCircle size={12} /> {c.phone}
                         </a>
                       ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                     </td>
