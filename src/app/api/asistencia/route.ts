@@ -17,6 +17,10 @@ export async function POST(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'userId requerido' }, { status: 400 })
     if (!fecha)  return NextResponse.json({ error: 'fecha requerida' }, { status: 400 })
 
+    // Verify the target user belongs to the same org (prevents cross-org data injection)
+    const targetUser = await prisma.user.findFirst({ where: { id: userId, organizationId: payload.orgId } })
+    if (!targetUser) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+
     const db   = prisma as any
     const fechaDt = new Date(fecha)
 

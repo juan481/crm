@@ -74,7 +74,8 @@ export default function RrhhPage() {
   // Group by user
   const byUser = records.reduce<Record<string, EmpleadoRow>>((acc, r) => {
     const uid  = r.userId
-    const user = r.user!
+    const user = r.user
+    if (!user) return acc
     if (!acc[uid]) acc[uid] = { userId: uid, name: user.name, role: user.role, avatarUrl: user.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, pct: 0, records: [] }
     acc[uid].records.push(r)
     if (r.ausente)       acc[uid].ausentes++
@@ -106,7 +107,12 @@ export default function RrhhPage() {
     setSaving(true)
     try {
       const fecha = editRecord.fecha.slice(0, 10)
-      const toIso = (timeStr: string) => timeStr ? `${fecha}T${timeStr}:00.000Z` : null
+      const toIso = (timeStr: string) => {
+        if (!timeStr) return null
+        const [y, mo, d] = fecha.split('-').map(Number)
+        const [h, m]     = timeStr.split(':').map(Number)
+        return new Date(y, mo - 1, d, h, m, 0).toISOString()
+      }
 
       const res  = await fetch(`/api/asistencia/${editRecord.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -131,12 +137,6 @@ export default function RrhhPage() {
     if (!absenteModal) return
     setMarkingAbs(true)
     try {
-      const res = await fetch('/api/asistencia/check-in', { method: 'POST' })
-      // We need a different approach: create/update the record directly
-      // Use the PATCH endpoint via a workaround — create first, then patch
-      // Actually we need to create an Asistencia record via a different endpoint
-      // For now, use the existing [id] PATCH but we need the record id first
-      // Let's use a dedicated approach: POST to /api/asistencia with userId
       const r = await fetch('/api/asistencia', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

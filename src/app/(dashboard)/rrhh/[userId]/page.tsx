@@ -75,7 +75,12 @@ export default function EmpleadoRrhhPage() {
     setSaving(true)
     try {
       const fecha = editRecord.fecha.slice(0, 10)
-      const toIso = (t: string) => t ? `${fecha}T${t}:00.000Z` : null
+      const toIso = (t: string) => {
+        if (!t) return null
+        const [y, mo, d] = fecha.split('-').map(Number)
+        const [h, m]     = t.split(':').map(Number)
+        return new Date(y, mo - 1, d, h, m, 0).toISOString()
+      }
       const res  = await fetch(`/api/asistencia/${editRecord.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

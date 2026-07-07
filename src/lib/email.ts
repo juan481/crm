@@ -136,6 +136,7 @@ export function buildEmailHtml(
     .header{background:linear-gradient(135deg,${primaryColor} 0%,${secondaryColor} 100%);padding:32px 40px}
     .header h1{color:#fff;margin:0;font-size:22px;font-weight:600}
     .body{padding:40px;color:#1e293b;line-height:1.7;font-size:15px}
+    .body img{max-width:100%;height:auto;display:block}
     .footer{background:#f1f5f9;padding:20px 40px;text-align:center;color:#94a3b8;font-size:13px}
   </style>
 </head>

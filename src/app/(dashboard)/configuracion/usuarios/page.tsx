@@ -47,6 +47,7 @@ export default function UsuariosPage() {
     queryFn: async () => {
       const res = await fetch('/api/settings/users')
       const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error al cargar usuarios')
       return json.data
     },
   })
@@ -84,6 +85,7 @@ export default function UsuariosPage() {
     qc.invalidateQueries({ queryKey: ['users'] })
     setActionUser(null)
     setAction(null)
+    setNewPassword('')
   }
 
   const deleteUser = async (id: string) => {
@@ -209,7 +211,7 @@ export default function UsuariosPage() {
         </form>
       </Modal>
 
-      <Modal open={action === 'password' && !!actionUser} onClose={() => { setActionUser(null); setAction(null) }} title="Cambiar Contraseña" size="sm">
+      <Modal open={action === 'password' && !!actionUser} onClose={() => { setActionUser(null); setAction(null); setNewPassword('') }} title="Cambiar Contraseña" size="sm">
         <p className="text-sm text-[var(--color-text-muted)] mb-4">
           Establece una nueva contraseña para <strong className="text-[var(--color-text)]">{actionUser?.name}</strong>.
         </p>

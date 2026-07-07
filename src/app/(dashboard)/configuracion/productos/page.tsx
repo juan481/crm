@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Plus, ArrowLeft, Pencil, Trash2, Package } from 'lucide-react'
+import { Plus, ArrowLeft, Pencil, Trash2, Package, Upload, CheckCircle, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -12,6 +12,61 @@ import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import type { Product } from '@/types'
 import toast from 'react-hot-toast'
+
+interface CsvRow { name: string; description: string; price: string; currency: string; unit: string; valid: boolean; error?: string }
+
+function normalizeHeader(h: string): string {
+  return h.trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip accents: é→e, ó→o, etc.
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+}
+
+function splitCsvLine(line: string): string[] {
+  const cols: string[] = []
+  let cur = '', inQuote = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuote && line[i + 1] === '"') { cur += '"'; i++ }
+      else inQuote = !inQuote
+    } else if (ch === ',' && !inQuote) {
+      cols.push(cur.trim()); cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  cols.push(cur.trim())
+  return cols
+}
+
+function parseCsv(text: string): CsvRow[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return []
+  const headers = splitCsvLine(lines[0]).map(normalizeHeader)
+  const idx = (k: string) => headers.indexOf(k)
+  const nameIdx  = idx('nombre') !== -1 ? idx('nombre') : idx('name') !== -1 ? idx('name') : 0
+  const descIdx  = idx('descripcion') !== -1 ? idx('descripcion') : idx('description') !== -1 ? idx('description') : -1
+  const priceIdx = idx('precio') !== -1 ? idx('precio') : idx('price') !== -1 ? idx('price') : -1
+  const currIdx  = idx('moneda') !== -1 ? idx('moneda') : idx('currency') !== -1 ? idx('currency') : -1
+  const unitIdx  = idx('unidad') !== -1 ? idx('unidad') : idx('unit') !== -1 ? idx('unit') : -1
+
+  return lines.slice(1).map(line => {
+    const cols  = splitCsvLine(line)
+    const name  = cols[nameIdx]  ?? ''
+    const price = priceIdx !== -1 ? (cols[priceIdx] ?? '') : ''
+    const error = !name.trim() ? 'Nombre vacío' : (isNaN(Number(price)) || price === '') ? 'Precio inválido' : undefined
+    return {
+      name,
+      description: descIdx !== -1 ? (cols[descIdx] ?? '') : '',
+      price,
+      currency:    currIdx !== -1 ? (cols[currIdx] || 'USD') : 'USD',
+      unit:        unitIdx !== -1 ? (cols[unitIdx] || 'unidad') : 'unidad',
+      valid:       !error,
+      error,
+    }
+  })
+}
 
 const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD — Dólar' },
@@ -26,12 +81,16 @@ export default function ProductosPage() {
   const qc     = useQueryClient()
   const { user } = useAuthStore()
 
-  const [showModal,  setShowModal]  = useState(false)
-  const [editing,    setEditing]    = useState<Product | null>(null)
-  const [deleteId,   setDeleteId]   = useState<string | null>(null)
-  const [form,       setForm]       = useState(EMPTY_FORM)
-  const [saving,     setSaving]     = useState(false)
-  const [deleting,   setDeleting]   = useState(false)
+  const [showModal,    setShowModal]    = useState(false)
+  const [editing,      setEditing]      = useState<Product | null>(null)
+  const [deleteId,     setDeleteId]     = useState<string | null>(null)
+  const [form,         setForm]         = useState(EMPTY_FORM)
+  const [saving,       setSaving]       = useState(false)
+  const [deleting,     setDeleting]     = useState(false)
+  const [csvRows,      setCsvRows]      = useState<CsvRow[]>([])
+  const [showImport,   setShowImport]   = useState(false)
+  const [importing,    setImporting]    = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery<{ data: Product[] }>({
     queryKey: ['products'],
@@ -49,6 +108,43 @@ export default function ProductosPage() {
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY_FORM) }
 
   const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const rows = parseCsv(ev.target?.result as string)
+      if (!rows.length) { toast.error('El archivo no contiene filas válidas'); return }
+      setCsvRows(rows)
+      setShowImport(true)
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const handleImport = async () => {
+    const valid = csvRows.filter(r => r.valid)
+    if (!valid.length) { toast.error('No hay filas válidas para importar'); return }
+    setImporting(true)
+    let ok = 0
+    let fail = 0
+    for (const row of valid) {
+      try {
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: row.name, description: row.description || null, price: Number(row.price), currency: row.currency, unit: row.unit }),
+        })
+        if (res.ok) ok++; else fail++
+      } catch { fail++ }
+    }
+    setImporting(false)
+    qc.invalidateQueries({ queryKey: ['products'] })
+    setShowImport(false)
+    setCsvRows([])
+    toast.success(`${ok} producto${ok !== 1 ? 's' : ''} importado${ok !== 1 ? 's' : ''}${fail ? ` · ${fail} fallaron` : ''}`)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -110,9 +206,15 @@ export default function ProductosPage() {
           </div>
         </div>
         {canManage && (
-          <Button leftIcon={<Plus size={15} />} onClick={openCreate}>
-            Nuevo Producto
-          </Button>
+          <div className="flex items-center gap-2">
+            <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
+            <Button variant="outline" leftIcon={<Upload size={15} />} onClick={() => fileRef.current?.click()}>
+              Importar CSV
+            </Button>
+            <Button leftIcon={<Plus size={15} />} onClick={openCreate}>
+              Nuevo Producto
+            </Button>
+          </div>
         )}
       </div>
 
@@ -242,6 +344,57 @@ export default function ProductosPage() {
         <ModalFooter>
           <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancelar</Button>
           <Button variant="danger" onClick={handleDelete} loading={deleting}>Eliminar</Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* CSV Import preview */}
+      <Modal open={showImport} onClose={() => { setShowImport(false); setCsvRows([]) }} title="Vista previa de importación" size="lg">
+        <div className="mb-3 flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          <span className="font-medium" style={{ color: 'var(--color-text)' }}>{csvRows.length}</span> filas detectadas ·&nbsp;
+          <span style={{ color: '#10b981' }}><strong>{csvRows.filter(r => r.valid).length}</strong> válidas</span>
+          {csvRows.some(r => !r.valid) && (
+            <span style={{ color: '#ef4444' }}> · <strong>{csvRows.filter(r => !r.valid).length}</strong> con error</span>
+          )}
+        </div>
+        <p className="text-xs mb-3" style={{ color: 'var(--color-text-subtle)' }}>
+          Columnas esperadas: <strong>nombre, descripcion, precio, moneda, unidad</strong> (o en inglés: name, description, price, currency, unit)
+        </p>
+        <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border)', maxHeight: 320, overflowY: 'auto' }}>
+          <table className="w-full text-xs">
+            <thead style={{ background: 'var(--color-surface-raised)', position: 'sticky', top: 0 }}>
+              <tr>
+                {['', 'Nombre', 'Descripción', 'Precio', 'Moneda', 'Unidad'].map(h => (
+                  <th key={h} className="px-3 py-2 text-left font-semibold" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {csvRows.map((row, i) => (
+                <tr key={i} style={{ borderTop: '1px solid var(--color-border)', background: row.valid ? undefined : 'rgba(239,68,68,0.04)' }}>
+                  <td className="px-3 py-2">
+                    {row.valid
+                      ? <CheckCircle size={13} style={{ color: '#10b981' }} />
+                      : <span title={row.error}><XCircle size={13} style={{ color: '#ef4444' }} /></span>}
+                  </td>
+                  <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{row.name || <em style={{ color: 'var(--color-text-subtle)' }}>—</em>}</td>
+                  <td className="px-3 py-2" style={{ color: 'var(--color-text-muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.description || '—'}</td>
+                  <td className="px-3 py-2" style={{ color: row.valid ? 'var(--color-text)' : '#ef4444' }}>{row.price}</td>
+                  <td className="px-3 py-2" style={{ color: 'var(--color-text-muted)' }}>{row.currency}</td>
+                  <td className="px-3 py-2" style={{ color: 'var(--color-text-muted)' }}>{row.unit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <ModalFooter className="mt-4">
+          <Button variant="ghost" onClick={() => { setShowImport(false); setCsvRows([]) }}>Cancelar</Button>
+          <Button
+            onClick={handleImport}
+            loading={importing}
+            disabled={!csvRows.some(r => r.valid)}
+          >
+            Importar {csvRows.filter(r => r.valid).length} productos
+          </Button>
         </ModalFooter>
       </Modal>
     </div>

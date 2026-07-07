@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion' // solo para modal
 import {
   CheckSquare, Square, Headphones, Plus, Calculator,
-  AlertCircle, Clock, CheckCircle2, Zap, ChevronRight,
+  AlertCircle, Clock, CheckCircle2, ChevronRight,
   Calendar, Flag, User, LogIn, LogOut, CheckCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -74,7 +74,7 @@ export default function MiDiaPage() {
   const mesCurrent = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
 
   const { data: asistenciaHoy, refetch: refetchAsistencia } = useQuery({
-    queryKey: ['asistencia-hoy'],
+    queryKey: ['asistencia-hoy', user?.id],
     queryFn:  async () => {
       const r = await fetch(`/api/asistencia?mes=${mesCurrent}`)
       if (!r.ok) return null
@@ -118,7 +118,7 @@ export default function MiDiaPage() {
 
   // Today's tasks assigned to me
   const { data: tasksData, isLoading: loadingTasks } = useQuery<Task[]>({
-    queryKey: ['my-tasks'],
+    queryKey: ['my-tasks', user?.id],
     queryFn: async () => {
       const res = await fetch('/api/tareas?status=PENDIENTE&status=EN_CURSO')
       if (!res.ok) return []
@@ -130,7 +130,7 @@ export default function MiDiaPage() {
 
   // Open tickets assigned to me
   const { data: ticketsData, isLoading: loadingTickets } = useQuery<Ticket[]>({
-    queryKey: ['my-tickets'],
+    queryKey: ['my-tickets', user?.id],
     queryFn: async () => {
       const res = await fetch('/api/tickets?status=ABIERTO&status=EN_PROCESO')
       if (!res.ok) return []
@@ -265,23 +265,6 @@ export default function MiDiaPage() {
             : <Button size="sm" leftIcon={<LogIn size={13} />} onClick={handleCheckIn} loading={checkingIn}>Entrada</Button>
         )}
       </div>
-
-      {/* ── Acceso rápido cotizador ─────────────────────────────────────── */}
-      <Link
-        href="/cotizador"
-        className="surface rounded-2xl p-4 flex items-center gap-4 hover:border-[var(--color-primary)]/30 hover:bg-[var(--color-primary)]/5 transition-all group"
-      >
-        <div className="w-11 h-11 rounded-xl gradient-bg flex items-center justify-center shrink-0">
-          <Zap size={20} className="text-white" />
-        </div>
-        <div className="flex-1">
-          <p className="font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">
-            Cotizador rápido
-          </p>
-          <p className="text-xs text-[var(--color-text-muted)]">Armá un presupuesto en segundos</p>
-        </div>
-        <ChevronRight size={16} className="text-[var(--color-text-subtle)] group-hover:text-[var(--color-primary)] transition-colors" />
-      </Link>
 
       {/* ── Mis Tareas ──────────────────────────────────────────────────── */}
       <section>

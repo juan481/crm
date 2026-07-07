@@ -9,6 +9,9 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!['SUPER_ADMIN', 'ADMIN', 'SELLER'].includes(payload.role)) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const body = await req.json()
     const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId } = body as {

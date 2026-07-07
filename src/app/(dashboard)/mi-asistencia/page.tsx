@@ -5,12 +5,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LogIn, LogOut, Clock, CheckCircle, AlertCircle, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/store/auth-store'
 import type { Asistencia } from '@/types'
 import toast from 'react-hot-toast'
 
 function formatHora(dt: string | null): string {
   if (!dt) return '—'
   return new Date(dt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatFecha(dateStr: string): string {
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
 }
 
 function horasTrabajadas(entrada: string | null, salida: string | null): string {
@@ -27,6 +33,7 @@ function mesActual() {
 }
 
 export default function MiAsistenciaPage() {
+  const { user } = useAuthStore()
   const qc   = useQueryClient()
   const [now, setNow] = useState(new Date())
   const [checkingIn,  setCheckingIn]  = useState(false)
@@ -42,13 +49,14 @@ export default function MiAsistenciaPage() {
   const fechaStr = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   const { data: historialData, isLoading } = useQuery({
-    queryKey: ['mi-asistencia', mesActual()],
+    queryKey: ['mi-asistencia', mesActual(), user?.id],
     queryFn:  async () => {
       const r = await fetch(`/api/asistencia?mes=${mesActual()}`)
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Asistencia[]
     },
     staleTime: 30_000,
+    enabled:   !!user?.id,
   })
 
   const historial = historialData ?? []
@@ -67,7 +75,7 @@ export default function MiAsistenciaPage() {
       if (res.status === 409) { toast.error(json.error); qc.invalidateQueries({ queryKey: ['mi-asistencia'] }); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : '✅ ¡Buenos días! Entrada registrada')
-      qc.invalidateQueries({ queryKey: ['mi-asistencia'] })
+      qc.invalidateQueries({ queryKey: ['mi-asistencia', mesActual(), user?.id] })
     } catch { toast.error('Error de conexión') }
     finally { setCheckingIn(false) }
   }
@@ -80,7 +88,7 @@ export default function MiAsistenciaPage() {
       if (res.status === 409) { toast.error(json.error); qc.invalidateQueries({ queryKey: ['mi-asistencia'] }); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(`Hasta luego! Trabajaste ${json.horasTrabajadas}`)
-      qc.invalidateQueries({ queryKey: ['mi-asistencia'] })
+      qc.invalidateQueries({ queryKey: ['mi-asistencia', mesActual(), user?.id] })
     } catch { toast.error('Error de conexión') }
     finally { setCheckingOut(false) }
   }
@@ -215,7 +223,7 @@ export default function MiAsistenciaPage() {
                       className={`transition-colors hover:bg-[var(--color-surface-raised)] ${isHoy ? 'bg-[var(--color-primary)]/5' : ''}`}
                       style={{ borderBottom: '1px solid var(--color-border)' }}>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text)' }}>
-                        {new Date(r.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                        {formatFecha(r.fecha)}
                         {isHoy && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-primary)', color: '#fff' }}>Hoy</span>}
                       </td>
                       <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>{formatHora(r.horaEntrada)}</td>

@@ -148,6 +148,10 @@ export default function CotizadorPage() {
   // ── Cart ops ───────────────────────────────────────────────────────────────
   const addItem = (type: ItemType, item: Service | Product) => {
     const k = itemKey(type, item.id)
+    if (cartItems.length > 0 && item.currency !== currency) {
+      toast.error(`No se pueden mezclar monedas (el carrito está en ${currency})`)
+      return
+    }
     setCart(p => ({ ...p, [k]: { type, item, quantity: (p[k]?.quantity ?? 0) + 1 } }))
   }
   const removeItem = (key: string) => setCart(p => {

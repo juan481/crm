@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, canAccess } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml } from '@/lib/email'
 
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) {
+    if (!['SUPER_ADMIN', 'ADMIN', 'SELLER'].includes(payload.role)) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
@@ -61,6 +61,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     const smtpConfig = (org?.smtpHost && org?.smtpUser && org?.smtpPass)
       ? { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser, pass: org.smtpPass, from: org.smtpFrom ?? org.smtpUser }
       : undefined
+
+    // Fail fast if there's no way to send (no org SMTP and no global fallback configured)
+    if (!smtpConfig && !process.env.BREVO_API_KEY && !process.env.SMTP_HOST) {
+      return NextResponse.json({
+        error: 'No hay configuración de email. Configurá el correo en Configuración → Correo antes de enviar.',
+      }, { status: 422 })
+    }
 
     const agent = await prisma.user.findUnique({ where: { id: payload.userId }, select: { name: true } })
     const agentName = agent?.name || 'El equipo'

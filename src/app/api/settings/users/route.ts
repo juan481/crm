@@ -41,12 +41,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nombre, email y contraseña son requeridos' }, { status: 400 })
     }
 
+    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN']
+    if (!VALID_ROLES.includes(role)) {
+      return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
+    }
     if (role === 'SUPER_ADMIN' && payload.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'No podés crear un Super Admin' }, { status: 403 })
     }
 
-    // Check duplicate in our DB
-    const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+    // Check duplicate in our DB (ignore DELETED users — they'll be fully removed from Supabase Auth on delete)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const exists = await (prisma.user as any).findFirst({ where: { email: email.toLowerCase(), status: { not: 'DELETED' } } })
     if (exists) return NextResponse.json({ error: 'El email ya está registrado' }, { status: 400 })
 
     // 1. Create the user in Supabase Auth (admin API — no email verification needed)

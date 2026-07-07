@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { ausente, tardanza, observaciones, horaEntrada, horaSalida } = await req.json()
 
-    const data: Record<string, unknown> = { creadoPorId: payload.userId }
+    const data: Record<string, unknown> = {}
     if (ausente        !== undefined) data.ausente        = ausente
     if (tardanza       !== undefined) data.tardanza       = tardanza
     if (observaciones  !== undefined) data.observaciones  = observaciones || null

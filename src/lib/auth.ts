@@ -8,7 +8,7 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
     SUPER_ADMIN: 3,
     ADMIN: 2,
     SELLER: 1,
-    HR: 1,
+    HR: 0,        // HR is lateral to TECHNICIAN — HR-specific routes use explicit role arrays
     TECHNICIAN: 0,
   }
   return hierarchy[userRole] >= hierarchy[requiredRole]

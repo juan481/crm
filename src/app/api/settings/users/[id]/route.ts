@@ -22,7 +22,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const updateData: Record<string, unknown> = {}
     if (status) updateData.status = status
-    if (role && canAccess(payload.role, 'SUPER_ADMIN')) updateData.role = role
+    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN']
+    if (role) {
+      if (!VALID_ROLES.includes(role)) {
+        return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
+      }
+      if (canAccess(payload.role, 'SUPER_ADMIN')) updateData.role = role
+    }
     if (forcePasswordChange !== undefined) updateData.forcePasswordChange = forcePasswordChange
     if (newPassword) {
       if (newPassword.length < 8) {
@@ -62,6 +68,21 @@ export async function DELETE(_: NextRequest, { params }: Params) {
 
     if (params.id === payload.userId) {
       return NextResponse.json({ error: 'No puedes eliminarte a ti mismo' }, { status: 400 })
+    }
+
+    const target = await prisma.user.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+    })
+    if (!target) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+
+    // Remove from Supabase Auth so the email can be reused when recreating the user
+    if (target.supabaseId) {
+      try {
+        const admin = createAdminClient()
+        await admin.auth.admin.deleteUser(target.supabaseId)
+      } catch (e) {
+        console.error('[USER DELETE] Supabase Auth delete failed:', e)
+      }
     }
 
     await prisma.user.update({

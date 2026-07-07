@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
@@ -9,6 +9,16 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import type { User } from '@/types'
+
+// Routes each restricted role may access. Everything else redirects to their default.
+const ROLE_ALLOWED_PREFIXES: Partial<Record<User['role'], string[]>> = {
+  HR:         ['/rrhh', '/mi-asistencia', '/tareas'],
+  TECHNICIAN: ['/mi-dia', '/mi-asistencia', '/tareas'],
+}
+const ROLE_DEFAULT: Partial<Record<User['role'], string>> = {
+  HR:         '/rrhh',
+  TECHNICIAN: '/mi-dia',
+}
 
 interface Branding {
   crmName: string
@@ -33,11 +43,22 @@ export function AppShell({ user, branding, children }: AppShellProps) {
   const { loadBranding } = useThemeStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
+  const router   = useRouter()
 
   useEffect(() => {
     setUser(user)
     if (branding) loadBranding(branding)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Protect restricted roles from accessing routes outside their allowed list
+  useEffect(() => {
+    const allowed  = ROLE_ALLOWED_PREFIXES[user.role]
+    const fallback = ROLE_DEFAULT[user.role]
+    if (allowed && fallback) {
+      const ok = allowed.some(p => pathname === p || pathname.startsWith(p + '/'))
+      if (!ok) router.replace(fallback)
+    }
+  }, [pathname, user.role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
