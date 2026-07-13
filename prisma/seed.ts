@@ -195,7 +195,7 @@ async function main() {
   const createdClients: Record<string, string> = {}
   for (const c of clientsData) {
     const existing = await prisma.client.findFirst({ where: { email: c.email, organizationId: org.id } })
-    const client = existing ?? await prisma.client.create({ data: { ...c, tags: '[]', organizationId: org.id } })
+    const client = existing ?? await prisma.client.create({ data: { ...c, tags: '[]', organizationId: org.id } as any })
     createdClients[c.name] = client.id
   }
 
@@ -236,7 +236,7 @@ async function main() {
     if (!clientId) continue
     const exists = await prisma.invoice.findFirst({ where: { description: inv.description, clientId } })
     if (!exists) {
-      await prisma.invoice.create({ data: { amount: inv.amount, currency: inv.currency, status: inv.status, description: inv.description, dueDate: inv.dueDate, clientId } })
+      await prisma.invoice.create({ data: { amount: inv.amount, currency: inv.currency, status: inv.status as any, description: inv.description, dueDate: inv.dueDate, clientId } })
     }
   }
 
@@ -266,7 +266,7 @@ async function main() {
     if (!exists) {
       const clientId = createdClients[deal.clientName]
       await prisma.deal.create({
-        data: { title: deal.title, amount: deal.amount, currency: deal.currency, probability: deal.probability, stage: deal.stage, clientId: clientId || null, ownerId: deal.ownerId, organizationId: org.id },
+        data: { title: deal.title, amount: deal.amount, currency: deal.currency, probability: deal.probability, stage: deal.stage as any, clientId: clientId || null, ownerId: deal.ownerId, organizationId: org.id },
       })
     }
   }
@@ -288,7 +288,7 @@ async function main() {
     if (!exists) {
       const clientId = createdClients[task.clientName]
       await prisma.task.create({
-        data: { title: task.title, priority: task.priority, status: task.status, dueDate: task.dueDate, clientId: clientId || null, assignedToId: task.assignedId, createdById: superAdmin.id, organizationId: org.id },
+        data: { title: task.title, priority: task.priority as any, status: task.status as any, dueDate: task.dueDate, clientId: clientId || null, assignedToId: task.assignedId, createdById: superAdmin.id, organizationId: org.id },
       })
     }
   }
@@ -335,7 +335,7 @@ async function main() {
     if (!exists) {
       const clientId = createdClients[ticket.clientName]
       const created = await prisma.ticket.create({
-        data: { title: ticket.title, description: ticket.description, status: ticket.status, priority: ticket.priority, category: ticket.category, number: ticketNum++, clientId: clientId || null, assignedToId: ticket.assignedId, createdById: superAdmin.id, organizationId: org.id },
+        data: { title: ticket.title, description: ticket.description, status: ticket.status as any, priority: ticket.priority as any, category: ticket.category as any, number: ticketNum++, clientId: clientId || null, assignedToId: ticket.assignedId, createdById: superAdmin.id, organizationId: org.id },
       })
       // Agregar mensaje de ejemplo al primer ticket
       if (ticket.status === 'EN_PROCESO') {
@@ -366,7 +366,7 @@ async function main() {
     if (!clientId) continue
     const exists = await prisma.activityLog.findFirst({ where: { description: act.description, clientId } })
     if (!exists) {
-      await prisma.activityLog.create({ data: { clientId, userId: superAdmin.id, action: act.action, description: act.description } })
+      await prisma.activityLog.create({ data: { clientId, userId: superAdmin.id, action: act.action as any, description: act.description } })
     }
   }
 
