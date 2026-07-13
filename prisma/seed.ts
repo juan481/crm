@@ -236,7 +236,7 @@ async function main() {
     if (!clientId) continue
     const exists = await prisma.invoice.findFirst({ where: { description: inv.description, clientId } })
     if (!exists) {
-      await prisma.invoice.create({ data: { amount: inv.amount, currency: inv.currency, status: inv.status as any, description: inv.description, dueDate: inv.dueDate, clientId } })
+      await prisma.invoice.create({ data: { amount: inv.amount, currency: inv.currency, status: inv.status as any, description: inv.description, dueDate: inv.dueDate, clientId, organizationId: org.id } })
     }
   }
 
