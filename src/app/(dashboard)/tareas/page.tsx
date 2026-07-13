@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, CheckSquare, Square, Clock, AlertCircle, ChevronDown, Trash2,
-  User, Calendar, Flag, Building2, Search, Eye, EyeOff, Activity,
+  User, Calendar, Flag, Building2, Search, Eye, EyeOff, Activity, X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -89,19 +89,35 @@ export default function TareasPage() {
     ...users.map(u => ({ value: u.id, label: u.name })),
   ]
 
+  // Empresa combobox state
+  const [empresaSearch, setEmpresaSearch]     = useState('')
+  const [empresaOpen,   setEmpresaOpen]       = useState(false)
+  const [empresaLabel,  setEmpresaLabel]      = useState('')
+  const empresaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (empresaRef.current && !empresaRef.current.contains(e.target as Node)) {
+        setEmpresaOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   const { data: empresasData } = useQuery({
-    queryKey: ['empresas-tareas'],
+    queryKey: ['empresas-search', empresaSearch],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?limit=200')
+      const params = new URLSearchParams({ limit: '20' })
+      if (empresaSearch.length >= 1) params.set('search', empresaSearch)
+      const res = await fetch(`/api/empresas?${params}`)
       if (!res.ok) return { data: [] }
       return res.json()
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    enabled: empresaOpen,
   })
-  const empresaOptions = [
-    { value: '', label: 'Sin empresa' },
-    ...((empresasData?.data ?? []) as Array<{ id: string; name: string }>).map(e => ({ value: e.id, label: e.name })),
-  ]
+  const empresaResults: Array<{ id: string; name: string }> = empresasData?.data ?? []
 
   const { data, isLoading } = useQuery<Task[]>({
     queryKey: ['tasks', statusFilter, search],
@@ -158,6 +174,8 @@ export default function TareasPage() {
       if (!res.ok) { toast.error(json.error); return }
       toast.success('Tarea creada')
       setForm(EMPTY_FORM)
+      setEmpresaSearch('')
+      setEmpresaLabel('')
       setShowForm(false)
       qc.invalidateQueries({ queryKey: ['tasks'] })
     } catch { toast.error('Error') } finally { setSaving(false) }
@@ -309,7 +327,7 @@ export default function TareasPage() {
       )}
 
       {/* Create task modal */}
-      <Modal open={showForm} onClose={() => setShowForm(false)} title="Nueva Tarea" size="sm">
+      <Modal open={showForm} onClose={() => { setShowForm(false); setEmpresaSearch(''); setEmpresaLabel(''); setForm(EMPTY_FORM) }} title="Nueva Tarea" size="sm">
         <form onSubmit={handleCreate} className="space-y-3">
           <Input
             label="Título *"
@@ -347,12 +365,91 @@ export default function TareasPage() {
               value={form.assignedToId}
               onChange={e => setForm(f => ({ ...f, assignedToId: e.target.value }))}
             />
-            <Select
-              label="Empresa (opcional)"
-              options={empresaOptions}
-              value={form.empresaId}
-              onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
-            />
+            <div className="flex flex-col gap-1.5" ref={empresaRef}>
+              <label className="text-sm font-medium text-[var(--color-text-muted)]">Empresa (opcional)</label>
+              <div className="relative">
+                <div
+                  className="flex items-center gap-1.5 w-full rounded-xl border px-3 py-2 text-sm cursor-text"
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text)',
+                  }}
+                  onClick={() => { setEmpresaOpen(true); setEmpresaSearch('') }}
+                >
+                  {form.empresaId ? (
+                    <>
+                      <span className="flex-1 truncate">{empresaLabel}</span>
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation()
+                          setForm(f => ({ ...f, empresaId: '' }))
+                          setEmpresaLabel('')
+                          setEmpresaSearch('')
+                        }}
+                        className="shrink-0 text-[var(--color-text-subtle)] hover:text-red-400 transition-colors"
+                      >
+                        <X size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <input
+                      className="flex-1 bg-transparent outline-none text-sm placeholder:text-[var(--color-text-subtle)]"
+                      placeholder="Buscar empresa..."
+                      value={empresaSearch}
+                      onChange={e => { setEmpresaSearch(e.target.value); setEmpresaOpen(true) }}
+                      onFocus={() => setEmpresaOpen(true)}
+                    />
+                  )}
+                </div>
+
+                {empresaOpen && (
+                  <div
+                    className="absolute z-50 w-full mt-1 rounded-xl shadow-lg overflow-hidden"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+                  >
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
+                      style={{ color: 'var(--color-text-muted)' }}
+                      onClick={() => {
+                        setForm(f => ({ ...f, empresaId: '' }))
+                        setEmpresaLabel('')
+                        setEmpresaSearch('')
+                        setEmpresaOpen(false)
+                      }}
+                    >
+                      Sin empresa
+                    </button>
+                    <div className="max-h-44 overflow-y-auto">
+                      {empresaResults.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-[var(--color-text-muted)]">
+                          {empresaSearch.length >= 1 ? 'Sin resultados' : 'Escribí para buscar...'}
+                        </p>
+                      ) : (
+                        empresaResults.map(e => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition-colors truncate"
+                            style={{ color: 'var(--color-text)' }}
+                            onClick={() => {
+                              setForm(f => ({ ...f, empresaId: e.id }))
+                              setEmpresaLabel(e.name)
+                              setEmpresaSearch('')
+                              setEmpresaOpen(false)
+                            }}
+                          >
+                            {e.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" type="button" onClick={() => setShowForm(false)}>Cancelar</Button>

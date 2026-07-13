@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, Phone, Video, Send, ClipboardList, MessageCircle,
-  Headphones, Clock, X, Paperclip,
+  Headphones, Clock, X, Paperclip, Trash2,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -84,6 +84,7 @@ export function EmpresaNotas({ empresaId }: Props) {
   const [tipo,      setTipo]      = useState<Tipo>('NOTA')
   const [minutes,   setMinutes]   = useState(0)
   const [saving,    setSaving]    = useState(false)
+  const [deleting,  setDeleting]  = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -100,6 +101,28 @@ export function EmpresaNotas({ empresaId }: Props) {
   })
 
   const notas: EmpresaNotaItem[] = data?.data ?? []
+
+  const handleDelete = async (notaId: string) => {
+    if (!confirm('¿Eliminar esta nota?')) return
+    setDeleting(notaId)
+    try {
+      const res = await fetch(`/api/empresas/${empresaId}/notas/${notaId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json()
+        toast.error(json.error ?? 'Error al eliminar')
+        return
+      }
+      qc.setQueryData<{ data: EmpresaNotaItem[] }>(
+        ['empresa-notas', empresaId],
+        old => ({ data: (old?.data ?? []).filter(n => n.id !== notaId) })
+      )
+      toast.success('Nota eliminada')
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const handleTipoChange = (newTipo: Tipo) => {
     setTipo(newTipo)
@@ -333,7 +356,7 @@ export function EmpresaNotas({ empresaId }: Props) {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="flex gap-3 relative"
+                    className="flex gap-3 relative group/nota"
                   >
                     {/* Type dot */}
                     <div
@@ -362,6 +385,18 @@ export function EmpresaNotas({ empresaId }: Props) {
                         <span className="text-xs ml-auto" style={{ color: 'var(--color-text-muted)' }} title={formatDate(nota.createdAt)}>
                           {timeAgo(nota.createdAt)}
                         </span>
+                        {(nota.user.id === user?.id || ['ADMIN', 'SUPER_ADMIN'].includes(user?.role ?? '')) && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(nota.id)}
+                            disabled={deleting === nota.id}
+                            className="opacity-0 group-hover/nota:opacity-100 ml-1 p-1 rounded transition-all hover:text-red-400 disabled:opacity-40"
+                            style={{ color: 'var(--color-text-subtle)' }}
+                            title="Eliminar nota"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </div>
 
                       <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text-muted)' }}>
