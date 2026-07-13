@@ -1,7 +1,5 @@
 'use client'
 
-'use client'
-
 import { useState } from 'react'
 import Link from 'next/link'
 import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package } from 'lucide-react'

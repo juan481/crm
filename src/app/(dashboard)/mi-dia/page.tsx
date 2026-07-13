@@ -120,7 +120,7 @@ export default function MiDiaPage() {
   const { data: tasksData, isLoading: loadingTasks } = useQuery<Task[]>({
     queryKey: ['my-tasks', user?.id],
     queryFn: async () => {
-      const res = await fetch('/api/tareas?status=PENDIENTE&status=EN_CURSO')
+      const res = await fetch(`/api/tareas?status=PENDIENTE&status=EN_CURSO&assignedToId=${user?.id ?? ''}`)
       if (!res.ok) return []
       const json = await res.json()
       return json.data ?? []

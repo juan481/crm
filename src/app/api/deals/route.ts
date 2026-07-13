@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -48,6 +48,20 @@ export async function POST(req: NextRequest) {
     const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, ownerId } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
+    // Validate ownerId belongs to this org; SELLER can only own their own deals
+    let resolvedOwner = payload.userId
+    if (ownerId && ownerId !== payload.userId) {
+      if (!canAccess(payload.role, 'ADMIN')) {
+        return NextResponse.json({ error: 'Solo admins pueden asignar deals a otros usuarios' }, { status: 403 })
+      }
+      const ownerUser = await prisma.user.findFirst({
+        where: { id: ownerId, organizationId: payload.orgId },
+        select: { id: true },
+      })
+      if (!ownerUser) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+      resolvedOwner = ownerId
+    }
+
     const db2 = prisma as any
     const deal = await db2.deal.create({
       data: {
@@ -60,7 +74,7 @@ export async function POST(req: NextRequest) {
         notes:             notes               || null,
         empresaId:         empresaId           || null,
         clientId:          clientId            || null,
-        ownerId:           ownerId             || payload.userId,
+        ownerId:           resolvedOwner,
         organizationId:    payload.orgId,
       },
       include: INCLUDE,

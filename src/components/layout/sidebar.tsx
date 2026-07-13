@@ -8,11 +8,13 @@ import {
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck,
   Building2, UserCircle2, FileText, ClipboardList,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { Avatar } from '@/components/ui/avatar'
 import Image from 'next/image'
 import type { User } from '@/types'
+import type { NotificationCounts } from '@/app/api/notifications/counts/route'
 
 interface NavItem {
   label: string
@@ -20,6 +22,7 @@ interface NavItem {
   icon: React.ReactNode
   roles?: string[]
   exact?: boolean
+  badgeKey?: keyof NotificationCounts
 }
 
 const navItems: NavItem[] = [
@@ -27,13 +30,13 @@ const navItems: NavItem[] = [
   { label: 'Mi Día',         href: '/mi-dia',           icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'] },
   { label: 'Clientes',       href: '/clientes',         icon: <Users size={17} />,                        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Pipeline',       href: '/pipeline',         icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Tareas',         href: '/tareas',           icon: <CheckSquare size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'] },
+  { label: 'Tareas',         href: '/tareas',           icon: <CheckSquare size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], badgeKey: 'tasks' },
   { label: 'Cotizador',      href: '/cotizador',        icon: <Calculator size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Cotizaciones',   href: '/cotizaciones',     icon: <FileText size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Tickets',        href: '/tickets',          icon: <LifeBuoy size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'] },
+  { label: 'Tickets',        href: '/tickets',          icon: <LifeBuoy size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], badgeKey: 'tickets' },
   { label: 'Eventos',        href: '/eventos',          icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Comunicaciones', href: '/comunicaciones',   icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Facturación',    href: '/facturas',         icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Facturación',    href: '/facturas',         icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices' },
   { label: 'Documentos',     href: '/documentos',       icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Empresas',       href: '/empresas',         icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Contactos',      href: '/contactos',        icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
@@ -61,6 +64,17 @@ interface SidebarProps {
 export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { logout } = useAuthStore()
+
+  const { data: counts } = useQuery<NotificationCounts>({
+    queryKey: ['notification-counts'],
+    queryFn: async () => {
+      const res = await fetch('/api/notifications/counts')
+      const json = await res.json()
+      return json.data ?? { tasks: 0, tickets: 0, invoices: 0 }
+    },
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  })
 
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href
@@ -97,7 +111,13 @@ export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: Sid
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
         <div className="space-y-0.5">
           {filteredNav.map((item) => (
-            <SidebarLink key={item.href} item={item} active={isActive(item)} onClose={onClose} />
+            <SidebarLink
+              key={item.href}
+              item={item}
+              active={isActive(item)}
+              onClose={onClose}
+              badge={item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0}
+            />
           ))}
         </div>
         {filteredSettings.length > 0 && (
@@ -131,7 +151,11 @@ export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: Sid
   )
 }
 
-function SidebarLink({ item, active, onClose }: { item: NavItem; active: boolean; onClose?: () => void }) {
+function SidebarLink({
+  item, active, onClose, badge = 0,
+}: {
+  item: NavItem; active: boolean; onClose?: () => void; badge?: number
+}) {
   return (
     <Link
       href={item.href}
@@ -146,6 +170,14 @@ function SidebarLink({ item, active, onClose }: { item: NavItem; active: boolean
         {item.icon}
       </span>
       <span className="flex-1">{item.label}</span>
+      {badge > 0 && !active && (
+        <span
+          className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center leading-none"
+          style={{ background: '#ef4444', color: '#fff' }}
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
       {active && <ChevronRight size={13} className="text-white/60" />}
     </Link>
   )

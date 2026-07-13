@@ -64,28 +64,35 @@ export async function POST(req: NextRequest) {
     if (!description?.trim()) return NextResponse.json({ error: 'La descripción es requerida' },  { status: 400 })
 
     const db = prisma as any
-    const lastTicket = await db.ticket.findFirst({
-      where:   { organizationId: payload.orgId },
-      orderBy: { number: 'desc' },
-      select:  { number: true },
-    })
-    const number = (lastTicket?.number ?? 0) + 1
+    const ticketData = {
+      title:          title.trim(),
+      description:    description.trim(),
+      priority:       priority    || 'MEDIA',
+      category:       category    || 'SOPORTE',
+      clientId:       clientId    || null,
+      empresaId:      empresaId   || null,
+      assignedToId:   assignedToId || null,
+      createdById:    payload.userId,
+      organizationId: payload.orgId,
+    }
 
-    const ticket = await db.ticket.create({
-      data: {
-        number,
-        title:          title.trim(),
-        description:    description.trim(),
-        priority:       priority    || 'MEDIA',
-        category:       category    || 'SOPORTE',
-        clientId:       clientId    || null,
-        empresaId:      empresaId   || null,
-        assignedToId:   assignedToId || null,
-        createdById:    payload.userId,
-        organizationId: payload.orgId,
-      },
-      include: INCLUDE,
-    })
+    // Retry on race condition (P2002 unique constraint on number+orgId)
+    let ticket: any = null
+    for (let attempt = 0; attempt < 5 && !ticket; attempt++) {
+      const last = await db.ticket.findFirst({
+        where:   { organizationId: payload.orgId },
+        orderBy: { number: 'desc' },
+        select:  { number: true },
+      })
+      try {
+        ticket = await db.ticket.create({
+          data: { ...ticketData, number: (last?.number ?? 0) + 1 },
+          include: INCLUDE,
+        })
+      } catch (err: any) {
+        if (err.code !== 'P2002' || attempt === 4) throw err
+      }
+    }
 
     return NextResponse.json({ data: ticket }, { status: 201 })
   } catch (error) {

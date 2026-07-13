@@ -59,11 +59,11 @@ export default function RrhhPage() {
   const [absenteDate,  setAbsenteDate]  = useState(new Date().toISOString().slice(0, 10))
   const [markingAbs,   setMarkingAbs]   = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['asistencia-rrhh', mes],
     queryFn:  async () => {
       const r = await fetch(`/api/asistencia?mes=${mes}`)
-      if (!r.ok) return []
+      if (!r.ok) throw new Error('Error al cargar asistencia')
       return ((await r.json()).data ?? []) as Asistencia[]
     },
     staleTime: 30_000,
@@ -187,6 +187,12 @@ export default function RrhhPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => <div key={i} className="h-16 rounded-2xl animate-pulse" style={{ background: 'var(--color-surface)' }} />)}
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-2 rounded-2xl"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <AlertCircle size={28} className="text-red-400" />
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Error al cargar los registros de asistencia</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 rounded-2xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>

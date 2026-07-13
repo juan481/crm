@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
@@ -42,25 +42,38 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // HR no puede editar tickets
+    if (payload.role === 'HR')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const existing = await db.ticket.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
     if (!existing) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
 
-    const { title, status, priority, category, assignedToId, empresaId, clientId } = await req.json()
-    const isResolving = (status === 'RESUELTO' || status === 'CERRADO') && existing.status !== 'RESUELTO' && existing.status !== 'CERRADO'
+    const body = await req.json()
+    const { status } = body
+    const isTech  = payload.role === 'TECHNICIAN'
+    const isAdmin = canAccess(payload.role, 'ADMIN')
 
+    // TECHNICIAN solo puede cambiar el estado de tickets asignados a ellos
+    if (isTech && existing.assignedToId !== payload.userId)
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+
+    const isResolving = (status === 'RESUELTO' || status === 'CERRADO') &&
+      existing.status !== 'RESUELTO' && existing.status !== 'CERRADO'
+
+    const { title, priority, category, assignedToId, empresaId, clientId } = body
     const ticket = await db.ticket.update({
       where: { id: params.id },
       data: {
-        ...(title                     && { title }),
-        ...(status !== undefined      && { status }),
-        ...(priority                  && { priority }),
-        ...(category                  && { category }),
-        ...(assignedToId !== undefined && { assignedToId: assignedToId || null }),
-        ...(empresaId !== undefined   && { empresaId: empresaId || null }),
-        ...(clientId !== undefined    && { clientId: clientId || null }),
-        ...(isResolving               && { resolvedAt: new Date() }),
+        ...((!isTech && title)                 && { title }),
+        ...(status !== undefined               && { status }),
+        ...((!isTech && priority)              && { priority }),
+        ...((!isTech && category)              && { category }),
+        ...(isAdmin && assignedToId !== undefined && { assignedToId: assignedToId || null }),
+        ...((!isTech && empresaId !== undefined)  && { empresaId: empresaId || null }),
+        ...((!isTech && clientId !== undefined)   && { clientId: clientId || null }),
+        ...(isResolving                        && { resolvedAt: new Date() }),
       },
       include: INCLUDE_LIST,
     })

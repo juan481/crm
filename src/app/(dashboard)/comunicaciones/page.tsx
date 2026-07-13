@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight } from 'lucide-react'
+import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +23,8 @@ const STATUS_CONFIG = {
 
 interface CampaignRecipient {
   id: string; email: string; status: string; sentAt: string | null; error: string | null
+  deliveredAt?: string | null; bouncedAt?: string | null; spamAt?: string | null
+  openedAt?: string | null; openCount?: number
 }
 interface CampaignDetail extends EmailCampaign {
   recipients: CampaignRecipient[]
@@ -71,12 +73,12 @@ export default function ComunicacionesPage() {
     enabled: !!detailId,
   })
 
-  const { data, isLoading } = useQuery<EmailCampaign[]>({
+  const { data, isLoading, isError } = useQuery<EmailCampaign[]>({
     queryKey: ['campaigns'],
     queryFn: async () => {
       const res = await fetch('/api/communications/campaigns')
-      const json = await res.json()
-      return json.data
+      if (!res.ok) throw new Error('Error al cargar campañas')
+      return (await res.json()).data ?? []
     },
   })
 
@@ -129,6 +131,11 @@ export default function ComunicacionesPage() {
           <div className="p-5 space-y-3">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
           </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-2">
+            <AlertCircle size={24} className="text-red-400" />
+            <p className="text-sm text-[var(--color-text-muted)]">Error al cargar las campañas</p>
+          </div>
         ) : campaigns.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-14 h-14 rounded-2xl bg-[var(--color-surface-raised)] flex items-center justify-center">
@@ -154,10 +161,31 @@ export default function ComunicacionesPage() {
                     <p className="font-medium text-[var(--color-text)] truncate">{campaign.name}</p>
                     <p className="text-sm text-[var(--color-text-muted)] truncate">{campaign.subject}</p>
                   </div>
-                  <div className="hidden sm:flex items-center gap-4 shrink-0">
+                  <div className="hidden sm:flex items-center gap-3 shrink-0 flex-wrap justify-end">
                     <div className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)]">
-                      <Users size={14} />{campaign._count?.recipients ?? 0} destinatarios
+                      <Users size={14} />{campaign._count?.recipients ?? 0}
                     </div>
+                    {/* Tracking stats — visible after SES migration */}
+                    {(campaign.totalDelivered ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-emerald-400" title="Entregados">
+                        <CheckCircle size={12} />{campaign.totalDelivered}
+                      </div>
+                    )}
+                    {(campaign.totalBounced ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-red-400" title="Rebotados">
+                        <MailX size={12} />{campaign.totalBounced}
+                      </div>
+                    )}
+                    {(campaign.totalOpened ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-blue-400" title="Abiertos">
+                        <Eye size={12} />{campaign.totalOpened}
+                      </div>
+                    )}
+                    {(campaign.totalSpam ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-amber-400" title="Spam">
+                        <ShieldAlert size={12} />{campaign.totalSpam}
+                      </div>
+                    )}
                     {campaign.sentAt && (
                       <div className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)]">
                         <Calendar size={14} />{formatDateTime(campaign.sentAt)}
@@ -192,17 +220,31 @@ export default function ComunicacionesPage() {
           <div className="space-y-4">
             {/* Summary */}
             {(() => {
-              const pendingCount = detailData.recipients.filter(r => r.status === 'pending').length
+              const pendingCount   = detailData.recipients.filter(r => r.status === 'pending').length
+              const sentCount      = detailData.recipients.filter(r => r.status === 'sent' || r.status === 'bounced' || r.status === 'spam').length
+              const failedCount    = detailData.recipients.filter(r => r.status === 'failed').length
+              const deliveredCount = detailData.recipients.filter(r => r.deliveredAt).length
+              const openedCount    = detailData.recipients.filter(r => r.openedAt).length
+              const bouncedCount   = detailData.recipients.filter(r => r.bouncedAt || r.status === 'bounced').length
+              const spamCount      = detailData.recipients.filter(r => r.spamAt    || r.status === 'spam').length
+              const hasSesTracking = deliveredCount > 0 || bouncedCount > 0 || openedCount > 0 || spamCount > 0
+              const stats = [
+                { label: 'Enviados',    value: sentCount,      color: 'text-emerald-400' },
+                { label: 'Fallidos',    value: failedCount,    color: 'text-red-400' },
+                { label: 'Pendientes',  value: pendingCount,   color: 'text-amber-400' },
+                ...(hasSesTracking ? [
+                  { label: 'Entregados', value: deliveredCount, color: 'text-teal-400' },
+                  { label: 'Abiertos',   value: openedCount,    color: 'text-blue-400' },
+                  { label: 'Rebotados',  value: bouncedCount,   color: 'text-orange-400' },
+                  { label: 'Spam',       value: spamCount,      color: 'text-yellow-400' },
+                ] : []),
+              ]
               return (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: 'Enviados',   value: detailData.recipients.filter(r => r.status === 'sent').length,   color: 'text-emerald-400' },
-                      { label: 'Fallidos',   value: detailData.recipients.filter(r => r.status === 'failed').length, color: 'text-red-400' },
-                      { label: 'Pendientes', value: pendingCount,                                                     color: 'text-amber-400' },
-                    ].map(s => (
+                  <div className={`grid gap-3 ${hasSesTracking ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                    {stats.map(s => (
                       <div key={s.label} className="surface-raised rounded-xl p-3 text-center">
-                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                        <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
                         <p className="text-xs text-[var(--color-text-muted)]">{s.label}</p>
                       </div>
                     ))}
@@ -249,18 +291,41 @@ export default function ComunicacionesPage() {
 
             {/* Recipient list */}
             <div className="rounded-xl overflow-hidden max-h-72 overflow-y-auto" style={{ border: '1px solid var(--color-border)' }}>
-              {detailData.recipients.map(r => (
+              {detailData.recipients.map(r => {
+                const Icon = r.openedAt     ? Eye
+                           : r.deliveredAt  ? CheckCircle
+                           : r.status === 'bounced' || r.bouncedAt ? MailX
+                           : r.status === 'spam'    || r.spamAt    ? ShieldAlert
+                           : r.status === 'sent'    ? Mail
+                           : r.status === 'failed'  ? XCircle
+                           : Clock
+                const iconColor = r.openedAt     ? 'text-blue-400'
+                                : r.deliveredAt  ? 'text-teal-400'
+                                : r.status === 'bounced' || r.bouncedAt ? 'text-orange-400'
+                                : r.status === 'spam'    || r.spamAt    ? 'text-yellow-400'
+                                : r.status === 'sent'    ? 'text-emerald-400'
+                                : r.status === 'failed'  ? 'text-red-400'
+                                : 'text-amber-400'
+                const iconTitle = r.openedAt     ? `Abierto${(r.openCount ?? 0) > 1 ? ` (${r.openCount}×)` : ''}`
+                                : r.deliveredAt  ? 'Entregado'
+                                : r.status === 'bounced' || r.bouncedAt ? 'Rebotado'
+                                : r.status === 'spam'    || r.spamAt    ? 'Marcado como spam'
+                                : r.status === 'sent'    ? 'Enviado'
+                                : r.status === 'failed'  ? 'Falló'
+                                : 'Pendiente'
+                return (
                 <div key={r.id} className="flex items-start gap-3 px-4 py-3 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
-                  {r.status === 'sent'    && <CheckCircle size={14} className="text-emerald-400 mt-0.5 shrink-0" />}
-                  {r.status === 'failed'  && <XCircle     size={14} className="text-red-400 mt-0.5 shrink-0" />}
-                  {r.status === 'pending' && <Loader      size={14} className="text-amber-400 mt-0.5 shrink-0 animate-spin" />}
+                  <span title={iconTitle}>
+                    <Icon size={14} className={`${iconColor} mt-0.5 shrink-0 ${r.status === 'pending' ? 'animate-spin' : ''}`} />
+                  </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.email}</p>
                     {r.error && <p className="text-xs mt-0.5 text-red-400 break-words">{r.error}</p>}
                     {r.sentAt && !r.error && <p className="text-xs text-[var(--color-text-muted)]">{formatDateTime(r.sentAt)}</p>}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}

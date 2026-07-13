@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 function parseJsonArray(raw: string): string[] {
@@ -12,9 +12,15 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const client = await prisma.client.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
+      where: {
+        id: params.id,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { assignedSellerId: payload.userId }),
+      },
       include: {
         invoices: { orderBy: { createdAt: 'desc' }, take: 15 },
         contacts: { orderBy: { createdAt: 'desc' }, take: 30 },
@@ -47,22 +53,32 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const existing = await prisma.client.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
+      where: {
+        id: params.id,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { assignedSellerId: payload.userId }),
+      },
     })
     if (!existing) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 
     const body = await req.json()
     const {
       name, email, phone, company, country, city, address, postalCode, province,
-      website, status, clientType, isEnabled, serviceType, mrr,
+      website, clientType, isEnabled, serviceType, mrr,
       contractStart, contractEnd, tags,
       licenseSerial, licenseVersion, maxWorkstations, subscriptionStart, subscriptionEnd,
       licenseHibernated, licenseRepurchased, isActive24x7,
       distributorName, totalInvestment, renewalCount,
-      assignedSellerId,
     } = body
+
+    // Only ADMIN+ can change status or reassign seller
+    const isAdmin = canAccess(payload.role, 'ADMIN')
+    const status          = isAdmin ? body.status          : undefined
+    const assignedSellerId = isAdmin ? body.assignedSellerId : undefined
 
     const prevStatus = existing.status
 

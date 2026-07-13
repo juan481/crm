@@ -8,6 +8,146 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  SELLER
+  HR
+  TECHNICIAN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_PAYMENT
+  EXPIRED
+  PROSPECT
+}
+
+enum ClientType {
+  B2B
+  B2C
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum NoteType {
+  NOTE
+  CALL
+  EMAIL
+  MEETING
+  TASK
+  CHAT
+}
+
+enum ActivityAction {
+  NOTE
+  CALL
+  EMAIL
+  MEETING
+  TASK
+  CLIENT_CREATED
+  CLIENT_UPDATED
+  CLIENT_DELETED
+  STATUS_CHANGED
+  SALE_REGISTERED
+  DOCUMENT_UPLOADED
+}
+
+enum CampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  FAILED
+}
+
+enum RecipientStatus {
+  pending
+  sent
+  failed
+  bounced
+  spam
+}
+
+enum DealStage {
+  LEAD
+  CONTACTADO
+  PROPUESTA
+  NEGOCIACION
+  GANADO
+  PERDIDO
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_CURSO
+  HECHA
+}
+
+enum Priority {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO
+  ESPERANDO
+  RESUELTO
+  CERRADO
+}
+
+enum TicketCategory {
+  SOPORTE
+  BUG
+  FACTURACION
+  CONSULTA
+}
+
+enum EmpresaNotaTipo {
+  NOTA
+  LLAMADA
+  REUNION
+  CHAT
+  ENVIO_COTIZACION
+  CONVERSACION
+  SOPORTE
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  ONE_TIME
+}
+
+enum CotizacionStatus {
+  GUARDADA
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  VENCIDA
+}
+
+enum SmtpProvider {
+  SMTP
+  SES
+}
+
 // ─── Multi-tenant White-label organizations ────────────────────────────────
 model Organization {
   id             String   @id @default(cuid())
@@ -22,6 +162,12 @@ model Organization {
   smtpUser       String?
   smtpPass       String?
   smtpFrom       String?
+  smtpProvider   SmtpProvider @default(SMTP)
+  sesRegion      String?
+  sesAccessKeyId String?
+  sesSecretKey   String?
+  sesFrom        String?
+  sesConfigSet   String?
   // Datos de facturación
   billingAddress      String?
   billingEmail        String?
@@ -57,8 +203,8 @@ model User {
   supabaseId          String?  @unique  // links to Supabase auth.users.id
   email               String   @unique
   name                String
-  role                String   @default("SELLER")
-  status              String   @default("ACTIVE")
+  role                Role       @default(SELLER)
+  status              UserStatus @default(ACTIVE)
   onboardingCompleted Boolean  @default(false)
   forcePasswordChange Boolean  @default(false)
   avatarUrl           String?
@@ -95,7 +241,7 @@ model Service {
   description    String?
   price          Float    @default(0)
   currency       String   @default("USD")
-  billingCycle   String   @default("MONTHLY")
+  billingCycle   BillingCycle @default(MONTHLY)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   clients        Client[]
@@ -119,9 +265,9 @@ model Client {
   postalCode     String?
   province       String?
   website        String?
-  status         String   @default("ACTIVE")
-  isEnabled      Boolean  @default(true)
-  clientType     String   @default("B2B")
+  status         ClientStatus @default(ACTIVE)
+  isEnabled      Boolean      @default(true)
+  clientType     ClientType   @default(B2B)
   serviceType    String?
   tags           String   @default("[]")
   mrr            Float    @default(0)
@@ -186,10 +332,10 @@ model Invoice {
   id             String   @id @default(cuid())
   clientId       String
   client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  organizationId String   @default("")
+  organizationId String
   amount         Float
   currency       String   @default("USD")
-  status         String   @default("PENDING")
+  status         InvoiceStatus @default(PENDING)
   description    String?
   dueDate        DateTime
   paidAt         DateTime?
@@ -207,13 +353,16 @@ model Invoice {
 model Note {
   id        String   @id @default(cuid())
   content   String
-  type      String   @default("NOTE") // NOTE | CALL | EMAIL | MEETING | TASK | CHAT
+  type      NoteType @default(NOTE)
   metadata  String?  // JSON: { estimatedHours?, estimatedMinutes?, complexity?, estimatedCost?, imageUrl? }
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([userId])
 }
 
 // ─── Activity Log ──────────────────────────────────────────────────────────
@@ -223,7 +372,7 @@ model ActivityLog {
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  action      String   @default("NOTE")
+  action      ActivityAction @default(NOTE)
   description String
   metadata    String?
   createdAt   DateTime @default(now())
@@ -239,7 +388,7 @@ model Sale {
   sellerId   String
   seller     User     @relation(fields: [sellerId], references: [id])
   serviceId  String?
-  service    Service? @relation(fields: [serviceId], references: [id])
+  service    Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   amount     Float
   currency   String   @default("USD")
   closedAt   DateTime @default(now())
@@ -269,25 +418,39 @@ model EmailCampaign {
   name           String
   subject        String
   body           String
-  status         String   @default("DRAFT")
+  status         CampaignStatus @default(DRAFT)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sentAt         DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  // Tracking aggregates (populated by SES webhooks)
+  totalDelivered Int      @default(0)
+  totalBounced   Int      @default(0)
+  totalSpam      Int      @default(0)
+  totalOpened    Int      @default(0)
 
   recipients CampaignRecipient[]
 }
 
 model CampaignRecipient {
-  id         String        @id @default(cuid())
-  campaignId String
-  campaign   EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  email      String
-  name       String?
-  status     String        @default("pending")
-  sentAt     DateTime?
-  error      String?
+  id            String        @id @default(cuid())
+  campaignId    String
+  campaign      EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  email         String
+  name          String?
+  status        RecipientStatus @default(pending)
+  sentAt        DateTime?
+  error         String?
+  // SES tracking fields
+  messageId     String?
+  deliveredAt   DateTime?
+  bouncedAt     DateTime?
+  bounceType    String?
+  bounceSubType String?
+  spamAt        DateTime?
+  openedAt      DateTime?
+  openCount     Int           @default(0)
 }
 
 // ─── Email Templates ───────────────────────────────────────────────────────
@@ -363,7 +526,7 @@ model Document {
   size           Int
   url            String
   folderId       String?
-  folder         Folder?  @relation(fields: [folderId], references: [id])
+  folder         Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   clientId       String?
   client         Client?  @relation(fields: [clientId], references: [id])
   organizationId String
@@ -384,7 +547,7 @@ model Deal {
   amount            Float     @default(0)
   currency          String    @default("USD")
   probability       Int       @default(0)
-  stage             String    @default("LEAD")
+  stage             DealStage @default(LEAD)
   expectedCloseDate DateTime?
   closedAt          DateTime?
   notes             String?
@@ -408,8 +571,8 @@ model Task {
   id             String    @id @default(cuid())
   title          String
   description    String?
-  status         String    @default("PENDIENTE")
-  priority       String    @default("MEDIA")
+  status         TaskStatus @default(PENDIENTE)
+  priority       Priority   @default(MEDIA)
   dueDate        DateTime?
   completedAt    DateTime?
   viewedAt       DateTime?
@@ -437,9 +600,9 @@ model Ticket {
   number         Int
   title          String
   description    String
-  status         String    @default("ABIERTO")
-  priority       String    @default("MEDIA")
-  category       String    @default("SOPORTE")
+  status         TicketStatus   @default(ABIERTO)
+  priority       Priority       @default(MEDIA)
+  category       TicketCategory @default(SOPORTE)
   clientId       String?
   client         Client?   @relation(fields: [clientId], references: [id])
   empresaId      String?
@@ -457,6 +620,9 @@ model Ticket {
 
   @@unique([number, organizationId])
   @@index([organizationId, status])
+  @@index([assignedToId])
+  @@index([clientId])
+  @@index([empresaId])
 }
 
 model TicketMessage {
@@ -530,7 +696,7 @@ model EmpresaNota {
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId           String
   user             User     @relation(fields: [userId], references: [id])
-  tipo             String   @default("NOTA") // NOTA | LLAMADA | REUNION | CHAT | ENVIO_COTIZACION | CONVERSACION | SOPORTE
+  tipo             EmpresaNotaTipo @default(NOTA)
   content          String
   estimatedMinutes Int      @default(0)
   metadata         String?  // JSON: { imageUrl? }
@@ -574,7 +740,7 @@ model Cotizacion {
   finalTotal     Float     @default(0)
   currency       String    @default("USD")
   notes          String?
-  status         String    @default("ENVIADA")
+  status         CotizacionStatus @default(ENVIADA)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

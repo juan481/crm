@@ -6,6 +6,12 @@ export interface SmtpConfig {
   user: string
   pass: string
   from: string
+  // Amazon SES
+  provider?: 'SMTP' | 'BREVO' | 'SES'
+  sesRegion?: string
+  sesAccessKeyId?: string
+  sesSecretKey?: string
+  sesConfigSet?: string
 }
 
 interface EmailAttachment {
@@ -32,10 +38,37 @@ function resolveFrom(smtpFrom: string | undefined, smtpUser: string | undefined)
   return `${smtpFrom} <${fallback}>`
 }
 
+// Amazon SES via SDK v3
+async function sendViaSES(
+  region: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  opts: { from: string; to: string | string[]; subject: string; html: string },
+  configSet?: string
+): Promise<{ messageId: string }> {
+  const { SESClient, SendEmailCommand } = await import('@aws-sdk/client-ses')
+  const client = new SESClient({ region, credentials: { accessKeyId, secretAccessKey } })
+
+  const toArr = Array.isArray(opts.to) ? opts.to : [opts.to]
+
+  const cmd = new SendEmailCommand({
+    Source: opts.from,
+    Destination: { ToAddresses: toArr },
+    Message: {
+      Subject: { Data: opts.subject, Charset: 'UTF-8' },
+      Body:    { Html: { Data: opts.html, Charset: 'UTF-8' } },
+    },
+    ConfigurationSetName: configSet || undefined,
+  })
+
+  const res = await client.send(cmd)
+  return { messageId: res.MessageId ?? '' }
+}
+
 // Brevo HTTP API — no IP restrictions, works from any serverless environment
 async function sendViaBrevoApi(apiKey: string, opts: {
   from: string; to: string | string[]; subject: string; html: string; attachments?: EmailAttachment[]
-}) {
+}): Promise<{ messageId?: string }> {
   const fromMatch = opts.from.match(/^(.+?)\s*<(.+?)>$/)
   const sender    = fromMatch
     ? { name: fromMatch[1].trim(), email: fromMatch[2].trim() }
@@ -66,6 +99,9 @@ async function sendViaBrevoApi(apiKey: string, opts: {
     const err = await res.json().catch(() => ({})) as { message?: string }
     throw new Error(err.message ?? `Brevo API error ${res.status}`)
   }
+
+  const data = await res.json().catch(() => ({})) as { messageId?: string }
+  return { messageId: data.messageId }
 }
 
 function createTransporter(cfg?: SmtpConfig) {
@@ -83,22 +119,54 @@ function createTransporter(cfg?: SmtpConfig) {
   })
 }
 
-export async function sendEmail({ to, subject, html, from, smtpConfig, attachments }: SendEmailOptions) {
-  const fromAddress = from ?? resolveFrom(smtpConfig?.from, smtpConfig?.user) ?? process.env.SMTP_FROM ?? 'CRM Pro <noreply@crmpro.com>'
+export async function sendEmail({
+  to, subject, html, from, smtpConfig, attachments,
+}: SendEmailOptions): Promise<{ messageId?: string }> {
+  const fromAddress = from
+    ?? resolveFrom(smtpConfig?.from, smtpConfig?.user)
+    ?? process.env.SMTP_FROM
+    ?? 'CRM Pro <noreply@crmpro.com>'
+
+  // Amazon SES — triggered when provider is explicitly 'SES' or env vars are set
+  if (
+    smtpConfig?.provider === 'SES' ||
+    (process.env.AWS_SES_REGION && !smtpConfig?.host)
+  ) {
+    const region  = smtpConfig?.sesRegion       ?? process.env.AWS_SES_REGION       ?? ''
+    const akid    = smtpConfig?.sesAccessKeyId  ?? process.env.AWS_SES_ACCESS_KEY_ID ?? ''
+    const secret  = smtpConfig?.sesSecretKey    ?? process.env.AWS_SES_SECRET_ACCESS_KEY ?? ''
+    const cs      = smtpConfig?.sesConfigSet    ?? process.env.AWS_SES_CONFIG_SET
+    if (!region || !akid || !secret) {
+      throw new Error('Amazon SES: faltan credenciales (región, Access Key ID o Secret)')
+    }
+    return sendViaSES(region, akid, secret, { from: fromAddress, to, subject, html }, cs)
+  }
 
   // Use Brevo HTTP API (no IP restrictions) when key starts with xkeysib-
   if (smtpConfig?.pass?.startsWith('xkeysib-') || process.env.BREVO_API_KEY) {
     const apiKey = (smtpConfig?.pass?.startsWith('xkeysib-') ? smtpConfig.pass : null) ?? process.env.BREVO_API_KEY!
-    await sendViaBrevoApi(apiKey, { from: fromAddress, to, subject, html, attachments })
-    return
+    return sendViaBrevoApi(apiKey, { from: fromAddress, to, subject, html, attachments })
   }
 
   const transporter = createTransporter(smtpConfig)
-  await transporter.sendMail({ from: fromAddress, to, subject, html, attachments })
+  const info = await transporter.sendMail({ from: fromAddress, to, subject, html, attachments })
+  return { messageId: info.messageId }
 }
 
 export async function testSmtp(cfg: SmtpConfig): Promise<{ ok: boolean; error?: string }> {
   try {
+    // Amazon SES — verify credentials
+    if (cfg.provider === 'SES') {
+      const { SESClient, GetSendQuotaCommand } = await import('@aws-sdk/client-ses')
+      const region = cfg.sesRegion ?? ''
+      const akid   = cfg.sesAccessKeyId ?? cfg.user ?? ''
+      const secret = cfg.sesSecretKey ?? cfg.pass ?? ''
+      if (!region || !akid || !secret) return { ok: false, error: 'Completá región, Access Key ID y Secret' }
+      const client = new SESClient({ region, credentials: { accessKeyId: akid, secretAccessKey: secret } })
+      await client.send(new GetSendQuotaCommand({}))
+      return { ok: true }
+    }
+
     // If it's a Brevo API key, verify via HTTP instead of SMTP connection
     if (cfg.pass?.startsWith('xkeysib-')) {
       const res = await fetch('https://api.brevo.com/v3/account', {
@@ -122,9 +190,10 @@ export async function testSmtp(cfg: SmtpConfig): Promise<{ ok: boolean; error?: 
 export function buildEmailHtml(
   subject: string,
   body: string,
-  orgName      = 'CRM Pro',
-  primaryColor = '#6366f1',
+  orgName        = 'CRM Pro',
+  primaryColor   = '#6366f1',
   secondaryColor = '#8b5cf6',
+  trackingPixelUrl?: string,
 ): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -145,7 +214,7 @@ export function buildEmailHtml(
     <div class="header"><h1>${subject}</h1></div>
     <div class="body">${body.replace(/\n/g, '<br/>')}</div>
     <div class="footer">Enviado por ${orgName} &mdash; No responder a este correo.</div>
-  </div>
+  </div>${trackingPixelUrl ? `\n  <img src="${trackingPixelUrl}" width="1" height="1" style="display:none;border:0" alt="" />` : ''}
 </body>
 </html>`
 }

@@ -27,6 +27,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
           select: {
             crmName: true, primaryColor: true, secondaryColor: true,
             smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+            smtpProvider: true,
+            sesRegion: true, sesAccessKeyId: true, sesSecretKey: true,
+            sesFrom: true, sesConfigSet: true,
           },
         },
       },
@@ -36,9 +39,31 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     if (campaign.status === 'SENT') return NextResponse.json({ sent: 0, failed: 0, remaining: 0, done: true })
 
     const org = campaign.organization
-    const smtpConfig: SmtpConfig | undefined = org.smtpHost
-      ? { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser ?? '', pass: org.smtpPass ?? '', from: org.smtpFrom ?? org.smtpUser ?? '' }
-      : undefined
+
+    // Build smtp config based on provider
+    let smtpConfig: SmtpConfig | undefined
+    if (org.smtpProvider === 'SES') {
+      smtpConfig = {
+        provider: 'SES',
+        host: '', port: 587, user: '', pass: '',
+        from: org.sesFrom ?? '',
+        sesRegion: org.sesRegion ?? '',
+        sesAccessKeyId: org.sesAccessKeyId ?? '',
+        sesSecretKey: org.sesSecretKey ?? '',
+        sesConfigSet: org.sesConfigSet ?? undefined,
+      }
+    } else if (org.smtpHost) {
+      smtpConfig = {
+        host: org.smtpHost,
+        port: org.smtpPort ?? 587,
+        user: org.smtpUser ?? '',
+        pass: org.smtpPass ?? '',
+        from: org.smtpFrom ?? org.smtpUser ?? '',
+      }
+    }
+
+    // Tracking pixel base URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
     // Fetch next batch of pending recipients
     const pending = await db.campaignRecipient.findMany({
@@ -54,11 +79,36 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       const vars = { nombre: r.name ?? r.email, empresa: '', email: r.email }
       const subject  = mergeVars(campaign.subject, vars)
       const bodyHtml = mergeVars(campaign.body,    vars)
-      const html     = buildEmailHtml(subject, bodyHtml, org.crmName ?? 'CRM', org.primaryColor ?? '#6366f1', org.secondaryColor ?? '#8b5cf6')
+
+      // Inject tracking pixel if we have an app URL
+      const pixelUrl = appUrl ? `${appUrl}/api/track/open?rid=${r.id}` : undefined
+      const html = buildEmailHtml(
+        subject, bodyHtml,
+        org.crmName ?? 'CRM',
+        org.primaryColor ?? '#6366f1',
+        org.secondaryColor ?? '#8b5cf6',
+        pixelUrl,
+      )
 
       try {
-        await sendEmail({ to: r.email, subject, html, smtpConfig })
-        await db.campaignRecipient.update({ where: { id: r.id }, data: { status: 'sent', sentAt: new Date() } })
+        const { messageId } = await sendEmail({ to: r.email, subject, html, smtpConfig })
+
+        // Always mark as sent
+        await db.campaignRecipient.update({
+          where: { id: r.id },
+          data:  { status: 'sent', sentAt: new Date() },
+        })
+
+        // Store messageId for webhook correlation (requires migration)
+        if (messageId) {
+          try {
+            await db.campaignRecipient.update({
+              where: { id: r.id },
+              data:  { messageId },
+            })
+          } catch { /* column not yet migrated — safe to ignore */ }
+        }
+
         sent++
       } catch (err) {
         await db.campaignRecipient.update({

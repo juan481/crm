@@ -5,11 +5,11 @@ import type { AuthPayload, Role } from '@/types'
 // canAccess remains unchanged — used by all API routes
 export function canAccess(userRole: Role, requiredRole: Role): boolean {
   const hierarchy: Record<Role, number> = {
-    SUPER_ADMIN: 3,
-    ADMIN: 2,
-    SELLER: 1,
-    HR: 0,        // HR is lateral to TECHNICIAN — HR-specific routes use explicit role arrays
-    TECHNICIAN: 0,
+    SUPER_ADMIN: 4,
+    ADMIN: 3,
+    SELLER: 2,
+    HR: 1,         // canAccess(role, 'HR')  → blocks only TECHNICIAN
+    TECHNICIAN: 0, // canAccess(role, 'SELLER') → blocks HR and TECHNICIAN
   }
   return hierarchy[userRole] >= hierarchy[requiredRole]
 }

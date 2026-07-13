@@ -287,6 +287,11 @@ export interface EmailCampaign {
   createdAt: string
   updatedAt: string
   _count?: { recipients: number }
+  // SES tracking aggregates (available after migration + SES config)
+  totalDelivered?: number
+  totalBounced?: number
+  totalSpam?: number
+  totalOpened?: number
 }
 
 // ─── Email Template ───────────────────────────────────────────────────────

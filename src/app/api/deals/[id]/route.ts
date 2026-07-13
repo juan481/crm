@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
@@ -14,9 +14,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const existing = await prisma.deal.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
+      where: {
+        id: params.id,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
+      },
     })
     if (!existing) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
 

@@ -192,15 +192,63 @@ export default function DashboardPage() {
               <p className="text-sm text-[var(--color-text-muted)]">Tickets abiertos</p>
             </div>
           </Link>
-          <Link href="/cotizaciones" className="surface rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-border-strong)] transition-colors group">
-            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0 group-hover:bg-violet-500/20 transition-colors">
-              <FileText size={20} />
+          <Link href="/cotizaciones" className="surface rounded-2xl p-5 hover:border-[var(--color-border-strong)] transition-colors group">
+            <div className="flex items-center gap-4 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0 group-hover:bg-violet-500/20 transition-colors">
+                <FileText size={20} />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-[var(--color-text)]">{data.cotizacionesEnviadas}</p>
+                <p className="text-sm text-[var(--color-text-muted)]">Cotizaciones enviadas</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xl font-bold text-[var(--color-text)]">{data.cotizacionesEnviadas}</p>
-              <p className="text-sm text-[var(--color-text-muted)]">Cotizaciones enviadas · {data.cotizacionesAceptadas} aceptadas</p>
-            </div>
+            {data.cotizacionesEnviadas > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${Math.round((data.cotizacionesAceptadas / data.cotizacionesEnviadas) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-semibold text-emerald-500 shrink-0">
+                  {Math.round((data.cotizacionesAceptadas / data.cotizacionesEnviadas) * 100)}% conv.
+                </span>
+              </div>
+            )}
           </Link>
+        </div>
+      )}
+
+      {/* Pipeline stage breakdown */}
+      {!isLoading && data && data.activeDealsCount > 0 && (
+        <div className="surface rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-primary)' }} />
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">Pipeline por etapa</h2>
+            </div>
+            <Link href="/pipeline" className="text-xs text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] transition-colors">
+              Ver tablero →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(
+              [
+                { stage: 'LEAD',        label: 'Lead',        color: '#64748b', bg: 'rgba(100,116,139,0.1)' },
+                { stage: 'CONTACTADO',  label: 'Contactado',  color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
+                { stage: 'PROPUESTA',   label: 'Propuesta',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)' },
+                { stage: 'NEGOCIACION', label: 'Negociación', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+              ] as const
+            ).map(({ stage, label, color, bg }) => {
+              const count = data.dealsByStage[stage] ?? 0
+              return (
+                <div key={stage} className="rounded-xl p-3 text-center" style={{ background: bg }}>
+                  <p className="text-2xl font-bold" style={{ color }}>{count}</p>
+                  <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{label}</p>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
