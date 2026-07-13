@@ -71,11 +71,12 @@ export async function POST(req: NextRequest) {
         prisma.invoice.create({
           data: {
             clientId: c.id,
+            organizationId: payload.orgId,
             amount: c.mrr,
             currency: c.service?.currency ?? 'USD',
             description: `${c.service?.name ?? c.serviceType ?? 'Servicio'} — ${monthName}`,
             dueDate,
-            status: 'PENDING',
+            status: 'PENDING' as const,
           },
         })
       )
