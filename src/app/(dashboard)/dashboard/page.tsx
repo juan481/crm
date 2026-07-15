@@ -69,8 +69,6 @@ export default function DashboardPage() {
               title="Clientes Activos"
               value={data?.activeClients ?? 0}
               icon={<Users size={20} />}
-              trend={data?.mrrGrowth}
-              trendLabel="vs mes anterior"
               href="/clientes"
               index={0}
             />

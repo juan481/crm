@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
           empresaId,
           organizationId: payload.orgId,
           userId:         payload.userId,
-          tipo:           'NOTA',
+          tipo:           'ENVIO_COTIZACION',
           content:        `Cotización ${quoteRef} generada por ${agentName} para ${recipientName || recipientEmail}. Total: ${totalStr}. Servicios: ${serviceNames}.`,
         },
       })

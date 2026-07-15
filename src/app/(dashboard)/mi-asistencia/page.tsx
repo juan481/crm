@@ -51,7 +51,7 @@ export default function MiAsistenciaPage() {
   const { data: historialData, isLoading } = useQuery({
     queryKey: ['mi-asistencia', mesActual(), user?.id],
     queryFn:  async () => {
-      const r = await fetch(`/api/asistencia?mes=${mesActual()}`)
+      const r = await fetch(`/api/asistencia?mes=${mesActual()}&userId=${user?.id}`)
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Asistencia[]
     },

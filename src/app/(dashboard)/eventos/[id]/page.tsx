@@ -52,6 +52,9 @@ export default function EventoDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [togglingActive, setTogglingActive] = useState(false)
+  const [showEditEvent, setShowEditEvent] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', description: '', eventDate: '', location: '' })
+  const [editSaving, setEditSaving] = useState(false)
 
   const { data: event, isLoading } = useQuery<Event>({
     queryKey: ['event', id],
@@ -145,6 +148,45 @@ export default function EventoDetailPage() {
     }
   }
 
+  const openEditEvent = () => {
+    if (!event) return
+    setEditForm({
+      name:        event.name,
+      description: event.description ?? '',
+      eventDate:   event.eventDate ? new Date(event.eventDate).toISOString().slice(0, 16) : '',
+      location:    event.location ?? '',
+    })
+    setShowEditEvent(true)
+  }
+
+  const handleEditEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editForm.name.trim()) { toast.error('El nombre es requerido'); return }
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/eventos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:        editForm.name.trim(),
+          description: editForm.description.trim() || null,
+          eventDate:   editForm.eventDate || null,
+          location:    editForm.location.trim() || null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
+      toast.success('Evento actualizado')
+      setShowEditEvent(false)
+      qc.invalidateQueries({ queryKey: ['event', id] })
+      qc.invalidateQueries({ queryKey: ['events'] })
+    } catch {
+      toast.error('Error al guardar')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   const afield = (key: keyof AttendeeFormState) => ({
     value: attendeeForm[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -214,6 +256,14 @@ export default function EventoDetailPage() {
         </div>
         {canManage && (
           <div className="flex gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Edit3 size={14} />}
+              onClick={openEditEvent}
+            >
+              Editar
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -388,6 +438,42 @@ export default function EventoDetailPage() {
           <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
           <Button variant="danger" loading={deleting} onClick={handleDeleteAttendee}>Eliminar</Button>
         </div>
+      </Modal>
+
+      {/* Edit event modal */}
+      <Modal open={showEditEvent} onClose={() => setShowEditEvent(false)} title="Editar Evento" size="sm">
+        <form onSubmit={handleEditEvent} className="space-y-3">
+          <Input
+            label="Nombre *"
+            value={editForm.name}
+            onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+          />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-[var(--color-text-muted)]">Descripción</label>
+            <textarea
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"
+              rows={3}
+              value={editForm.description}
+              onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+          <Input
+            label="Fecha y hora"
+            type="datetime-local"
+            value={editForm.eventDate}
+            onChange={e => setEditForm(f => ({ ...f, eventDate: e.target.value }))}
+          />
+          <Input
+            label="Ubicación"
+            placeholder="Ej: Salón A, CABA"
+            value={editForm.location}
+            onChange={e => setEditForm(f => ({ ...f, location: e.target.value }))}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" type="button" onClick={() => setShowEditEvent(false)}>Cancelar</Button>
+            <Button type="submit" loading={editSaving}>Guardar cambios</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   )

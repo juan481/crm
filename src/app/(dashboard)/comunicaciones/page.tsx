@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CampaignComposer } from '@/components/communications/campaign-composer'
 import { TemplateManager } from '@/components/communications/template-manager'
 import { formatDateTime } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth-store'
 import type { EmailCampaign } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -31,6 +32,8 @@ interface CampaignDetail extends EmailCampaign {
 }
 
 export default function ComunicacionesPage() {
+  const { user } = useAuthStore()
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const [composerOpen,  setComposerOpen]  = useState(false)
   const [detailId,      setDetailId]      = useState<string | null>(null)
   const [resending,     setResending]     = useState(false)
@@ -95,7 +98,7 @@ export default function ComunicacionesPage() {
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Comunicaciones</h1>
           <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Campañas masivas y plantillas de email</p>
         </div>
-        <Button leftIcon={<Plus size={16} />} onClick={() => setComposerOpen(true)}>Nueva Campaña</Button>
+        {canManage && <Button leftIcon={<Plus size={16} />} onClick={() => setComposerOpen(true)}>Nueva Campaña</Button>}
       </div>
 
       {/* Stats */}

@@ -147,11 +147,17 @@ export default function TareasPage() {
 
   const handleDelete = async (id: string) => {
     const res = await fetch(`/api/tareas/${id}`, { method: 'DELETE' })
+    const json = await res.json()
     if (res.ok) {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       toast.success('Tarea eliminada')
+    } else {
+      toast.error(json.error ?? 'Sin permisos para eliminar esta tarea')
     }
   }
+
+  const canDelete = (task: Task) =>
+    user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || task.createdById === user?.id
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -314,12 +320,14 @@ export default function TareasPage() {
                     </div>
                   )}
 
-                  <button
-                    onClick={() => handleDelete(task.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--color-text-subtle)] hover:text-red-400 transition-all shrink-0"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {canDelete(task) && (
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--color-text-subtle)] hover:text-red-400 transition-all shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               )
             })}

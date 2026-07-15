@@ -7,6 +7,8 @@ export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'ADMIN'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)

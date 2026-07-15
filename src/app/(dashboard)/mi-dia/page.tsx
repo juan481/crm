@@ -11,6 +11,7 @@ import {
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -62,6 +63,7 @@ const EMPTY_TICKET: TicketForm = {
 
 export default function MiDiaPage() {
   const { user } = useAuthStore()
+  const router = useRouter()
   const qc = useQueryClient()
   const [ticketOpen, setTicketOpen] = useState(false)
   const [ticketForm, setTicketForm] = useState<TicketForm>(EMPTY_TICKET)
@@ -116,28 +118,36 @@ export default function MiDiaPage() {
   const dayName  = format(today, 'EEEE', { locale: es })
   const dayFull  = format(today, "d 'de' MMMM", { locale: es })
 
-  // Today's tasks assigned to me
+  // Today's tasks assigned to me — two fetches because searchParams.get returns only first value
   const { data: tasksData, isLoading: loadingTasks } = useQuery<Task[]>({
     queryKey: ['my-tasks', user?.id],
     queryFn: async () => {
-      const res = await fetch(`/api/tareas?status=PENDIENTE&status=EN_CURSO&assignedToId=${user?.id ?? ''}`)
-      if (!res.ok) return []
-      const json = await res.json()
-      return json.data ?? []
+      const uid = user?.id ?? ''
+      const [r1, r2] = await Promise.all([
+        fetch(`/api/tareas?status=PENDIENTE&assignedToId=${uid}`),
+        fetch(`/api/tareas?status=EN_CURSO&assignedToId=${uid}`),
+      ])
+      const [j1, j2] = await Promise.all([r1.json(), r2.json()])
+      return [...(j1.data ?? []), ...(j2.data ?? [])] as Task[]
     },
     staleTime: 30 * 1000,
+    enabled: !!user?.id,
   })
 
-  // Open tickets assigned to me
+  // Open tickets assigned to me — two fetches for multi-status + server-side assignee filter
   const { data: ticketsData, isLoading: loadingTickets } = useQuery<Ticket[]>({
     queryKey: ['my-tickets', user?.id],
     queryFn: async () => {
-      const res = await fetch('/api/tickets?status=ABIERTO&status=EN_PROCESO')
-      if (!res.ok) return []
-      const json = await res.json()
-      return json.data ?? []
+      const uid = user?.id ?? ''
+      const [r1, r2] = await Promise.all([
+        fetch(`/api/tickets?status=ABIERTO&assignedToId=${uid}`),
+        fetch(`/api/tickets?status=EN_PROCESO&assignedToId=${uid}`),
+      ])
+      const [j1, j2] = await Promise.all([r1.json(), r2.json()])
+      return [...(j1.data ?? []), ...(j2.data ?? [])] as Ticket[]
     },
     staleTime: 30 * 1000,
+    enabled: !!user?.id,
   })
 
   // Clients for ticket creation
@@ -151,8 +161,8 @@ export default function MiDiaPage() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const tasks   = (tasksData ?? []).filter(t => t.assignedToId === user?.id || !t.assignedToId)
-  const tickets = (ticketsData ?? []).filter(t => t.assignedToId === user?.id || !t.assignedToId)
+  const tasks   = tasksData ?? []
+  const tickets = ticketsData ?? []
   const clients = clientsData ?? []
 
   const todayTasks     = tasks.filter(t => {
@@ -378,7 +388,9 @@ export default function MiDiaPage() {
               return (
                 <div
                   key={ticket.id}
-                  className="list-appear surface rounded-xl px-4 py-3.5 flex items-start gap-3"
+                  onClick={() => router.push(`/tickets/${ticket.id}`)}
+                  className="list-appear surface rounded-xl px-4 py-3.5 flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)]/40 transition-colors"
+                  style={{ border: '1px solid transparent' }}
                 >
                   <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
                     <Headphones size={15} className="text-amber-400" />

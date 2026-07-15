@@ -35,7 +35,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
-    const existing = await db.task.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
+    const scopeWhere: Record<string, unknown> = { id: params.id, organizationId: payload.orgId }
+    if (payload.role === 'SELLER') scopeWhere.OR = [{ assignedToId: payload.userId }, { createdById: payload.userId }]
+    const existing = await db.task.findFirst({ where: scopeWhere })
     if (!existing) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
 
     const body = await req.json()

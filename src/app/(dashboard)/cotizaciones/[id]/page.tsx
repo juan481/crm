@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Download, Mail, MessageCircle, CheckCircle2,
-  Clock, Send, Building2, Calendar, DollarSign, FileText,
+  Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
@@ -18,9 +18,11 @@ const BILLING_LABELS: Record<string, string> = {
 }
 
 const STATUS_CONFIG = {
-  GUARDADA: { label: 'Guardada',  color: 'text-slate-400',   icon: <Clock       size={13} /> },
-  ENVIADA:  { label: 'Enviada',   color: 'text-blue-400',    icon: <Send        size={13} /> },
-  ACEPTADA: { label: 'Aceptada',  color: 'text-emerald-400', icon: <CheckCircle2 size={13} /> },
+  GUARDADA:  { label: 'Guardada',   color: 'text-slate-400',  icon: <Clock          size={13} /> },
+  ENVIADA:   { label: 'Enviada',    color: 'text-blue-400',   icon: <Send           size={13} /> },
+  ACEPTADA:  { label: 'Aceptada',   color: 'text-emerald-400',icon: <CheckCircle2   size={13} /> },
+  RECHAZADA: { label: 'Rechazada',  color: 'text-red-400',    icon: <XCircle        size={13} /> },
+  VENCIDA:   { label: 'Vencida',    color: 'text-amber-400',  icon: <AlertTriangle  size={13} /> },
 }
 
 interface CotizacionDetail {
@@ -29,6 +31,8 @@ interface CotizacionDetail {
   recipientName:  string
   recipientEmail: string
   total:          number
+  discount:       number | null
+  finalTotal:     number | null
   currency:       string
   status:         string
   createdAt:      string
@@ -131,7 +135,7 @@ export default function CotizacionDetailPage() {
       doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
       doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59)
       doc.text('Total', mg + 2, y)
-      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: data.currency, minimumFractionDigits: 0 }).format(data.total)
+      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: data.currency, minimumFractionDigits: 0 }).format(data.finalTotal ?? data.total)
       doc.setTextColor(pr, pg, pb); doc.setFontSize(13)
       doc.text(totalStr, mg + cw - 2, y, { align: 'right' }); y += 12
 
@@ -224,7 +228,7 @@ export default function CotizacionDetailPage() {
       const lt = i.price * i.quantity
       t += `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${formatCurrency(lt, i.currency)}/${BILLING_LABELS[i.billingCycle] ?? 'mes'}\n`
     })
-    t += `\n*Total: ${formatCurrency(data.total, data.currency)}*`
+    t += `\n*Total: ${formatCurrency(data.finalTotal ?? data.total, data.currency)}*`
     if (data.notes) t += `\n\n📝 ${data.notes}`
     t += `\n\nCualquier consulta, estamos a disposición.`
     return `https://wa.me/?text=${encodeURIComponent(t)}`
@@ -301,7 +305,7 @@ export default function CotizacionDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { icon: <Building2 size={14} />, label: 'Empresa',      value: data.empresa?.name ?? '—' },
-          { icon: <DollarSign size={14} />, label: 'Total',       value: formatCurrency(data.total, data.currency) },
+          { icon: <DollarSign size={14} />, label: 'Total',       value: formatCurrency(data.finalTotal ?? data.total, data.currency) },
           { icon: <Calendar size={14} />,   label: 'Fecha',       value: date },
           { icon: <Mail size={14} />,       label: 'Destinatario',value: data.recipientEmail },
         ].map(item => (

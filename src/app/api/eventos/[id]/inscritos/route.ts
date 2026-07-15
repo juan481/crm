@@ -19,6 +19,15 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Nombre y apellido son requeridos' }, { status: 400 })
     }
 
+    // Deduplicate by email
+    if (email) {
+      const existing = await prisma.eventAttendee.findFirst({
+        where: { eventId: params.id, email: email.trim().toLowerCase() },
+        select: { id: true },
+      })
+      if (existing) return NextResponse.json({ error: 'Este email ya está inscripto en el evento' }, { status: 409 })
+    }
+
     const attendee = await prisma.eventAttendee.create({
       data: {
         eventId: params.id,
@@ -47,6 +56,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     const { searchParams } = req.nextUrl
     const attendeeId = searchParams.get('attendeeId')
     if (!attendeeId) return NextResponse.json({ error: 'attendeeId requerido' }, { status: 400 })
+
+    // Verify the event belongs to this org before deleting
+    const event = await prisma.event.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: { id: true },
+    })
+    if (!event) return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 })
 
     await prisma.eventAttendee.deleteMany({
       where: { id: attendeeId, eventId: params.id },

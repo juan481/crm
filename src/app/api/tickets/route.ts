@@ -28,7 +28,14 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, Number(searchParams.get('limit') ?? 50))
     const skip  = (page - 1) * limit
 
+    const assignedToId = searchParams.get('assignedToId')
+
     const where: Record<string, unknown> = { organizationId: payload.orgId }
+    if (payload.role === 'TECHNICIAN') {
+      where.assignedToId = payload.userId
+    } else if (assignedToId) {
+      where.assignedToId = assignedToId
+    }
     if (status)    where.status    = status
     if (priority)  where.priority  = priority
     if (category)  where.category  = category

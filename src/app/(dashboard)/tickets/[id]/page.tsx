@@ -289,15 +289,19 @@ export default function TicketDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-[var(--color-text-subtle)] mb-1">Asignado a</p>
-                <Select
-                  options={[
-                    { value: '', label: 'Sin asignar' },
-                    ...users.map(u => ({ value: u.id, label: u.name })),
-                  ]}
-                  value={data.assignedToId ?? ''}
-                  onChange={e => handleUpdate({ assignedToId: e.target.value || null })}
-                  disabled={updating}
-                />
+                {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') ? (
+                  <Select
+                    options={[
+                      { value: '', label: 'Sin asignar' },
+                      ...users.map(u => ({ value: u.id, label: u.name })),
+                    ]}
+                    value={data.assignedToId ?? ''}
+                    onChange={e => handleUpdate({ assignedToId: e.target.value || null })}
+                    disabled={updating}
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--color-text)]">{data.assignedTo?.name ?? 'Sin asignar'}</p>
+                )}
               </div>
             </div>
           </div>

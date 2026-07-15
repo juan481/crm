@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
-  TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck,
+  TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
   Building2, UserCircle2, FileText, ClipboardList,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -41,7 +41,7 @@ const navItems: NavItem[] = [
   { label: 'Empresas',       href: '/empresas',         icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'Contactos',      href: '/contactos',        icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
   { label: 'RRHH',           href: '/rrhh',             icon: <ClipboardList size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'HR'] },
-  { label: 'Mi Asistencia',  href: '/mi-asistencia',    icon: <CalendarCheck size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'] },
+  { label: 'Mi Asistencia',  href: '/mi-asistencia',    icon: <ClipboardCheck size={17} />,               roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'] },
 ]
 
 const settingsItems: NavItem[] = [

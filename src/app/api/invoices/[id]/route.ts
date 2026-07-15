@@ -20,6 +20,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const body = await req.json()
     const { status, amount, currency, description, dueDate } = body
 
+    const VALID_STATUSES = ['PENDING', 'PAID', 'OVERDUE', 'CANCELLED']
+    if (status && !VALID_STATUSES.includes(status))
+      return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
+
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
       data: {
@@ -49,10 +53,13 @@ export async function DELETE(_: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    await prisma.invoice.deleteMany({
-      where: { id: params.id, client: { organizationId: payload.orgId } },
+    const toDelete = await prisma.invoice.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: { id: true },
     })
+    if (!toDelete) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
+    await prisma.invoice.delete({ where: { id: params.id } })
     return NextResponse.json({ message: 'Factura eliminada' })
   } catch (error) {
     console.error('[INVOICE DELETE]', error)

@@ -89,7 +89,14 @@ interface InvoiceRow {
 }
 interface InvoicesResponse {
   data: InvoiceRow[]; total: number; totalPages: number
-  summary: { pendingTotal: number; paidThisMonth: number; overdueCount: number }
+  summary: { pendingByCurrency: Record<string, number>; paidByCurrency: Record<string, number>; overdueCount: number }
+}
+
+function formatByCurrency(byCurrency: Record<string, number> | undefined): string {
+  if (!byCurrency) return formatCurrency(0)
+  const entries = Object.entries(byCurrency).filter(([, v]) => v > 0)
+  if (entries.length === 0) return formatCurrency(0)
+  return entries.map(([cur, amt]) => formatCurrency(amt, cur)).join(' + ')
 }
 
 const STATUS_OPTIONS = [
@@ -173,8 +180,8 @@ export default function FacturasPage() {
         {isLoading ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />) : (
           <>
             {[
-              { label: 'Por cobrar', value: formatCurrency(summary?.pendingTotal ?? 0), icon: <DollarSign size={20} />, color: '#f59e0b' },
-              { label: 'Cobrado este mes', value: formatCurrency(summary?.paidThisMonth ?? 0), icon: <CheckCircle size={20} />, color: '#22c55e' },
+              { label: 'Por cobrar', value: formatByCurrency(summary?.pendingByCurrency), icon: <DollarSign size={20} />, color: '#f59e0b' },
+              { label: 'Cobrado este mes', value: formatByCurrency(summary?.paidByCurrency), icon: <CheckCircle size={20} />, color: '#22c55e' },
               { label: 'Facturas vencidas', value: String(summary?.overdueCount ?? 0), icon: <AlertCircle size={20} />, color: '#ef4444' },
             ].map((stat, i) => (
               <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="surface rounded-2xl p-5 flex items-center gap-4">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, type SmtpConfig } from '@/lib/email'
 
@@ -15,6 +15,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'ADMIN'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
 

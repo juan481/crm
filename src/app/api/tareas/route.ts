@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     if (status)       where.status       = status
     if (assignedToId) where.assignedToId = assignedToId
     if (empresaId)    where.empresaId    = empresaId
-    if (payload.role === 'SELLER') where.assignedToId = payload.userId
+    if (['SELLER', 'TECHNICIAN', 'HR'].includes(payload.role)) where.assignedToId = payload.userId
     if (search.length >= 2) {
       where.OR = [
         { title:       { contains: search, mode: 'insensitive' } },

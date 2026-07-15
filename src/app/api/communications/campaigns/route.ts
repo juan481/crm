@@ -9,6 +9,8 @@ export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const campaigns = await prisma.emailCampaign.findMany({
       where:   { organizationId: payload.orgId },

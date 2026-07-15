@@ -175,6 +175,7 @@ export default function PipelinePage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar este deal? Esta acción no se puede deshacer.')) return
     const res = await fetch(`/api/deals/${id}`, { method: 'DELETE' })
     if (res.ok) { qc.invalidateQueries({ queryKey: ['deals'] }); toast.success('Deal eliminado') }
   }

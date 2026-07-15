@@ -42,6 +42,8 @@ export async function GET(req: NextRequest) {
           recipientName: true,
           recipientEmail:true,
           total:         true,
+          discount:      true,
+          finalTotal:    true,
           currency:      true,
           status:        true,
           createdAt:     true,

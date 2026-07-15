@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (horaEntrada    !== undefined) data.horaEntrada    = horaEntrada ? new Date(horaEntrada) : null
     if (horaSalida     !== undefined) data.horaSalida     = horaSalida  ? new Date(horaSalida)  : null
 
-    const record = await db.asistencia.update({ where: { id: params.id }, data })
+    const record = await db.asistencia.update({ where: { id: params.id, organizationId: payload.orgId }, data })
     return NextResponse.json({ data: record })
   } catch (err) {
     console.error('[ASISTENCIA PATCH]', err)

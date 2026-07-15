@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where:  { id: params.id, organizationId: payload.orgId },
       select: {
         id: true, ref: true, recipientName: true, recipientEmail: true,
-        total: true, currency: true, status: true, createdAt: true, notes: true,
+        total: true, discount: true, finalTotal: true, currency: true, status: true, createdAt: true, notes: true,
         items: true,
         empresa: { select: { id: true, name: true } },
         user:    { select: { id: true, name: true } },
@@ -51,7 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { status } = await req.json()
-    const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA']
+    const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA']
     if (!allowed.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
 
     const db = prisma as any

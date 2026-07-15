@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       ...(Object.keys(clientFilter).length > 0 && { client: clientFilter }),
     }
 
-    const [data, total, pendingAgg, paidAgg, overdueCount] = await Promise.all([
+    const [data, total, pendingGroups, paidGroups, overdueCount] = await Promise.all([
       prisma.invoice.findMany({
         where,
         skip,
@@ -45,11 +45,13 @@ export async function GET(req: NextRequest) {
         include: { client: { select: { id: true, name: true, email: true } } },
       }),
       prisma.invoice.count({ where }),
-      prisma.invoice.aggregate({
+      prisma.invoice.groupBy({
+        by: ['currency'],
         where: { ...baseWhere, status: { in: ['PENDING', 'OVERDUE'] } },
         _sum: { amount: true },
       }),
-      prisma.invoice.aggregate({
+      prisma.invoice.groupBy({
+        by: ['currency'],
         where: { ...baseWhere, status: 'PAID', paidAt: { gte: startOfMonth } },
         _sum: { amount: true },
       }),
@@ -61,6 +63,9 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
+    const toByCurrency = (groups: { currency: string; _sum: { amount: number | null } }[]) =>
+      Object.fromEntries(groups.map(g => [g.currency, g._sum.amount ?? 0]))
+
     return NextResponse.json(
       {
         data,
@@ -69,8 +74,8 @@ export async function GET(req: NextRequest) {
         limit,
         totalPages: Math.ceil(total / limit),
         summary: {
-          pendingTotal:   pendingAgg._sum.amount ?? 0,
-          paidThisMonth:  paidAgg._sum.amount    ?? 0,
+          pendingByCurrency: toByCurrency(pendingGroups),
+          paidByCurrency:    toByCurrency(paidGroups),
           overdueCount,
         },
       },
