@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 export async function GET(_: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const templates = await prisma.emailTemplate.findMany({
       where: { organizationId: payload.orgId },
@@ -24,6 +26,8 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'ADMIN'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { name, subject, body } = await req.json()
     if (!name?.trim() || !subject?.trim() || !body?.trim()) {

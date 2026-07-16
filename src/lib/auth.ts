@@ -24,8 +24,7 @@ export async function getCurrentUser(): Promise<AuthPayload | null> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return null
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const user = await (prisma.user as any).findUnique({
+    const user = await prisma.user.findUnique({
       where: { supabaseId: session.user.id },
       select: { id: true, organizationId: true, role: true, email: true, status: true },
     })

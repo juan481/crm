@@ -6,7 +6,7 @@ import { AnimatePresence } from 'framer-motion' // solo para modal
 import {
   CheckSquare, Square, Headphones, Plus, Calculator,
   AlertCircle, Clock, CheckCircle2, ChevronRight,
-  Calendar, Flag, User, LogIn, LogOut, CheckCircle,
+  Calendar, Flag, User, LogIn, LogOut, CheckCircle, AlertTriangle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -119,7 +119,7 @@ export default function MiDiaPage() {
   const dayFull  = format(today, "d 'de' MMMM", { locale: es })
 
   // Today's tasks assigned to me — two fetches because searchParams.get returns only first value
-  const { data: tasksData, isLoading: loadingTasks } = useQuery<Task[]>({
+  const { data: tasksData, isLoading: loadingTasks, isError: isErrorTasks } = useQuery<Task[]>({
     queryKey: ['my-tasks', user?.id],
     queryFn: async () => {
       const uid = user?.id ?? ''
@@ -287,6 +287,13 @@ export default function MiDiaPage() {
             Ver todas <ChevronRight size={11} />
           </Link>
         </div>
+
+        {isErrorTasks && (
+          <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+            <AlertTriangle size={16} />
+            Error al cargar los datos. Intentá de nuevo.
+          </div>
+        )}
 
         {loadingTasks ? (
           <div className="space-y-2">

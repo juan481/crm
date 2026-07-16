@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, CheckSquare, Square, Clock, AlertCircle, ChevronDown, Trash2,
-  User, Calendar, Flag, Building2, Search, Eye, EyeOff, Activity, X,
+  User, Calendar, Flag, Building2, Search, Eye, EyeOff, Activity, X, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -119,7 +119,7 @@ export default function TareasPage() {
   })
   const empresaResults: Array<{ id: string; name: string }> = empresasData?.data ?? []
 
-  const { data, isLoading } = useQuery<Task[]>({
+  const { data, isLoading, isError } = useQuery<Task[]>({
     queryKey: ['tasks', statusFilter, search],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -227,6 +227,13 @@ export default function TareasPage() {
           </Button>
         </div>
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Task list */}
       {isLoading ? (

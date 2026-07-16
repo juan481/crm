@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle } from 'lucide-react'
+import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
@@ -49,7 +49,7 @@ export default function ContactosPage() {
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['contactos', search, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
@@ -165,6 +165,13 @@ export default function ContactosPage() {
           leftIcon={<Search size={15} />}
         />
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
         <table className="w-full text-sm">

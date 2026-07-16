@@ -1,15 +1,23 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 // DELETE all business data for the org (SUPER_ADMIN only)
 // Preserves: organization settings, users, services, branding
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'SUPER_ADMIN') {
       return NextResponse.json({ error: 'Solo el Super Admin puede resetear los datos' }, { status: 403 })
+    }
+
+    const body = await req.json().catch(() => ({}))
+    if (body.confirm !== 'RESETEAR') {
+      return NextResponse.json(
+        { error: 'Confirmación requerida: enviá { "confirm": "RESETEAR" }' },
+        { status: 400 },
+      )
     }
 
     const orgId = payload.orgId

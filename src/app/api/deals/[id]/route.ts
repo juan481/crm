@@ -28,6 +28,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, ownerId, closedAt } = await req.json()
 
+    let resolvedOwnerId = ownerId
+    if (ownerId) {
+      if (!canAccess(payload.role, 'ADMIN'))
+        return NextResponse.json({ error: 'Solo admins pueden reasignar deals' }, { status: 403 })
+      const ownerUser = await prisma.user.findFirst({
+        where: { id: ownerId, organizationId: payload.orgId },
+        select: { id: true },
+      })
+      if (!ownerUser) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+      resolvedOwnerId = ownerUser.id
+    }
+
     const db = prisma as any
     const deal = await db.deal.update({
       where: { id: params.id },
@@ -41,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(notes !== undefined      && { notes: notes || null }),
         ...(empresaId !== undefined  && { empresaId: empresaId || null }),
         ...(clientId !== undefined   && { clientId: clientId || null }),
-        ...(ownerId                  && { ownerId }),
+        ...(resolvedOwnerId          && { ownerId: resolvedOwnerId }),
         ...(closedAt !== undefined   && { closedAt: closedAt ? new Date(closedAt) : null }),
       },
       include: INCLUDE,

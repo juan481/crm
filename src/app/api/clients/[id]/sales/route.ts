@@ -20,6 +20,20 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'sellerId y amount son requeridos' }, { status: 400 })
     }
 
+    const seller = await prisma.user.findFirst({
+      where: { id: sellerId, organizationId: payload.orgId },
+      select: { id: true },
+    })
+    if (!seller) return NextResponse.json({ error: 'Vendedor no encontrado en esta organización' }, { status: 400 })
+
+    if (serviceId) {
+      const service = await prisma.service.findFirst({
+        where: { id: serviceId, organizationId: payload.orgId },
+        select: { id: true },
+      })
+      if (!service) return NextResponse.json({ error: 'Servicio no encontrado en esta organización' }, { status: 400 })
+    }
+
     const sale = await prisma.sale.create({
       data: {
         clientId: params.id,

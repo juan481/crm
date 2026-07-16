@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User } from 'lucide-react'
+import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -73,7 +73,7 @@ export default function PipelinePage() {
       .map(e => ({ value: e.id, label: e.city ? `${e.name} (${e.city})` : e.name })),
   ]
 
-  const { data, isLoading } = useQuery<Deal[]>({
+  const { data, isLoading, isError } = useQuery<Deal[]>({
     queryKey: ['deals'],
     queryFn: async () => {
       const r = await fetch('/api/deals')
@@ -207,6 +207,13 @@ export default function PipelinePage() {
           </Button>
         </div>
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Kanban board */}
       {isLoading ? (

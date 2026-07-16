@@ -40,7 +40,7 @@ export default function EmpleadoRrhhPage() {
   const [editForm,   setEditForm]   = useState({ ausente: false, tardanza: false, observaciones: '', horaEntrada: '', horaSalida: '' })
   const [saving,     setSaving]     = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['asistencia-empleado', userId, mes],
     queryFn:  async () => {
       const r = await fetch(`/api/asistencia?userId=${userId}&mes=${mes}`)
@@ -169,6 +169,13 @@ export default function EmpleadoRrhhPage() {
           </div>
         ))}
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Calendar */}
       <div className="rounded-2xl overflow-hidden p-4"

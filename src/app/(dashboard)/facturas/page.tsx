@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search } from 'lucide-react'
+import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -126,7 +126,7 @@ export default function FacturasPage() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const { data, isLoading } = useQuery<InvoicesResponse>({
+  const { data, isLoading, isError } = useQuery<InvoicesResponse>({
     queryKey: ['invoices', statusFilter, search, page],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: '20' })
@@ -207,6 +207,13 @@ export default function FacturasPage() {
         <Filter size={15} className="text-[var(--color-text-subtle)]" />
         <Select options={STATUS_OPTIONS} value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className="max-w-[200px]" />
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       <Table<InvoiceRow>
         loading={isLoading}

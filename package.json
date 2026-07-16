@@ -21,14 +21,10 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
     "@tanstack/react-query": "^5.51.11",
-    "axios": "^1.7.2",
-    "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "cookie": "^0.6.0",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.3.8",
-    "jose": "^6.2.3",
-    "jsonwebtoken": "^9.0.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.408.0",
     "next": "14.2.5",
@@ -38,16 +34,16 @@
     "react-hook-form": "^7.52.2",
     "react-hot-toast": "^2.4.1",
     "recharts": "^2.12.7",
-    "sharp": "^0.33.4",
     "tailwind-merge": "^2.4.0",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8",
     "zustand": "^4.5.4"
   },
+  "optionalDependencies": {
+    "sharp": "^0.33.4"
+  },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
     "@types/cookie": "^0.6.0",
-    "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.11",
     "@types/nodemailer": "^6.4.15",
     "@types/react": "^18.3.3",
@@ -58,7 +54,6 @@
     "postcss": "^8.4.39",
     "prisma": "^5.16.1",
     "tailwindcss": "^3.4.6",
-    "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.5.3"
   }

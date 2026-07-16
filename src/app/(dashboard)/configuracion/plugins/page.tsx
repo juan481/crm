@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Mail, Download, Search, BarChart3, MessageCircle, FileText, Zap, Calendar, Puzzle,
-  Settings, ArrowRight, CheckCircle, BookOpen,
+  Settings, ArrowRight, CheckCircle, BookOpen, AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
@@ -84,7 +84,7 @@ export default function PluginsPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const [configPlugin, setConfigPlugin] = useState<PluginWithState | null>(null)
 
-  const { data, isLoading } = useQuery<PluginWithState[]>({
+  const { data, isLoading, isError } = useQuery<PluginWithState[]>({
     queryKey: ['plugins'],
     queryFn: async () => { const res = await fetch('/api/plugins'); const json = await res.json(); return json.data },
     staleTime: 60 * 1000,
@@ -116,6 +116,13 @@ export default function PluginsPage() {
       {!isSuperAdmin && (
         <div className="surface rounded-2xl p-4 border-l-4 border-amber-500 bg-amber-500/5">
           <p className="text-sm text-amber-400">Solo el Super Admin puede activar o desactivar plugins.</p>
+        </div>
+      )}
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
         </div>
       )}
 

@@ -56,7 +56,11 @@ export default function ConfiguracionPage() {
   const handleReset = async () => {
     setResetting(true)
     try {
-      const res = await fetch('/api/settings/reset-data', { method: 'POST' })
+      const res = await fetch('/api/settings/reset-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'RESETEAR' }),
+      })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
       // Limpia TODA la cache de React Query para que las stats se actualicen sin F5

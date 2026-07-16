@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogIn, LogOut, Clock, CheckCircle, AlertCircle, Calendar } from 'lucide-react'
+import { LogIn, LogOut, Clock, CheckCircle, AlertCircle, Calendar, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import type { Asistencia } from '@/types'
@@ -48,7 +48,7 @@ export default function MiAsistenciaPage() {
   const horaStr  = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const fechaStr = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-  const { data: historialData, isLoading } = useQuery({
+  const { data: historialData, isLoading, isError } = useQuery({
     queryKey: ['mi-asistencia', mesActual(), user?.id],
     queryFn:  async () => {
       const r = await fetch(`/api/asistencia?mes=${mesActual()}&userId=${user?.id}`)
@@ -189,6 +189,13 @@ export default function MiAsistenciaPage() {
           </div>
         ))}
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Historial */}
       <div>

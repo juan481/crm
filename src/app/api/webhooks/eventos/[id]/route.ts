@@ -5,7 +5,11 @@ interface Params { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    const secret = req.nextUrl.searchParams.get('secret')
+    // Accept secret from Authorization header (Bearer) or legacy query param
+    const authHeader = req.headers.get('authorization') ?? ''
+    const secret = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : req.nextUrl.searchParams.get('secret')
 
     const event = await prisma.event.findFirst({
       where: { id: params.id, isActive: true },

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FolderOpen, Folder, FileText, FileImage, File, Plus,
-  Upload, Trash2, ChevronRight, Home, Download, Tag, X,
+  Upload, Trash2, ChevronRight, Home, Download, Tag, X, AlertTriangle, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,8 +44,12 @@ export default function DocumentosPage() {
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteFolder, setDeleteFolder] = useState<FolderType | null>(null)
+  const [deletingFolder, setDeletingFolder] = useState(false)
+  const [renameFolder, setRenameFolder] = useState<FolderType | null>(null)
+  const [renameName, setRenameName] = useState('')
+  const [renaming, setRenaming] = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['documents', currentFolderId],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -137,6 +141,46 @@ export default function DocumentosPage() {
     }
   }
 
+  const handleDeleteFolder = async () => {
+    if (!deleteFolder) return
+    setDeletingFolder(true)
+    try {
+      const res = await fetch(`/api/documentos/folders/${deleteFolder.id}`, { method: 'DELETE' })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error); return }
+      toast.success('Carpeta eliminada')
+      setDeleteFolder(null)
+      qc.invalidateQueries({ queryKey: ['documents', currentFolderId] })
+    } catch {
+      toast.error('Error al eliminar')
+    } finally {
+      setDeletingFolder(false)
+    }
+  }
+
+  const handleRenameFolder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!renameFolder || !renameName.trim()) return
+    setRenaming(true)
+    try {
+      const res = await fetch(`/api/documentos/folders/${renameFolder.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameName.trim() }),
+      })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error); return }
+      toast.success('Carpeta renombrada')
+      setRenameFolder(null)
+      setRenameName('')
+      qc.invalidateQueries({ queryKey: ['documents', currentFolderId] })
+    } catch {
+      toast.error('Error al renombrar')
+    } finally {
+      setRenaming(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -195,6 +239,13 @@ export default function DocumentosPage() {
         ))}
       </div>
 
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
+
       {/* Drop zone hint */}
       <div
         className="surface rounded-2xl p-4"
@@ -239,6 +290,22 @@ export default function DocumentosPage() {
                           {folder._count?.children ?? 0} carpeta{(folder._count?.children ?? 0) !== 1 ? 's' : ''} ·{' '}
                           {folder._count?.documents ?? 0} archivo{(folder._count?.documents ?? 0) !== 1 ? 's' : ''}
                         </p>
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setRenameFolder(folder); setRenameName(folder.name) }}
+                            className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
+                            title="Renombrar"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteFolder(folder) }}
+                            className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-red-400 transition-colors"
+                            title="Eliminar carpeta"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </motion.div>
                     ))}
                   </AnimatePresence>
@@ -342,6 +409,33 @@ export default function DocumentosPage() {
           <Button variant="ghost" onClick={() => setDeleteDoc(null)}>Cancelar</Button>
           <Button variant="danger" loading={deleting} onClick={handleDeleteDoc}>Eliminar</Button>
         </div>
+      </Modal>
+
+      {/* Delete folder confirm */}
+      <Modal open={!!deleteFolder} onClose={() => setDeleteFolder(null)} title="Eliminar Carpeta" size="sm">
+        <p className="text-sm text-[var(--color-text-muted)] mb-6">
+          ¿Eliminar la carpeta <strong className="text-[var(--color-text)]">{deleteFolder?.name}</strong>? Solo se puede eliminar si está vacía.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="ghost" onClick={() => setDeleteFolder(null)}>Cancelar</Button>
+          <Button variant="danger" loading={deletingFolder} onClick={handleDeleteFolder}>Eliminar</Button>
+        </div>
+      </Modal>
+
+      {/* Rename folder modal */}
+      <Modal open={!!renameFolder} onClose={() => { setRenameFolder(null); setRenameName('') }} title="Renombrar Carpeta" size="sm">
+        <form onSubmit={handleRenameFolder} className="space-y-4">
+          <Input
+            label="Nuevo nombre"
+            value={renameName}
+            onChange={(e) => setRenameName(e.target.value)}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" type="button" onClick={() => { setRenameFolder(null); setRenameName('') }}>Cancelar</Button>
+            <Button type="submit" loading={renaming}>Renombrar</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   )

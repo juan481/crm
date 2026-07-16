@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock } from 'lucide-react'
+import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,7 +38,26 @@ export default function ComunicacionesPage() {
   const [detailId,      setDetailId]      = useState<string | null>(null)
   const [resending,     setResending]     = useState(false)
   const [resendProg,    setResendProg]    = useState<{ sent: number; failed: number; total: number } | null>(null)
+  const [deleteCampaignId, setDeleteCampaignId] = useState<string | null>(null)
+  const [deletingCampaign, setDeletingCampaign] = useState(false)
   const qc = useQueryClient()
+
+  const handleDeleteCampaign = async () => {
+    if (!deleteCampaignId) return
+    setDeletingCampaign(true)
+    try {
+      const res = await fetch(`/api/communications/campaigns/${deleteCampaignId}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
+      toast.success('Campaña eliminada')
+      setDeleteCampaignId(null)
+      qc.invalidateQueries({ queryKey: ['campaigns'] })
+    } catch {
+      toast.error('Error al eliminar')
+    } finally {
+      setDeletingCampaign(false)
+    }
+  }
 
   const handleResend = async (campaignId: string, pendingCount: number) => {
     setResending(true)
@@ -198,6 +217,15 @@ export default function ComunicacionesPage() {
                   <Badge variant={config.variant}>
                     <span className="flex items-center gap-1.5">{config.icon}{config.label}</span>
                   </Badge>
+                  {canManage && campaign.status === 'DRAFT' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteCampaignId(campaign.id) }}
+                      className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+                      title="Eliminar borrador"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                   <ChevronRight size={14} className="text-[var(--color-text-subtle)] shrink-0" />
                 </div>
               )
@@ -205,6 +233,16 @@ export default function ComunicacionesPage() {
           </div>
         )}
       </Card>
+
+      <Modal open={!!deleteCampaignId} onClose={() => setDeleteCampaignId(null)} title="Eliminar Campaña" size="sm">
+        <p className="text-sm text-[var(--color-text-muted)] mb-6">
+          ¿Eliminar este borrador? Esta acción no se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="ghost" onClick={() => setDeleteCampaignId(null)}>Cancelar</Button>
+          <Button variant="danger" loading={deletingCampaign} onClick={handleDeleteCampaign}>Eliminar</Button>
+        </div>
+      </Modal>
 
       <Modal open={composerOpen} onClose={() => setComposerOpen(false)} title="Nueva Campaña de Email" size="xl">
         <CampaignComposer

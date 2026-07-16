@@ -7,14 +7,16 @@ export const dynamic = 'force-dynamic'
 // Only trust certs served from AWS SNS endpoints
 const SNS_CERT_HOST = /^https:\/\/sns\.[a-z0-9-]+\.amazonaws\.com\//
 
-// Simple in-process cert cache to avoid fetching on every request
-const certCache = new Map<string, string>()
+// In-process cert cache with 24h TTL to handle AWS cert rotation
+const certCache = new Map<string, { cert: string; expiresAt: number }>()
+const CERT_TTL_MS = 24 * 60 * 60 * 1000
 
 async function fetchCert(url: string): Promise<string> {
-  if (certCache.has(url)) return certCache.get(url)!
+  const cached = certCache.get(url)
+  if (cached && cached.expiresAt > Date.now()) return cached.cert
   const res = await fetch(url)
   const cert = await res.text()
-  certCache.set(url, cert)
+  certCache.set(url, { cert, expiresAt: Date.now() + CERT_TTL_MS })
   return cert
 }
 
@@ -152,6 +154,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[SES WEBHOOK]', err)
-    return NextResponse.json({ ok: true }) // Always 200 — SNS will retry on non-2xx
+    // Return 500 so SNS retries genuine server errors; 200 is reserved for known-handled cases above
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

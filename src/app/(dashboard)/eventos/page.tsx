@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CalendarDays, MapPin, Users, Power, Trash2, Globe } from 'lucide-react'
+import { Plus, CalendarDays, MapPin, Users, Power, Trash2, Globe, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
@@ -36,7 +36,7 @@ export default function EventosPage() {
   const [deleteTarget, setDeleteTarget] = useState<Event | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const { data, isLoading } = useQuery<Event[]>({
+  const { data, isLoading, isError } = useQuery<Event[]>({
     queryKey: ['events'],
     queryFn: async () => {
       const res = await fetch('/api/eventos')
@@ -115,6 +115,13 @@ export default function EventosPage() {
           </Button>
         )}
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Grid */}
       {isLoading ? (

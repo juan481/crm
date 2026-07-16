@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2,
-  CheckCircle2, XCircle, Merge, Filter, X,
+  CheckCircle2, XCircle, Merge, Filter, X, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -77,7 +77,7 @@ export default function EmpresasPage() {
 
   const activeFilters = [filterActividadInput, filterCiudadInput, tieneWeb].filter(Boolean).length
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['empresas', search, filterActividad, filterCiudad, tieneWeb, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
@@ -344,6 +344,13 @@ export default function EmpresasPage() {
               </select>
             </div>
           </div>
+        </div>
+      )}
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
         </div>
       )}
 

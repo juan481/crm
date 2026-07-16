@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Tag, Edit, Trash2, Users, RefreshCw } from 'lucide-react'
+import { Plus, Tag, Edit, Trash2, Users, RefreshCw, AlertTriangle } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -86,7 +86,7 @@ export default function ServiciosPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
-  const { data, isLoading } = useQuery<Service[]>({
+  const { data, isLoading, isError } = useQuery<Service[]>({
     queryKey: ['services'],
     queryFn: async () => {
       const res = await fetch('/api/services')
@@ -127,6 +127,13 @@ export default function ServiciosPage() {
           <strong>¿Para qué sirven los servicios?</strong> Asignalos a clientes y generá facturas automáticas desde <strong>Facturación → Generar Facturas del Mes</strong>.
         </p>
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

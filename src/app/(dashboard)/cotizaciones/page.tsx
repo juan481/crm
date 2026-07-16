@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Search, FileText, Building2, Calendar, DollarSign, CheckCircle2, Clock, Send } from 'lucide-react'
+import { Search, FileText, Building2, Calendar, DollarSign, CheckCircle2, Clock, Send, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/utils'
@@ -34,16 +34,14 @@ export default function CotizacionesPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(1)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Debounce search
-  const handleSearch = (val: string) => {
-    setSearch(val)
-    setPage(1)
-    clearTimeout((window as any).__cSearch)
-    ;(window as any).__cSearch = setTimeout(() => setDebouncedSearch(val), 300)
-  }
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [search])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['cotizaciones', debouncedSearch, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
@@ -82,10 +80,17 @@ export default function CotizacionesPage() {
         <Input
           placeholder="Buscar por empresa, ref o servicio..."
           value={search}
-          onChange={e => handleSearch(e.target.value)}
+          onChange={e => setSearch(e.target.value)}
           leftIcon={<Search size={15} />}
         />
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar las cotizaciones. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>

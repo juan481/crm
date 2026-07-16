@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Plus, ArrowLeft, Pencil, Trash2, Package, Upload, CheckCircle, XCircle } from 'lucide-react'
+import { Plus, ArrowLeft, Pencil, Trash2, Package, Upload, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -92,7 +92,7 @@ export default function ProductosPage() {
   const [importing,    setImporting]    = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading } = useQuery<{ data: Product[] }>({
+  const { data, isLoading, isError } = useQuery<{ data: Product[] }>({
     queryKey: ['products'],
     queryFn:  async () => (await fetch('/api/products')).json(),
     staleTime: 30_000,
@@ -217,6 +217,13 @@ export default function ProductosPage() {
           </div>
         )}
       </div>
+
+      {isError && (
+        <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+          <AlertTriangle size={16} />
+          Error al cargar los datos. Intentá de nuevo.
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>

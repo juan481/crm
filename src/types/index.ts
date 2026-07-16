@@ -15,6 +15,10 @@ export type TaskStatus = 'PENDIENTE' | 'EN_CURSO' | 'HECHA'
 export type TaskPriority = 'BAJA' | 'MEDIA' | 'ALTA' | 'URGENTE'
 export type TicketStatus = 'ABIERTO' | 'EN_PROCESO' | 'ESPERANDO' | 'RESUELTO' | 'CERRADO'
 export type TicketCategory = 'SOPORTE' | 'BUG' | 'FACTURACION' | 'CONSULTA'
+export type CotizacionStatus = 'BORRADOR' | 'ENVIADA' | 'ACEPTADA' | 'RECHAZADA' | 'VENCIDA'
+export type EmpresaNotaTipo = 'NOTA' | 'LLAMADA' | 'REUNION' | 'EMAIL' | 'ENVIO_COTIZACION'
+export type SmtpProvider = 'SMTP' | 'SES'
+export type BillingCycle = 'MENSUAL' | 'ANUAL' | 'UNICO'
 
 // ─── Organization ─────────────────────────────────────────────────────────
 export interface Organization {
@@ -138,6 +142,46 @@ export interface Invoice {
   description: string | null
   dueDate: string
   paidAt: string | null
+  organizationId: string
+  createdAt: string
+  updatedAt: string
+}
+
+// ─── Cotizacion ───────────────────────────────────────────────────────────
+export interface Cotizacion {
+  id: string
+  number: number
+  status: CotizacionStatus
+  clientId: string | null
+  client?: { id: string; name: string } | null
+  empresaId: string | null
+  empresa?: { id: string; name: string } | null
+  contactName: string | null
+  contactEmail: string | null
+  items: string
+  subtotal: number
+  discount: number
+  finalTotal: number
+  currency: string
+  validUntil: string | null
+  notes: string | null
+  organizationId: string
+  createdById: string
+  createdBy?: { id: string; name: string }
+  sentAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// ─── Empresa Nota ─────────────────────────────────────────────────────────
+export interface EmpresaNota {
+  id: string
+  empresaId: string
+  userId: string
+  user?: { id: string; name: string; avatarUrl: string | null }
+  tipo: EmpresaNotaTipo
+  contenido: string
+  organizationId: string
   createdAt: string
 }
 

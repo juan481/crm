@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
     const stage   = searchParams.get('stage')
@@ -44,6 +46,8 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, ownerId } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
