@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
+import { loadLogoForPdf, fitLogo, drawBrandedFooter } from '@/lib/pdf-branding'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -81,20 +82,33 @@ export default function CotizacionDetailPage() {
       const pg  = parseInt(hex.slice(2, 4), 16)
       const pb  = parseInt(hex.slice(4, 6), 16)
 
+      // Load logo (rasterized to PNG via canvas so any source format renders correctly)
+      const logo = await loadLogoForPdf(data.logoUrl)
+      if (cancelled) return
+
       // Header
       doc.setFillColor(pr, pg, pb)
       doc.rect(0, 0, pw, 42, 'F')
       doc.setTextColor(255, 255, 255)
+
+      let titleX = mg
+      if (logo) {
+        const maxW = 38, maxH = 20
+        const { w: lW, h: lH } = fitLogo(logo.width, logo.height, maxW, maxH)
+        doc.addImage(logo.dataUrl, 'PNG', mg, (42 - lH) / 2, lW, lH)
+        titleX = mg + lW + 4
+      }
+
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(7)
-      doc.text('PRESUPUESTO DE SERVICIOS', mg, 13)
+      doc.text('PRESUPUESTO DE SERVICIOS', titleX, 13)
       doc.setFontSize(20)
-      doc.text(data.orgName, mg, 25)
+      doc.text(data.orgName, titleX, 25)
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
       doc.text(
         new Date(data.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
-        mg, 35,
+        titleX, 35,
       )
 
       let y = 56
@@ -150,12 +164,15 @@ export default function CotizacionDetailPage() {
         y += 22
       }
 
-      // Footer
+      // Notice
       y += 6
       doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
       doc.setTextColor(148, 163, 184); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
       doc.text(`Presupuesto preparado por ${data.agentName} · ${data.orgName}`, mg, y); y += 5
-      doc.text('Este presupuesto es de carácter informativo y no constituye un contrato.', mg, y)
+      doc.text('Este presupuesto es de carácter informativo y no constituye un contrato.', mg, y); y += 10
+
+      // Footer
+      drawBrandedFooter(doc, { pw, mg, y, pr, pg, pb, leftText: data.orgName })
 
       if (cancelled) return
       setPdfBlobUrl(doc.output('bloburl') as unknown as string)

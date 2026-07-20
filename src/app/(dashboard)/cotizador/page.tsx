@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
+import { loadLogoForPdf, fitLogo, drawBrandedFooter } from '@/lib/pdf-branding'
 import type { Service, Product } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -194,41 +195,20 @@ export default function CotizadorPage() {
     const pg = parseInt(hex.slice(2, 4), 16)
     const pb = parseInt(hex.slice(4, 6), 16)
 
-    // Load logo
-    let logoBase64: string | null = null
-    let logoType: 'PNG' | 'JPEG' = 'PNG'
-    if (quote.logoUrl) {
-      try {
-        const resp  = await fetch(quote.logoUrl)
-        const buf   = await resp.arrayBuffer()
-        const bytes = new Uint8Array(buf)
-        let bin = ''; bytes.forEach(b => { bin += String.fromCharCode(b) })
-        logoBase64 = btoa(bin)
-        logoType   = quote.logoUrl.toLowerCase().includes('.png') ? 'PNG' : 'JPEG'
-      } catch { /* proceed without logo */ }
-    }
+    // Load logo (rasterized to PNG via canvas so any source format renders correctly)
+    const logo = await loadLogoForPdf(quote.logoUrl)
 
     // Header band
     doc.setFillColor(pr, pg, pb)
     doc.rect(0, 0, pw, 44, 'F')
     doc.setTextColor(255, 255, 255)
 
-    if (logoBase64) {
-      try {
-        const logoEl = new window.Image()
-        logoEl.src   = `data:image/${logoType.toLowerCase()};base64,${logoBase64}`
-        await new Promise<void>(r => { logoEl.onload = () => r(); logoEl.onerror = () => r() })
-        const maxW = 40, maxH = 22
-        const r    = Math.min(maxW / (logoEl.naturalWidth || 1), maxH / (logoEl.naturalHeight || 1), 1)
-        const lW   = (logoEl.naturalWidth  || 40) * r
-        const lH   = (logoEl.naturalHeight || 16) * r
-        doc.addImage(logoBase64, logoType, mg, (44 - lH) / 2, lW, lH)
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(16)
-        doc.text(quote.orgName, mg + lW + 4, 24)
-      } catch {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
-        doc.text(quote.orgName, mg, 22)
-      }
+    if (logo) {
+      const maxW = 40, maxH = 22
+      const { w: lW, h: lH } = fitLogo(logo.width, logo.height, maxW, maxH)
+      doc.addImage(logo.dataUrl, 'PNG', mg, (44 - lH) / 2, lW, lH)
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16)
+      doc.text(quote.orgName, mg + lW + 4, 24)
     } else {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
       doc.text(quote.orgName, mg, 22)
@@ -331,14 +311,10 @@ export default function CotizadorPage() {
     }
 
     // Footer
-    const footerY = 297 - 18
-    doc.setDrawColor(226, 232, 240); doc.line(mg, footerY, pw - mg, footerY)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184)
-    doc.text(`${quote.agentName} · ${new Date().toLocaleDateString('es-AR')}`, mg, footerY + 6)
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(pr, pg, pb)
-    doc.text('Enviado desde JustCRM', pw / 2, footerY + 6, { align: 'center' })
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184)
-    doc.text('Pág. 1 / 1', pw - mg, footerY + 6, { align: 'right' })
+    drawBrandedFooter(doc, {
+      pw, mg, y: 297 - 18, pr, pg, pb,
+      leftText: `${quote.agentName} · ${new Date().toLocaleDateString('es-AR')}`,
+    })
 
     return doc
   }
