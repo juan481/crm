@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
-import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawBrandedFooter } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
 import type { Service, Product } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -312,13 +312,7 @@ export default function CotizadorPage() {
 
     // Notes
     if (quote.notes) {
-      doc.setFillColor(248, 250, 252); doc.setDrawColor(pr, pg, pb)
-      doc.roundedRect(mg, y, cw, 18, 2, 2, 'FD')
-      doc.setTextColor(71, 85, 105); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
-      doc.text('Notas:', mg + 4, y + 6)
-      doc.setFont('helvetica', 'normal')
-      doc.text(doc.splitTextToSize(quote.notes, cw - 8), mg + 4, y + 12)
-      y += 22
+      y = drawNotesBox(doc, { mg, cw, y, pr, pg, pb, notes: quote.notes, maxY: 297 - 18 - 6 })
     }
 
     // Footer

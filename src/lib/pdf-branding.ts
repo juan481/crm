@@ -134,6 +134,43 @@ export function drawValidityNote(doc: jsPDF, opts: {
   return y + h + 8
 }
 
+/**
+ * Draws the "Notas:" box, sizing it to however many lines the note wraps to
+ * instead of a fixed height — a long note used to spill text out past a
+ * hardcoded 18mm box. If the note is so long it still wouldn't fit before
+ * `maxY` (e.g. the footer), the font is shrunk step by step to make it fit.
+ * Returns the y position right after the box.
+ */
+export function drawNotesBox(doc: jsPDF, opts: {
+  mg: number; cw: number; y: number
+  pr: number; pg: number; pb: number
+  notes: string
+  maxY: number
+}): number {
+  const { mg, cw, y, pr, pg, pb, notes, maxY } = opts
+  const padTop = 10, padBottom = 5
+
+  let fontSize = 8.5
+  let lines: string[] = []
+  let boxH = 0
+  for (;;) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(fontSize)
+    lines = doc.splitTextToSize(notes, cw - 8) as string[]
+    boxH = padTop + lines.length * fontSize * 0.5 + padBottom
+    if (y + boxH <= maxY || fontSize <= 6) break
+    fontSize -= 0.5
+  }
+
+  doc.setFillColor(248, 250, 252); doc.setDrawColor(pr, pg, pb)
+  doc.roundedRect(mg, y, cw, boxH, 2, 2, 'FD')
+  doc.setTextColor(71, 85, 105); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
+  doc.text('Notas:', mg + 4, y + 6)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(fontSize); doc.setTextColor(71, 85, 105)
+  doc.text(lines, mg + 4, y + padTop)
+
+  return y + boxH + 4
+}
+
 const BRAND_URL   = 'https://justcreate.com.ar'
 const BRAND_LABEL = 'Cotización realizada con JustCRM, by JustCreate'
 

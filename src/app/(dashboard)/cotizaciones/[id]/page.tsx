@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawBrandedFooter } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -141,13 +141,7 @@ export default function CotizacionDetailPage() {
 
       // Notes
       if (data.notes) {
-        doc.setFillColor(248, 250, 252); doc.setDrawColor(pr, pg, pb)
-        doc.roundedRect(mg, y, cw, 18, 2, 2, 'FD')
-        doc.setTextColor(71, 85, 105); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
-        doc.text('Notas:', mg + 4, y + 6)
-        doc.setFont('helvetica', 'normal')
-        doc.text(doc.splitTextToSize(data.notes, cw - 8), mg + 4, y + 12)
-        y += 22
+        y = drawNotesBox(doc, { mg, cw, y, pr, pg, pb, notes: data.notes, maxY: 297 - 18 })
       }
 
       // Notice
