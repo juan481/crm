@@ -34,13 +34,21 @@ const ROLE_OPTIONS = [
   { value: 'ADMIN',      label: 'Administrador' },
 ]
 
+const ROLE_OPTIONS_SUPER = [
+  ...ROLE_OPTIONS,
+  { value: 'SUPER_ADMIN', label: 'Super Admin' },
+]
+
 export default function UsuariosPage() {
   const { user: me } = useAuthStore()
   const qc = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
   const [actionUser, setActionUser] = useState<User | null>(null)
-  const [action, setAction] = useState<'suspend' | 'delete' | 'password' | null>(null)
+  const [action, setAction] = useState<'suspend' | 'delete' | 'password' | 'role' | null>(null)
   const [newPassword, setNewPassword] = useState('')
+  const [newRole, setNewRole] = useState('')
+
+  const isSuperAdmin = me?.role === 'SUPER_ADMIN'
 
   const { data, isLoading } = useQuery<User[]>({
     queryKey: ['users'],
@@ -86,6 +94,7 @@ export default function UsuariosPage() {
     setActionUser(null)
     setAction(null)
     setNewPassword('')
+    setNewRole('')
   }
 
   const deleteUser = async (id: string) => {
@@ -162,6 +171,15 @@ export default function UsuariosPage() {
                 </div>
                 {user.id !== me?.id && (
                   <div className="flex gap-1">
+                    {isSuperAdmin && (
+                      <button
+                        onClick={() => { setActionUser(user); setNewRole(user.role); setAction('role') }}
+                        className="p-2 rounded-lg text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-primary)] transition-all"
+                        title="Cambiar privilegios"
+                      >
+                        <Shield size={15} />
+                      </button>
+                    )}
                     <button
                       onClick={() => { setActionUser(user); setAction('password') }}
                       className="p-2 rounded-lg text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-primary)] transition-all"
@@ -209,6 +227,27 @@ export default function UsuariosPage() {
             <Button type="submit" loading={isSubmitting}>Crear Usuario</Button>
           </ModalFooter>
         </form>
+      </Modal>
+
+      <Modal open={action === 'role' && !!actionUser} onClose={() => { setActionUser(null); setAction(null); setNewRole('') }} title="Cambiar Privilegios" size="sm">
+        <p className="text-sm text-[var(--color-text-muted)] mb-4">
+          Rol actual de <strong className="text-[var(--color-text)]">{actionUser?.name}</strong>: <strong className="text-[var(--color-text)]">{actionUser && ROLE_LABELS[actionUser.role]}</strong>.
+        </p>
+        <Select label="Nuevo rol" options={ROLE_OPTIONS_SUPER} value={newRole} onChange={(e) => setNewRole(e.target.value)} />
+        {newRole === 'SUPER_ADMIN' && (
+          <p className="text-xs text-amber-400 mt-2">
+            Super Admin tiene acceso total, incluida la gestión de otros usuarios y la facturación.
+          </p>
+        )}
+        <ModalFooter className="mt-4">
+          <Button variant="ghost" onClick={() => { setActionUser(null); setAction(null); setNewRole('') }}>Cancelar</Button>
+          <Button
+            onClick={() => updateUser(actionUser!.id, { role: newRole })}
+            disabled={!newRole || newRole === actionUser?.role}
+          >
+            Actualizar
+          </Button>
+        </ModalFooter>
       </Modal>
 
       <Modal open={action === 'password' && !!actionUser} onClose={() => { setActionUser(null); setAction(null); setNewPassword('') }} title="Cambiar Contraseña" size="sm">
