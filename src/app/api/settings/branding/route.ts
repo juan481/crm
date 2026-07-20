@@ -13,6 +13,7 @@ export async function GET() {
       where: { id: payload.orgId },
       select: {
         name: true, logoUrl: true, primaryColor: true, secondaryColor: true, crmName: true,
+        quoteValidityDays: true,
         billingAddress: true, billingEmail: true, billingPhone: true,
         billingTaxId: true, paymentInstructions: true,
       },
@@ -35,9 +36,13 @@ export async function PATCH(req: NextRequest) {
     }
 
     const {
-      name, logoUrl, primaryColor, secondaryColor, crmName,
+      name, logoUrl, primaryColor, secondaryColor, crmName, quoteValidityDays,
       billingAddress, billingEmail, billingPhone, billingTaxId, paymentInstructions,
     } = await req.json()
+
+    const validityDays = quoteValidityDays !== undefined
+      ? Math.max(1, Math.min(365, Number(quoteValidityDays) || 30))
+      : undefined
 
     const org = await prisma.organization.update({
       where: { id: payload.orgId },
@@ -47,6 +52,7 @@ export async function PATCH(req: NextRequest) {
         ...(logoUrl !== undefined && { logoUrl }),
         ...(primaryColor && { primaryColor }),
         ...(secondaryColor && { secondaryColor }),
+        ...(validityDays !== undefined && { quoteValidityDays: validityDays }),
         ...(billingAddress !== undefined && { billingAddress: billingAddress || null }),
         ...(billingEmail !== undefined && { billingEmail: billingEmail || null }),
         ...(billingPhone !== undefined && { billingPhone: billingPhone || null }),
@@ -55,6 +61,7 @@ export async function PATCH(req: NextRequest) {
       },
       select: {
         name: true, logoUrl: true, primaryColor: true, secondaryColor: true, crmName: true,
+        quoteValidityDays: true,
         billingAddress: true, billingEmail: true, billingPhone: true,
         billingTaxId: true, paymentInstructions: true,
       },

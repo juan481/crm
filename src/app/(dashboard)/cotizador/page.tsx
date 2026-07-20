@@ -6,13 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Minus, MessageCircle, ChevronRight, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
-  TrendingUp, CheckCircle, Search, Package, Wrench, Tag,
+  TrendingUp, CheckCircle, Search, Package, Wrench, Tag, Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
-import { loadLogoForPdf, fitLogo, drawBrandedFooter } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawBrandedFooter } from '@/lib/pdf-branding'
 import type { Service, Product } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -55,6 +55,7 @@ interface SavedQuote {
   finalTotal:     number
   currency:       string
   notes:          string
+  validityDays:   number
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -64,6 +65,8 @@ export default function CotizadorPage() {
   const [cart,       setCart]       = useState<Record<string, CartItem>>({})
   const [activeTab,  setActiveTab]  = useState<ItemType>('SERVICE')
   const [discount,   setDiscount]   = useState(0)
+  const [validityDays, setValidityDays] = useState(30)
+  const [validityTouched, setValidityTouched] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
 
@@ -116,6 +119,23 @@ export default function CotizadorPage() {
     enabled:   !!selectedEmpresaId && clientMode === 'existing',
     staleTime: 2 * 60_000,
   })
+  const { data: cotizadorConfig } = useQuery({
+    queryKey: ['cotizador-config'],
+    queryFn:  async () => {
+      const r = await fetch('/api/cotizador/config')
+      if (!r.ok) return null
+      return (await r.json()).data as { quoteValidityDays: number } | null
+    },
+    staleTime: 5 * 60_000,
+  })
+
+  useEffect(() => {
+    if (cotizadorConfig?.quoteValidityDays && !validityTouched) {
+      setValidityDays(cotizadorConfig.quoteValidityDays)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cotizadorConfig])
+
   const { data: rateData, isLoading: loadingRate, refetch: refetchRate } = useQuery({
     queryKey: ['exchange-rate'],
     queryFn:  async () => {
@@ -197,27 +217,16 @@ export default function CotizadorPage() {
 
     // Load logo (rasterized to PNG via canvas so any source format renders correctly)
     const logo = await loadLogoForPdf(quote.logoUrl)
+    const today = new Date()
 
-    // Header band
-    doc.setFillColor(pr, pg, pb)
-    doc.rect(0, 0, pw, 44, 'F')
-    doc.setTextColor(255, 255, 255)
+    const headerH = drawPdfHeader(doc, {
+      pw, mg, pr, pg, pb, logo,
+      orgName:   quote.orgName,
+      kicker:    'Presupuesto',
+      dateLabel: today.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
+    })
 
-    if (logo) {
-      const maxW = 40, maxH = 22
-      const { w: lW, h: lH } = fitLogo(logo.width, logo.height, maxW, maxH)
-      doc.addImage(logo.dataUrl, 'PNG', mg, (44 - lH) / 2, lW, lH)
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(16)
-      doc.text(quote.orgName, mg + lW + 4, 24)
-    } else {
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(18)
-      doc.text(quote.orgName, mg, 22)
-    }
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5)
-    doc.text('PRESUPUESTO DE SERVICIOS Y PRODUCTOS', mg, 36)
-    doc.text(new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }), pw - mg, 36, { align: 'right' })
-
-    let y = 56
+    let y = headerH + 12
     doc.setTextColor(148, 163, 184); doc.setFontSize(7.5)
     doc.text(`Ref: ${quote.ref}`, mg, y); y += 10
 
@@ -225,6 +234,8 @@ export default function CotizadorPage() {
     doc.text(`Estimado/a ${quote.recipientName}:`, mg, y); y += 7
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 116, 139)
     doc.text('A continuación encontrará el detalle de los ítems cotizados.', mg, y); y += 12
+
+    y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: quote.validityDays, fromDate: today })
 
     // Table header
     doc.setFillColor(pr, pg, pb)
@@ -344,7 +355,7 @@ export default function CotizadorPage() {
         body: JSON.stringify({
           items, empresaId: clientMode === 'existing' ? selectedEmpresaId || null : null,
           recipientEmail, recipientName: recipientName || 'Cliente',
-          notes, total: subtotal, discount, currency,
+          notes, total: subtotal, discount, currency, validityDays,
         }),
       })
       const json = await res.json()
@@ -366,6 +377,7 @@ export default function CotizadorPage() {
         finalTotal:   json.finalTotal,
         currency,
         notes,
+        validityDays: json.validityDays ?? validityDays,
       }
 
       const doc     = await buildPdf(quote)
@@ -767,6 +779,34 @@ export default function CotizadorPage() {
                 </p>
               </motion.div>
             )}
+          </div>
+        </motion.section>
+      )}
+
+      {/* ── Validez ───────────────────────────────────────────────────────── */}
+      {cartItems.length > 0 && (
+        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>
+              <Clock size={11} />
+            </span>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+              Validez de la cotización
+            </p>
+          </div>
+          <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <input
+              type="number" min="1" max="365" step="1"
+              value={validityDays}
+              onChange={e => { setValidityTouched(true); setValidityDays(Math.max(1, Math.min(365, Number(e.target.value) || 1))) }}
+              className="w-20 text-center text-lg font-bold rounded-xl border outline-none py-1.5 transition-all focus:ring-2 focus:ring-[var(--color-primary)]/30"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+            />
+            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              días — se verá como &quot;Válida por {validityDays} días&quot; en el presupuesto
+            </span>
           </div>
         </motion.section>
       )}

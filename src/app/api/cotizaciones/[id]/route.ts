@@ -15,6 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       select: {
         id: true, ref: true, recipientName: true, recipientEmail: true,
         total: true, discount: true, finalTotal: true, currency: true, status: true, createdAt: true, notes: true,
+        validityDays: true,
         items: true,
         empresa: { select: { id: true, name: true } },
         user:    { select: { id: true, name: true } },
@@ -32,7 +33,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       data: {
         ...cotizacion,
         createdAt:      cotizacion.createdAt.toISOString(),
-        orgName:        org?.crmName || org?.name || 'CRM Pro',
+        validityDays:   cotizacion.validityDays ?? 30,
+        // The client-facing brand name (org.name) must win over crmName, which is just the
+        // CRM product's own internal label — showing crmName here leaked "JustCRM" onto quotes.
+        orgName:        org?.name || org?.crmName || 'CRM Pro',
         primaryColor:   org?.primaryColor || '#6366f1',
         logoUrl:        org?.logoUrl ?? null,
         agentName:      cotizacion.user?.name || 'El equipo',

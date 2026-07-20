@@ -48,6 +48,92 @@ export function fitLogo(width: number, height: number, maxW: number, maxH: numbe
   return { w: width * r, h: height * r }
 }
 
+export interface PdfLogo { dataUrl: string; width: number; height: number }
+
+/**
+ * Draws the document header band: logo + brand name on the left, a small
+ * uppercase "kicker" pill and the date stacked on the right, plus a subtle
+ * darker diagonal accent for depth instead of a flat single-color block.
+ * Returns the band height so callers know where the body content starts.
+ */
+export function drawPdfHeader(doc: jsPDF, opts: {
+  pw: number; mg: number
+  pr: number; pg: number; pb: number
+  orgName: string
+  logo: PdfLogo | null
+  kicker: string
+  dateLabel: string
+}): number {
+  const { pw, mg, pr, pg, pb, orgName, logo, kicker, dateLabel } = opts
+  const H = 46
+
+  doc.setFillColor(pr, pg, pb)
+  doc.rect(0, 0, pw, H, 'F')
+
+  const darken = (c: number) => Math.max(0, Math.round(c * 0.82))
+  doc.setFillColor(darken(pr), darken(pg), darken(pb))
+  doc.triangle(pw - 46, H, pw, H - 20, pw, H, 'F')
+
+  let textX = mg
+  if (logo) {
+    const maxW = 40, maxH = 24
+    const { w: lW, h: lH } = fitLogo(logo.width, logo.height, maxW, maxH)
+    doc.addImage(logo.dataUrl, 'PNG', mg, (H - lH) / 2, lW, lH)
+    textX = mg + lW + 5
+  }
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(19)
+  doc.text(orgName, textX, H / 2 + 4)
+
+  // Kicker pill (top-right)
+  const kickerText = kicker.toUpperCase()
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5)
+  const kw = doc.getTextWidth(kickerText) + 8
+  const pillX = pw - mg - kw, pillY = 10
+  doc.setGState(doc.GState({ opacity: 0.18 }))
+  doc.setFillColor(255, 255, 255)
+  doc.roundedRect(pillX, pillY, kw, 7, 3.5, 3.5, 'F')
+  doc.setGState(doc.GState({ opacity: 1 }))
+  doc.setTextColor(255, 255, 255)
+  doc.text(kickerText, pillX + kw / 2, pillY + 4.9, { align: 'center' })
+
+  // Date (below the pill)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
+  doc.setGState(doc.GState({ opacity: 0.85 }))
+  doc.text(dateLabel, pw - mg, pillY + 15, { align: 'right' })
+  doc.setGState(doc.GState({ opacity: 1 }))
+
+  return H
+}
+
+/**
+ * Draws a subtle tinted notice bar stating how long the quote is valid for.
+ * Returns the y position right after the bar so callers can keep stacking content.
+ */
+export function drawValidityNote(doc: jsPDF, opts: {
+  mg: number; cw: number; y: number
+  pr: number; pg: number; pb: number
+  validityDays: number
+  fromDate: Date
+}): number {
+  const { mg, cw, y, pr, pg, pb, validityDays, fromDate } = opts
+  const expiry = new Date(fromDate)
+  expiry.setDate(expiry.getDate() + validityDays)
+  const expiryLabel = expiry.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
+  const text = `Cotización válida por ${validityDays} días luego de su emisión — vence el ${expiryLabel}.`
+
+  const h = 9
+  doc.setGState(doc.GState({ opacity: 0.08 }))
+  doc.setFillColor(pr, pg, pb)
+  doc.roundedRect(mg, y, cw, h, 2, 2, 'F')
+  doc.setGState(doc.GState({ opacity: 1 }))
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(pr, pg, pb)
+  doc.text(text, mg + cw / 2, y + h / 2 + 1.4, { align: 'center' })
+
+  return y + h + 8
+}
+
 const BRAND_URL   = 'https://justcreate.com.ar'
 const BRAND_LABEL = 'Cotización realizada con JustCRM, by JustCreate'
 

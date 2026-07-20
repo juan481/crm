@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId } = body as {
+    const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId, validityDays } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       recipientEmail: string
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       total: number
       discount?: number
       currency: string
+      validityDays?: number
     }
     const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
     const finalTotal   = total * (1 - discountPct / 100)
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
     const [org, agent] = await Promise.all([
       prisma.organization.findUnique({
         where:  { id: payload.orgId },
-        select: { name: true, crmName: true, primaryColor: true, logoUrl: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true },
+        select: { name: true, crmName: true, primaryColor: true, logoUrl: true, quoteValidityDays: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true },
       }),
       prisma.user.findUnique({
         where:  { id: payload.userId },
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     const primaryColor = org?.primaryColor || '#6366f1'
     const agentName    = agent?.name || 'El equipo'
     const quoteRef     = `PRESUP-${Date.now().toString(36).toUpperCase()}`
+    const validityDaysFinal = Math.max(1, Math.min(365, Number(validityDays) || org?.quoteValidityDays || 30))
 
     // Save cotizacion to DB
     const cotizacion = await db.cotizacion.create({
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest) {
         finalTotal,
         currency,
         notes:          notes || null,
+        validityDays:   validityDaysFinal,
         status:         'GUARDADA',
       },
       select: { id: true },
@@ -92,6 +95,7 @@ export async function POST(req: NextRequest) {
       agentName,
       discount:     discountPct,
       finalTotal,
+      validityDays: validityDaysFinal,
       smtpConfigured: !!(org?.smtpHost && org?.smtpUser && org?.smtpPass),
     })
   } catch (error) {

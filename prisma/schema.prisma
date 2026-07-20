@@ -157,6 +157,7 @@ model Organization {
   secondaryColor String   @default("#8b5cf6")
   domain         String?  @unique
   crmName        String   @default("CRM Pro")
+  quoteValidityDays Int   @default(30)
   smtpHost       String?
   smtpPort       Int?
   smtpUser       String?
@@ -740,6 +741,7 @@ model Cotizacion {
   finalTotal     Float     @default(0)
   currency       String    @default("USD")
   notes          String?
+  validityDays   Int       @default(30)
   status         CotizacionStatus @default(ENVIADA)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

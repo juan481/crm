@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { loadLogoForPdf, fitLogo, drawBrandedFooter } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawBrandedFooter } from '@/lib/pdf-branding'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -38,6 +38,7 @@ interface CotizacionDetail {
   status:         string
   createdAt:      string
   notes:          string | null
+  validityDays:   number
   items:          Array<{ name: string; price: number; currency: string; billingCycle: string; quantity: number }>
   empresa:        { id: string; name: string } | null
   user:           { id: string; name: string } | null
@@ -86,32 +87,15 @@ export default function CotizacionDetailPage() {
       const logo = await loadLogoForPdf(data.logoUrl)
       if (cancelled) return
 
-      // Header
-      doc.setFillColor(pr, pg, pb)
-      doc.rect(0, 0, pw, 42, 'F')
-      doc.setTextColor(255, 255, 255)
+      const createdAt = new Date(data.createdAt)
+      const headerH = drawPdfHeader(doc, {
+        pw, mg, pr, pg, pb, logo,
+        orgName:   data.orgName,
+        kicker:    'Presupuesto',
+        dateLabel: createdAt.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
+      })
 
-      let titleX = mg
-      if (logo) {
-        const maxW = 38, maxH = 20
-        const { w: lW, h: lH } = fitLogo(logo.width, logo.height, maxW, maxH)
-        doc.addImage(logo.dataUrl, 'PNG', mg, (42 - lH) / 2, lW, lH)
-        titleX = mg + lW + 4
-      }
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7)
-      doc.text('PRESUPUESTO DE SERVICIOS', titleX, 13)
-      doc.setFontSize(20)
-      doc.text(data.orgName, titleX, 25)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(9)
-      doc.text(
-        new Date(data.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
-        titleX, 35,
-      )
-
-      let y = 56
+      let y = headerH + 12
       doc.setTextColor(148, 163, 184); doc.setFontSize(8)
       doc.text(`REF: ${data.ref}`, mg, y); y += 10
 
@@ -119,6 +103,8 @@ export default function CotizacionDetailPage() {
       doc.text(`Estimado/a ${data.recipientName}:`, mg, y); y += 7
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 116, 139)
       doc.text('A continuación encontrará el detalle de los servicios cotizados.', mg, y); y += 12
+
+      y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: data.validityDays ?? 30, fromDate: createdAt })
 
       // Table header
       doc.setFillColor(241, 245, 249); doc.rect(mg, y, cw, 8, 'F')

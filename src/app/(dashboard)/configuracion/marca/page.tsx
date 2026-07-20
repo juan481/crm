@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Upload, Save, RotateCcw, Shield, X, Receipt } from 'lucide-react'
+import { Upload, Save, RotateCcw, Shield, X, Receipt, Clock } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,8 @@ import toast from 'react-hot-toast'
 
 const schema = z.object({
   crmName: z.string().min(2, 'Mínimo 2 caracteres').max(40),
+  name: z.string().min(2, 'Mínimo 2 caracteres').max(60),
+  quoteValidityDays: z.coerce.number().int().min(1, 'Mínimo 1 día').max(365, 'Máximo 365 días'),
   primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido'),
   secondaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido'),
   billingAddress: z.string().optional(),
@@ -53,7 +55,7 @@ export default function MarcaPage() {
 
   const { register, handleSubmit, setValue, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { crmName, primaryColor, secondaryColor },
+    defaultValues: { crmName, primaryColor, secondaryColor, name: '', quoteValidityDays: 30 },
   })
 
   useEffect(() => {
@@ -63,6 +65,8 @@ export default function MarcaPage() {
         if (!data) return
         reset({
           crmName: data.crmName ?? crmName,
+          name: data.name ?? '',
+          quoteValidityDays: data.quoteValidityDays ?? 30,
           primaryColor: data.primaryColor ?? primaryColor,
           secondaryColor: data.secondaryColor ?? secondaryColor,
           billingAddress: data.billingAddress ?? '',
@@ -161,7 +165,18 @@ export default function MarcaPage() {
             <CardDescription>Nombre y logo del CRM</CardDescription>
           </CardHeader>
           <div className="space-y-4">
-            <Input label="Nombre del CRM" placeholder="Mi CRM" error={errors.crmName?.message} {...register('crmName')} />
+            <div>
+              <Input label="Nombre de la marca / empresa" placeholder="Mi Empresa S.A." error={errors.name?.message} {...register('name')} />
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+                Este es el que ven tus clientes: aparece en cotizaciones, facturas y emails enviados.
+              </p>
+            </div>
+            <div>
+              <Input label="Nombre del CRM" placeholder="Mi CRM" error={errors.crmName?.message} {...register('crmName')} />
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+                Uso interno: el nombre que ve tu equipo dentro de esta plataforma (menú, título de pestaña).
+              </p>
+            </div>
             <div>
               <label className="text-sm font-medium text-[var(--color-text-muted)] block mb-1.5">Logo</label>
               <input ref={fileInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/svg+xml" onChange={handleLogoChange} />
@@ -236,6 +251,29 @@ export default function MarcaPage() {
               <button type="button" className="px-4 py-2 rounded-xl text-sm font-medium border" style={{ borderColor: previewPrimary, color: previewPrimary }}>Botón Outline</button>
               <span className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: `${previewPrimary}22`, color: previewPrimary }}>Badge</span>
             </div>
+          </div>
+        </Card>
+
+        {/* Cotizador */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock size={16} />
+              Cotizador
+            </CardTitle>
+            <CardDescription>Validez por defecto de las cotizaciones que emite tu equipo</CardDescription>
+          </CardHeader>
+          <div>
+            <Input
+              label="Validez de la cotización (días)"
+              type="number" min={1} max={365}
+              className="max-w-[10rem]"
+              error={errors.quoteValidityDays?.message}
+              {...register('quoteValidityDays')}
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+              Se usa como valor inicial al crear una cotización nueva (ej: &quot;Válida por 30 días&quot;). Se puede ajustar caso por caso desde el cotizador.
+            </p>
           </div>
         </Card>
 
