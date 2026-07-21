@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { sendEmail } from '@/lib/email'
+import { sendEmail, resolveOrgSmtpConfig } from '@/lib/email'
 import type { QuoteItem } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -120,7 +120,11 @@ export async function POST(req: NextRequest) {
     const [org, agent] = await Promise.all([
       prisma.organization.findUnique({
         where:  { id: payload.orgId },
-        select: { name: true, crmName: true, primaryColor: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true },
+        select: {
+          name: true, crmName: true, primaryColor: true,
+          smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+          smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+        },
       }),
       prisma.user.findUnique({
         where:  { id: payload.userId },
@@ -128,7 +132,7 @@ export async function POST(req: NextRequest) {
       }),
     ])
 
-    const orgName      = org?.crmName || org?.name || 'CRM Pro'
+    const orgName      = org?.name || org?.crmName || 'CRM Pro'
     const primaryColor = org?.primaryColor || '#6366f1'
     const agentName    = agent?.name || 'El equipo'
 
@@ -145,9 +149,7 @@ export async function POST(req: NextRequest) {
       agentName,
     })
 
-    const smtpConfig = org?.smtpHost && org.smtpUser && org.smtpPass
-      ? { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser, pass: org.smtpPass, from: org.smtpFrom || org.smtpUser }
-      : undefined
+    const smtpConfig = resolveOrgSmtpConfig(org)
 
     // Strip the data URI prefix if present (data:application/pdf;base64,...)
     const base64Data = pdfBase64.includes(',') ? pdfBase64.split(',')[1] : pdfBase64

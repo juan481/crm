@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { sendEmail, buildEmailHtml } from '@/lib/email'
+import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
 interface Params { params: { id: string } }
 
@@ -48,22 +48,24 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     if (!validContacts.length) return NextResponse.json({ error: 'Los contactos seleccionados no tienen email' }, { status: 400 })
 
-    // Fetch org SMTP config
+    // Fetch org email config (SMTP or SES, whichever the org has selected)
     const org = await prisma.organization.findUnique({
       where: { id: payload.orgId },
-      select: { name: true, crmName: true, primaryColor: true, secondaryColor: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true },
+      select: {
+        name: true, crmName: true, primaryColor: true, secondaryColor: true,
+        smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+        smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+      },
     })
 
     const orgName      = org?.name || org?.crmName || 'CRM Pro'
     const primaryColor = org?.primaryColor || '#6366f1'
     const secondaryColor = org?.secondaryColor || '#8b5cf6'
 
-    const smtpConfig = (org?.smtpHost && org?.smtpUser && org?.smtpPass)
-      ? { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser, pass: org.smtpPass, from: org.smtpFrom ?? org.smtpUser }
-      : undefined
+    const smtpConfig = resolveOrgSmtpConfig(org)
 
-    // Fail fast if there's no way to send (no org SMTP and no global fallback configured)
-    if (!smtpConfig && !process.env.BREVO_API_KEY && !process.env.SMTP_HOST) {
+    // Fail fast if there's no way to send (no org config and no global fallback configured)
+    if (!isOrgEmailConfigured(org) && !process.env.BREVO_API_KEY && !process.env.SMTP_HOST) {
       return NextResponse.json({
         error: 'No hay configuración de email. Configurá el correo en Configuración → Correo antes de enviar.',
       }, { status: 422 })

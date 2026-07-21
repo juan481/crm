@@ -38,20 +38,88 @@ function resolveFrom(smtpFrom: string | undefined, smtpUser: string | undefined)
   return `${smtpFrom} <${fallback}>`
 }
 
-// Amazon SES via SDK v3
+export interface OrgEmailFields {
+  smtpProvider?: string | null
+  smtpHost?: string | null
+  smtpPort?: number | null
+  smtpUser?: string | null
+  smtpPass?: string | null
+  smtpFrom?: string | null
+  sesRegion?: string | null
+  sesAccessKeyId?: string | null
+  sesSecretKey?: string | null
+  sesFrom?: string | null
+  sesConfigSet?: string | null
+}
+
+/**
+ * Turns an Organization row into the SmtpConfig sendEmail() expects, picking
+ * SES or SMTP based on the org's chosen `smtpProvider`. Centralized here so
+ * every send site (quotes, campaigns, empresa emails) honors the same
+ * provider switch instead of each route re-deriving it (and risking one
+ * still hardcoded to SMTP after the org migrates to SES).
+ */
+export function resolveOrgSmtpConfig(org: OrgEmailFields | null | undefined): SmtpConfig | undefined {
+  if (!org) return undefined
+
+  if (org.smtpProvider === 'SES') {
+    if (!org.sesRegion || !org.sesAccessKeyId || !org.sesSecretKey) return undefined
+    return {
+      provider: 'SES', host: '', port: 587, user: '', pass: '',
+      from: org.sesFrom ?? '',
+      sesRegion: org.sesRegion, sesAccessKeyId: org.sesAccessKeyId, sesSecretKey: org.sesSecretKey,
+      sesConfigSet: org.sesConfigSet ?? undefined,
+    }
+  }
+
+  if (org.smtpHost && org.smtpUser && org.smtpPass) {
+    return { host: org.smtpHost, port: org.smtpPort ?? 587, user: org.smtpUser, pass: org.smtpPass, from: org.smtpFrom ?? org.smtpUser }
+  }
+
+  return undefined
+}
+
+/** Whether the org has enough email config to actually send (SES or SMTP), without leaking secrets. */
+export function isOrgEmailConfigured(org: OrgEmailFields | null | undefined): boolean {
+  return !!resolveOrgSmtpConfig(org)
+}
+
+// Amazon SES via SDK v3. SES's simple SendEmail API has no attachment support,
+// so when attachments are present we build a raw RFC822 MIME message instead
+// (via nodemailer's MailComposer — used purely to compose bytes, never to
+// connect anywhere) and submit it through SendRawEmail.
 async function sendViaSES(
   region: string,
   accessKeyId: string,
   secretAccessKey: string,
-  opts: { from: string; to: string | string[]; subject: string; html: string },
+  opts: { from: string; to: string | string[]; subject: string; html: string; attachments?: EmailAttachment[] },
   configSet?: string
 ): Promise<{ messageId: string }> {
-  const { SESClient, SendEmailCommand } = await import('@aws-sdk/client-ses')
-  const client = new SESClient({ region, credentials: { accessKeyId, secretAccessKey } })
-
   const toArr = Array.isArray(opts.to) ? opts.to : [opts.to]
+  const client = new (await import('@aws-sdk/client-ses')).SESClient({ region, credentials: { accessKeyId, secretAccessKey } })
 
-  const cmd = new SendEmailCommand({
+  if (opts.attachments?.length) {
+    const { SendRawEmailCommand } = await import('@aws-sdk/client-ses')
+    const { default: MailComposer } = await import('nodemailer/lib/mail-composer/index.js')
+    const mail = new MailComposer({
+      from: opts.from, to: toArr, subject: opts.subject, html: opts.html,
+      attachments: opts.attachments,
+    })
+    const raw = await new Promise<Buffer>((resolve, reject) => {
+      mail.compile().build((err: Error | null, message: Buffer) => err ? reject(err) : resolve(message))
+    })
+
+    const res = await client.send(new SendRawEmailCommand({
+      Source: opts.from,
+      Destinations: toArr,
+      RawMessage: { Data: raw },
+      ConfigurationSetName: configSet || undefined,
+    }))
+    return { messageId: res.MessageId ?? '' }
+  }
+
+  const { SendEmailCommand } = await import('@aws-sdk/client-ses')
+  const res = await client.send(new SendEmailCommand({
     Source: opts.from,
     Destination: { ToAddresses: toArr },
     Message: {
@@ -59,9 +127,7 @@ async function sendViaSES(
       Body:    { Html: { Data: opts.html, Charset: 'UTF-8' } },
     },
     ConfigurationSetName: configSet || undefined,
-  })
-
-  const res = await client.send(cmd)
+  }))
   return { messageId: res.MessageId ?? '' }
 }
 
@@ -139,7 +205,7 @@ export async function sendEmail({
     if (!region || !akid || !secret) {
       throw new Error('Amazon SES: faltan credenciales (región, Access Key ID o Secret)')
     }
-    return sendViaSES(region, akid, secret, { from: fromAddress, to, subject, html }, cs)
+    return sendViaSES(region, akid, secret, { from: fromAddress, to, subject, html, attachments }, cs)
   }
 
   // Use Brevo HTTP API (no IP restrictions) when key starts with xkeysib-

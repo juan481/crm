@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { sendEmail, buildEmailHtml, type SmtpConfig } from '@/lib/email'
+import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,28 +41,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     if (campaign.status === 'SENT') return NextResponse.json({ sent: 0, failed: 0, remaining: 0, done: true })
 
     const org = campaign.organization
-
-    // Build smtp config based on provider
-    let smtpConfig: SmtpConfig | undefined
-    if (org.smtpProvider === 'SES') {
-      smtpConfig = {
-        provider: 'SES',
-        host: '', port: 587, user: '', pass: '',
-        from: org.sesFrom ?? '',
-        sesRegion: org.sesRegion ?? '',
-        sesAccessKeyId: org.sesAccessKeyId ?? '',
-        sesSecretKey: org.sesSecretKey ?? '',
-        sesConfigSet: org.sesConfigSet ?? undefined,
-      }
-    } else if (org.smtpHost) {
-      smtpConfig = {
-        host: org.smtpHost,
-        port: org.smtpPort ?? 587,
-        user: org.smtpUser ?? '',
-        pass: org.smtpPass ?? '',
-        from: org.smtpFrom ?? org.smtpUser ?? '',
-      }
-    }
+    const smtpConfig = resolveOrgSmtpConfig(org)
 
     // Tracking pixel base URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''

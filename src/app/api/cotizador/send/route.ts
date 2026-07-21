@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { isOrgEmailConfigured } from '@/lib/email'
 import type { QuoteItem } from '@/types'
 
 // This endpoint ONLY saves the cotizacion to DB and creates the EmpresaNota.
@@ -36,7 +37,11 @@ export async function POST(req: NextRequest) {
     const [org, agent] = await Promise.all([
       prisma.organization.findUnique({
         where:  { id: payload.orgId },
-        select: { name: true, crmName: true, primaryColor: true, logoUrl: true, quoteValidityDays: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true },
+        select: {
+          name: true, crmName: true, primaryColor: true, logoUrl: true, quoteValidityDays: true,
+          smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+          smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+        },
       }),
       prisma.user.findUnique({
         where:  { id: payload.userId },
@@ -96,7 +101,7 @@ export async function POST(req: NextRequest) {
       discount:     discountPct,
       finalTotal,
       validityDays: validityDaysFinal,
-      smtpConfigured: !!(org?.smtpHost && org?.smtpUser && org?.smtpPass),
+      smtpConfigured: isOrgEmailConfigured(org),
     })
   } catch (error) {
     console.error('[COTIZADOR SAVE]', error)

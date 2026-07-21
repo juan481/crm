@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { isOrgEmailConfigured } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const org = await prisma.organization.findUnique({
       where:  { id: payload.orgId },
-      select: { crmName: true, name: true, primaryColor: true, logoUrl: true, smtpHost: true, smtpUser: true, smtpPass: true },
+      select: {
+        crmName: true, name: true, primaryColor: true, logoUrl: true,
+        smtpHost: true, smtpUser: true, smtpPass: true,
+        smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+      },
     })
 
     return NextResponse.json({
@@ -40,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         primaryColor:   org?.primaryColor || '#6366f1',
         logoUrl:        org?.logoUrl ?? null,
         agentName:      cotizacion.user?.name || 'El equipo',
-        smtpConfigured: !!(org?.smtpHost && org?.smtpUser && org?.smtpPass),
+        smtpConfigured: isOrgEmailConfigured(org),
       },
     })
   } catch (error) {
