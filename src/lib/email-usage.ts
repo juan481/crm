@@ -5,7 +5,19 @@ function currentMonthKey(d = new Date()): { year: number; month: number } {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 }
 }
 
-export interface EmailUsage { used: number; limit: number; remaining: number }
+export interface EmailUsage {
+  used: number
+  limit: number
+  remaining: number
+  /** Days left (UTC) until the counter resets back to 0 on the 1st of next month. */
+  daysUntilReset: number
+}
+
+function daysUntilNextMonth(d = new Date()): number {
+  const nextMonthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)
+  const todayStart     = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  return Math.round((nextMonthStart - todayStart) / (24 * 60 * 60 * 1000))
+}
 
 /** Current month's campaign-send usage vs. the org's monthly cap. Only campaign
  * sends count toward this — quote emails and empresa-contact emails don't. */
@@ -21,7 +33,7 @@ export async function getEmailUsage(orgId: string): Promise<EmailUsage> {
   ])
   const limit = org?.emailMonthlyLimit ?? 9000
   const used  = usage?.count ?? 0
-  return { used, limit, remaining: Math.max(0, limit - used) }
+  return { used, limit, remaining: Math.max(0, limit - used), daysUntilReset: daysUntilNextMonth() }
 }
 
 /** Increments this month's campaign-send usage counter. Call once per successfully-sent email. */

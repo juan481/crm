@@ -118,7 +118,7 @@ export default function ComunicacionesPage() {
     queryFn: async () => {
       const res = await fetch('/api/communications/usage')
       if (!res.ok) throw new Error('Error al cargar uso')
-      return (await res.json()).data as { used: number; limit: number; remaining: number }
+      return (await res.json()).data as { used: number; limit: number; remaining: number; daysUntilReset: number }
     },
     enabled: canManage,
   })
@@ -157,6 +157,10 @@ export default function ComunicacionesPage() {
               background: usage.used >= usage.limit ? '#ef4444' : usage.used / usage.limit >= 0.9 ? '#f59e0b' : 'var(--color-primary)',
             }} />
           </div>
+          <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-subtle)]">
+            <Clock size={12} />
+            Este contador se reinicia todos los meses — quedan {usage.daysUntilReset} día{usage.daysUntilReset === 1 ? '' : 's'} para el próximo reinicio.
+          </p>
           {usage.used / usage.limit >= 0.9 && (
             <a href={EMAIL_LIMIT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline">
