@@ -1,11 +1,23 @@
 'use client'
 
-import { Suspense, useState, useTransition } from 'react'
+import { Suspense, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Script from 'next/script'
 import { Eye, EyeOff, LogIn, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useThemeStore } from '@/store/theme-store'
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement, options: Record<string, unknown>) => string
+      reset:  (widgetId: string) => void
+    }
+  }
+}
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
 export default function LoginPage() {
   return (
@@ -24,6 +36,20 @@ function LoginForm() {
   const [error, setError]       = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  const turnstileEl  = useRef<HTMLDivElement>(null)
+  const widgetId      = useRef<string | null>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+
+  const renderTurnstile = () => {
+    if (!TURNSTILE_SITE_KEY || !turnstileEl.current || !window.turnstile) return
+    widgetId.current = window.turnstile.render(turnstileEl.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (token: string) => setCaptchaToken(token),
+      'expired-callback': () => setCaptchaToken(null),
+      'error-callback':   () => setCaptchaToken(null),
+    })
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
@@ -33,10 +59,14 @@ function LoginForm() {
     const password = fd.get('password') as string
 
     if (!email || !password) { setError('Completá todos los campos.'); return }
+    if (TURNSTILE_SITE_KEY && !captchaToken) { setError('Completá la verificación de seguridad.'); return }
 
     startTransition(async () => {
       const supabase = createClient()
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email, password,
+        ...(captchaToken ? { options: { captchaToken } } : {}),
+      })
 
       if (authError) {
         setError(
@@ -44,6 +74,9 @@ function LoginForm() {
             ? 'Email o contraseña incorrectos.'
             : authError.message
         )
+        // Turnstile tokens are single-use — reset the widget so the user can retry
+        if (window.turnstile && widgetId.current) window.turnstile.reset(widgetId.current)
+        setCaptchaToken(null)
         return
       }
 
@@ -55,6 +88,9 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
+      {TURNSTILE_SITE_KEY && (
+        <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer onLoad={renderTurnstile} />
+      )}
       {/* ── Left panel: dark navy ─────────────────────────────────────── */}
       <div
         className="hidden lg:flex lg:w-[42%] flex-col justify-between p-14 relative overflow-hidden"
@@ -93,22 +129,25 @@ function LoginForm() {
           </p>
         </div>
 
-        <div className="relative z-10 grid grid-cols-2 gap-3">
-          {[
-            { value: '∞', label: 'Clientes' },
-            { value: '24/7', label: 'Disponible' },
-            { value: 'WL', label: 'White Label' },
-            { value: '100%', label: 'Mobile-first' },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="rounded-2xl p-4"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}
-            >
-              <p className="text-2xl font-bold text-white">{s.value}</p>
-              <p className="text-sm" style={{ color: 'rgba(148,163,184,0.8)' }}>{s.label}</p>
-            </div>
-          ))}
+        <div className="relative z-10 space-y-6">
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: '∞', label: 'Clientes' },
+              { value: '24/7', label: 'Disponible' },
+              { value: 'WL', label: 'White Label' },
+              { value: '100%', label: 'Mobile-first' },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-2xl p-4"
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}
+              >
+                <p className="text-2xl font-bold text-white">{s.value}</p>
+                <p className="text-sm" style={{ color: 'rgba(148,163,184,0.8)' }}>{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <JustCreateCredit tone="dark" />
         </div>
       </div>
 
@@ -198,9 +237,11 @@ function LoginForm() {
                 </div>
               )}
 
+              {TURNSTILE_SITE_KEY && <div ref={turnstileEl} className="flex justify-center" />}
+
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={isPending || (!!TURNSTILE_SITE_KEY && !captchaToken)}
                 className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}
               >
@@ -215,9 +256,38 @@ function LoginForm() {
             <p className="mt-6 text-center text-xs" style={{ color: '#94a3b8' }}>
               ¿Problemas para acceder? Contactá a tu administrador.
             </p>
+
+            <div className="mt-4 pt-4 flex justify-center" style={{ borderTop: '1px solid #f1f5f9' }}>
+              <JustCreateCredit tone="light" />
+            </div>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function JustCreateCredit({ tone }: { tone: 'dark' | 'light' }) {
+  const muted = tone === 'dark' ? 'rgba(148,163,184,0.75)' : '#94a3b8'
+  const strong = tone === 'dark' ? '#ffffff' : '#334155'
+  return (
+    <a
+      href="https://justcreate.com.ar"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+      style={{ color: muted }}
+    >
+      <span>by</span>
+      <span className="inline-flex items-center gap-1 font-bold" style={{ color: strong }}>
+        <span
+          className="w-4 h-4 rounded-[5px] flex items-center justify-center text-[9px] font-black text-white"
+          style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+        >
+          J
+        </span>
+        JustCreate
+      </span>
+    </a>
   )
 }
