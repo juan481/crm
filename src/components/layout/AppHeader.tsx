@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut } from 'lucide-react'
+import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut, MessageSquarePlus, Send } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import type { Client } from '@/types'
 import type { AppNotification } from '@/app/api/notifications/route'
+import toast from 'react-hot-toast'
 
 interface AppHeaderProps {
   user: { name: string; email: string; avatarUrl: string | null; role: string }
@@ -25,10 +26,14 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestText, setSuggestText] = useState('')
+  const [sendingSuggestion, setSendingSuggestion] = useState(false)
 
   const searchRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
   const userRef = useRef<HTMLDivElement>(null)
+  const suggestRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -38,10 +43,32 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       }
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
       if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false)
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) setSuggestOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  const handleSendSuggestion = async () => {
+    if (!suggestText.trim()) return
+    setSendingSuggestion(true)
+    try {
+      const res = await fetch('/api/suggestions', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ message: suggestText }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al enviar'); return }
+      toast.success(json.message ?? 'Sugerencia enviada')
+      setSuggestText('')
+      setSuggestOpen(false)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setSendingSuggestion(false)
+    }
+  }
 
   const { data: searchResults } = useQuery({
     queryKey: ['search', searchQuery],
@@ -179,6 +206,56 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 ml-auto">
+        {/* Suggestion box */}
+        <div ref={suggestRef} className="relative">
+          <button
+            onClick={() => setSuggestOpen((v) => !v)}
+            className="p-2 rounded-xl transition-all hover:bg-[var(--color-surface-raised)]"
+            style={{ color: 'var(--color-text-muted)' }}
+            title="Enviar una sugerencia"
+          >
+            <MessageSquarePlus size={16} />
+          </button>
+          {suggestOpen && (
+            <div
+              className="absolute right-0 top-full mt-1 w-80 rounded-2xl overflow-hidden z-50 p-4 space-y-3"
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border-strong)',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
+              }}
+            >
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Enviar una sugerencia</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                  Va directo al equipo de JustCreate
+                </p>
+              </div>
+              <textarea
+                autoFocus
+                rows={4}
+                value={suggestText}
+                onChange={(e) => setSuggestText(e.target.value)}
+                placeholder="Contanos qué mejorarías o qué problema encontraste..."
+                className="w-full rounded-xl px-3 py-2.5 text-sm resize-none outline-none transition-all"
+                style={{
+                  background: 'var(--color-surface-raised)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+              />
+              <button
+                onClick={handleSendSuggestion}
+                disabled={sendingSuggestion || !suggestText.trim()}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-50 gradient-bg"
+              >
+                <Send size={14} />
+                {sendingSuggestion ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Dark mode toggle */}
         <button
           onClick={toggleDarkMode}
