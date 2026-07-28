@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig } from '@/lib/email'
+import { getSuppressedSet } from '@/lib/suppression'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,22 +54,36 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       select:  { id: true, email: true, name: true },
     })
 
-    let sent   = 0
-    let failed = 0
+    // Re-check suppression right before sending — someone may have unsubscribed
+    // since this campaign's recipients were created (batching a large list can
+    // take a while), so this catches it even if the creation-time filter didn't.
+    const suppressedSet = await getSuppressedSet(payload.orgId, pending.map((r: { email: string }) => r.email))
+
+    let sent       = 0
+    let failed     = 0
+    let suppressed = 0
 
     for (const r of pending) {
+      if (suppressedSet.has(r.email.trim().toLowerCase())) {
+        await db.campaignRecipient.update({ where: { id: r.id }, data: { status: 'suppressed' } })
+        suppressed++
+        continue
+      }
+
       const vars = { nombre: r.name ?? r.email, empresa: '', email: r.email }
       const subject  = mergeVars(campaign.subject, vars)
       const bodyHtml = mergeVars(campaign.body,    vars)
 
-      // Inject tracking pixel if we have an app URL
-      const pixelUrl = appUrl ? `${appUrl}/api/track/open?rid=${r.id}` : undefined
+      // Inject tracking pixel + unsubscribe link if we have an app URL
+      const pixelUrl       = appUrl ? `${appUrl}/api/track/open?rid=${r.id}` : undefined
+      const unsubscribeUrl = appUrl ? `${appUrl}/unsubscribe/${r.id}` : undefined
       const html = buildEmailHtml(
         subject, bodyHtml,
         org.crmName ?? 'CRM',
         org.primaryColor ?? '#6366f1',
         org.secondaryColor ?? '#8b5cf6',
         pixelUrl,
+        unsubscribeUrl,
       )
 
       try {
@@ -111,7 +126,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       await db.emailCampaign.update({ where: { id: params.id }, data: { status: finalStatus, sentAt: new Date() } })
     }
 
-    return NextResponse.json({ sent, failed, remaining, done: remaining === 0 })
+    return NextResponse.json({ sent, failed, suppressed, remaining, done: remaining === 0 })
   } catch (error) {
     console.error('[CAMPAIGN SEND BATCH]', error)
     return NextResponse.json({ error: 'Error al enviar lote' }, { status: 500 })

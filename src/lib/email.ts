@@ -260,6 +260,7 @@ export function buildEmailHtml(
   primaryColor   = '#6366f1',
   secondaryColor = '#8b5cf6',
   trackingPixelUrl?: string,
+  unsubscribeUrl?: string,
 ): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -273,13 +274,17 @@ export function buildEmailHtml(
     .body{padding:40px;color:#1e293b;line-height:1.7;font-size:15px}
     .body img{max-width:100%;height:auto;display:block}
     .footer{background:#f1f5f9;padding:20px 40px;text-align:center;color:#94a3b8;font-size:13px}
+    .footer a{color:#94a3b8;text-decoration:underline}
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header"><h1>${subject}</h1></div>
     <div class="body">${body.replace(/\n/g, '<br/>')}</div>
-    <div class="footer">Enviado por ${orgName} &mdash; No responder a este correo.</div>
+    <div class="footer">
+      Enviado por ${orgName} &mdash; No responder a este correo.
+      ${unsubscribeUrl ? `<br/><a href="${unsubscribeUrl}">Darse de baja de estos correos</a>` : ''}
+    </div>
   </div>${trackingPixelUrl ? `\n  <img src="${trackingPixelUrl}" width="1" height="1" style="display:none;border:0" alt="" />` : ''}
 </body>
 </html>`

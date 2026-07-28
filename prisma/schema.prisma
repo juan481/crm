@@ -79,6 +79,7 @@ enum RecipientStatus {
   failed
   bounced
   spam
+  suppressed
 }
 
 enum DealStage {
@@ -196,6 +197,22 @@ model Organization {
   empresaNotas      EmpresaNota[]
   cotizaciones      Cotizacion[]
   asistencias       Asistencia[]
+  suppressions      EmailSuppression[]
+}
+
+// Emails that opted out of marketing/campaign sends for an org. Checked before
+// creating campaign recipients and again right before sending (in case someone
+// unsubscribes while a large campaign is still batching out).
+model EmailSuppression {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  reason         String   @default("unsubscribed")
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
 }
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────

@@ -322,8 +322,11 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
 
+      const skipped = json.skippedUnsubscribed as number | undefined
+      const skippedNote = skipped ? ` (${skipped} destinatario${skipped > 1 ? 's' : ''} omitido${skipped > 1 ? 's' : ''} por baja previa)` : ''
+
       if (!sendNow) {
-        toast.success('Campaña guardada como borrador')
+        toast.success(`Campaña guardada como borrador${skippedNote}`)
         onSuccess()
         return
       }
@@ -335,22 +338,29 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       setSending(true)
       setSubmitting(false)
 
-      let sent   = 0
-      let failed = 0
-      let done   = false
+      let sent       = 0
+      let failed     = 0
+      let suppressed = 0
+      let done       = false
 
       while (!done) {
         const batchRes = await fetch(`/api/communications/campaigns/${campaignId}/send`, { method: 'POST' })
         if (!batchRes.ok) { toast.error('Error al enviar lote'); break }
         const batch = await batchRes.json()
-        sent   += batch.sent   ?? 0
-        failed += batch.failed ?? 0
-        done    = batch.done   ?? false
+        sent       += batch.sent       ?? 0
+        failed     += batch.failed     ?? 0
+        suppressed += batch.suppressed ?? 0
+        done        = batch.done       ?? false
         setSendProgress({ sent, failed, total })
         if (!done) await new Promise(r => setTimeout(r, 300))
       }
 
-      toast.success(`Campaña enviada: ${sent} emails entregados${failed > 0 ? `, ${failed} fallidos` : ''}`)
+      toast.success(
+        `Campaña enviada: ${sent} emails entregados` +
+        (failed > 0 ? `, ${failed} fallidos` : '') +
+        (suppressed > 0 ? `, ${suppressed} omitidos por baja` : '') +
+        skippedNote
+      )
       setSending(false)
       setSendProgress(null)
       onSuccess()

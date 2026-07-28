@@ -7,6 +7,8 @@ const PUBLIC_PATHS = [
   '/reset-password',
   '/setup-cliente',
   '/api/auth',
+  '/unsubscribe',
+  '/api/track/open',
 ]
 
 export async function middleware(req: NextRequest) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { isOrgEmailConfigured } from '@/lib/email'
+import { filterSuppressed } from '@/lib/suppression'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,17 +59,30 @@ export async function POST(req: NextRequest) {
       seen.add(key); return true
     })
 
+    // Drop anyone who unsubscribed from this org's emails before
+    const { allowed, suppressed } = await filterSuppressed(payload.orgId, unique)
+
     if (sendNow) {
       const org = await prisma.organization.findUnique({
         where:  { id: payload.orgId },
-        select: { smtpHost: true, smtpUser: true, smtpPass: true },
+        select: {
+          smtpHost: true, smtpUser: true, smtpPass: true,
+          smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true,
+        },
       })
-      if (!org?.smtpHost || !org?.smtpUser || !org?.smtpPass) {
+      if (!isOrgEmailConfigured(org)) {
         return NextResponse.json(
           { error: 'Configurá el servidor de email en Configuración → Email antes de enviar campañas.' },
           { status: 400 }
         )
       }
+    }
+
+    if (allowed.length === 0) {
+      return NextResponse.json(
+        { error: `Los ${suppressed.length} destinatarios seleccionados se dieron de baja anteriormente y no se les puede volver a escribir.` },
+        { status: 400 },
+      )
     }
 
     const db = prisma as any
@@ -80,13 +95,16 @@ export async function POST(req: NextRequest) {
         status:         sendNow ? 'SENDING' : 'DRAFT',
         organizationId: payload.orgId,
         recipients: {
-          create: unique.map(r => ({ email: r.email.trim(), name: r.name.trim() })),
+          create: allowed.map(r => ({ email: r.email.trim(), name: r.name.trim() })),
         },
       },
       select: { id: true, name: true, status: true, _count: { select: { recipients: true } } },
     })
 
-    return NextResponse.json({ data: campaign }, { status: 201 })
+    return NextResponse.json({
+      data: campaign,
+      skippedUnsubscribed: suppressed.length,
+    }, { status: 201 })
   } catch (error) {
     console.error('[CAMPAIGNS POST]', error)
     return NextResponse.json({ error: 'Error al crear campaña' }, { status: 500 })
