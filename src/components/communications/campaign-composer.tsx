@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
 import {
   Users, Send, Save, Filter, ChevronDown, ChevronUp,
-  Search, FileText, Building2, Info, MapPin, Tag,
+  Search, FileText, Building2, Info, MapPin, Tag, MessageCircle,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { RichEditor, type RichEditorHandle } from '@/components/ui/rich-editor'
@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select'
 import { ModalFooter } from '@/components/ui/modal'
 import type { Client, ClientStatus, EmailTemplate, Empresa } from '@/types'
 import { CLIENT_STATUS_LABELS } from '@/lib/utils'
+import { EMAIL_LIMIT_WHATSAPP_URL } from '@/lib/upsell'
 import toast from 'react-hot-toast'
 
 const schema = z.object({
@@ -64,6 +65,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const [submitting,     setSubmitting]     = useState(false)
   const [sending,        setSending]        = useState(false)
   const [sendProgress,   setSendProgress]   = useState<{ sent: number; failed: number; total: number } | null>(null)
+  const [quotaBlocked,   setQuotaBlocked]   = useState<{ used: number; limit: number } | null>(null)
   const [showFilters,    setShowFilters]    = useState(false)
   const [statusFilter,   setStatusFilter]   = useState('')
   const [searchFilter,   setSearchFilter]   = useState('')
@@ -320,7 +322,10 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
         body:    JSON.stringify({ ...data, body, recipients, sendNow }),
       })
       const json = await res.json()
-      if (!res.ok) { toast.error(json.error); return }
+      if (!res.ok) {
+        if (json.quotaExceeded) { setQuotaBlocked({ used: json.used, limit: json.limit }); return }
+        toast.error(json.error); return
+      }
 
       const skipped = json.skippedUnsubscribed as number | undefined
       const skippedNote = skipped ? ` (${skipped} destinatario${skipped > 1 ? 's' : ''} omitido${skipped > 1 ? 's' : ''} por baja previa)` : ''
@@ -342,6 +347,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       let failed     = 0
       let suppressed = 0
       let done       = false
+      let quotaHit   = false
 
       while (!done) {
         const batchRes = await fetch(`/api/communications/campaigns/${campaignId}/send`, { method: 'POST' })
@@ -352,15 +358,24 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
         suppressed += batch.suppressed ?? 0
         done        = batch.done       ?? false
         setSendProgress({ sent, failed, total })
+        if (batch.quotaExceeded) {
+          setQuotaBlocked({ used: batch.quota?.used ?? sent, limit: batch.quota?.limit ?? sent })
+          quotaHit = true
+          break // stop — some emails may have already sent fine before hitting the cap
+        }
         if (!done) await new Promise(r => setTimeout(r, 300))
       }
 
-      toast.success(
-        `Campaña enviada: ${sent} emails entregados` +
-        (failed > 0 ? `, ${failed} fallidos` : '') +
-        (suppressed > 0 ? `, ${suppressed} omitidos por baja` : '') +
-        skippedNote
-      )
+      if (quotaHit) {
+        toast.error(`Alcanzaste tu límite mensual — ${sent} emails enviados antes de cortar${skippedNote}`)
+      } else {
+        toast.success(
+          `Campaña enviada: ${sent} emails entregados` +
+          (failed > 0 ? `, ${failed} fallidos` : '') +
+          (suppressed > 0 ? `, ${suppressed} omitidos por baja` : '') +
+          skippedNote
+        )
+      }
       setSending(false)
       setSendProgress(null)
       onSuccess()
@@ -374,6 +389,18 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+
+      {quotaBlocked && (
+        <div className="rounded-xl p-4 space-y-3 border border-amber-500/25 bg-amber-500/10">
+          <p className="text-sm text-amber-400">
+            Alcanzaste tu límite mensual de emails ({quotaBlocked.used}/{quotaBlocked.limit}). No se pueden enviar más campañas hasta que se reinicie el mes o se aumente el límite.
+          </p>
+          <a href={EMAIL_LIMIT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors">
+            <MessageCircle size={14} /> Solicitar aumento
+          </a>
+        </div>
+      )}
 
       {templates.length > 0 && (
         <div className="flex items-center gap-3 p-3 surface-raised rounded-xl">

@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig } from '@/lib/email'
 import { getSuppressedSet } from '@/lib/suppression'
+import { getEmailUsage, incrementEmailUsage } from '@/lib/email-usage'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,13 +45,27 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     const org = campaign.organization
     const smtpConfig = resolveOrgSmtpConfig(org)
 
+    // Quota check — only campaign sends count toward this. If there's no
+    // room left at all, stop before touching anything else in this batch.
+    const quota = await getEmailUsage(payload.orgId)
+    if (quota.remaining <= 0) {
+      const remainingPending = await db.campaignRecipient.count({
+        where: { campaignId: params.id, status: 'pending' },
+      })
+      return NextResponse.json({
+        sent: 0, failed: 0, suppressed: 0, remaining: remainingPending, done: false,
+        quotaExceeded: true, quota: { used: quota.used, limit: quota.limit },
+      })
+    }
+
     // Tracking pixel base URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
-    // Fetch next batch of pending recipients
+    // Fetch next batch of pending recipients, capped to whatever quota allows
+    const takeCount = Math.min(BATCH, quota.remaining)
     const pending = await db.campaignRecipient.findMany({
       where:   { campaignId: params.id, status: 'pending' },
-      take:    BATCH,
+      take:    takeCount,
       select:  { id: true, email: true, name: true },
     })
 
@@ -105,6 +120,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
           } catch { /* column not yet migrated — safe to ignore */ }
         }
 
+        await incrementEmailUsage(payload.orgId, 1)
         sent++
       } catch (err) {
         await db.campaignRecipient.update({
@@ -126,7 +142,15 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       await db.emailCampaign.update({ where: { id: params.id }, data: { status: finalStatus, sentAt: new Date() } })
     }
 
-    return NextResponse.json({ sent, failed, suppressed, remaining, done: remaining === 0 })
+    // Ran out of quota mid-batch: there's still pending work, but no room left
+    // this month. Campaign stays SENDING — "Reenviar pendientes" already
+    // picks it back up once the limit resets or the agency raises it.
+    const quotaExceeded = remaining > 0 && (quota.remaining - sent) <= 0
+
+    return NextResponse.json({
+      sent, failed, suppressed, remaining, done: remaining === 0,
+      ...(quotaExceeded ? { quotaExceeded: true, quota: { used: quota.used + sent, limit: quota.limit } } : {}),
+    })
   } catch (error) {
     console.error('[CAMPAIGN SEND BATCH]', error)
     return NextResponse.json({ error: 'Error al enviar lote' }, { status: 500 })

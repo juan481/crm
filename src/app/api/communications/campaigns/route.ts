@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { isOrgEmailConfigured } from '@/lib/email'
 import { filterSuppressed } from '@/lib/suppression'
+import { getEmailUsage } from '@/lib/email-usage'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,6 +76,15 @@ export async function POST(req: NextRequest) {
           { error: 'Configurá el servidor de email en Configuración → Email antes de enviar campañas.' },
           { status: 400 }
         )
+      }
+
+      const quota = await getEmailUsage(payload.orgId)
+      if (quota.remaining <= 0) {
+        return NextResponse.json({
+          error: 'Alcanzaste el límite mensual de envíos de email. Solicitá un aumento para seguir enviando campañas.',
+          quotaExceeded: true,
+          used: quota.used, limit: quota.limit,
+        }, { status: 429 })
       }
     }
 

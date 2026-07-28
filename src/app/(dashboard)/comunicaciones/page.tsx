@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2 } from 'lucide-react'
+import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CampaignComposer } from '@/components/communications/campaign-composer'
 import { TemplateManager } from '@/components/communications/template-manager'
 import { formatDateTime } from '@/lib/utils'
+import { EMAIL_LIMIT_WHATSAPP_URL } from '@/lib/upsell'
 import { useAuthStore } from '@/store/auth-store'
 import type { EmailCampaign } from '@/types'
 import toast from 'react-hot-toast'
@@ -32,6 +34,7 @@ interface CampaignDetail extends EmailCampaign {
 }
 
 export default function ComunicacionesPage() {
+  const router = useRouter()
   const { user } = useAuthStore()
   const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const [composerOpen,  setComposerOpen]  = useState(false)
@@ -62,7 +65,7 @@ export default function ComunicacionesPage() {
   const handleResend = async (campaignId: string, pendingCount: number) => {
     setResending(true)
     setResendProg({ sent: 0, failed: 0, total: pendingCount })
-    let sent = 0, failed = 0, done = false
+    let sent = 0, failed = 0, done = false, quotaHit = false
     try {
       while (!done) {
         const res = await fetch(`/api/communications/campaigns/${campaignId}/send`, { method: 'POST' })
@@ -72,11 +75,17 @@ export default function ComunicacionesPage() {
         failed += batch.failed ?? 0
         done    = batch.done   ?? false
         setResendProg({ sent, failed, total: pendingCount })
+        if (batch.quotaExceeded) { quotaHit = true; break }
         if (!done) await new Promise(r => setTimeout(r, 300))
       }
-      toast.success(`${sent} emails enviados${failed > 0 ? `, ${failed} fallidos` : ''}`)
+      if (quotaHit) {
+        toast.error(`Alcanzaste tu límite mensual — ${sent} emails enviados antes de cortar`)
+      } else {
+        toast.success(`${sent} emails enviados${failed > 0 ? `, ${failed} fallidos` : ''}`)
+      }
       qc.invalidateQueries({ queryKey: ['campaigns'] })
       qc.invalidateQueries({ queryKey: ['campaign-detail', campaignId] })
+      qc.invalidateQueries({ queryKey: ['email-usage'] })
     } catch {
       toast.error('Error de conexión')
     } finally {
@@ -104,6 +113,16 @@ export default function ComunicacionesPage() {
     },
   })
 
+  const { data: usage } = useQuery({
+    queryKey: ['email-usage'],
+    queryFn: async () => {
+      const res = await fetch('/api/communications/usage')
+      if (!res.ok) throw new Error('Error al cargar uso')
+      return (await res.json()).data as { used: number; limit: number; remaining: number }
+    },
+    enabled: canManage,
+  })
+
   const campaigns = data ?? []
   const sent  = campaigns.filter((c) => c.status === 'SENT').length
   const draft = campaigns.filter((c) => c.status === 'DRAFT').length
@@ -117,8 +136,35 @@ export default function ComunicacionesPage() {
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Comunicaciones</h1>
           <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Campañas masivas y plantillas de email</p>
         </div>
-        {canManage && <Button leftIcon={<Plus size={16} />} onClick={() => setComposerOpen(true)}>Nueva Campaña</Button>}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" leftIcon={<MailX size={14} />} onClick={() => router.push('/comunicaciones/bajas')}>
+            Bajas
+          </Button>
+          {canManage && <Button leftIcon={<Plus size={16} />} onClick={() => setComposerOpen(true)}>Nueva Campaña</Button>}
+        </div>
       </div>
+
+      {/* Usage */}
+      {canManage && usage && (
+        <div className="surface rounded-2xl p-5 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-[var(--color-text)]">Uso mensual de emails (campañas)</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{usage.used} / {usage.limit}</p>
+          </div>
+          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+            <div className="h-full rounded-full transition-all" style={{
+              width: `${Math.min(100, (usage.used / usage.limit) * 100)}%`,
+              background: usage.used >= usage.limit ? '#ef4444' : usage.used / usage.limit >= 0.9 ? '#f59e0b' : 'var(--color-primary)',
+            }} />
+          </div>
+          {usage.used / usage.limit >= 0.9 && (
+            <a href={EMAIL_LIMIT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline">
+              <MessageCircle size={13} /> Solicitar aumento
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -246,7 +292,7 @@ export default function ComunicacionesPage() {
 
       <Modal open={composerOpen} onClose={() => setComposerOpen(false)} title="Nueva Campaña de Email" size="xl">
         <CampaignComposer
-          onSuccess={() => { setComposerOpen(false); qc.invalidateQueries({ queryKey: ['campaigns'] }) }}
+          onSuccess={() => { setComposerOpen(false); qc.invalidateQueries({ queryKey: ['campaigns'] }); qc.invalidateQueries({ queryKey: ['email-usage'] }) }}
           onCancel={() => setComposerOpen(false)}
         />
       </Modal>

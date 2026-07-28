@@ -170,6 +170,9 @@ model Organization {
   sesSecretKey   String?
   sesFrom        String?
   sesConfigSet   String?
+  // Campaign-send cap. Agency-managed only — not exposed as an editable
+  // field in any org-facing settings screen (see scripts/set-email-limit.ts).
+  emailMonthlyLimit Int @default(9000)
   // Datos de facturación
   billingAddress      String?
   billingEmail        String?
@@ -198,6 +201,7 @@ model Organization {
   cotizaciones      Cotizacion[]
   asistencias       Asistencia[]
   suppressions      EmailSuppression[]
+  emailUsage        EmailUsageMonthly[]
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before
@@ -212,6 +216,25 @@ model EmailSuppression {
   createdAt      DateTime @default(now())
 
   @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+// Campaign-send volume per org per calendar month. Rows are created lazily on
+// first send of a new month via upsert — this is the entire "reset"
+// mechanism, no cron job needed. Only counts campaign sends (see
+// src/lib/email-usage.ts) — quote emails and empresa-contact emails are
+// explicitly excluded from this counter.
+model EmailUsageMonthly {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  year           Int
+  month          Int      // 1-12
+  count          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, year, month])
   @@index([organizationId])
 }
 
