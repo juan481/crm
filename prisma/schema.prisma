@@ -173,6 +173,11 @@ model Organization {
   // Campaign-send cap. Agency-managed only — not exposed as an editable
   // field in any org-facing settings screen (see scripts/set-email-limit.ts).
   emailMonthlyLimit Int @default(9000)
+  // Agency kill switch (e.g. non-payment). Blocks login for every user in
+  // this org without deleting anything. Only ever changed from /admin —
+  // never client-facing.
+  suspended   Boolean   @default(false)
+  suspendedAt DateTime?
   // Datos de facturación
   billingAddress      String?
   billingEmail        String?
@@ -248,6 +253,10 @@ model User {
   status              UserStatus @default(ACTIVE)
   onboardingCompleted Boolean  @default(false)
   forcePasswordChange Boolean  @default(false)
+  // Agency operator flag — orthogonal to Role (SUPER_ADMIN is per-org, this
+  // is cross-tenant). Never settable from any in-app UI — only via
+  // scripts/set-platform-admin.ts. See getPlatformAdmin() in src/lib/auth.ts.
+  isPlatformAdmin     Boolean  @default(false)
   avatarUrl           String?
   organizationId      String
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

@@ -28,13 +28,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (prisma.organization as any).findFirst({
         where: { users: { some: { supabaseId: supabaseUser.id } } },
-        select: { crmName: true, logoUrl: true, primaryColor: true, secondaryColor: true },
+        select: { crmName: true, logoUrl: true, primaryColor: true, secondaryColor: true, suspended: true },
       }),
     ])
 
     if (!dbUser || dbUser.status !== 'ACTIVE') {
       await supabase.auth.signOut()
       redirect('/login')
+    }
+
+    if (org?.suspended) {
+      await supabase.auth.signOut()
+      redirect('/login?suspended=1')
     }
 
     if (!dbUser.onboardingCompleted) redirect('/onboarding')

@@ -26,10 +26,13 @@ export async function getCurrentUser(): Promise<AuthPayload | null> {
 
     const user = await prisma.user.findUnique({
       where: { supabaseId: session.user.id },
-      select: { id: true, organizationId: true, role: true, email: true, status: true },
+      select: {
+        id: true, organizationId: true, role: true, email: true, status: true,
+        organization: { select: { suspended: true } },
+      },
     })
 
-    if (!user || user.status !== 'ACTIVE') return null
+    if (!user || user.status !== 'ACTIVE' || user.organization.suspended) return null
 
     return {
       userId: user.id,
@@ -37,6 +40,33 @@ export async function getCurrentUser(): Promise<AuthPayload | null> {
       role:   user.role as Role,
       email:  user.email,
     }
+  } catch {
+    return null
+  }
+}
+
+export interface PlatformAdminPayload {
+  userId: string
+  email:  string
+}
+
+// Orthogonal to getCurrentUser()/canAccess() on purpose: this never checks
+// organization.suspended, so the agency can always reach /admin even if its
+// own org were ever suspended by mistake — no lockout with no way out.
+export async function getPlatformAdmin(): Promise<PlatformAdminPayload | null> {
+  try {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return null
+
+    const user = await prisma.user.findUnique({
+      where: { supabaseId: session.user.id },
+      select: { id: true, email: true, status: true, isPlatformAdmin: true },
+    })
+
+    if (!user || user.status !== 'ACTIVE' || !user.isPlatformAdmin) return null
+
+    return { userId: user.id, email: user.email }
   } catch {
     return null
   }

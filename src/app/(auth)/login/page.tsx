@@ -1,14 +1,24 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, LogIn, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useThemeStore } from '@/store/theme-store'
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const suspended = searchParams.get('suspended') === '1'
   const { crmName } = useThemeStore()
   const [showPass, setShowPass] = useState(false)
   const [error, setError]       = useState<string | null>(null)
@@ -168,6 +178,15 @@ export default function LoginPage() {
                   </Link>
                 </div>
               </div>
+
+              {suspended && (
+                <div
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm"
+                  style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}
+                >
+                  Cuenta suspendida, contactá a contacto@justcreate.com.ar
+                </div>
+              )}
 
               {error && (
                 <div
