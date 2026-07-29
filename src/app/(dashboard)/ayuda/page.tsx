@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import Link from 'next/link'
+import { Presentation } from 'lucide-react'
 
 type Tab = 'equipo' | 'admin'
 
@@ -217,10 +219,18 @@ export default function AyudaPage() {
               clipPath: 'polygon(50% 0%, 100% 22%, 100% 55%, 50% 100%, 0% 55%, 0% 22%)',
             }}
           />
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-[12px] font-bold tracking-[0.09em] uppercase text-text-subtle m-0 mb-1.5">JustCRM · by JustCreate</p>
             <h1 className="text-[28px] font-bold text-text m-0 tracking-tight text-balance">Documentación del sistema</h1>
           </div>
+          <Link
+            href="/ayuda/presentacion"
+            className="shrink-0 hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+          >
+            <Presentation size={15} />
+            Ver en presentación
+          </Link>
         </header>
         <p className="max-w-[62ch] text-[16px] text-text-muted mb-6">
           Cómo funciona el CRM, explicado en simple — como parte del equipo que lo usa día a día, y como quien lo administra.
