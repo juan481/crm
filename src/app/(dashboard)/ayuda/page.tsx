@@ -300,8 +300,9 @@ export default function AyudaPage() {
               <H3>Técnico</H3>
               <P>
                 El rol más acotado de todos: entra directo a <b>Mi Día</b>, la agenda de lo que tiene asignado para hoy, sin el resto
-                del CRM alrededor. Además tiene <b>Mi Asistencia</b> para fichar entrada/salida y <b>Tareas</b>. Pensado para usarse
-                desde el celular en el campo, no desde un escritorio administrativo.
+                del CRM alrededor. Además tiene <b>Mi Asistencia</b> para fichar entrada/salida, <b>Tareas</b>, y <b>Tickets</b> —
+                acá ve únicamente los reclamos o pedidos de soporte que tiene asignados, no los del resto del equipo. Pensado para
+                usarse desde el celular en el campo, no desde un escritorio administrativo.
               </P>
 
               <FieldTable
@@ -311,7 +312,7 @@ export default function AyudaPage() {
                   ['Admin', 'Gestión general: usuarios (sin cambiar roles), Comunicaciones, Servicios/Productos, Clientes, Pipeline, Cotizador.'],
                   ['Vendedor', 'Clientes, Pipeline, Cotizador, Directorio. Ve las campañas de Comunicaciones pero no las crea.'],
                   ['RRHH', 'Solo RRHH, Mi Asistencia y Tareas — sin acceso a los módulos comerciales.'],
-                  ['Técnico', 'Solo Mi Día, Mi Asistencia y Tareas — pensado para uso en campo.'],
+                  ['Técnico', 'Mi Día, Mi Asistencia, Tareas y sus propios Tickets — pensado para uso en campo.'],
                 ]}
               />
             </Section>
