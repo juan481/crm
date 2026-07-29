@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createVerify } from 'crypto'
 import { prisma } from '@/lib/db'
+import { suppressEmail } from '@/lib/suppression'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,7 +86,10 @@ export async function POST(req: NextRequest) {
 
     const recipient = await db.campaignRecipient.findFirst({
       where: { messageId },
-      select: { id: true, campaignId: true, openedAt: true },
+      select: {
+        id: true, campaignId: true, openedAt: true, email: true,
+        campaign: { select: { organizationId: true } },
+      },
     })
 
     if (!recipient) return NextResponse.json({ ok: true })
@@ -119,6 +123,11 @@ export async function POST(req: NextRequest) {
           where: { id: recipient.campaignId },
           data:  { totalBounced: { increment: 1 } },
         })
+        // Permanent bounces (invalid/nonexistent address) must never be mailed
+        // again — transient ones (mailbox full, etc.) are left to retry naturally.
+        if (b.bounceType === 'Permanent') {
+          await suppressEmail(recipient.campaign.organizationId, recipient.email, 'bounced')
+        }
       } catch { /* columns not yet migrated */ }
     }
 
@@ -132,6 +141,8 @@ export async function POST(req: NextRequest) {
           where: { id: recipient.campaignId },
           data:  { totalSpam: { increment: 1 } },
         })
+        // A spam complaint is a hard opt-out — suppress immediately, same as unsubscribe.
+        await suppressEmail(recipient.campaign.organizationId, recipient.email, 'complaint')
       } catch { /* columns not yet migrated */ }
     }
 
