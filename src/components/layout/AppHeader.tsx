@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut, MessageSquarePlus, Send } from 'lucide-react'
+import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut, MessageSquarePlus, Send, HelpCircle } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
@@ -206,6 +206,16 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 ml-auto">
+        {/* Ayuda / documentación */}
+        <Link
+          href="/ayuda"
+          className="p-2 rounded-xl transition-all hover:bg-[var(--color-surface-raised)]"
+          style={{ color: 'var(--color-text-muted)' }}
+          title="Ayuda y documentación"
+        >
+          <HelpCircle size={16} />
+        </Link>
+
         {/* Suggestion box */}
         <div ref={suggestRef} className="relative">
           <button
