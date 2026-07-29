@@ -34,7 +34,7 @@ function Bullets({ items }: { items: ReactNode[] }) {
       {items.map((it, i) => (
         <li key={i} className="flex items-start gap-3 text-[16px] md:text-[18px] text-text leading-snug">
           <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ACCENT }} />
-          {it}
+          <span>{it}</span>
         </li>
       ))}
     </ul>
@@ -202,7 +202,7 @@ function RoleSlideBody({ icon, chips, bullets, usage }: { icon: ReactNode; chips
 
 function Divider({ n, title }: { n: string; title: string }) {
   return (
-    <div className="h-full w-full flex flex-col items-center justify-center text-center px-10">
+    <div className="h-full w-full flex flex-col items-center justify-center text-center px-10" style={{ background: '#0f172a' }}>
       <p className="text-[15px] font-bold tracking-[0.16em] uppercase text-white/70 mb-4">{n}</p>
       <h1 className="text-[40px] md:text-[56px] font-bold text-white tracking-tight text-balance">{title}</h1>
     </div>
@@ -607,7 +607,16 @@ export default function PresentacionPage() {
   const router = useRouter()
   const slides = useSlides()
   const [i, setI] = useState(0)
+  const [reducedMotion, setReducedMotion] = useState(false)
   const total = slides.length
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReducedMotion(mq.matches)
+    const onChange = () => setReducedMotion(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const next = useCallback(() => setI((v) => Math.min(total - 1, v + 1)), [total])
   const prev = useCallback(() => setI((v) => Math.max(0, v - 1)), [])
@@ -643,7 +652,11 @@ export default function PresentacionPage() {
       </div>
 
       {/* slide */}
-      <div className="flex-1 min-h-0 overflow-hidden">{slides[i]}</div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div key={i} className={`w-full h-full ${reducedMotion ? '' : 'animate-slide-right'}`}>
+          {slides[i]}
+        </div>
+      </div>
 
       {/* nav */}
       <div className="flex items-center justify-center gap-3 pb-6 shrink-0">
