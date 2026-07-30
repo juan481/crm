@@ -85,7 +85,7 @@ function RecurringModal({ open, onClose, onGenerated }: { open: boolean; onClose
 interface InvoiceRow {
   id: string; amount: number; currency: string; status: string
   description: string | null; dueDate: string; paidAt: string | null; createdAt: string
-  client: { id: string; name: string; email: string }
+  empresa: { id: string; name: string }
 }
 interface InvoicesResponse {
   data: InvoiceRow[]; total: number; totalPages: number
@@ -220,7 +220,7 @@ export default function FacturasPage() {
         data={invoices}
         emptyMessage="No hay facturas que coincidan con los filtros"
         columns={[
-          { key: 'client', header: 'Cliente', render: (row) => <div className="flex items-center gap-3"><Avatar name={row.client.name} size="sm" /><div><p className="font-medium text-[var(--color-text)]">{row.client.name}</p><p className="text-xs text-[var(--color-text-muted)]">{row.client.email}</p></div></div> },
+          { key: 'empresa', header: 'Cliente', render: (row) => <div className="flex items-center gap-3"><Avatar name={row.empresa.name} size="sm" /><p className="font-medium text-[var(--color-text)]">{row.empresa.name}</p></div> },
           { key: 'description', header: 'Descripción', render: (row) => <span className="text-[var(--color-text-muted)]">{row.description ?? 'Servicio'}</span> },
           { key: 'amount', header: 'Monto', align: 'right', render: (row) => <span className="font-semibold text-[var(--color-text)]">{formatCurrency(row.amount, row.currency)}</span> },
           { key: 'dueDate', header: 'Vencimiento', render: (row) => <span className={isOverdue(row) && row.status !== 'PAID' ? 'text-red-400 font-medium' : 'text-[var(--color-text-muted)]'}>{formatDate(row.dueDate)}</span> },

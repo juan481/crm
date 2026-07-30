@@ -304,12 +304,12 @@ export interface PluginConfig {
 export interface DashboardMetrics {
   activeClients: number
   pendingPayment: number
-  expiredServices: number
+  overdueInvoices: number
   mrr: number
   mrrGrowth: number
   newClientsThisMonth: number
   revenueByMonth: { month: string; revenue: number }[]
-  clientsByStatus: { status: string; count: number }[]
+  invoicesByStatus: { status: string; count: number }[]
   pendingTasks: number
   openTickets: number
   activeDealsCount: number
@@ -317,6 +317,7 @@ export interface DashboardMetrics {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
+  topClientsByRevenue: { id: string; name: string; total: number }[]
 }
 
 // ─── Email Campaign ────────────────────────────────────────────────────────

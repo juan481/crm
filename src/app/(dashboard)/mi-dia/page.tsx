@@ -54,11 +54,11 @@ interface TicketForm {
   description: string
   category: TicketCategory
   priority: TaskPriority
-  clientId: string
+  empresaId: string
 }
 
 const EMPTY_TICKET: TicketForm = {
-  title: '', description: '', category: 'SOPORTE', priority: 'MEDIA', clientId: '',
+  title: '', description: '', category: 'SOPORTE', priority: 'MEDIA', empresaId: '',
 }
 
 export default function MiDiaPage() {
@@ -150,11 +150,11 @@ export default function MiDiaPage() {
     enabled: !!user?.id,
   })
 
-  // Clients for ticket creation
-  const { data: clientsData } = useQuery({
-    queryKey: ['clients-list'],
+  // Empresas for ticket creation
+  const { data: empresasData } = useQuery({
+    queryKey: ['empresas-mi-dia'],
     queryFn: async () => {
-      const res = await fetch('/api/clients?limit=200')
+      const res = await fetch('/api/empresas?limit=200')
       const json = await res.json()
       return (json.data ?? []) as Array<{ id: string; name: string }>
     },
@@ -163,7 +163,7 @@ export default function MiDiaPage() {
 
   const tasks   = tasksData ?? []
   const tickets = ticketsData ?? []
-  const clients = clientsData ?? []
+  const clients = empresasData ?? []
 
   const todayTasks     = tasks.filter(t => {
     if (!t.dueDate) return true
@@ -197,7 +197,7 @@ export default function MiDiaPage() {
           description: ticketForm.description.trim() || '',
           category:    ticketForm.category,
           priority:    ticketForm.priority,
-          clientId:    ticketForm.clientId || null,
+          empresaId:   ticketForm.empresaId || null,
         }),
       })
       const json = await res.json()
@@ -469,8 +469,8 @@ export default function MiDiaPage() {
               { value: '', label: 'Sin cliente' },
               ...clients.map(c => ({ value: c.id, label: c.name })),
             ]}
-            value={ticketForm.clientId}
-            onChange={e => setTicketForm(f => ({ ...f, clientId: e.target.value }))}
+            value={ticketForm.empresaId}
+            onChange={e => setTicketForm(f => ({ ...f, empresaId: e.target.value }))}
           />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" type="button" onClick={() => setTicketOpen(false)}>Cancelar</Button>

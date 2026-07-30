@@ -12,12 +12,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
-    const search   = searchParams.get('search')   ?? ''
-    const status   = searchParams.get('status')   ?? ''
-    const clientId = searchParams.get('clientId') ?? ''
-    const page     = Math.max(1, Number(searchParams.get('page')  ?? 1))
-    const limit    = Math.min(50, Number(searchParams.get('limit') ?? 20))
-    const skip     = (page - 1) * limit
+    const search    = searchParams.get('search')    ?? ''
+    const status    = searchParams.get('status')    ?? ''
+    const empresaId = searchParams.get('empresaId') ?? ''
+    const page      = Math.max(1, Number(searchParams.get('page')  ?? 1))
+    const limit     = Math.min(50, Number(searchParams.get('limit') ?? 20))
+    const skip      = (page - 1) * limit
 
     const orgId = payload.orgId
     const now = new Date()
@@ -25,15 +25,15 @@ export async function GET(req: NextRequest) {
 
     const baseWhere = { organizationId: orgId }
 
-    // Build client filter: text search takes priority over direct clientId
-    const clientFilter: Record<string, unknown> = {}
-    if (search.length >= 2) clientFilter.name = { contains: search, mode: 'insensitive' }
-    if (clientId)           clientFilter.id   = clientId
+    // Build empresa filter: text search takes priority over a direct empresaId
+    const empresaFilter: Record<string, unknown> = {}
+    if (search.length >= 2) empresaFilter.name = { contains: search, mode: 'insensitive' }
+    if (empresaId)          empresaFilter.id   = empresaId
 
     const where: Record<string, unknown> = {
       ...baseWhere,
       ...(status && { status }),
-      ...(Object.keys(clientFilter).length > 0 && { client: clientFilter }),
+      ...(Object.keys(empresaFilter).length > 0 && { empresa: empresaFilter }),
     }
 
     const [data, total, pendingGroups, paidGroups, overdueCount] = await Promise.all([
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
         skip,
         take: limit,
         orderBy: { dueDate: 'asc' },
-        include: { client: { select: { id: true, name: true, email: true } } },
+        include: { empresa: { select: { id: true, name: true } } },
       }),
       prisma.invoice.count({ where }),
       prisma.invoice.groupBy({
@@ -95,22 +95,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const { clientId, amount, currency, description, dueDate, status } = await req.json()
-    if (!clientId || !amount || !dueDate) {
+    const { empresaId, amount, currency, description, dueDate, status } = await req.json()
+    if (!empresaId || !amount || !dueDate) {
       return NextResponse.json({ error: 'Cliente, monto y vencimiento son requeridos' }, { status: 400 })
     }
 
-    const client = await prisma.client.findFirst({
-      where: { id: clientId, organizationId: payload.orgId },
+    const empresa = await prisma.empresa.findFirst({
+      where: { id: empresaId, organizationId: payload.orgId },
       select: { id: true, organizationId: true },
     })
-    if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
+    if (!empresa) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 
     const initialStatus = status || 'PENDING'
     const invoice = await prisma.invoice.create({
       data: {
-        clientId,
-        organizationId: client.organizationId, // persist directly
+        empresaId,
+        organizationId: empresa.organizationId, // persist directly
         amount:  Number(amount),
         currency: currency || 'USD',
         description: description || null,
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
         status: initialStatus,
         paidAt: initialStatus === 'PAID' ? new Date() : null,
       },
-      include: { client: { select: { id: true, name: true, email: true } } },
+      include: { empresa: { select: { id: true, name: true } } },
     })
 
     return NextResponse.json({ data: invoice }, { status: 201 })

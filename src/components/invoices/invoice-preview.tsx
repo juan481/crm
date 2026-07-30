@@ -13,7 +13,7 @@ interface InvoiceData {
   dueDate: string
   paidAt: string | null
   createdAt: string
-  client: { name: string; email: string; company?: string | null; address?: string | null }
+  empresa: { name: string; address?: string | null; city?: string | null; province?: string | null }
 }
 
 interface OrgBilling {
@@ -155,10 +155,13 @@ export function InvoicePreview({ invoice, onClose }: InvoicePreviewProps) {
             <div className="grid grid-cols-2 gap-8">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Facturar a</p>
-                <p className="font-semibold" style={{ color: '#1e293b' }}>{invoice.client.name}</p>
-                {invoice.client.company && <p className="text-sm" style={{ color: '#64748b' }}>{invoice.client.company}</p>}
-                <p className="text-sm" style={{ color: '#64748b' }}>{invoice.client.email}</p>
-                {invoice.client.address && <p className="text-sm" style={{ color: '#64748b' }}>{invoice.client.address}</p>}
+                <p className="font-semibold" style={{ color: '#1e293b' }}>{invoice.empresa.name}</p>
+                {invoice.empresa.address && <p className="text-sm" style={{ color: '#64748b' }}>{invoice.empresa.address}</p>}
+                {(invoice.empresa.city || invoice.empresa.province) && (
+                  <p className="text-sm" style={{ color: '#64748b' }}>
+                    {[invoice.empresa.city, invoice.empresa.province].filter(Boolean).join(', ')}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Fechas</p>

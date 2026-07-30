@@ -9,10 +9,9 @@ import { ClientsChart } from '@/components/dashboard/clients-chart'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Avatar } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { formatCurrency, CLIENT_STATUS_LABELS, CLIENT_STATUS_COLORS } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import { usePlugin } from '@/hooks/use-plugin'
-import type { DashboardMetrics, Client } from '@/types'
+import type { DashboardMetrics } from '@/types'
 
 export default function DashboardPage() {
   const { data, isLoading, error } = useQuery<DashboardMetrics>({
@@ -28,18 +27,6 @@ export default function DashboardPage() {
   })
 
   const { enabled: analyticsEnabled } = usePlugin('advanced-analytics')
-
-  const { data: topClients } = useQuery<Client[]>({
-    queryKey: ['top-clients'],
-    queryFn: async () => {
-      const res = await fetch('/api/clients?limit=5&page=1')
-      if (!res.ok) return []
-      const json = await res.json()
-      return (json.data ?? []).sort((a: Client, b: Client) => b.mrr - a.mrr)
-    },
-    enabled: analyticsEnabled,
-    staleTime: 5 * 60 * 1000,
-  })
 
   if (error) {
     return (
@@ -86,18 +73,18 @@ export default function DashboardPage() {
               title="Pagos Pendientes"
               value={data?.pendingPayment ?? 0}
               icon={<Clock size={20} />}
-              subtitle="clientes con pago pendiente"
+              subtitle="facturas con pago pendiente"
               accentColor="#f59e0b"
-              href="/clientes"
+              href="/facturas"
               index={2}
             />
             <MetricCard
-              title="Servicios Vencidos"
-              value={data?.expiredServices ?? 0}
+              title="Facturas Vencidas"
+              value={data?.overdueInvoices ?? 0}
               icon={<AlertCircle size={20} />}
               subtitle="requieren atención"
               accentColor="#ef4444"
-              href="/clientes"
+              href="/facturas"
               index={3}
             />
           </>
@@ -115,7 +102,7 @@ export default function DashboardPage() {
           ) : (
             <>
               <RevenueChart data={data?.revenueByMonth ?? []} />
-              <ClientsChart data={data?.clientsByStatus ?? []} />
+              <ClientsChart data={data?.invoicesByStatus ?? []} />
             </>
           )}
         </div>
@@ -251,7 +238,7 @@ export default function DashboardPage() {
       )}
 
       {/* Advanced Analytics (plugin gated) */}
-      {analyticsEnabled && topClients && topClients.length > 0 && (
+      {analyticsEnabled && data && data.topClientsByRevenue.length > 0 && (
         <div className="surface rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2 h-2 rounded-full bg-[var(--color-primary)]" />
@@ -261,27 +248,14 @@ export default function DashboardPage() {
             </span>
           </div>
           <div className="space-y-3">
-            {topClients.map((client, i) => (
+            {data.topClientsByRevenue.map((client, i) => (
               <div key={client.id} className="flex items-center gap-3">
                 <span className="text-xs font-bold text-[var(--color-text-subtle)] w-5 text-right">
                   {i + 1}
                 </span>
                 <Avatar name={client.name} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--color-text)] truncate">{client.name}</p>
-                  <p className="text-xs text-[var(--color-text-subtle)] truncate">{client.serviceType ?? '—'}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-[var(--color-text)]">{formatCurrency(client.mrr)}</p>
-                  <p className="text-xs text-[var(--color-text-subtle)]">/mes</p>
-                </div>
-                <Badge
-                  variant={CLIENT_STATUS_COLORS[client.status] as 'success' | 'warning' | 'danger' | 'info' | 'neutral'}
-                  size="sm"
-                  dot
-                >
-                  {CLIENT_STATUS_LABELS[client.status]}
-                </Badge>
+                <p className="text-sm font-medium text-[var(--color-text)] truncate flex-1 min-w-0">{client.name}</p>
+                <p className="text-sm font-bold text-[var(--color-text)] shrink-0">{formatCurrency(client.total)}</p>
               </div>
             ))}
           </div>

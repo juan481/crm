@@ -8,9 +8,10 @@ import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
-import type { Client } from '@/types'
 import type { AppNotification } from '@/app/api/notifications/route'
 import toast from 'react-hot-toast'
+
+interface EmpresaSearchResult { id: string; name: string; activity: string | null; city: string | null }
 
 interface AppHeaderProps {
   user: { name: string; email: string; avatarUrl: string | null; role: string }
@@ -74,10 +75,10 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
     queryKey: ['search', searchQuery],
     queryFn: async () => {
       if (searchQuery.length < 2) return []
-      const res = await fetch(`/api/clients?search=${encodeURIComponent(searchQuery)}&limit=6`)
+      const res = await fetch(`/api/empresas?search=${encodeURIComponent(searchQuery)}&limit=6`)
       if (!res.ok) return []
       const json = await res.json()
-      return (json.data ?? []) as Client[]
+      return (json.data ?? []) as EmpresaSearchResult[]
     },
     enabled: searchQuery.length >= 2,
     staleTime: 30 * 1000,
@@ -192,9 +193,11 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
                         <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                           {client.name}
                         </p>
-                        <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                          {client.email}
-                        </p>
+                        {(client.activity || client.city) && (
+                          <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                            {[client.activity, client.city].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
                       </div>
                     </button>
                   </li>

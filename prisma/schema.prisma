@@ -380,8 +380,12 @@ model Contact {
 // ─── Invoices ──────────────────────────────────────────────────────────────
 model Invoice {
   id             String   @id @default(cuid())
-  clientId       String
-  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // clientId (legacy) kept only for the old, no-longer-navigable /clients pages —
+  // every invoice created from the live Facturación screen uses empresaId instead.
+  clientId       String?
+  client         Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  empresaId      String?
+  empresa        Empresa? @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   organizationId String
   amount         Float
   currency       String   @default("USD")
@@ -395,6 +399,7 @@ model Invoice {
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([clientId])
+  @@index([empresaId])
   @@index([status])
   @@index([dueDate])
 }
@@ -712,6 +717,7 @@ model Empresa {
   deals          Deal[]
   tasks          Task[]
   tickets        Ticket[]
+  invoices       Invoice[]
 
   @@index([organizationId])
   @@index([organizationId, name])

@@ -15,37 +15,24 @@ export interface AppNotification {
 async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const now = new Date()
 
-  // Promise.all (not $transaction) — reads don't need transaction overhead
-  const [overdueInvoices, pendingPaymentClients, expiredClients] = await Promise.all([
-    prisma.invoice.findMany({
-      where: {
-        organizationId: orgId,          // direct column — no JOIN
-        OR: [
-          { status: 'OVERDUE' },
-          { status: 'PENDING', dueDate: { lt: now } },
-        ],
-      },
-      select: {
-        id: true,
-        amount: true,
-        currency: true,
-        status: true,
-        client: { select: { id: true, name: true } },
-      },
-      orderBy: { dueDate: 'asc' },
-      take: 8,
-    }),
-    prisma.client.findMany({
-      where: { organizationId: orgId, status: 'PENDING_PAYMENT' },
-      select: { id: true, name: true },
-      take: 5,
-    }),
-    prisma.client.findMany({
-      where: { organizationId: orgId, status: 'EXPIRED' },
-      select: { id: true, name: true },
-      take: 5,
-    }),
-  ])
+  const overdueInvoices = await prisma.invoice.findMany({
+    where: {
+      organizationId: orgId,          // direct column — no JOIN
+      OR: [
+        { status: 'OVERDUE' },
+        { status: 'PENDING', dueDate: { lt: now } },
+      ],
+    },
+    select: {
+      id: true,
+      amount: true,
+      currency: true,
+      status: true,
+      empresa: { select: { id: true, name: true } },
+    },
+    orderBy: { dueDate: 'asc' },
+    take: 8,
+  })
 
   const notifications: AppNotification[] = []
 
@@ -54,29 +41,9 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       id: `inv-${inv.id}`,
       type: 'overdue_invoice',
       title: inv.status === 'OVERDUE' ? 'Factura vencida' : 'Factura pendiente',
-      body: `${inv.client.name} — ${inv.amount.toLocaleString('es')} ${inv.currency}`,
+      body: `${inv.empresa?.name ?? 'Cliente'} — ${inv.amount.toLocaleString('es')} ${inv.currency}`,
       href: '/facturas',
       severity: 'danger',
-    })
-  }
-  for (const c of pendingPaymentClients) {
-    notifications.push({
-      id: `pp-${c.id}`,
-      type: 'pending_payment',
-      title: 'Pago pendiente',
-      body: `${c.name} tiene un pago pendiente`,
-      href: `/clients/${c.id}`,
-      severity: 'warning',
-    })
-  }
-  for (const c of expiredClients) {
-    notifications.push({
-      id: `exp-${c.id}`,
-      type: 'expired_service',
-      title: 'Servicio expirado',
-      body: `${c.name} — servicio expirado`,
-      href: `/clients/${c.id}`,
-      severity: 'warning',
     })
   }
 

@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const existing = await prisma.invoice.findFirst({
-      where: { id: params.id, client: { organizationId: payload.orgId } },
+      where: { id: params.id, organizationId: payload.orgId },
     })
     if (!existing) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(description !== undefined && { description }),
         ...(dueDate && { dueDate: new Date(dueDate) }),
       },
-      include: { client: { select: { id: true, name: true, email: true } } },
+      include: { empresa: { select: { id: true, name: true } } },
     })
 
     return NextResponse.json({ data: invoice })

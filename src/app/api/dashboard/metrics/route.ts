@@ -11,12 +11,12 @@ interface MonthRow {
 interface MetricsData {
   activeClients: number
   pendingPayment: number
-  expiredServices: number
+  overdueInvoices: number
   mrr: number
   mrrGrowth: number
   newClientsThisMonth: number
   revenueByMonth: { month: string; revenue: number }[]
-  clientsByStatus: { status: string; count: number }[]
+  invoicesByStatus: { status: string; count: number }[]
   pendingTasks: number
   openTickets: number
   activeDealsCount: number
@@ -24,49 +24,67 @@ interface MetricsData {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
+  topClientsByRevenue: { id: string; name: string; total: number }[]
 }
 
+// Metrics are computed from Empresa (the live "Clientes" model, toggled via
+// isCliente) + Invoice — NOT the legacy Client model, which the active
+// Clientes/Empresas workflow never populates.
 async function fetchMetrics(orgId: string): Promise<MetricsData> {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
 
-  // 7 parallel queries
   const [
-    statusGroups,
+    activeClients,
     newClientsThisMonth,
     monthlyRows,
+    pendingPayment,
+    overdueInvoices,
+    invoiceStatusGroups,
+    topRevenueGroups,
     pendingTasks,
     openTickets,
     activeDeals,
     cotizacionGroups,
   ] = await Promise.all([
-    // All client status counts + MRR sums in ONE groupBy
-    prisma.client.groupBy({
-      by: ['status'],
-      where: { organizationId: orgId },
-      _count: { _all: true },
-      _sum: { mrr: true },
+    prisma.empresa.count({ where: { organizationId: orgId, isCliente: true } }),
+
+    prisma.empresa.count({
+      where: { organizationId: orgId, isCliente: true, clienteDesde: { gte: startOfMonth } },
     }),
 
-    prisma.client.count({
-      where: { organizationId: orgId, createdAt: { gte: startOfMonth } },
-    }),
-
-    // 6-month MRR in a single SQL — no per-month connection
+    // 6-month real revenue (sum of invoices actually paid that month)
     prisma.$queryRaw<MonthRow[]>`
       SELECT
         gs.n,
         DATE_TRUNC('month', NOW()) - (gs.n * INTERVAL '1 month') AS month_date,
-        COALESCE(SUM(c.mrr), 0)::float AS revenue
+        COALESCE(SUM(i.amount), 0)::float AS revenue
       FROM generate_series(0, 5) AS gs(n)
-      LEFT JOIN "Client" c ON
-        c."organizationId" = ${orgId}
-        AND c."status" = 'ACTIVE'
-        AND c."createdAt" < DATE_TRUNC('month', NOW()) - ((gs.n - 1) * INTERVAL '1 month')
+      LEFT JOIN "Invoice" i ON
+        i."organizationId" = ${orgId}
+        AND i."status" = 'PAID'
+        AND i."paidAt" >= DATE_TRUNC('month', NOW()) - (gs.n * INTERVAL '1 month')
+        AND i."paidAt" <  DATE_TRUNC('month', NOW()) - ((gs.n - 1) * INTERVAL '1 month')
       GROUP BY gs.n
       ORDER BY gs.n DESC
     `,
+
+    prisma.invoice.count({ where: { organizationId: orgId, status: 'PENDING' } }),
+    prisma.invoice.count({
+      where: { organizationId: orgId, OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: now } }] },
+    }),
+    prisma.invoice.groupBy({
+      by: ['status'],
+      where: { organizationId: orgId },
+      _count: { _all: true },
+    }),
+    prisma.invoice.groupBy({
+      by: ['empresaId'],
+      where: { organizationId: orgId, status: 'PAID', empresaId: { not: null } },
+      _sum: { amount: true },
+      orderBy: { _sum: { amount: 'desc' } },
+      take: 5,
+    }),
 
     prisma.task.count({ where: { organizationId: orgId, status: { not: 'HECHA' } } }),
     prisma.ticket.count({ where: { organizationId: orgId, status: { in: ['ABIERTO', 'EN_PROCESO'] } } }),
@@ -81,14 +99,7 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
     }),
   ])
 
-  const getCount = (s: string) => statusGroups.find((g) => g.status === s)?._count._all ?? 0
-  const getSum   = (s: string) => statusGroups.find((g) => g.status === s)?._sum.mrr  ?? 0
-
-  const activeClients  = getCount('ACTIVE')
-  const pendingPayment = getCount('PENDING_PAYMENT')
-  const expiredServices = getCount('EXPIRED')
-  const currentMrr = getSum('ACTIVE')
-
+  const currentMrr = Number(monthlyRows.find((r) => Number(r.n) === 0)?.revenue ?? 0)
   const prevMrr = Number(monthlyRows.find((r) => Number(r.n) === 1)?.revenue ?? 0)
   const mrrGrowth =
     prevMrr === 0
@@ -100,10 +111,22 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
     revenue: Number(row.revenue),
   }))
 
-  const clientsByStatus = statusGroups.map((g) => ({
+  const invoicesByStatus = invoiceStatusGroups.map((g) => ({
     status: g.status,
     count: g._count._all,
   }))
+
+  const empresaIds = topRevenueGroups.map((g) => g.empresaId).filter((id): id is string => !!id)
+  const topEmpresas = empresaIds.length
+    ? await prisma.empresa.findMany({ where: { id: { in: empresaIds } }, select: { id: true, name: true } })
+    : []
+  const topClientsByRevenue = topRevenueGroups
+    .filter((g) => g.empresaId)
+    .map((g) => ({
+      id: g.empresaId as string,
+      name: topEmpresas.find((e) => e.id === g.empresaId)?.name ?? '—',
+      total: g._sum.amount ?? 0,
+    }))
 
   const pipelineValue = activeDeals.reduce((s, d) => s + d.amount * (d.probability / 100), 0)
   const dealsByStage  = activeDeals.reduce<Record<string, number>>((acc, d) => {
@@ -116,14 +139,15 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       .find((g) => g.status === s)?._count._all ?? 0
 
   return {
-    activeClients, pendingPayment, expiredServices,
+    activeClients, pendingPayment, overdueInvoices,
     mrr: currentMrr, mrrGrowth, newClientsThisMonth,
-    revenueByMonth, clientsByStatus,
+    revenueByMonth, invoicesByStatus,
     pendingTasks, openTickets,
     activeDealsCount: activeDeals.length,
     pipelineValue, dealsByStage,
     cotizacionesEnviadas: getCotizCount('ENVIADA'),
     cotizacionesAceptadas: getCotizCount('ACEPTADA'),
+    topClientsByRevenue,
   }
 }
 

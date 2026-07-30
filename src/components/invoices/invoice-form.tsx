@@ -9,10 +9,11 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import toast from 'react-hot-toast'
-import type { Client } from '@/types'
+
+interface EmpresaOption { id: string; name: string }
 
 const schema = z.object({
-  clientId: z.string().min(1, 'Seleccioná un cliente'),
+  empresaId: z.string().min(1, 'Seleccioná un cliente'),
   description: z.string().optional(),
   amount: z.coerce.number().positive('Debe ser mayor a 0'),
   currency: z.string().default('USD'),
@@ -38,29 +39,29 @@ const STATUS_OPTIONS = [
 ]
 
 interface InvoiceFormProps {
-  defaultClientId?: string
+  defaultEmpresaId?: string
   onSuccess: (invoice: unknown) => void
   onCancel: () => void
 }
 
-export function InvoiceForm({ defaultClientId, onSuccess, onCancel }: InvoiceFormProps) {
+export function InvoiceForm({ defaultEmpresaId, onSuccess, onCancel }: InvoiceFormProps) {
   const [saving, setSaving] = useState(false)
 
-  const { data: clientsData } = useQuery({
-    queryKey: ['clients-all'],
+  const { data: empresasData } = useQuery({
+    queryKey: ['empresas-clientes-all'],
     queryFn: async () => {
-      const res = await fetch('/api/clients?limit=200')
+      const res = await fetch('/api/empresas?isCliente=true&limit=200')
       if (!res.ok) return []
       const json = await res.json()
-      return (json.data ?? []) as Client[]
+      return (json.data ?? []) as EmpresaOption[]
     },
     staleTime: 60 * 1000,
-    enabled: !defaultClientId,
+    enabled: !defaultEmpresaId,
   })
 
-  const clientOptions = defaultClientId
+  const empresaOptions = defaultEmpresaId
     ? []
-    : [{ value: '', label: 'Seleccionar cliente...' }, ...(clientsData ?? []).map((c) => ({ value: c.id, label: c.name }))]
+    : [{ value: '', label: 'Seleccionar cliente...' }, ...(empresasData ?? []).map((e) => ({ value: e.id, label: e.name }))]
 
   const defaultDue = new Date()
   defaultDue.setDate(defaultDue.getDate() + 30)
@@ -73,7 +74,7 @@ export function InvoiceForm({ defaultClientId, onSuccess, onCancel }: InvoiceFor
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      clientId: defaultClientId ?? '',
+      empresaId: defaultEmpresaId ?? '',
       currency: 'USD',
       dueDate: defaultDueStr,
       status: 'PENDING',
@@ -104,12 +105,12 @@ export function InvoiceForm({ defaultClientId, onSuccess, onCancel }: InvoiceFor
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {!defaultClientId && (
+      {!defaultEmpresaId && (
         <Select
           label="Cliente"
-          options={clientOptions}
-          error={errors.clientId?.message}
-          {...register('clientId')}
+          options={empresaOptions}
+          error={errors.empresaId?.message}
+          {...register('empresaId')}
         />
       )}
 

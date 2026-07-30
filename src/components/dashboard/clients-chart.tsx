@@ -2,31 +2,36 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import { CLIENT_STATUS_LABELS } from '@/lib/utils'
 
 interface ClientsChartProps {
   data: { status: string; count: number }[]
 }
 
-const COLORS = {
-  ACTIVE: '#22c55e',
-  INACTIVE: '#64748b',
-  PENDING_PAYMENT: '#f59e0b',
-  EXPIRED: '#ef4444',
-  PROSPECT: '#3b82f6',
+const INVOICE_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Pendiente',
+  PAID: 'Pagada',
+  OVERDUE: 'Vencida',
+  CANCELLED: 'Cancelada',
+}
+
+const COLORS: Record<string, string> = {
+  PENDING: '#f59e0b',
+  PAID: '#22c55e',
+  OVERDUE: '#ef4444',
+  CANCELLED: '#64748b',
 }
 
 export function ClientsChart({ data }: ClientsChartProps) {
   const chartData = data.map((d) => ({
-    name: CLIENT_STATUS_LABELS[d.status] ?? d.status,
+    name: INVOICE_STATUS_LABELS[d.status] ?? d.status,
     value: d.count,
-    color: COLORS[d.status as keyof typeof COLORS] ?? '#6366f1',
+    color: COLORS[d.status] ?? '#6366f1',
   }))
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Clientes por Estado</CardTitle>
+        <CardTitle>Facturas por Estado</CardTitle>
       </CardHeader>
       <div className="h-52">
         <ResponsiveContainer width="100%" height="100%">
