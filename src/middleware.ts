@@ -9,6 +9,10 @@ const PUBLIC_PATHS = [
   '/api/auth',
   '/unsubscribe',
   '/api/track/open',
+  // Webhooks are called by external, unauthenticated callers (a website form,
+  // Amazon SNS) and authenticate themselves (per-event secret / SNS signature)
+  // instead of a Supabase session — must stay reachable past this middleware.
+  '/api/webhooks',
 ]
 
 export async function middleware(req: NextRequest) {

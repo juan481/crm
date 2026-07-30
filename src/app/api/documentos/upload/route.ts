@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/db'
 
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error('[DOC UPLOAD] SUPABASE_SERVICE_ROLE_KEY not set')

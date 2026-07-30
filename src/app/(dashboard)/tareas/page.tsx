@@ -60,6 +60,7 @@ function isOverdue(task: Task): boolean {
 
 export default function TareasPage() {
   const qc = useQueryClient()
+  const router = useRouter()
   const { user } = useAuthStore()
 
   const [statusFilter, setStatusFilter] = useState('')
@@ -156,8 +157,10 @@ export default function TareasPage() {
     }
   }
 
-  const canDelete = (task: Task) =>
-    user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || task.createdById === user?.id
+  // Must mirror the API's own check (src/app/api/tareas/[id]/route.ts) — only
+  // ADMIN+ can delete there, so showing the button to a non-admin creator
+  // would just 403 every time.
+  const canDelete = () => user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -255,12 +258,13 @@ export default function TareasPage() {
               return (
                 <div
                   key={task.id}
-                  className={`list-appear surface rounded-xl px-4 py-3 flex items-start gap-3 group transition-opacity ${
+                  onClick={() => router.push(`/tareas/${task.id}`)}
+                  className={`list-appear surface rounded-xl px-4 py-3 flex items-start gap-3 group transition-opacity cursor-pointer hover:border-[var(--color-border-strong)] ${
                     task.status === 'HECHA' ? 'opacity-60' : ''
                   }`}
                 >
                   <button
-                    onClick={() => toggleStatus(task)}
+                    onClick={(e) => { e.stopPropagation(); toggleStatus(task) }}
                     className={`mt-0.5 shrink-0 transition-colors ${
                       task.status === 'HECHA' ? 'text-emerald-400' : 'text-[var(--color-text-subtle)] hover:text-[var(--color-primary)]'
                     }`}
@@ -327,9 +331,9 @@ export default function TareasPage() {
                     </div>
                   )}
 
-                  {canDelete(task) && (
+                  {canDelete() && (
                     <button
-                      onClick={() => handleDelete(task.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(task.id) }}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--color-text-subtle)] hover:text-red-400 transition-all shrink-0"
                     >
                       <Trash2 size={14} />

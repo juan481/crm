@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
@@ -8,6 +8,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { name } = await req.json()
     if (!name?.trim()) return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
@@ -30,6 +31,7 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const folder = await prisma.folder.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
