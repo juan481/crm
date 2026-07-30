@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, AlertTriangle, Calculator, CalendarClock } from 'lucide-react'
+import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, AlertTriangle, Calculator, CalendarClock, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -23,6 +23,18 @@ const STAGES: { key: DealStage; label: string; color: string; prob: number }[] =
   { key: 'GANADO',      label: 'Ganado',      color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', prob: 100 },
   { key: 'PERDIDO',     label: 'Perdido',     color: 'bg-red-500/15 text-red-400 border-red-500/20',           prob: 0   },
 ]
+
+// Días sin cambios (updatedAt) para marcar una oportunidad como estancada.
+// No aplica a etapas ya cerradas.
+const STALE_DAYS = 14
+
+function daysSinceUpdate(deal: Deal) {
+  return Math.floor((Date.now() - new Date(deal.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function isDealStale(deal: Deal) {
+  return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO' && daysSinceUpdate(deal) >= STALE_DAYS
+}
 
 const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD' },
@@ -200,7 +212,10 @@ export default function PipelinePage() {
   const { data, isLoading, isError } = useQuery<Deal[]>({
     queryKey: ['deals'],
     queryFn: async () => {
-      const r = await fetch('/api/deals')
+      // Sin este límite explícito, el default de la API (50) corta justo los
+      // deals hace más tiempo sin actividad — los más "estancados" — porque
+      // el orden es updatedAt desc.
+      const r = await fetch('/api/deals?limit=2000')
       if (!r.ok) throw new Error('Error al cargar pipeline')
       return (await r.json()).data
     },
@@ -318,7 +333,10 @@ export default function PipelinePage() {
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Pipeline de Ventas</h1>
           <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
             {deals.filter(d => d.stage !== 'PERDIDO' && d.stage !== 'GANADO').length} deals activos
-            · Arrastrá las tarjetas para moverlas entre etapas
+            {deals.some(isDealStale) && (
+              <span className="text-amber-400"> · {deals.filter(isDealStale).length} estancadas (+{STALE_DAYS}d sin actividad)</span>
+            )}
+            {' '}· Arrastrá las tarjetas para moverlas entre etapas
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -379,6 +397,7 @@ export default function PipelinePage() {
                   <AnimatePresence initial={false}>
                     {columnDeals.map(deal => {
                       const stageIdx = STAGES.findIndex(s => s.key === deal.stage)
+                      const stale = isDealStale(deal)
                       return (
                         <motion.div
                           key={deal.id}
@@ -392,7 +411,7 @@ export default function PipelinePage() {
                             draggable
                             onDragStart={(e: React.DragEvent<HTMLDivElement>) => onDragStart(e, deal.id)}
                             onClick={() => setSelectedDealId(deal.id)}
-                            className="surface rounded-xl p-3 group relative select-none cursor-grab active:cursor-grabbing hover:border-[var(--color-border-strong)] transition-colors"
+                            className={`surface rounded-xl p-3 group relative select-none cursor-grab active:cursor-grabbing hover:border-[var(--color-border-strong)] transition-colors ${stale ? 'border-l-2 border-amber-400/60' : ''}`}
                             style={{ opacity: movingId === deal.id ? 0.5 : 1 }}
                           >
                             <p className="text-sm font-medium text-[var(--color-text)] mb-1.5 pr-5 leading-snug">
@@ -423,6 +442,12 @@ export default function PipelinePage() {
                               <p className="text-[10px] flex items-center gap-1 mt-1"
                                 style={{ color: 'var(--color-text-subtle)' }}>
                                 <User size={9} />{deal.owner.name}
+                              </p>
+                            )}
+
+                            {stale && (
+                              <p className="text-[10px] flex items-center gap-1 mt-1 font-medium text-amber-400">
+                                <Clock size={9} />{daysSinceUpdate(deal)} días sin actividad
                               </p>
                             )}
 
