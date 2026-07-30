@@ -94,6 +94,17 @@ export default function ValorarTicketPage() {
   const orgName = data.organization?.name || data.organization?.crmName || 'nuestro equipo'
   const primaryColor = data.organization?.primaryColor || '#6366f1'
   const alreadyRated = !!data.satisfactionRatedAt
+  const stillOpen = data.status !== 'RESUELTO' && data.status !== 'CERRADO'
+
+  if (!alreadyRated && !submitted && stillOpen) {
+    return (
+      <Shell>
+        <p style={{ fontSize: 14, color: 'var(--color-text-muted)', lineHeight: 1.6, margin: 0 }}>
+          El ticket #{String(data.number).padStart(4, '0')} fue reabierto y todavía está en curso. Vas a poder calificar la atención cuando {orgName} lo resuelva de nuevo.
+        </p>
+      </Shell>
+    )
+  }
 
   if (alreadyRated || submitted) {
     return (

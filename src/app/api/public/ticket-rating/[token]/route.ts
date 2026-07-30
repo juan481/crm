@@ -40,6 +40,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (existing.satisfactionRatedAt) {
       return NextResponse.json({ error: 'Este ticket ya fue calificado' }, { status: 409 })
     }
+    // El link se emailó para UNA resolución puntual — si el ticket se
+    // reabrió después (antes de que el cliente califique), ese ciclo ya no
+    // está esperando una calificación todavía.
+    if (existing.status !== 'RESUELTO' && existing.status !== 'CERRADO') {
+      return NextResponse.json({ error: 'Este ticket fue reabierto y todavía no fue resuelto de nuevo' }, { status: 409 })
+    }
 
     await db.ticket.update({
       where: { id: existing.id },

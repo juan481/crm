@@ -72,14 +72,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (isTech && existing.assignedToId !== payload.userId)
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const isResolving = (status === 'RESUELTO' || status === 'CERRADO') &&
-      existing.status !== 'RESUELTO' && existing.status !== 'CERRADO'
+    const wasClosed  = existing.status === 'RESUELTO' || existing.status === 'CERRADO'
+    const isResolving = (status === 'RESUELTO' || status === 'CERRADO') && !wasClosed
+    // Reabrir: sale de RESUELTO/CERRADO hacia cualquier otro estado — resetea
+    // resolvedAt (si no, quedaba "pegado" a la fecha de la resolución vieja,
+    // ver bug de SLA de abajo y el panel de detalle mostrando un "Resuelto"
+    // desactualizado con el ticket ya reabierto).
+    const isReopening = status !== undefined && status !== 'RESUELTO' && status !== 'CERRADO' && wasClosed
 
     const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName } = body
 
-    // El SLA se recalcula si cambia la prioridad mientras el ticket sigue abierto.
+    // El SLA se recalcula si cambia la prioridad mientras el ticket sigue
+    // abierto. "Sigue abierto" tiene que mirar el status EFECTIVO tras este
+    // PATCH (no `existing.resolvedAt`, que nunca se limpiaba al reabrir y
+    // por eso bloqueaba el recálculo de SLA en un ticket reabierto).
+    const effectiveStatus = status !== undefined ? status : existing.status
+    const isOpenAfterUpdate = effectiveStatus !== 'RESUELTO' && effectiveStatus !== 'CERRADO'
     const priorityChanged = !isTech && priority && priority !== existing.priority
-    const newSlaDueAt = (priorityChanged && !existing.resolvedAt)
+    const newSlaDueAt = (priorityChanged && isOpenAfterUpdate)
       ? new Date(Date.now() + (SLA_HOURS[priority] ?? SLA_HOURS.MEDIA) * 60 * 60 * 1000)
       : undefined
 
@@ -106,6 +116,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...((!isTech && recipientEmail !== undefined) && { recipientEmail: recipientEmail || null }),
         ...((!isTech && recipientName !== undefined)  && { recipientName: recipientName || null }),
         ...(isResolving                        && { resolvedAt: new Date() }),
+        ...(isReopening                        && { resolvedAt: null }),
         ...(newSlaDueAt                        && { slaDueAt: newSlaDueAt }),
         ...(satisfactionToken                  && { satisfactionToken }),
         ...(resetSatisfaction                  && { satisfactionRating: null, satisfactionComment: null, satisfactionRatedAt: null }),

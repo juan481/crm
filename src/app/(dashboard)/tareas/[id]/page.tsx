@@ -39,18 +39,26 @@ function TaskChecklist({ taskId }: { taskId: string }) {
   const toggle = async (item: TaskSubitem) => {
     qc.setQueryData<TaskSubitem[]>(['task-subitems', taskId], (old) =>
       old?.map((i) => (i.id === item.id ? { ...i, done: !i.done } : i)) ?? [])
-    await fetch(`/api/tareas/${taskId}/subitems/${item.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ done: !item.done }),
-    })
-    qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+    try {
+      const res = await fetch(`/api/tareas/${taskId}/subitems/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: !item.done }),
+      })
+      if (!res.ok) toast.error('No se pudo actualizar la subtarea')
+    } catch { toast.error('Error de conexión') } finally {
+      qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+    }
   }
 
   const remove = async (item: TaskSubitem) => {
     qc.setQueryData<TaskSubitem[]>(['task-subitems', taskId], (old) => old?.filter((i) => i.id !== item.id) ?? [])
-    await fetch(`/api/tareas/${taskId}/subitems/${item.id}`, { method: 'DELETE' })
-    qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+    try {
+      const res = await fetch(`/api/tareas/${taskId}/subitems/${item.id}`, { method: 'DELETE' })
+      if (!res.ok) toast.error('No se pudo eliminar la subtarea')
+    } catch { toast.error('Error de conexión') } finally {
+      qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+    }
   }
 
   const add = async (e: React.FormEvent) => {
