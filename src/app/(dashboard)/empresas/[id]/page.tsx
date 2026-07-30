@@ -7,8 +7,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
   Briefcase, Plus, Mail, UserCircle2, UserCheck, UserX, MessageCircle,
-  Send, X, CheckSquare,
+  Send, X, CheckSquare, DollarSign,
 } from 'lucide-react'
+import { Select } from '@/components/ui/select'
+import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal, ModalFooter } from '@/components/ui/modal'
@@ -32,6 +34,7 @@ export default function EmpresaDetailPage() {
   const [deleteContactoId,  setDeleteContactoId]  = useState<string | null>(null)
   const [deleting,          setDeleting]          = useState(false)
   const [togglingCliente,   setTogglingCliente]   = useState(false)
+  const [savingBilling,     setSavingBilling]     = useState(false)
 
   // Email selectivo
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set())
@@ -83,6 +86,32 @@ export default function EmpresaDetailPage() {
       }
     } catch { toast.error('Error de conexión') }
     finally { setTogglingCliente(false) }
+  }
+
+  const handleSaveBilling = async (monthlyAmount: string, billingCurrency: string) => {
+    if (!empresa) return
+    setSavingBilling(true)
+    try {
+      const res = await fetch(`/api/empresas/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: empresa.name,
+          activity: empresa.activity,
+          address: empresa.address,
+          city: empresa.city,
+          province: empresa.province,
+          country: empresa.country,
+          website: empresa.website,
+          monthlyAmount: monthlyAmount === '' ? null : Number(monthlyAmount),
+          billingCurrency,
+        }),
+      })
+      if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
+      toast.success('Facturación recurrente actualizada')
+      qc.invalidateQueries({ queryKey: ['empresa', id] })
+    } catch { toast.error('Error de conexión') }
+    finally { setSavingBilling(false) }
   }
 
   const handleDeleteEmpresa = async () => {
@@ -267,6 +296,42 @@ export default function EmpresaDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Recurring billing (only relevant once marked as cliente) */}
+      {empresa.isCliente && (
+        <div className="rounded-2xl p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <DollarSign size={15} style={{ color: 'var(--color-text-muted)' }} />
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+              Facturación recurrente
+            </p>
+          </div>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+            Si esta empresa se factura todos los meses por el mismo monto, cargalo acá — así aparece en
+            &quot;Generar Facturas del Mes&quot; en Facturación.
+            {empresa.monthlyAmount ? ` Hoy: ${formatCurrency(empresa.monthlyAmount, empresa.billingCurrency)}/mes.` : ''}
+          </p>
+          <div className="grid grid-cols-[1fr_auto] gap-2 max-w-xs">
+            <Input
+              type="number" min="0" step="0.01"
+              placeholder="0.00"
+              defaultValue={empresa.monthlyAmount ?? ''}
+              disabled={savingBilling}
+              onBlur={(e) => {
+                if (Number(e.target.value || 0) !== (empresa.monthlyAmount ?? 0)) {
+                  handleSaveBilling(e.target.value, empresa.billingCurrency)
+                }
+              }}
+            />
+            <Select
+              options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }, { value: 'EUR', label: 'EUR' }]}
+              defaultValue={empresa.billingCurrency}
+              disabled={savingBilling}
+              onChange={(e) => handleSaveBilling(String(empresa.monthlyAmount ?? ''), e.target.value)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Activity / Notas section */}
       <EmpresaNotas empresaId={id} empresaNombre={empresa.name} />

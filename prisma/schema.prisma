@@ -744,6 +744,11 @@ model Empresa {
   province       String?
   country        String?
   website        String?
+  // Recurring billing — only meaningful once isCliente=true. Powers
+  // "Generar Facturas del Mes" (previously read from the legacy Client.mrr,
+  // a table the live Clientes/Empresas workflow never populates).
+  monthlyAmount    Float?
+  billingCurrency  String   @default("USD")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -523,6 +523,8 @@ export interface Empresa {
   province: string | null
   country: string | null
   website: string | null
+  monthlyAmount: number | null
+  billingCurrency: string
   organizationId: string
   createdAt: string
   updatedAt: string

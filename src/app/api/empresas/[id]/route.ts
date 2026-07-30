@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
-    const { name, activity, address, codigoPostal, city, province, country, website, isCliente } = body
+    const { name, activity, address, codigoPostal, city, province, country, website, isCliente, monthlyAmount, billingCurrency } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
@@ -78,6 +78,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       updateData.isCliente    = isCliente
       updateData.clienteDesde = isCliente && !exists.isCliente ? new Date() : (isCliente ? undefined : null)
     }
+
+    if (monthlyAmount !== undefined)  updateData.monthlyAmount  = monthlyAmount === null || monthlyAmount === '' ? null : Number(monthlyAmount)
+    if (billingCurrency !== undefined) updateData.billingCurrency = billingCurrency || 'USD'
 
     const empresa = await db.empresa.update({ where: { id: params.id }, data: updateData })
 

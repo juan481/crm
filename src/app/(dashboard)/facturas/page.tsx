@@ -19,8 +19,7 @@ import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
 
 interface RecurringClient {
-  id: string; name: string; email: string; mrr: number
-  serviceType: string | null; service: { name: string; currency: string } | null
+  id: string; name: string; monthlyAmount: number; billingCurrency: string
 }
 interface RecurringPreview {
   pending: RecurringClient[]; alreadyBilled: RecurringClient[]; month: string
@@ -39,7 +38,7 @@ function RecurringModal({ open, onClose, onGenerated }: { open: boolean; onClose
     if (!selected.size) return
     setGenerating(true)
     try {
-      const res = await fetch('/api/invoices/generate-recurring', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientIds: Array.from(selected) }) })
+      const res = await fetch('/api/invoices/generate-recurring', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empresaIds: Array.from(selected) }) })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
       toast.success(json.message); onGenerated(); onClose()
@@ -65,8 +64,8 @@ function RecurringModal({ open, onClose, onGenerated }: { open: boolean; onClose
                   <label key={c.id} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)]/50 cursor-pointer transition-all">
                     <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} className="accent-[var(--color-primary)]" />
                     <Avatar name={c.name} size="sm" />
-                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-[var(--color-text)] truncate">{c.name}</p><p className="text-xs text-[var(--color-text-muted)]">{c.service?.name ?? c.serviceType ?? 'Servicio'}</p></div>
-                    <span className="text-sm font-bold text-[var(--color-text)] shrink-0">{formatCurrency(c.mrr, c.service?.currency ?? 'USD')}</span>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-[var(--color-text)] truncate">{c.name}</p><p className="text-xs text-[var(--color-text-muted)]">Facturación recurrente</p></div>
+                    <span className="text-sm font-bold text-[var(--color-text)] shrink-0">{formatCurrency(c.monthlyAmount, c.billingCurrency)}</span>
                   </label>
                 ))}
               </div>

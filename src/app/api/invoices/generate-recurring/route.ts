@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
-// Returns clients that would be billed (preview) or creates invoices (action)
+// Returns empresas that would be billed (preview) or creates invoices (action).
+// Uses Empresa.monthlyAmount — the legacy Client.mrr this used to read from
+// belongs to a model the live Clientes/Empresas workflow never populates.
 export async function GET() {
   try {
     const payload = await getCurrentUser()
@@ -14,29 +16,29 @@ export async function GET() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
-    const activeClients = await prisma.client.findMany({
-      where: { organizationId: payload.orgId, status: 'ACTIVE', mrr: { gt: 0 } },
-      select: { id: true, name: true, email: true, mrr: true, serviceType: true, service: { select: { name: true, currency: true } } },
+    const billableEmpresas = await prisma.empresa.findMany({
+      where: { organizationId: payload.orgId, isCliente: true, monthlyAmount: { gt: 0 } },
+      select: { id: true, name: true, monthlyAmount: true, billingCurrency: true },
       orderBy: { name: 'asc' },
     })
 
-    // Find which clients already have an invoice this month
+    // Find which empresas already have an invoice this month
     const existingInvoices = await prisma.invoice.findMany({
       where: {
-        clientId: { in: activeClients.map((c) => c.id) },
+        empresaId: { in: billableEmpresas.map((e) => e.id) },
         createdAt: { gte: startOfMonth, lt: endOfMonth },
       },
-      select: { clientId: true },
+      select: { empresaId: true },
     })
-    const alreadyBilled = new Set(existingInvoices.map((i) => i.clientId))
+    const alreadyBilledIds = new Set(existingInvoices.map((i) => i.empresaId))
 
-    const pending = activeClients.filter((c) => !alreadyBilled.has(c.id))
-    const alreadyDone = activeClients.filter((c) => alreadyBilled.has(c.id))
+    const pending = billableEmpresas.filter((e) => !alreadyBilledIds.has(e.id))
+    const alreadyBilled = billableEmpresas.filter((e) => alreadyBilledIds.has(e.id))
 
     return NextResponse.json({
       data: {
         pending,
-        alreadyBilled: alreadyDone,
+        alreadyBilled,
         month: now.toLocaleString('es', { month: 'long', year: 'numeric' }),
       },
     })
@@ -54,8 +56,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const { clientIds } = await req.json() as { clientIds: string[] }
-    if (!clientIds?.length) {
+    const { empresaIds } = await req.json() as { empresaIds: string[] }
+    if (!empresaIds?.length) {
       return NextResponse.json({ error: 'No hay clientes seleccionados' }, { status: 400 })
     }
 
@@ -63,20 +65,19 @@ export async function POST(req: NextRequest) {
     const monthName = now.toLocaleString('es', { month: 'long', year: 'numeric' })
     const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 5) // due on 5th of next month
 
-    const clients = await prisma.client.findMany({
-      where: { id: { in: clientIds }, organizationId: payload.orgId, status: 'ACTIVE' },
-      include: { service: { select: { name: true, currency: true } } },
+    const empresas = await prisma.empresa.findMany({
+      where: { id: { in: empresaIds }, organizationId: payload.orgId, isCliente: true },
     })
 
     const invoices = await prisma.$transaction(
-      clients.map((c) =>
+      empresas.map((e) =>
         prisma.invoice.create({
           data: {
-            clientId: c.id,
+            empresaId: e.id,
             organizationId: payload.orgId,
-            amount: c.mrr,
-            currency: c.service?.currency ?? 'USD',
-            description: `${c.service?.name ?? c.serviceType ?? 'Servicio'} — ${monthName}`,
+            amount: e.monthlyAmount ?? 0,
+            currency: e.billingCurrency || 'USD',
+            description: `Facturación recurrente — ${monthName}`,
             dueDate,
             status: 'PENDING' as const,
           },
