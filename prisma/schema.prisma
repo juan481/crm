@@ -714,6 +714,18 @@ model Ticket {
   createdById    String
   createdBy      User      @relation("TicketCreator", fields: [createdById], references: [id])
   resolvedAt     DateTime?
+  // SLA — calculado al crear (o al recategorizar prioridad mientras sigue
+  // abierto) según Priority; ver SLA_HOURS en la API de tickets.
+  slaDueAt              DateTime?
+  // CSAT — link público de un solo uso, generado recién al cerrar/resolver
+  // el ticket (no @default: evita requerir backfill en filas existentes).
+  // Unicidad garantizada en la app (crypto.randomUUID), no a nivel de DB,
+  // para evitar el flag --accept-data-loss en el push de este constraint.
+  // No requiere login ni portal de cliente.
+  satisfactionToken     String?
+  satisfactionRating    Int?
+  satisfactionComment   String?
+  satisfactionRatedAt   DateTime?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages       TicketMessage[]
@@ -725,6 +737,7 @@ model Ticket {
   @@index([assignedToId])
   @@index([clientId])
   @@index([empresaId])
+  @@index([satisfactionToken])
 }
 
 model TicketMessage {

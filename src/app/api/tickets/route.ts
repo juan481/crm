@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { SLA_HOURS } from '@/lib/tickets'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,10 +74,11 @@ export async function POST(req: NextRequest) {
     if (!description?.trim()) return NextResponse.json({ error: 'La descripción es requerida' },  { status: 400 })
 
     const db = prisma as any
+    const priorityValue = priority || 'MEDIA'
     const ticketData = {
       title:          title.trim(),
       description:    description.trim(),
-      priority:       priority    || 'MEDIA',
+      priority:       priorityValue,
       category:       category    || 'SOPORTE',
       clientId:       clientId    || null,
       empresaId:      empresaId   || null,
@@ -85,6 +87,7 @@ export async function POST(req: NextRequest) {
       assignedToId:   assignedToId || null,
       createdById:    payload.userId,
       organizationId: payload.orgId,
+      slaDueAt:       new Date(Date.now() + SLA_HOURS[priorityValue] * 60 * 60 * 1000),
     }
 
     // Retry on race condition (P2002 unique constraint on number+orgId)

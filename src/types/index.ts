@@ -500,6 +500,11 @@ export interface Ticket {
   createdById: string
   createdBy?: { id: string; name: string }
   resolvedAt: string | null
+  slaDueAt: string | null
+  satisfactionToken: string | null
+  satisfactionRating: number | null
+  satisfactionComment: string | null
+  satisfactionRatedAt: string | null
   organizationId: string
   messages?: TicketMessage[]
   _count?: { messages: number }

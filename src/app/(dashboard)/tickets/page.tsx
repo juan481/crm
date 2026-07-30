@@ -27,6 +27,12 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   BAJA: 'neutral', MEDIA: 'info', ALTA: 'warning', URGENTE: 'danger',
 }
 
+function isTicketOverdue(ticket: Ticket) {
+  return !!ticket.slaDueAt
+    && ticket.status !== 'RESUELTO' && ticket.status !== 'CERRADO'
+    && new Date(ticket.slaDueAt).getTime() < Date.now()
+}
+
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos los estados' },
   { value: 'ABIERTO', label: 'Abierto' },
@@ -200,6 +206,11 @@ export default function TicketsPage() {
                       {ticket.priority}
                     </Badge>
                     <Badge variant="neutral" size="sm">{ticket.category}</Badge>
+                    {isTicketOverdue(ticket) && (
+                      <Badge variant="danger" size="sm">
+                        <AlertCircle size={9} className="mr-1" />Vencido
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-[var(--color-text-subtle)] line-clamp-1">{ticket.description}</p>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">

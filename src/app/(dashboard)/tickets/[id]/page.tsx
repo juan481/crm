@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Send, Lock, Unlock, User, Clock, Tag, AlertCircle,
-  CheckCircle, XCircle, Edit2, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, ListPlus,
+  CheckCircle, XCircle, Edit2, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, ListPlus, Star,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -208,6 +208,7 @@ export default function TicketDetailPage() {
   if (!data) return null
 
   const isClosed = data.status === 'RESUELTO' || data.status === 'CERRADO'
+  const isOverdue = !!data.slaDueAt && !isClosed && new Date(data.slaDueAt).getTime() < Date.now()
   const isImageFile = (name?: string | null) => !!name && /\.(png|jpe?g|webp)$/i.test(name)
 
   return (
@@ -233,6 +234,11 @@ export default function TicketDetailPage() {
             {data.priority}
           </Badge>
           <Badge variant="neutral" size="sm">{data.category}</Badge>
+          {isOverdue && (
+            <Badge variant="danger" size="sm">
+              <AlertCircle size={9} className="mr-1" />SLA vencido
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -460,6 +466,17 @@ export default function TicketDetailPage() {
                 </div>
               </div>
             )}
+            {data.slaDueAt && !isClosed && (
+              <div className="flex items-center gap-2">
+                <AlertCircle size={13} className={isOverdue ? 'text-red-400 shrink-0' : 'text-[var(--color-text-subtle)] shrink-0'} />
+                <div>
+                  <p className="text-xs text-[var(--color-text-subtle)]">SLA</p>
+                  <p className={`text-sm ${isOverdue ? 'text-red-400 font-medium' : 'text-[var(--color-text)]'}`}>
+                    {isOverdue ? `Vencido — ${formatDate(data.slaDueAt)}` : `Vence ${formatDate(data.slaDueAt)}`}
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Tag size={13} className="text-[var(--color-text-subtle)] shrink-0" />
               <div>
@@ -468,6 +485,37 @@ export default function TicketDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* CSAT */}
+          {isClosed && (
+            <div className="surface rounded-2xl p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-subtle)]">Satisfacción del cliente</p>
+              {data.satisfactionRating ? (
+                <>
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        size={16}
+                        fill={data.satisfactionRating! >= n ? '#f59e0b' : 'none'}
+                        color={data.satisfactionRating! >= n ? '#f59e0b' : 'var(--color-border-strong)'}
+                        strokeWidth={1.5}
+                      />
+                    ))}
+                  </div>
+                  {data.satisfactionComment && (
+                    <p className="text-sm text-[var(--color-text-muted)] italic">&ldquo;{data.satisfactionComment}&rdquo;</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-[var(--color-text-subtle)]">
+                  {data.recipientEmail || data.client
+                    ? 'Invitación enviada — esperando que el cliente califique.'
+                    : 'Sin email de contacto cargado, no se pudo invitar a calificar.'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

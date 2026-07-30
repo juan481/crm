@@ -13,6 +13,10 @@ const PUBLIC_PATHS = [
   // Amazon SNS) and authenticate themselves (per-event secret / SNS signature)
   // instead of a Supabase session — must stay reachable past this middleware.
   '/api/webhooks',
+  // Ticket CSAT — public, token-gated rating link emailed to the client on
+  // close (same class as /unsubscribe: no login, single purpose, self-authenticating token).
+  '/valorar-ticket',
+  '/api/public/ticket-rating',
 ]
 
 export async function middleware(req: NextRequest) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { SLA_HOURS } from '@/lib/tickets'
 
 interface Params { params: { id: string } }
 
@@ -52,7 +54,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
-    const existing = await db.ticket.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
+    const existing = await db.ticket.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      include: { client: { select: { email: true, name: true } } },
+    })
     if (!existing) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
 
     const body = await req.json()
@@ -68,6 +73,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       existing.status !== 'RESUELTO' && existing.status !== 'CERRADO'
 
     const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName } = body
+
+    // El SLA se recalcula si cambia la prioridad mientras el ticket sigue abierto.
+    const priorityChanged = !isTech && priority && priority !== existing.priority
+    const newSlaDueAt = (priorityChanged && !existing.resolvedAt)
+      ? new Date(Date.now() + (SLA_HOURS[priority] ?? SLA_HOURS.MEDIA) * 60 * 60 * 1000)
+      : undefined
+
+    // Al cerrar/resolver por primera vez, generamos (si falta) el token de
+    // calificación — se emaila más abajo.
+    const satisfactionToken = (isResolving && !existing.satisfactionToken)
+      ? crypto.randomUUID()
+      : undefined
+
     const ticket = await db.ticket.update({
       where: { id: params.id },
       data: {
@@ -81,11 +99,56 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...((!isTech && recipientEmail !== undefined) && { recipientEmail: recipientEmail || null }),
         ...((!isTech && recipientName !== undefined)  && { recipientName: recipientName || null }),
         ...(isResolving                        && { resolvedAt: new Date() }),
+        ...(newSlaDueAt                        && { slaDueAt: newSlaDueAt }),
+        ...(satisfactionToken                  && { satisfactionToken }),
       },
       include: INCLUDE_LIST,
     })
 
-    return NextResponse.json({ data: ticket })
+    // Invitar al contacto a calificar la atención — link público de un solo
+    // uso, mismo patrón que Evento.webhookSecret. No requiere portal ni login.
+    let satisfactionEmailSent = false
+    if (isResolving) {
+      const toEmail = existing.recipientEmail || existing.client?.email
+      if (toEmail) {
+        const org = await prisma.organization.findUnique({
+          where: { id: payload.orgId },
+          select: {
+            name: true, crmName: true, primaryColor: true, secondaryColor: true,
+            smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+            smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+          },
+        })
+        if (isOrgEmailConfigured(org) || process.env.BREVO_API_KEY || process.env.SMTP_HOST) {
+          try {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+            const ratingUrl = `${appUrl}/valorar-ticket/${ticket.satisfactionToken}`
+            const orgName = org?.name || org?.crmName || 'CRM'
+            const contactName = existing.recipientName || existing.client?.name || ''
+            const ticketNumber = String(ticket.number).padStart(4, '0')
+            const primaryColor = org?.primaryColor || '#6366f1'
+            const html = buildEmailHtml(
+              `¿Cómo fue tu experiencia con el ticket #${ticketNumber}?`,
+              `Hola${contactName ? ' ' + contactName : ''},\n\nTu ticket "${ticket.title}" fue marcado como ${ticket.status === 'CERRADO' ? 'cerrado' : 'resuelto'}. Nos ayudaría mucho que nos cuentes cómo fue la atención recibida:\n\n<a href="${ratingUrl}" style="color:${primaryColor};font-weight:600">Calificar la atención →</a>`,
+              orgName,
+              primaryColor,
+              org?.secondaryColor || '#8b5cf6',
+            )
+            await sendEmail({
+              to: toEmail,
+              subject: `¿Cómo fue tu experiencia? — Ticket #${ticketNumber}`,
+              html,
+              smtpConfig: resolveOrgSmtpConfig(org),
+            })
+            satisfactionEmailSent = true
+          } catch (err) {
+            console.error('[TICKET PATCH] Satisfaction email failed:', err)
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ data: ticket, satisfactionEmailSent })
   } catch (error) {
     console.error('[TICKET PATCH]', error)
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 })
