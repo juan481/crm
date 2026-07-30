@@ -55,10 +55,12 @@ interface TicketForm {
   category: TicketCategory
   priority: TaskPriority
   empresaId: string
+  recipientEmail: string
+  recipientName: string
 }
 
 const EMPTY_TICKET: TicketForm = {
-  title: '', description: '', category: 'SOPORTE', priority: 'MEDIA', empresaId: '',
+  title: '', description: '', category: 'SOPORTE', priority: 'MEDIA', empresaId: '', recipientEmail: '', recipientName: '',
 }
 
 export default function MiDiaPage() {
@@ -198,6 +200,8 @@ export default function MiDiaPage() {
           category:    ticketForm.category,
           priority:    ticketForm.priority,
           empresaId:   ticketForm.empresaId || null,
+          recipientEmail: ticketForm.recipientEmail.trim() || null,
+          recipientName:  ticketForm.recipientName.trim()  || null,
         }),
       })
       const json = await res.json()
@@ -472,6 +476,20 @@ export default function MiDiaPage() {
             value={ticketForm.empresaId}
             onChange={e => setTicketForm(f => ({ ...f, empresaId: e.target.value }))}
           />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Email de contacto (opcional)"
+              type="email"
+              placeholder="Para avisarle avances"
+              value={ticketForm.recipientEmail}
+              onChange={e => setTicketForm(f => ({ ...f, recipientEmail: e.target.value }))}
+            />
+            <Input
+              label="Nombre del contacto"
+              value={ticketForm.recipientName}
+              onChange={e => setTicketForm(f => ({ ...f, recipientName: e.target.value }))}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" type="button" onClick={() => setTicketOpen(false)}>Cancelar</Button>
             <Button type="submit" loading={saving}>Crear Ticket</Button>

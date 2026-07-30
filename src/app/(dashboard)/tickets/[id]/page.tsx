@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Send, Lock, Unlock, User, Clock, Tag, AlertCircle,
-  CheckCircle, XCircle, Edit2, ChevronDown,
+  CheckCircle, XCircle, Edit2, ChevronDown, Paperclip, X, FileText, Image as ImageIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +68,9 @@ export default function TicketDetailPage() {
   const [isInternal, setIsInternal] = useState(true)
   const [sending, setSending] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [attachment, setAttachment] = useState<{ url: string; name: string } | null>(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery<TicketDetail>({
     queryKey: ['ticket', id],
@@ -105,17 +108,46 @@ export default function TicketDetailPage() {
       const res = await fetch(`/api/tickets/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: message.trim(), isInternal }),
+        body: JSON.stringify({
+          content: message.trim(),
+          isInternal,
+          attachmentUrl:  attachment?.url  ?? null,
+          attachmentName: attachment?.name ?? null,
+        }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
       setMessage('')
+      setAttachment(null)
+      if (!isInternal) {
+        if (json.emailNotified) toast.success('Nota guardada y cliente notificado por email')
+        else if (json.emailError) toast(json.emailError, { icon: '⚠️' })
+      }
       qc.invalidateQueries({ queryKey: ['ticket', id] })
       qc.invalidateQueries({ queryKey: ['tickets'] })
     } catch { toast.error('Error') } finally { setSending(false) }
   }
 
-  const handleUpdate = async (field: Partial<{ status: string; priority: string; category: string; assignedToId: string | null }>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/tickets/${id}/upload`, { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al subir archivo'); return }
+      setAttachment(json.data)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setUploadingFile(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleUpdate = async (field: Partial<{ status: string; priority: string; category: string; assignedToId: string | null; recipientEmail: string | null }>) => {
     setUpdating(true)
     try {
       const res = await fetch(`/api/tickets/${id}`, {
@@ -145,6 +177,7 @@ export default function TicketDetailPage() {
   if (!data) return null
 
   const isClosed = data.status === 'RESUELTO' || data.status === 'CERRADO'
+  const isImageFile = (name?: string | null) => !!name && /\.(png|jpe?g|webp)$/i.test(name)
 
   return (
     <div className="space-y-5">
@@ -207,6 +240,24 @@ export default function TicketDetailPage() {
                     )}
                   </div>
                   <p className="text-sm text-[var(--color-text-muted)] whitespace-pre-wrap">{msg.content}</p>
+                  {msg.attachmentUrl && (
+                    isImageFile(msg.attachmentName) ? (
+                      <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block mt-2.5 max-w-[240px]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={msg.attachmentUrl} alt={msg.attachmentName ?? 'adjunto'} className="rounded-xl border border-[var(--color-border)] max-h-56 object-cover" />
+                      </a>
+                    ) : (
+                      <a
+                        href={msg.attachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2.5 inline-flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40 transition-colors"
+                      >
+                        <FileText size={13} />
+                        {msg.attachmentName ?? 'Archivo adjunto'}
+                      </a>
+                    )
+                  )}
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -240,7 +291,26 @@ export default function TicketDetailPage() {
                 value={message}
                 onChange={e => setMessage(e.target.value)}
               />
-              <div className="flex justify-end">
+              {attachment && (
+                <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-[var(--color-surface-raised)] w-fit">
+                  {isImageFile(attachment.name) ? <ImageIcon size={13} /> : <FileText size={13} />}
+                  <span className="text-[var(--color-text-muted)] max-w-[180px] truncate">{attachment.name}</span>
+                  <button type="button" onClick={() => setAttachment(null)} className="text-[var(--color-text-subtle)] hover:text-red-400">
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={handleFileSelect} />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingFile || !!attachment}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors disabled:opacity-50"
+                >
+                  <Paperclip size={13} />
+                  {uploadingFile ? 'Subiendo...' : 'Adjuntar foto o PDF'}
+                </button>
                 <Button type="submit" loading={sending} leftIcon={<Send size={14} />}>
                   Guardar Nota
                 </Button>
@@ -301,6 +371,21 @@ export default function TicketDetailPage() {
                   />
                 ) : (
                   <p className="text-sm text-[var(--color-text)]">{data.assignedTo?.name ?? 'Sin asignar'}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-text-subtle)] mb-1">Email de contacto</p>
+                {user?.role !== 'TECHNICIAN' ? (
+                  <input
+                    type="email"
+                    defaultValue={data.recipientEmail ?? ''}
+                    placeholder="Para notificarle avances"
+                    disabled={updating}
+                    onBlur={e => { if (e.target.value !== (data.recipientEmail ?? '')) handleUpdate({ recipientEmail: e.target.value || null }) }}
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--color-text)]">{data.recipientEmail ?? 'Sin cargar'}</p>
                 )}
               </div>
             </div>

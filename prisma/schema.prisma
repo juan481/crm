@@ -662,6 +662,11 @@ model Ticket {
   client         Client?   @relation(fields: [clientId], references: [id])
   empresaId      String?
   empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // Direct contact for client-facing notifications — independent of
+  // Client/Empresa (which don't reliably carry a single contact email),
+  // same pattern already used by Cotizacion.recipientEmail.
+  recipientEmail String?
+  recipientName  String?
   assignedToId   String?
   assignedTo     User?     @relation("TicketAssignee", fields: [assignedToId], references: [id])
   createdById    String
@@ -681,14 +686,16 @@ model Ticket {
 }
 
 model TicketMessage {
-  id         String   @id @default(cuid())
-  ticketId   String
-  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  content    String
-  isInternal Boolean  @default(false)
-  userId     String
-  user       User     @relation("TicketMessageAuthor", fields: [userId], references: [id])
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  ticketId       String
+  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content        String
+  isInternal     Boolean  @default(false)
+  attachmentUrl  String?
+  attachmentName String?
+  userId         String
+  user           User     @relation("TicketMessageAuthor", fields: [userId], references: [id])
+  createdAt      DateTime @default(now())
 
   @@index([ticketId])
 }

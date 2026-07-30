@@ -471,6 +471,8 @@ export interface Ticket {
   client?: { id: string; name: string } | null
   empresaId: string | null
   empresa?: { id: string; name: string } | null
+  recipientEmail?: string | null
+  recipientName?: string | null
   assignedToId: string | null
   assignedTo?: { id: string; name: string } | null
   createdById: string
@@ -488,6 +490,8 @@ export interface TicketMessage {
   ticketId: string
   content: string
   isInternal: boolean
+  attachmentUrl?: string | null
+  attachmentName?: string | null
   userId: string
   user?: { id: string; name: string; avatarUrl: string | null }
   createdAt: string

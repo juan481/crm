@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const isResolving = (status === 'RESUELTO' || status === 'CERRADO') &&
       existing.status !== 'RESUELTO' && existing.status !== 'CERRADO'
 
-    const { title, priority, category, assignedToId, empresaId, clientId } = body
+    const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName } = body
     const ticket = await db.ticket.update({
       where: { id: params.id },
       data: {
@@ -78,6 +78,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(isAdmin && assignedToId !== undefined && { assignedToId: assignedToId || null }),
         ...((!isTech && empresaId !== undefined)  && { empresaId: empresaId || null }),
         ...((!isTech && clientId !== undefined)   && { clientId: clientId || null }),
+        ...((!isTech && recipientEmail !== undefined) && { recipientEmail: recipientEmail || null }),
+        ...((!isTech && recipientName !== undefined)  && { recipientName: recipientName || null }),
         ...(isResolving                        && { resolvedAt: new Date() }),
       },
       include: INCLUDE_LIST,

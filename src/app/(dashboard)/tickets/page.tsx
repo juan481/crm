@@ -57,10 +57,12 @@ interface TicketFormState {
   priority: TaskPriority
   category: TicketCategory
   empresaId: string
+  recipientEmail: string
+  recipientName: string
 }
 
 const EMPTY_FORM: TicketFormState = {
-  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '',
+  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '', recipientEmail: '', recipientName: '',
 }
 
 export default function TicketsPage() {
@@ -266,6 +268,20 @@ export default function TicketsPage() {
             value={form.empresaId}
             onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
           />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Email de contacto (opcional)"
+              type="email"
+              placeholder="Para notificarle avances"
+              value={form.recipientEmail}
+              onChange={e => setForm(f => ({ ...f, recipientEmail: e.target.value }))}
+            />
+            <Input
+              label="Nombre del contacto"
+              value={form.recipientName}
+              onChange={e => setForm(f => ({ ...f, recipientName: e.target.value }))}
+            />
+          </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" type="button" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button type="submit" loading={saving}>Abrir Ticket</Button>

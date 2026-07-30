@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
 interface Params { params: { id: string } }
 
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    // Fetch ticket + client email in a single query for the email TODO below
+    // Fetch ticket + client email (legacy fallback) for the client-notification email below
     const ticket = await prisma.ticket.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       include: {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const { content, isInternal = true } = await req.json()
+    const { content, isInternal = true, attachmentUrl, attachmentName } = await req.json()
     if (!content?.trim()) return NextResponse.json({ error: 'El contenido es requerido' }, { status: 400 })
 
     const message = await prisma.ticketMessage.create({
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         ticketId:   params.id,
         content:    content.trim(),
         isInternal: Boolean(isInternal),
+        attachmentUrl:  attachmentUrl  || null,
+        attachmentName: attachmentName || null,
         userId:     payload.userId,
       },
       include: { user: { select: { id: true, name: true, avatarUrl: true } } },
@@ -44,28 +47,53 @@ export async function POST(req: NextRequest, { params }: Params) {
       })
     }
 
-    // ─── TODO: Envío de email al cliente ──────────────────────────────────────
-    // Cuando isInternal === false (nota marcada como "Pública"), enviar email
-    // al cliente asociado al ticket con el contenido de la actualización.
-    //
-    // if (!isInternal && ticket.client?.email) {
-    //   await sendTicketUpdateEmail({
-    //     to:          ticket.client.email,
-    //     clientName:  ticket.client.name,
-    //     ticketNumber: String(ticket.number).padStart(4, '0'),
-    //     ticketTitle: ticket.title,
-    //     agentName:   message.user.name,
-    //     content:     content.trim(),
-    //   })
-    // }
-    //
-    // Implementar con Resend (recomendado) o SendGrid:
-    //   import { Resend } from 'resend'
-    //   const resend = new Resend(process.env.RESEND_API_KEY)
-    //   await resend.emails.send({ from: '...', to: ..., subject: ..., html: ... })
-    // ─────────────────────────────────────────────────────────────────────────
+    // Notify the client by email when the note is marked "público" — uses
+    // Ticket.recipientEmail (captured at creation) falling back to the
+    // legacy Client's email for older, client-linked tickets.
+    let emailNotified = false
+    let emailError: string | null = null
+    const toEmail = ticket.recipientEmail || ticket.client?.email
+    if (!isInternal && toEmail) {
+      const org = await prisma.organization.findUnique({
+        where: { id: payload.orgId },
+        select: {
+          name: true, crmName: true, primaryColor: true, secondaryColor: true,
+          smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+          smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+        },
+      })
 
-    return NextResponse.json({ data: message }, { status: 201 })
+      if (isOrgEmailConfigured(org) || process.env.BREVO_API_KEY || process.env.SMTP_HOST) {
+        try {
+          const orgName = org?.name || org?.crmName || 'CRM'
+          const recipientName = ticket.recipientName || ticket.client?.name || ''
+          const ticketNumber = String(ticket.number).padStart(4, '0')
+          const html = buildEmailHtml(
+            `Actualización en tu ticket #${ticketNumber}`,
+            `Hola${recipientName ? ' ' + recipientName : ''},\n\n${message.user.name} escribió una actualización sobre "${ticket.title}":\n\n${content.trim()}`,
+            orgName,
+            org?.primaryColor || '#6366f1',
+            org?.secondaryColor || '#8b5cf6',
+          )
+          await sendEmail({
+            to: toEmail,
+            subject: `Actualización en tu ticket #${ticketNumber} — ${ticket.title}`,
+            html,
+            smtpConfig: resolveOrgSmtpConfig(org),
+          })
+          emailNotified = true
+        } catch (err) {
+          console.error('[TICKET MSG] Email notification failed:', err)
+          emailError = 'No se pudo enviar el email al cliente'
+        }
+      } else {
+        emailError = 'El cliente no recibió el email: falta configurar el correo en Configuración → Correo'
+      }
+    } else if (!isInternal && !toEmail) {
+      emailError = 'El ticket no tiene un email de contacto cargado — el cliente no fue notificado'
+    }
+
+    return NextResponse.json({ data: message, emailNotified, emailError }, { status: 201 })
   } catch (error) {
     console.error('[TICKET MSG POST]', error)
     return NextResponse.json({ error: 'Error al guardar nota' }, { status: 500 })

@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { title, description, priority, category, clientId, empresaId, assignedToId } = await req.json()
+    const { title, description, priority, category, clientId, empresaId, assignedToId, recipientEmail, recipientName } = await req.json()
     if (!title?.trim())       return NextResponse.json({ error: 'El título es requerido' },       { status: 400 })
     if (!description?.trim()) return NextResponse.json({ error: 'La descripción es requerida' },  { status: 400 })
 
@@ -80,6 +80,8 @@ export async function POST(req: NextRequest) {
       category:       category    || 'SOPORTE',
       clientId:       clientId    || null,
       empresaId:      empresaId   || null,
+      recipientEmail: recipientEmail || null,
+      recipientName:  recipientName  || null,
       assignedToId:   assignedToId || null,
       createdById:    payload.userId,
       organizationId: payload.orgId,
