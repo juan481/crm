@@ -56,7 +56,11 @@ export async function GET(req: NextRequest) {
       db.ticket.count({ where }),
     ])
 
-    return NextResponse.json({ data: tickets, total, page, limit, totalPages: Math.ceil(total / limit) })
+    // satisfactionToken es el link público de auto-calificación — nunca debe
+    // viajar al staff (ver mismo fix en GET/PATCH de /api/tickets/[id]).
+    const safeTickets = tickets.map(({ satisfactionToken, ...t }: any) => t)
+
+    return NextResponse.json({ data: safeTickets, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {
     console.error('[TICKETS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

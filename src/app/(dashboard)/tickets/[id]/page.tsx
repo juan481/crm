@@ -157,10 +157,17 @@ export default function TicketDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(field),
       })
-      if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
       qc.invalidateQueries({ queryKey: ['ticket', id] })
       qc.invalidateQueries({ queryKey: ['tickets'] })
-      toast.success('Ticket actualizado')
+      if (field.status === 'RESUELTO' || field.status === 'CERRADO') {
+        toast.success(json.satisfactionEmailSent
+          ? 'Ticket actualizado — se invitó al cliente a calificar la atención'
+          : 'Ticket actualizado')
+      } else {
+        toast.success('Ticket actualizado')
+      }
     } catch { toast.error('Error') } finally { setUpdating(false) }
   }
 
@@ -510,7 +517,7 @@ export default function TicketDetailPage() {
               ) : (
                 <p className="text-sm text-[var(--color-text-subtle)]">
                   {data.recipientEmail || data.client
-                    ? 'Invitación enviada — esperando que el cliente califique.'
+                    ? 'Esperando que el cliente califique la atención.'
                     : 'Sin email de contacto cargado, no se pudo invitar a calificar.'}
                 </p>
               )}

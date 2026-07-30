@@ -362,6 +362,9 @@ export default function CotizadorPage() {
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al guardar'); return }
+      if (dealId && !json.dealId) {
+        toast('La cotización se guardó, pero no se pudo vincular a la oportunidad de origen', { icon: '⚠️' })
+      }
 
       const quote: SavedQuote = {
         cotizacionId: json.cotizacionId,

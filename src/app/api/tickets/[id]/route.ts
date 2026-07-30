@@ -38,7 +38,10 @@ export async function GET(_: NextRequest, { params }: Params) {
     if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
-    return NextResponse.json({ data: ticket })
+    // satisfactionToken es el propio link público de calificación — nunca debe
+    // viajar al staff (cualquiera con acceso al ticket podría auto-calificarlo).
+    const { satisfactionToken, ...safeTicket } = ticket
+    return NextResponse.json({ data: safeTicket })
   } catch (error) {
     console.error('[TICKET GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
@@ -80,11 +83,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ? new Date(Date.now() + (SLA_HOURS[priority] ?? SLA_HOURS.MEDIA) * 60 * 60 * 1000)
       : undefined
 
-    // Al cerrar/resolver por primera vez, generamos (si falta) el token de
-    // calificación — se emaila más abajo.
+    // Al cerrar/resolver, generamos (si falta) el token de calificación — se
+    // emaila más abajo. Si el ticket se reabre y se vuelve a cerrar, se
+    // limpia la calificación anterior para permitir una nueva por este ciclo
+    // (si no, el guard de "ya calificado" del endpoint público bloquearía
+    // la segunda invitación con el mismo token).
     const satisfactionToken = (isResolving && !existing.satisfactionToken)
       ? crypto.randomUUID()
       : undefined
+    const resetSatisfaction = isResolving && !!existing.satisfactionRatedAt
 
     const ticket = await db.ticket.update({
       where: { id: params.id },
@@ -101,6 +108,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(isResolving                        && { resolvedAt: new Date() }),
         ...(newSlaDueAt                        && { slaDueAt: newSlaDueAt }),
         ...(satisfactionToken                  && { satisfactionToken }),
+        ...(resetSatisfaction                  && { satisfactionRating: null, satisfactionComment: null, satisfactionRatedAt: null }),
       },
       include: INCLUDE_LIST,
     })
@@ -148,7 +156,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }
     }
 
-    return NextResponse.json({ data: ticket, satisfactionEmailSent })
+    const { satisfactionToken: _token, ...safeTicket } = ticket
+    return NextResponse.json({ data: safeTicket, satisfactionEmailSent })
   } catch (error) {
     console.error('[TICKET PATCH]', error)
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 })

@@ -21,14 +21,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!task) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
 
     const { title, done } = await req.json()
-    const subitem = await db.taskSubitem.update({
-      where: { id: params.subId },
+    // updateMany + taskId filter (not a plain update by id) — sin esto, un
+    // subId de OTRA tarea (incluso de otra tarea que el usuario no tiene
+    // permiso de tocar) se podía editar con solo pasar un params.id propio.
+    const result = await db.taskSubitem.updateMany({
+      where: { id: params.subId, taskId: params.id },
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(done !== undefined && { done: Boolean(done) }),
       },
     })
+    if (result.count === 0) return NextResponse.json({ error: 'Subtarea no encontrada' }, { status: 404 })
 
+    const subitem = await db.taskSubitem.findUnique({ where: { id: params.subId } })
     return NextResponse.json({ data: subitem })
   } catch (error) {
     console.error('[TASK SUBITEM PATCH]', error)
