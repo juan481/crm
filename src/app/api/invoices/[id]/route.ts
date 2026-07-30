@@ -35,7 +35,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(description !== undefined && { description }),
         ...(dueDate && { dueDate: new Date(dueDate) }),
       },
-      include: { empresa: { select: { id: true, name: true } } },
+      include: {
+        empresa: { select: { id: true, name: true } },
+        client:  { select: { id: true, name: true } },
+      },
     })
 
     return NextResponse.json({ data: invoice })

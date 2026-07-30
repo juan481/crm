@@ -42,7 +42,13 @@ export async function GET(req: NextRequest) {
         skip,
         take: limit,
         orderBy: { dueDate: 'asc' },
-        include: { empresa: { select: { id: true, name: true } } },
+        // client (legacy) is still included: recurring-billing invoices
+        // (generate-recurring/route.ts) are only ever linked via clientId,
+        // never empresaId — the UI must fall back to it.
+        include: {
+          empresa: { select: { id: true, name: true } },
+          client:  { select: { id: true, name: true } },
+        },
       }),
       prisma.invoice.count({ where }),
       prisma.invoice.groupBy({
