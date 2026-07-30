@@ -460,6 +460,15 @@ export interface Task {
   updatedAt: string
 }
 
+export interface TaskSubitem {
+  id: string
+  taskId: string
+  title: string
+  done: boolean
+  order: number
+  createdAt: string
+}
+
 export interface TaskComment {
   id: string
   taskId: string

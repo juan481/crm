@@ -658,10 +658,23 @@ model Task {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   comments       TaskComment[]
+  subitems       TaskSubitem[]
 
   @@index([organizationId, status])
   @@index([assignedToId])
   @@index([empresaId])
+}
+
+model TaskSubitem {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title     String
+  done      Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
 }
 
 model TaskComment {

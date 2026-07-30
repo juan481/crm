@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, CheckSquare, Square, Calendar, User,
-  Building2, Flag, Trash2, Clock, Send, Paperclip, X, FileText, Image as ImageIcon,
+  Building2, Flag, Trash2, Clock, Send, Paperclip, X, FileText, Image as ImageIcon, Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,10 +14,103 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
-import type { Task, TaskStatus, TaskPriority, TaskComment } from '@/types'
+import type { Task, TaskStatus, TaskPriority, TaskComment, TaskSubitem } from '@/types'
 import toast from 'react-hot-toast'
 
 function isImageFile(name?: string | null) { return !!name && /\.(png|jpe?g|webp)$/i.test(name) }
+
+function TaskChecklist({ taskId }: { taskId: string }) {
+  const qc = useQueryClient()
+  const [newTitle, setNewTitle] = useState('')
+  const [adding, setAdding] = useState(false)
+
+  const { data, isLoading } = useQuery<TaskSubitem[]>({
+    queryKey: ['task-subitems', taskId],
+    queryFn: async () => {
+      const res = await fetch(`/api/tareas/${taskId}/subitems`)
+      if (!res.ok) return []
+      return (await res.json()).data
+    },
+    staleTime: 15 * 1000,
+  })
+  const items = data ?? []
+  const done = items.filter((i) => i.done).length
+
+  const toggle = async (item: TaskSubitem) => {
+    qc.setQueryData<TaskSubitem[]>(['task-subitems', taskId], (old) =>
+      old?.map((i) => (i.id === item.id ? { ...i, done: !i.done } : i)) ?? [])
+    await fetch(`/api/tareas/${taskId}/subitems/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ done: !item.done }),
+    })
+    qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+  }
+
+  const remove = async (item: TaskSubitem) => {
+    qc.setQueryData<TaskSubitem[]>(['task-subitems', taskId], (old) => old?.filter((i) => i.id !== item.id) ?? [])
+    await fetch(`/api/tareas/${taskId}/subitems/${item.id}`, { method: 'DELETE' })
+    qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+  }
+
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTitle.trim()) return
+    setAdding(true)
+    try {
+      const res = await fetch(`/api/tareas/${taskId}/subitems`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle.trim() }),
+      })
+      if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
+      setNewTitle('')
+      qc.invalidateQueries({ queryKey: ['task-subitems', taskId] })
+    } catch { toast.error('Error de conexión') } finally { setAdding(false) }
+  }
+
+  if (isLoading) return null
+
+  return (
+    <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>Subtareas</p>
+        {items.length > 0 && <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>{done}/{items.length}</span>}
+      </div>
+
+      {items.length > 0 && (
+        <div className="space-y-1.5">
+          {items.map((item) => (
+            <div key={item.id} className="flex items-center gap-2.5 group">
+              <button onClick={() => toggle(item)} className="shrink-0" style={{ color: item.done ? '#10b981' : 'var(--color-text-subtle)' }}>
+                {item.done ? <CheckSquare size={16} /> : <Square size={16} />}
+              </button>
+              <span className={`flex-1 text-sm ${item.done ? 'line-through opacity-60' : ''}`} style={{ color: 'var(--color-text)' }}>
+                {item.title}
+              </span>
+              <button onClick={() => remove(item)} className="opacity-0 group-hover:opacity-100 shrink-0 text-[var(--color-text-subtle)] hover:text-red-400 transition-opacity">
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={add} className="flex items-center gap-2">
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="Agregar un paso..."
+          className="flex-1 rounded-lg border px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-all"
+          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+        />
+        <button type="submit" disabled={adding || !newTitle.trim()} className="shrink-0 p-1.5 rounded-lg disabled:opacity-40 transition-colors" style={{ color: 'var(--color-primary)' }}>
+          <Plus size={16} />
+        </button>
+      </form>
+    </div>
+  )
+}
 
 function TaskComments({ taskId }: { taskId: string }) {
   const qc = useQueryClient()
@@ -393,6 +486,7 @@ export default function TareaDetailPage() {
         </div>
       )}
 
+      <TaskChecklist taskId={task.id} />
       <TaskComments taskId={task.id} />
     </div>
   )
