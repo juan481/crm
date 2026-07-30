@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { findEmpresaMatch } from '@/lib/directorio-link'
 
@@ -9,6 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contacto = await (prisma as any).directorioContacto.findFirst({
@@ -31,6 +32,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const exists = await (prisma as any).directorioContacto.findFirst({
@@ -84,6 +86,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const exists = await (prisma as any).directorioContacto.findFirst({

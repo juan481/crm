@@ -14,6 +14,7 @@ interface CotizacionItem {
   recipientName: string
   recipientEmail:string
   total:         number
+  finalTotal:    number
   currency:      string
   status:        string
   createdAt:     string
@@ -24,9 +25,11 @@ interface CotizacionItem {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  GUARDADA: { label: 'Guardada',  color: 'text-slate-400',   icon: <Clock    size={11} /> },
-  ENVIADA:  { label: 'Enviada',   color: 'text-blue-400',    icon: <Send     size={11} /> },
-  ACEPTADA: { label: 'Aceptada',  color: 'text-emerald-400', icon: <CheckCircle2 size={11} /> },
+  GUARDADA:  { label: 'Guardada',  color: 'text-slate-400',   icon: <Clock    size={11} /> },
+  ENVIADA:   { label: 'Enviada',   color: 'text-blue-400',    icon: <Send     size={11} /> },
+  ACEPTADA:  { label: 'Aceptada',  color: 'text-emerald-400', icon: <CheckCircle2 size={11} /> },
+  RECHAZADA: { label: 'Rechazada', color: 'text-red-400',     icon: <AlertTriangle size={11} /> },
+  VENCIDA:   { label: 'Vencida',  color: 'text-amber-400',   icon: <AlertTriangle size={11} /> },
 }
 
 export default function CotizacionesPage() {
@@ -162,7 +165,7 @@ export default function CotizacionesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                        {formatCurrency(c.total, c.currency)}
+                        {formatCurrency(c.finalTotal, c.currency)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center hidden sm:table-cell">

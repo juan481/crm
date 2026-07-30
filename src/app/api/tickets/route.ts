@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
     const search    = searchParams.get('search')    ?? ''
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { title, description, priority, category, clientId, empresaId, assignedToId } = await req.json()
     if (!title?.trim())       return NextResponse.json({ error: 'El título es requerido' },       { status: 400 })

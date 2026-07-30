@@ -27,10 +27,15 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const ticket = await db.ticket.findFirst({ where: { id: params.id, organizationId: payload.orgId }, include: INCLUDE_DETAIL })
     if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
+    // A technician can only read tickets assigned to them, same as the list endpoint.
+    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
     return NextResponse.json({ data: ticket })
   } catch (error) {
     console.error('[TICKET GET]', error)

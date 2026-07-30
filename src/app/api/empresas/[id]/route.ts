@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { relinkContactos } from '@/lib/directorio-link'
 
@@ -9,6 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const empresa = await db.empresa.findFirst({
@@ -50,6 +51,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
     const { name, activity, address, codigoPostal, city, province, country, website, isCliente } = body
@@ -102,6 +104,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const exists = await db.empresa.findFirst({ where: { id: params.id, organizationId: payload.orgId }, select: { id: true } })

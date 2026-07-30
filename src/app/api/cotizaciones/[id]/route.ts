@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { isOrgEmailConfigured } from '@/lib/email'
 
@@ -9,6 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const cotizacion = await db.cotizacion.findFirst({
@@ -58,6 +59,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { status } = await req.json()
     const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA']

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { relinkContactos } from '@/lib/directorio-link'
 
@@ -13,6 +13,10 @@ const SELECT = {
   _count: { select: { contactos: true } },
 }
 
+// GET is intentionally open to any authenticated role — Tickets and Mi Día
+// (reachable by TECHNICIAN) need this list for their "empresa" picker.
+// Only the write operations below are restricted to the Directorio's own
+// floor (SELLER+), matching the sidebar.
 export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
@@ -76,6 +80,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
     const { name, activity, address, codigoPostal, city, province, country, website } = body

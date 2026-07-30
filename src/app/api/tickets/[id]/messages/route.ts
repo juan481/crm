@@ -8,6 +8,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // Fetch ticket + client email in a single query for the email TODO below
     const ticket = await prisma.ticket.findFirst({
@@ -17,6 +18,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
     })
     if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
+    // A technician can only post on tickets assigned to them, same as PATCH.
+    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const { content, isInternal = true } = await req.json()
     if (!content?.trim()) return NextResponse.json({ error: 'El contenido es requerido' }, { status: 400 })

@@ -6,6 +6,7 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
     const page = Math.max(1, Number(searchParams.get('page') ?? 1))
