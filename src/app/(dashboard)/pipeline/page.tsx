@@ -160,16 +160,32 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             {data.closedAt && ` · Cerrado ${formatDate(data.closedAt)}`}
           </p>
 
+          {data.cotizaciones && data.cotizaciones.length > 0 && (
+            <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+                Cotizaciones vinculadas
+              </p>
+              {data.cotizaciones.map(c => (
+                <Link
+                  key={c.id}
+                  href={`/cotizaciones/${c.id}`}
+                  className="flex items-center justify-between text-sm rounded-lg px-2.5 py-1.5 hover:bg-[var(--color-surface-raised)] transition-colors"
+                >
+                  <span style={{ color: 'var(--color-text)' }}>{c.ref}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>{formatCurrency(c.finalTotal, c.currency)}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-            {data.empresa ? (
-              <Link
-                href={`/cotizador?empresaId=${data.empresa.id}`}
-                className="flex items-center gap-1.5 text-sm font-medium hover:underline"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                <Calculator size={14} />Generar cotización
-              </Link>
-            ) : <span />}
+            <Link
+              href={`/cotizador?dealId=${dealId}${data.empresa ? `&empresaId=${data.empresa.id}` : ''}`}
+              className="flex items-center gap-1.5 text-sm font-medium hover:underline"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              <Calculator size={14} />Generar cotización
+            </Link>
             <Button onClick={handleSave} loading={saving}>Guardar cambios</Button>
           </div>
         </div>

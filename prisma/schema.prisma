@@ -628,6 +628,7 @@ model Deal {
   owner             User      @relation("DealOwner", fields: [ownerId], references: [id])
   organizationId    String
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cotizaciones      Cotizacion[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -855,6 +856,10 @@ model Cotizacion {
   user           User      @relation(fields: [userId], references: [id])
   empresaId      String?
   empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // Vínculo estructurado a la oportunidad de Pipeline que originó (o recibió)
+  // esta cotización — antes solo existía como texto libre en Deal.notes.
+  dealId         String?
+  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
   recipientEmail String
   recipientName  String
   items          Json
@@ -871,6 +876,7 @@ model Cotizacion {
   @@index([organizationId])
   @@index([empresaId])
   @@index([userId])
+  @@index([dealId])
 }
 
 // ─── Módulo RRHH: Asistencia ──────────────────────────────────────────────

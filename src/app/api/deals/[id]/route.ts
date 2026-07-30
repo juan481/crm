@@ -8,6 +8,10 @@ const INCLUDE = {
   empresa: { select: { id: true, name: true, city: true } },
   client:  { select: { id: true, name: true, company: true } },
   owner:   { select: { id: true, name: true } },
+  cotizaciones: {
+    orderBy: { createdAt: 'desc' as const },
+    select: { id: true, ref: true, finalTotal: true, currency: true, status: true, createdAt: true },
+  },
 }
 
 export async function GET(_: NextRequest, { params }: Params) {

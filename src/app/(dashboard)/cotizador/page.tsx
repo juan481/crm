@@ -42,6 +42,7 @@ const getCurrency = (ci: CartItem) => ci.item.currency
 
 interface SavedQuote {
   cotizacionId:   string
+  dealId:         string | null
   ref:            string
   orgName:        string
   primaryColor:   string
@@ -72,6 +73,10 @@ export default function CotizadorPage() {
   const [showDropdown, setShowDropdown] = useState(false)
 
   const searchParams = useSearchParams()
+  // Presente cuando se llega desde "Generar cotización" en el detalle de una
+  // oportunidad de Pipeline — vincula la cotización a ese deal existente en
+  // vez de ofrecer crear uno nuevo al guardar.
+  const dealId = searchParams.get('dealId') ?? null
   const [clientMode,              setClientMode]              = useState<'existing' | 'manual'>('existing')
   const [selectedEmpresaId,       setSelectedEmpresaId]       = useState(() => searchParams.get('empresaId') ?? '')
   const [selectedContactEmail,    setSelectedContactEmail]    = useState('')
@@ -350,6 +355,7 @@ export default function CotizadorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items, empresaId: clientMode === 'existing' ? selectedEmpresaId || null : null,
+          dealId,
           recipientEmail, recipientName: recipientName || 'Cliente',
           notes, total: subtotal, discount, currency, validityDays,
         }),
@@ -359,6 +365,7 @@ export default function CotizadorPage() {
 
       const quote: SavedQuote = {
         cotizacionId: json.cotizacionId,
+        dealId:       json.dealId ?? null,
         ref:          json.ref,
         orgName:      json.orgName,
         primaryColor: json.primaryColor,
@@ -451,7 +458,15 @@ export default function CotizadorPage() {
           empresaId:   clientMode === 'existing' ? selectedEmpresaId || null : null,
         }),
       })
-      if (!res.ok) { const j = await res.json(); toast.error(j.error ?? 'Error'); return }
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+
+      // Vincular estructuralmente la cotización al deal recién creado.
+      await fetch(`/api/cotizaciones/${savedQuote.cotizacionId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dealId: json.data.id }),
+      })
+
       setPipelineAdded(true); toast.success('Deal creado en Pipeline → Propuesta')
     } catch { toast.error('Error al crear el deal') } finally { setAddingToPipeline(false) }
   }
@@ -519,7 +534,12 @@ export default function CotizadorPage() {
           </a>
         </div>
 
-        {!pipelineAdded ? (
+        {savedQuote.dealId ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm"
+            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
+            <CheckCircle size={15} /> Cotización vinculada a la oportunidad en Pipeline.
+          </div>
+        ) : !pipelineAdded ? (
           <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <div className="flex items-center gap-3">

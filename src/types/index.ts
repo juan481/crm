@@ -433,6 +433,7 @@ export interface Deal {
   ownerId: string
   owner?: { id: string; name: string }
   organizationId: string
+  cotizaciones?: Array<{ id: string; ref: string; finalTotal: number; currency: string; status: string; createdAt: string }>
   createdAt: string
   updatedAt: string
 }

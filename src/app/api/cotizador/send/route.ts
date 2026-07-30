@@ -15,9 +15,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId, validityDays } = body as {
+    const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId, validityDays, dealId } = body as {
       items: QuoteItem[]
       empresaId?: string | null
+      dealId?: string | null
       recipientEmail: string
       recipientName: string
       notes?: string
@@ -33,6 +34,21 @@ export async function POST(req: NextRequest) {
     if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
 
     const db = prisma as any
+
+    // Si viene de una oportunidad de Pipeline, validar que exista en esta org
+    // (y, para SELLER, que sea suya) antes de vincularla estructuralmente.
+    let linkedDealId: string | null = null
+    if (dealId) {
+      const deal = await db.deal.findFirst({
+        where: {
+          id: dealId,
+          organizationId: payload.orgId,
+          ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
+        },
+        select: { id: true },
+      })
+      if (deal) linkedDealId = deal.id
+    }
 
     const [org, agent] = await Promise.all([
       prisma.organization.findUnique({
@@ -62,6 +78,7 @@ export async function POST(req: NextRequest) {
         organizationId: payload.orgId,
         userId:         payload.userId,
         empresaId:      empresaId || null,
+        dealId:         linkedDealId,
         recipientEmail,
         recipientName:  recipientName || 'Cliente',
         items:          items as any,
@@ -93,6 +110,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       cotizacionId: cotizacion.id,
+      dealId:       linkedDealId,
       ref:          quoteRef,
       orgName,
       primaryColor,

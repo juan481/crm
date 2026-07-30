@@ -61,9 +61,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { status } = await req.json()
+    const { status, dealId } = await req.json()
     const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA']
-    if (!allowed.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
+    if (status !== undefined && !allowed.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
 
     const db = prisma as any
     const existing = await db.cotizacion.findFirst({
@@ -72,8 +72,34 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     })
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
-    await db.cotizacion.update({ where: { id: params.id }, data: { status } })
-    return NextResponse.json({ message: 'Estado actualizado' })
+    // Vincular a un deal existente (ej. al agregar una cotización ad-hoc al
+    // Pipeline) — valida que el deal sea de esta org (y, para SELLER, suyo).
+    let resolvedDealId: string | null | undefined = undefined
+    if (dealId !== undefined) {
+      if (dealId === null) {
+        resolvedDealId = null
+      } else {
+        const deal = await db.deal.findFirst({
+          where: {
+            id: dealId,
+            organizationId: payload.orgId,
+            ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
+          },
+          select: { id: true },
+        })
+        if (!deal) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 400 })
+        resolvedDealId = deal.id
+      }
+    }
+
+    await db.cotizacion.update({
+      where: { id: params.id },
+      data: {
+        ...(status !== undefined && { status }),
+        ...(resolvedDealId !== undefined && { dealId: resolvedDealId }),
+      },
+    })
+    return NextResponse.json({ message: 'Cotización actualizada' })
   } catch (error) {
     console.error('[COTIZACION PATCH]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
