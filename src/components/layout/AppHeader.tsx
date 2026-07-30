@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut, MessageSquarePlus, Send, HelpCircle } from 'lucide-react'
+import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut, MessageSquarePlus, Send, HelpCircle, UserCog } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
@@ -377,6 +377,15 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
                   {user.email}
                 </p>
               </div>
+              <Link
+                href="/mi-perfil"
+                onClick={() => setUserOpen(false)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-[var(--color-surface-raised)]"
+                style={{ color: 'var(--color-text)' }}
+              >
+                <UserCog size={14} />
+                Mi Perfil
+              </Link>
               <button
                 onClick={() => { setUserOpen(false); logout() }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors"

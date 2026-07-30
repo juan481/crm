@@ -12,8 +12,8 @@ import type { User } from '@/types'
 
 // Routes each restricted role may access. Everything else redirects to their default.
 const ROLE_ALLOWED_PREFIXES: Partial<Record<User['role'], string[]>> = {
-  HR:         ['/rrhh', '/mi-asistencia', '/tareas', '/ayuda'],
-  TECHNICIAN: ['/mi-dia', '/mi-asistencia', '/tareas', '/tickets', '/ayuda'],
+  HR:         ['/rrhh', '/mi-asistencia', '/tareas', '/ayuda', '/mi-perfil'],
+  TECHNICIAN: ['/mi-dia', '/mi-asistencia', '/tareas', '/tickets', '/ayuda', '/mi-perfil'],
 }
 const ROLE_DEFAULT: Partial<Record<User['role'], string>> = {
   HR:         '/rrhh',
