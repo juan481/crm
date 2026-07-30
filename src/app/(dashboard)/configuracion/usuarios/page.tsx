@@ -50,6 +50,12 @@ export default function UsuariosPage() {
 
   const isSuperAdmin = me?.role === 'SUPER_ADMIN'
 
+  // Misma jerarquía que canAccess() en el backend — evita mostrar botones
+  // (cambiar contraseña, suspender, eliminar) que la API va a rechazar
+  // igual porque el target tiene un rango mayor al del usuario actual.
+  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, SELLER: 2, HR: 1, TECHNICIAN: 0 }
+  const canManage = (targetRole: string) => (ROLE_LEVEL[me?.role ?? ''] ?? -1) >= (ROLE_LEVEL[targetRole] ?? 99)
+
   const { data, isLoading } = useQuery<User[]>({
     queryKey: ['users'],
     queryFn: async () => {
@@ -169,7 +175,7 @@ export default function UsuariosPage() {
                     Desde {formatDate(user.createdAt)}
                   </span>
                 </div>
-                {user.id !== me?.id && (
+                {user.id !== me?.id && canManage(user.role) && (
                   <div className="flex gap-1">
                     {isSuperAdmin && (
                       <button

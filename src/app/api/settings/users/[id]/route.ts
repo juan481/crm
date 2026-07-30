@@ -18,6 +18,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     })
     if (!target) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
+    // Un rol no puede tocar (password, suspensión, etc.) una cuenta de rango
+    // MAYOR al propio — sin esto, un ADMIN podía resetear la contraseña,
+    // suspender o eliminar a un SUPER_ADMIN. Solo el cambio de `role` en sí
+    // ya estaba protegido (línea de abajo), el resto de los campos no.
+    if (!canAccess(payload.role, target.role)) {
+      return NextResponse.json({ error: 'No podés modificar una cuenta de rango mayor al tuyo' }, { status: 403 })
+    }
+
     const { status, role, forcePasswordChange, newPassword } = await req.json()
 
     const updateData: Record<string, unknown> = {}
@@ -74,6 +82,10 @@ export async function DELETE(_: NextRequest, { params }: Params) {
       where: { id: params.id, organizationId: payload.orgId },
     })
     if (!target) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+
+    if (!canAccess(payload.role, target.role)) {
+      return NextResponse.json({ error: 'No podés eliminar una cuenta de rango mayor al tuyo' }, { status: 403 })
+    }
 
     // Remove from Supabase Auth so the email can be reused when recreating the user
     if (target.supabaseId) {

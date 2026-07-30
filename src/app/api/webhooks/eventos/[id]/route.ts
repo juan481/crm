@@ -30,6 +30,24 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'firstName y lastName son requeridos' }, { status: 400 })
     }
 
+    // Idempotente por email — un reintento de red del form externo (WordPress,
+    // SNS-style retry) no debe crear un inscrito duplicado. A diferencia del
+    // alta manual (que sí es un error 409 ahí), acá el caller es un form
+    // público: se responde éxito con el inscrito ya existente.
+    if (email) {
+      const existing = await prisma.eventAttendee.findFirst({
+        where: { eventId: params.id, email: email.trim().toLowerCase() },
+        select: { id: true },
+      })
+      if (existing) {
+        return NextResponse.json({
+          success: true,
+          attendeeId: existing.id,
+          message: 'Este email ya estaba inscripto',
+        })
+      }
+    }
+
     const attendee = await prisma.eventAttendee.create({
       data: {
         eventId: params.id,
