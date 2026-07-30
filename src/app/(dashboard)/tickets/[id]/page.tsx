@@ -408,6 +408,7 @@ export default function TicketDetailPage() {
                 <p className="text-xs text-[var(--color-text-subtle)] mb-1">Email de contacto</p>
                 {user?.role !== 'TECHNICIAN' ? (
                   <input
+                    key={data.recipientEmail ?? ''}
                     type="email"
                     defaultValue={data.recipientEmail ?? ''}
                     placeholder="Para notificarle avances"

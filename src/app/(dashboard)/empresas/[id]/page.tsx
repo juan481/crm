@@ -311,7 +311,7 @@ export default function EmpresaDetailPage() {
             &quot;Generar Facturas del Mes&quot; en Facturación.
             {empresa.monthlyAmount ? ` Hoy: ${formatCurrency(empresa.monthlyAmount, empresa.billingCurrency)}/mes.` : ''}
           </p>
-          <div className="grid grid-cols-[1fr_auto] gap-2 max-w-xs">
+          <div className="grid grid-cols-[1fr_auto] gap-2 max-w-xs" key={`${empresa.monthlyAmount}-${empresa.billingCurrency}`}>
             <Input
               type="number" min="0" step="0.01"
               placeholder="0.00"

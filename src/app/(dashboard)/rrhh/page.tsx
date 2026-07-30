@@ -101,7 +101,8 @@ export default function RrhhPage() {
     },
     staleTime: 5 * 60 * 1000,
   })
-  const roster: Array<{ id: string; name: string; role: string; avatarUrl: string | null }> = usersData?.data ?? []
+  const roster: Array<{ id: string; name: string; role: string; avatarUrl: string | null; status: string }> =
+    (usersData?.data ?? []).filter((u: { status: string }) => u.status === 'ACTIVE')
 
   const records = data ?? []
   const totalWeekdays = weekdaysElapsed(mes)

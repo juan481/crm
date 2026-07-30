@@ -17,7 +17,14 @@ export async function GET(_: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const db = prisma as any
-    const task = await db.task.findFirst({ where: { id: params.id, organizationId: payload.orgId }, include: INCLUDE })
+    // Same visibility as the list endpoint — a lower role could otherwise
+    // read any task in the org by guessing/typing its id, even though the
+    // list itself already scopes them to their own.
+    const scopeWhere: Record<string, unknown> = { id: params.id, organizationId: payload.orgId }
+    if (payload.role === 'TECHNICIAN') scopeWhere.assignedToId = payload.userId
+    else if (['SELLER', 'HR'].includes(payload.role)) scopeWhere.OR = [{ assignedToId: payload.userId }, { createdById: payload.userId }]
+
+    const task = await db.task.findFirst({ where: scopeWhere, include: INCLUDE })
     if (!task) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
     return NextResponse.json({ data: task })
   } catch (error) {
