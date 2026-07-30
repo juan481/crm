@@ -40,6 +40,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'El archivo supera el límite de 30MB' }, { status: 400 })
     }
 
+    // Sin esto, un folderId/clientId de OTRA organización se aceptaba igual
+    // (el FK de Prisma solo exige que el id exista, no que sea de esta org).
+    if (folderId) {
+      const folder = await prisma.folder.findFirst({ where: { id: folderId, organizationId: payload.orgId }, select: { id: true } })
+      if (!folder) return NextResponse.json({ error: 'Carpeta no encontrada' }, { status: 400 })
+    }
+    if (clientId) {
+      const client = await prisma.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 400 })
+    }
+
     // Resolve the document being replaced, if any — new row becomes v(previous+1)
     let previousVersion = 0
     let inheritedFolderId = folderId
@@ -87,6 +98,7 @@ export async function POST(req: NextRequest) {
         mimeType: file.type,
         size: file.size,
         url: publicUrl,
+        storagePath: path,
         folderId: inheritedFolderId || null,
         clientId: inheritedClientId || null,
         organizationId: payload.orgId,

@@ -581,6 +581,11 @@ model Document {
   mimeType       String
   size           Int
   url            String
+  // Object path within the Supabase Storage bucket (ej. "documents/{orgId}/x.pdf")
+  // — necesario para poder borrar el archivo real del storage al eliminar el
+  // registro; `url` es la URL pública completa, no sirve para `.remove()`.
+  // Nullable: filas viejas subidas antes de este campo no lo tienen.
+  storagePath    String?
   folderId       String?
   folder         Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   clientId       String?

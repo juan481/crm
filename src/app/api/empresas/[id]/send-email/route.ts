@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { filterSuppressed } from '@/lib/suppression'
 
 interface Params { params: { id: string } }
 
@@ -43,10 +44,17 @@ export async function POST(req: NextRequest, { params }: Params) {
     })
     if (!contacts.length) return NextResponse.json({ error: 'No se encontraron contactos válidos' }, { status: 400 })
 
-    const validContacts = (contacts as Array<{ id: string; firstName: string; lastName: string; email: string | null }>)
-      .filter(c => c.email)
+    const withEmail = (contacts as Array<{ id: string; firstName: string; lastName: string; email: string | null }>)
+      .filter((c): c is { id: string; firstName: string; lastName: string; email: string } => !!c.email)
 
-    if (!validContacts.length) return NextResponse.json({ error: 'Los contactos seleccionados no tienen email' }, { status: 400 })
+    if (!withEmail.length) return NextResponse.json({ error: 'Los contactos seleccionados no tienen email' }, { status: 400 })
+
+    // Igual que las campañas — un contacto dado de baja no debe recibir
+    // este envío puntual tampoco, aunque no sea una campaña masiva.
+    const { allowed: validContacts, suppressed: skippedContacts } = await filterSuppressed(payload.orgId, withEmail)
+    if (!validContacts.length) {
+      return NextResponse.json({ error: 'Todos los contactos seleccionados están dados de baja' }, { status: 400 })
+    }
 
     // Fetch org email config (SMTP or SES, whichever the org has selected)
     const org = await prisma.organization.findUnique({
@@ -103,7 +111,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       })
     }
 
-    return NextResponse.json({ sent: sent.length, failed, sentNames: sent })
+    return NextResponse.json({
+      sent: sent.length,
+      failed,
+      sentNames: sent,
+      skipped: skippedContacts.map(c => `${c.firstName} ${c.lastName}`),
+    })
   } catch (error) {
     console.error('[SEND-EMAIL EMPRESA]', error)
     return NextResponse.json({ error: 'Error al enviar el email' }, { status: 500 })

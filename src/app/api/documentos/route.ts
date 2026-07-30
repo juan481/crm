@@ -70,6 +70,17 @@ export async function POST(req: NextRequest) {
     const { name, parentId, clientId } = await req.json()
     if (!name?.trim()) return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
 
+    // Sin esto, un parentId/clientId de OTRA organización se aceptaba igual
+    // (el FK de Prisma solo exige que el id exista, no que sea de esta org).
+    if (parentId) {
+      const parent = await prisma.folder.findFirst({ where: { id: parentId, organizationId: payload.orgId }, select: { id: true } })
+      if (!parent) return NextResponse.json({ error: 'Carpeta padre no encontrada' }, { status: 400 })
+    }
+    if (clientId) {
+      const client = await prisma.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 400 })
+    }
+
     const folder = await prisma.folder.create({
       data: {
         name: name.trim(),

@@ -180,8 +180,9 @@ export default function EmpresaDetailPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al enviar'); return }
 
-      toast.success(`Email enviado a ${json.sent} contacto${json.sent !== 1 ? 's' : ''}`)
+      if (json.sent > 0) toast.success(`Email enviado a ${json.sent} contacto${json.sent !== 1 ? 's' : ''}`)
       if (json.failed?.length > 0) toast.error(`Fallaron: ${json.failed.join(', ')}`)
+      if (json.skipped?.length > 0) toast(`Dados de baja, no se les envió: ${json.skipped.join(', ')}`, { icon: '⚠️' })
 
       setEmailModalOpen(false)
       clearSelection()

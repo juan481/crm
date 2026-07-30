@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { unlink } from 'fs/promises'
-import { join } from 'path'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'uploads'
+
+// Derives the storage object path from the full public URL — only needed as
+// a fallback for documents uploaded before `storagePath` existed.
+function pathFromPublicUrl(url: string): string | null {
+  const marker = `/object/public/${BUCKET}/`
+  const idx = url.indexOf(marker)
+  return idx === -1 ? null : url.slice(idx + marker.length)
+}
 
 interface Params { params: { id: string } }
 
@@ -14,14 +23,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { name, tags } = await req.json()
 
-    const document = await prisma.document.updateMany({
+    const result = await prisma.document.updateMany({
       where: { id: params.id, organizationId: payload.orgId },
       data: {
         ...(name && { name }),
         ...(tags !== undefined && { tags: JSON.stringify(tags) }),
       },
     })
+    if (result.count === 0) return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 })
 
+    const document = await prisma.document.findUnique({ where: { id: params.id } })
     return NextResponse.json({ data: document })
   } catch (error) {
     console.error('[DOC PATCH]', error)
@@ -41,11 +52,13 @@ export async function DELETE(_: NextRequest, { params }: Params) {
 
     if (!doc) return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 })
 
-    try {
-      const filePath = join(process.cwd(), 'public', doc.url)
-      await unlink(filePath)
-    } catch {
-      // file may not exist on disk
+    const storagePath = doc.storagePath ?? pathFromPublicUrl(doc.url)
+    if (storagePath) {
+      const supabase = createAdminClient()
+      const { error: removeError } = await supabase.storage.from(BUCKET).remove([storagePath])
+      // No bloquea el borrado del registro por un error de storage (ej. ya
+      // no existe), pero sí queda logueado para poder limpiarlo a mano.
+      if (removeError) console.error('[DOC DELETE] Storage remove failed:', removeError)
     }
 
     await prisma.document.delete({ where: { id: params.id } })
