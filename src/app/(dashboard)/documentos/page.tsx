@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FolderOpen, Folder, FileText, FileImage, File, Plus,
-  Upload, Trash2, ChevronRight, Home, Download, Tag, X, AlertTriangle, Pencil,
+  Upload, Trash2, ChevronRight, Home, Download, Tag, X, AlertTriangle, Pencil, History, RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,108 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils'
 import type { Folder as FolderType, Document } from '@/types'
 import toast from 'react-hot-toast'
+
+interface DocVersion { id: string; originalName: string; version: number; url: string; createdAt: string; uploadedBy: { name: string } | null }
+
+function VersionHistoryModal({ doc, onClose }: { doc: Document; onClose: () => void }) {
+  const { data, isLoading } = useQuery<DocVersion[]>({
+    queryKey: ['doc-versions', doc.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/documentos/${doc.id}/versions`)
+      if (!res.ok) return []
+      return (await res.json()).data
+    },
+  })
+  return (
+    <Modal open onClose={onClose} title={`Versiones de "${doc.name}"`} size="sm">
+      {isLoading ? (
+        <Skeleton className="h-32 rounded-xl" />
+      ) : (
+        <div className="space-y-2">
+          {(data ?? []).map((v) => (
+            <div key={v.id} className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-[var(--color-border)]">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[var(--color-text)]">v{v.version}{v.version === (data?.[0]?.version ?? 0) ? ' (actual)' : ''}</p>
+                <p className="text-xs text-[var(--color-text-subtle)] truncate">{v.uploadedBy?.name ?? '—'} · {formatDate(v.createdAt)}</p>
+              </div>
+              <a href={v.url} target="_blank" rel="noopener noreferrer" className="shrink-0 p-1.5 rounded-lg bg-[var(--color-surface-raised)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors">
+                <Download size={13} />
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function TagEditor({ doc, allTags, onClose, onSaved }: { doc: Document; allTags: string[]; onClose: () => void; onSaved: () => void }) {
+  const [tags, setTags] = useState<string[]>(doc.tags)
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const addTag = (raw: string) => {
+    const t = raw.trim()
+    if (!t || tags.includes(t)) return
+    setTags((prev) => [...prev, t])
+    setInput('')
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/documentos/${doc.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags }),
+      })
+      if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
+      toast.success('Etiquetas actualizadas')
+      onSaved()
+      onClose()
+    } catch { toast.error('Error al guardar') } finally { setSaving(false) }
+  }
+
+  const suggestions = allTags.filter((t) => !tags.includes(t) && t.toLowerCase().includes(input.toLowerCase()))
+
+  return (
+    <Modal open onClose={onClose} title={`Etiquetas de "${doc.name}"`} size="sm">
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <span key={t} className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)]">
+              {t}
+              <button onClick={() => setTags((prev) => prev.filter((x) => x !== t))}><X size={10} /></button>
+            </span>
+          ))}
+        </div>
+        <Input
+          list="doc-tag-suggestions"
+          placeholder="Escribí y Enter para agregar"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(input) } }}
+        />
+        <datalist id="doc-tag-suggestions">
+          {suggestions.map((t) => <option key={t} value={t} />)}
+        </datalist>
+        {suggestions.length > 0 && !input && (
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.slice(0, 8).map((t) => (
+              <button key={t} onClick={() => addTag(t)} className="text-xs px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+                + {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" type="button" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} loading={saving}>Guardar</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -48,6 +150,20 @@ export default function DocumentosPage() {
   const [renameFolder, setRenameFolder] = useState<FolderType | null>(null)
   const [renameName, setRenameName] = useState('')
   const [renaming, setRenaming] = useState(false)
+  const [versionsDoc, setVersionsDoc] = useState<Document | null>(null)
+  const [tagsDoc, setTagsDoc] = useState<Document | null>(null)
+  const [replacingDocId, setReplacingDocId] = useState<string | null>(null)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+
+  const { data: allTagsData } = useQuery<string[]>({
+    queryKey: ['document-tags'],
+    queryFn: async () => {
+      const res = await fetch('/api/documentos/tags')
+      if (!res.ok) return []
+      return (await res.json()).data
+    },
+    staleTime: 60 * 1000,
+  })
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['documents', currentFolderId],
@@ -122,6 +238,27 @@ export default function DocumentosPage() {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleReplace = async (file: File | null) => {
+    if (!file || !replacingDocId) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('supersedesId', replacingDocId)
+      const res = await fetch('/api/documentos/upload', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
+      toast.success('Nueva versión subida')
+      qc.invalidateQueries({ queryKey: ['documents', currentFolderId] })
+    } catch {
+      toast.error('Error al subir')
+    } finally {
+      setUploading(false)
+      setReplacingDocId(null)
+      if (replaceInputRef.current) replaceInputRef.current.value = ''
     }
   }
 
@@ -215,6 +352,13 @@ export default function DocumentosPage() {
             className="hidden"
             accept=".jpg,.jpeg,.png,.pdf,.docx,.txt"
             onChange={(e) => handleUpload(e.target.files)}
+          />
+          <input
+            ref={replaceInputRef}
+            type="file"
+            className="hidden"
+            accept=".jpg,.jpeg,.png,.pdf,.docx,.txt"
+            onChange={(e) => handleReplace(e.target.files?.[0] ?? null)}
           />
         </div>
       </div>
@@ -333,9 +477,20 @@ export default function DocumentosPage() {
                             {getMimeIcon(doc.mimeType)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-[var(--color-text)] truncate" title={doc.name}>
-                              {doc.name}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm font-medium text-[var(--color-text)] truncate" title={doc.name}>
+                                {doc.name}
+                              </p>
+                              {doc.version > 1 && (
+                                <button
+                                  onClick={() => setVersionsDoc(doc)}
+                                  className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[var(--color-surface-raised)] text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] transition-colors"
+                                  title="Ver historial de versiones"
+                                >
+                                  v{doc.version}
+                                </button>
+                              )}
+                            </div>
                             <p className="text-xs text-[var(--color-text-subtle)] mt-0.5">
                               {formatSize(doc.size)} · {formatDate(doc.createdAt)}
                             </p>
@@ -356,6 +511,29 @@ export default function DocumentosPage() {
 
                         {/* Actions on hover */}
                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                          <button
+                            onClick={() => setTagsDoc(doc)}
+                            className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
+                            title="Editar etiquetas"
+                          >
+                            <Tag size={12} />
+                          </button>
+                          <button
+                            onClick={() => { setReplacingDocId(doc.id); replaceInputRef.current?.click() }}
+                            className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
+                            title="Subir nueva versión"
+                          >
+                            <RefreshCw size={12} />
+                          </button>
+                          {doc.version > 1 && (
+                            <button
+                              onClick={() => setVersionsDoc(doc)}
+                              className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
+                              title="Ver versiones anteriores"
+                            >
+                              <History size={12} />
+                            </button>
+                          )}
                           <a
                             href={doc.url}
                             target="_blank"
@@ -437,6 +615,22 @@ export default function DocumentosPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Version history */}
+      {versionsDoc && <VersionHistoryModal doc={versionsDoc} onClose={() => setVersionsDoc(null)} />}
+
+      {/* Tag editor */}
+      {tagsDoc && (
+        <TagEditor
+          doc={tagsDoc}
+          allTags={allTagsData ?? []}
+          onClose={() => setTagsDoc(null)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ['documents', currentFolderId] })
+            qc.invalidateQueries({ queryKey: ['document-tags'] })
+          }}
+        />
+      )}
     </div>
   )
 }

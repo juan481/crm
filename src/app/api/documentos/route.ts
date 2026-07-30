@@ -35,10 +35,11 @@ export async function GET(req: NextRequest) {
           organizationId: payload.orgId,
           folderId,
           ...(clientId && { clientId }),
+          supersededBy: { none: {} }, // only the latest version of each document shows up
         },
         skip,
         take: limit,
-        include: { uploadedBy: { select: { name: true } } },
+        include: { uploadedBy: { select: { name: true } }, supersedes: { select: { id: true } } },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.document.count({
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
           organizationId: payload.orgId,
           folderId,
           ...(clientId && { clientId }),
+          supersededBy: { none: {} },
         },
       }),
     ])

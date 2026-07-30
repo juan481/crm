@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null
     const folderId = formData.get('folderId') as string | null
     const clientId = formData.get('clientId') as string | null
+    const supersedesId = formData.get('supersedesId') as string | null
     const tagsRaw = formData.get('tags') as string | null
     const tags = tagsRaw ? JSON.parse(tagsRaw) : []
 
@@ -37,6 +38,26 @@ export async function POST(req: NextRequest) {
     }
     if (file.size > MAX_SIZE) {
       return NextResponse.json({ error: 'El archivo supera el límite de 30MB' }, { status: 400 })
+    }
+
+    // Resolve the document being replaced, if any — new row becomes v(previous+1)
+    let previousVersion = 0
+    let inheritedFolderId = folderId
+    let inheritedClientId = clientId
+    let inheritedTags = tags
+    if (supersedesId) {
+      const previous = await prisma.document.findFirst({
+        where: { id: supersedesId, organizationId: payload.orgId },
+        select: { version: true, folderId: true, clientId: true, tags: true, supersededBy: { select: { id: true } } },
+      })
+      if (!previous) return NextResponse.json({ error: 'El documento que intentás reemplazar no existe' }, { status: 404 })
+      if (previous.supersededBy.length > 0) {
+        return NextResponse.json({ error: 'Ese documento ya tiene una versión más nueva' }, { status: 409 })
+      }
+      previousVersion = previous.version
+      inheritedFolderId = folderId ?? previous.folderId
+      inheritedClientId = clientId ?? previous.clientId
+      inheritedTags = tags.length ? tags : JSON.parse(previous.tags || '[]')
     }
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
@@ -66,19 +87,21 @@ export async function POST(req: NextRequest) {
         mimeType: file.type,
         size: file.size,
         url: publicUrl,
-        folderId: folderId || null,
-        clientId: clientId || null,
+        folderId: inheritedFolderId || null,
+        clientId: inheritedClientId || null,
         organizationId: payload.orgId,
-        tags: JSON.stringify(tags),
+        tags: JSON.stringify(inheritedTags),
+        version: previousVersion + 1,
+        supersedesId: supersedesId || null,
         uploadedById: payload.userId,
       },
       include: { uploadedBy: { select: { name: true } } },
     })
 
-    if (clientId) {
+    if (inheritedClientId) {
       await prisma.activityLog.create({
         data: {
-          clientId,
+          clientId: inheritedClientId,
           userId: payload.userId,
           action: 'DOCUMENT_UPLOADED',
           description: `Documento "${file.name}" subido`,
@@ -86,7 +109,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ data: { ...document, tags } }, { status: 201 })
+    return NextResponse.json({ data: { ...document, tags: inheritedTags } }, { status: 201 })
   } catch (error) {
     console.error('[DOC UPLOAD]', error)
     return NextResponse.json({ error: 'Error al subir archivo' }, { status: 500 })

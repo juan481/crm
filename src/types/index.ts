@@ -410,6 +410,8 @@ export interface Document {
   tags: string[]
   uploadedById: string
   uploadedBy?: { name: string }
+  version: number
+  supersedesId: string | null
   createdAt: string
 }
 

@@ -591,8 +591,21 @@ model Document {
   uploadedBy     User     @relation(fields: [uploadedById], references: [id])
   createdAt      DateTime @default(now())
 
+  // Versioning: uploading a "replacement" creates a new row pointing back at
+  // the one it supersedes, instead of two unrelated documents with the same
+  // display name. The document browser only lists the tip of each chain
+  // (the one nothing else supersedes).
+  // No DB-level unique constraint here on purpose (would need --accept-data-loss
+  // for a fresh column with no possible duplicates yet) — the upload route
+  // enforces "at most one row supersedes a given document" itself.
+  version        Int       @default(1)
+  supersedesId   String?
+  supersedes     Document? @relation("DocumentVersions", fields: [supersedesId], references: [id])
+  supersededBy   Document[] @relation("DocumentVersions")
+
   @@index([organizationId])
   @@index([clientId])
+  @@index([supersedesId])
 }
 
 // ─── Sales Pipeline ────────────────────────────────────────────────────────
