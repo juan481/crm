@@ -113,7 +113,11 @@ export async function POST(req: NextRequest) {
     const db = prisma as any
 
     const cotizacion = await db.cotizacion.findFirst({
-      where: { id: cotizacionId, organizationId: payload.orgId },
+      where: {
+        id: cotizacionId,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { userId: payload.userId }),
+      },
     })
     if (!cotizacion) return NextResponse.json({ error: 'Cotización no encontrada' }, { status: 404 })
 

@@ -13,7 +13,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const db = prisma as any
     const cotizacion = await db.cotizacion.findFirst({
-      where:  { id: params.id, organizationId: payload.orgId },
+      where:  {
+        id: params.id,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { userId: payload.userId }),
+      },
       select: {
         id: true, ref: true, recipientName: true, recipientEmail: true,
         total: true, discount: true, finalTotal: true, currency: true, status: true, createdAt: true, notes: true,
@@ -67,7 +71,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const db = prisma as any
     const existing = await db.cotizacion.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
+      where: {
+        id: params.id,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { userId: payload.userId }),
+      },
       select: { id: true },
     })
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })

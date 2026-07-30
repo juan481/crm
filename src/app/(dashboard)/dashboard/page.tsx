@@ -9,7 +9,7 @@ import { ClientsChart } from '@/components/dashboard/clients-chart'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Avatar } from '@/components/ui/avatar'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatMultiCurrency, scaleByCurrency, primaryCurrencyKey } from '@/lib/utils'
 import { usePlugin } from '@/hooks/use-plugin'
 import type { DashboardMetrics } from '@/types'
 
@@ -61,9 +61,9 @@ export default function DashboardPage() {
             />
             <MetricCard
               title="Ingresos del Mes"
-              value={formatCurrency(data?.mrr ?? 0)}
+              value={formatMultiCurrency(data?.mrrByCurrency)}
               icon={<DollarSign size={20} />}
-              trend={data?.mrrGrowth}
+              trend={data?.mrrGrowthByCurrency?.[primaryCurrencyKey(data?.mrrByCurrency) ?? '']}
               trendLabel="crecimiento mensual"
               accentColor="#22c55e"
               href="/facturas"
@@ -126,7 +126,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xl font-bold text-[var(--color-text)]">
-                {formatCurrency((data.mrr ?? 0) * 12)}
+                {formatMultiCurrency(scaleByCurrency(data.mrrByCurrency, 12))}
               </p>
               <p className="text-sm text-[var(--color-text-muted)]">Ingresos anuales est.</p>
             </div>
@@ -138,7 +138,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-xl font-bold text-[var(--color-text)]">
                 {data.activeClients > 0
-                  ? formatCurrency((data.mrr ?? 0) / data.activeClients)
+                  ? formatMultiCurrency(scaleByCurrency(data.mrrByCurrency, 1 / data.activeClients))
                   : '$0'}
               </p>
               <p className="text-sm text-[var(--color-text-muted)]">Ingreso por cliente</p>
@@ -249,13 +249,13 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-3">
             {data.topClientsByRevenue.map((client, i) => (
-              <div key={client.id} className="flex items-center gap-3">
+              <div key={`${client.id}-${client.currency}`} className="flex items-center gap-3">
                 <span className="text-xs font-bold text-[var(--color-text-subtle)] w-5 text-right">
                   {i + 1}
                 </span>
                 <Avatar name={client.name} size="sm" />
                 <p className="text-sm font-medium text-[var(--color-text)] truncate flex-1 min-w-0">{client.name}</p>
-                <p className="text-sm font-bold text-[var(--color-text)] shrink-0">{formatCurrency(client.total)}</p>
+                <p className="text-sm font-bold text-[var(--color-text)] shrink-0">{formatCurrency(client.total, client.currency)}</p>
               </div>
             ))}
           </div>

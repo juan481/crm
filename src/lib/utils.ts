@@ -15,6 +15,27 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
   }).format(amount)
 }
 
+// Un monto en USD y otro en ARS no son la misma unidad — nunca se suman
+// entre sí. Estos helpers formatean/escalan un total agrupado por moneda
+// (ej. { USD: 1200, ARS: 50000 }) para mostrarlo en el dashboard.
+export function formatMultiCurrency(byCurrency: Record<string, number> | undefined | null): string {
+  const entries = Object.entries(byCurrency ?? {})
+  if (entries.length === 0) return formatCurrency(0)
+  return entries.map(([cur, v]) => formatCurrency(v, cur)).join(' · ')
+}
+
+export function scaleByCurrency(byCurrency: Record<string, number> | undefined | null, factor: number): Record<string, number> {
+  return Object.fromEntries(Object.entries(byCurrency ?? {}).map(([cur, v]) => [cur, v * factor]))
+}
+
+// Moneda con mayor monto — usada para elegir a cuál de todas corresponde
+// mostrar un único indicador de tendencia (ej. % de crecimiento).
+export function primaryCurrencyKey(byCurrency: Record<string, number> | undefined | null): string | undefined {
+  const entries = Object.entries(byCurrency ?? {})
+  if (entries.length === 0) return undefined
+  return entries.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
+}
+
 export function formatDate(date: string | Date): string {
   return format(new Date(date), 'dd MMM yyyy', { locale: es })
 }

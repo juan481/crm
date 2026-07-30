@@ -105,6 +105,9 @@ export async function POST(req: NextRequest) {
     if (!empresaId || !amount || !dueDate) {
       return NextResponse.json({ error: 'Cliente, monto y vencimiento son requeridos' }, { status: 400 })
     }
+    if (!(Number(amount) > 0)) {
+      return NextResponse.json({ error: 'El monto debe ser mayor a cero' }, { status: 400 })
+    }
 
     const empresa = await prisma.empresa.findFirst({
       where: { id: empresaId, organizationId: payload.orgId },

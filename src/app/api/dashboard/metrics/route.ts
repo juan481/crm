@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 
 interface MonthRow {
   n: unknown
-  month_date: Date | string
+  currency: string
   revenue: number | string
 }
 
@@ -12,10 +12,12 @@ interface MetricsData {
   activeClients: number
   pendingPayment: number
   overdueInvoices: number
-  mrr: number
-  mrrGrowth: number
+  // Montos separados por moneda — nunca se deben sumar entre sí (una
+  // factura en USD y otra en ARS no son la misma unidad).
+  mrrByCurrency: Record<string, number>
+  mrrGrowthByCurrency: Record<string, number>
   newClientsThisMonth: number
-  revenueByMonth: { month: string; revenue: number }[]
+  revenueByMonth: { month: string; byCurrency: Record<string, number> }[]
   invoicesByStatus: { status: string; count: number }[]
   pendingTasks: number
   openTickets: number
@@ -24,7 +26,7 @@ interface MetricsData {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
-  topClientsByRevenue: { id: string; name: string; total: number }[]
+  topClientsByRevenue: { id: string; name: string; total: number; currency: string }[]
 }
 
 // Metrics are computed from Empresa (the live "Clientes" model, toggled via
@@ -53,19 +55,22 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       where: { organizationId: orgId, isCliente: true, clienteDesde: { gte: startOfMonth } },
     }),
 
-    // 6-month real revenue (sum of invoices actually paid that month)
+    // 6-month real revenue (sum of invoices actually paid that month),
+    // grouped by currency — a USD invoice and an ARS invoice are not the
+    // same unit and must never be summed together. Months/currencies with
+    // no paid invoices simply produce no row (filled in below in JS).
     prisma.$queryRaw<MonthRow[]>`
       SELECT
         gs.n,
-        DATE_TRUNC('month', NOW()) - (gs.n * INTERVAL '1 month') AS month_date,
+        i.currency AS currency,
         COALESCE(SUM(i.amount), 0)::float AS revenue
       FROM generate_series(0, 5) AS gs(n)
-      LEFT JOIN "Invoice" i ON
+      JOIN "Invoice" i ON
         i."organizationId" = ${orgId}
         AND i."status" = 'PAID'
         AND i."paidAt" >= DATE_TRUNC('month', NOW()) - (gs.n * INTERVAL '1 month')
         AND i."paidAt" <  DATE_TRUNC('month', NOW()) - ((gs.n - 1) * INTERVAL '1 month')
-      GROUP BY gs.n
+      GROUP BY gs.n, i.currency
       ORDER BY gs.n DESC
     `,
 
@@ -78,8 +83,10 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       where: { organizationId: orgId },
       _count: { _all: true },
     }),
+    // by empresaId AND currency — una Empresa con facturas en dos monedas
+    // no puede sumarse en un único total.
     prisma.invoice.groupBy({
-      by: ['empresaId'],
+      by: ['empresaId', 'currency'],
       where: { organizationId: orgId, status: 'PAID', empresaId: { not: null } },
       _sum: { amount: true },
       orderBy: { _sum: { amount: 'desc' } },
@@ -99,17 +106,28 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
     }),
   ])
 
-  const currentMrr = Number(monthlyRows.find((r) => Number(r.n) === 0)?.revenue ?? 0)
-  const prevMrr = Number(monthlyRows.find((r) => Number(r.n) === 1)?.revenue ?? 0)
-  const mrrGrowth =
-    prevMrr === 0
-      ? currentMrr > 0 ? 100 : 0
-      : Math.round(((currentMrr - prevMrr) / prevMrr) * 100)
+  const byCurrencyForMonth = (n: number) => {
+    const acc: Record<string, number> = {}
+    monthlyRows.filter((r) => Number(r.n) === n).forEach((r) => { acc[r.currency] = Number(r.revenue) })
+    return acc
+  }
 
-  const revenueByMonth = monthlyRows.map((row) => ({
-    month: new Date(row.month_date).toLocaleString('es', { month: 'short', year: '2-digit' }),
-    revenue: Number(row.revenue),
-  }))
+  const mrrByCurrency = byCurrencyForMonth(0)
+  const prevMrrByCurrency = byCurrencyForMonth(1)
+  const mrrGrowthByCurrency: Record<string, number> = {}
+  new Set([...Object.keys(mrrByCurrency), ...Object.keys(prevMrrByCurrency)]).forEach((cur) => {
+    const cur_now  = mrrByCurrency[cur] ?? 0
+    const cur_prev = prevMrrByCurrency[cur] ?? 0
+    mrrGrowthByCurrency[cur] = cur_prev === 0 ? (cur_now > 0 ? 100 : 0) : Math.round(((cur_now - cur_prev) / cur_prev) * 100)
+  })
+
+  const monthLabel = (n: number) =>
+    new Date(now.getFullYear(), now.getMonth() - n, 1).toLocaleString('es', { month: 'short', year: '2-digit' })
+
+  const revenueByMonth = Array.from({ length: 6 }, (_, i) => {
+    const n = 5 - i
+    return { month: monthLabel(n), byCurrency: byCurrencyForMonth(n) }
+  })
 
   const invoicesByStatus = invoiceStatusGroups.map((g) => ({
     status: g.status,
@@ -126,6 +144,7 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       id: g.empresaId as string,
       name: topEmpresas.find((e) => e.id === g.empresaId)?.name ?? '—',
       total: g._sum.amount ?? 0,
+      currency: g.currency,
     }))
 
   const pipelineValue = activeDeals.reduce((s, d) => s + d.amount * (d.probability / 100), 0)
@@ -140,7 +159,7 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
 
   return {
     activeClients, pendingPayment, overdueInvoices,
-    mrr: currentMrr, mrrGrowth, newClientsThisMonth,
+    mrrByCurrency, mrrGrowthByCurrency, newClientsThisMonth,
     revenueByMonth, invoicesByStatus,
     pendingTasks, openTickets,
     activeDealsCount: activeDeals.length,

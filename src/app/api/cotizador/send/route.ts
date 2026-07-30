@@ -15,23 +15,26 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, total, discount = 0, currency, empresaId, validityDays, dealId } = body as {
+    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       dealId?: string | null
       recipientEmail: string
       recipientName: string
       notes?: string
-      total: number
       discount?: number
       currency: string
       validityDays?: number
     }
-    const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
-    const finalTotal   = total * (1 - discountPct / 100)
 
     if (!items?.length)  return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
     if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
+
+    // El total nunca se confía del cliente — se recalcula server-side a
+    // partir de los ítems, que sí quedan guardados tal cual en la cotización.
+    const total        = items.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0)
+    const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
+    const finalTotal   = total * (1 - discountPct / 100)
 
     const db = prisma as any
 
@@ -48,6 +51,19 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       })
       if (deal) linkedDealId = deal.id
+    }
+
+    // La empresa debe pertenecer a esta organización — sin esto, un empresaId
+    // de OTRA org quedaba vinculado igual (cotización + EmpresaNota cruzando
+    // el aislamiento multi-tenant).
+    let linkedEmpresaId: string | null = null
+    if (empresaId) {
+      const empresa = await db.empresa.findFirst({
+        where: { id: empresaId, organizationId: payload.orgId },
+        select: { id: true },
+      })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 400 })
+      linkedEmpresaId = empresa.id
     }
 
     const [org, agent] = await Promise.all([
@@ -68,7 +84,9 @@ export async function POST(req: NextRequest) {
     const orgName      = org?.name || org?.crmName || 'CRM Pro'
     const primaryColor = org?.primaryColor || '#6366f1'
     const agentName    = agent?.name || 'El equipo'
-    const quoteRef     = `PRESUP-${Date.now().toString(36).toUpperCase()}`
+    // Sufijo random además del timestamp — dos requests en el mismo
+    // milisegundo (dos sellers a la vez, o un retry) no deben colisionar.
+    const quoteRef     = `PRESUP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
     const validityDaysFinal = Math.max(1, Math.min(365, Number(validityDays) || org?.quoteValidityDays || 30))
 
     // Save cotizacion to DB
@@ -77,7 +95,7 @@ export async function POST(req: NextRequest) {
         ref:            quoteRef,
         organizationId: payload.orgId,
         userId:         payload.userId,
-        empresaId:      empresaId || null,
+        empresaId:      linkedEmpresaId,
         dealId:         linkedDealId,
         recipientEmail,
         recipientName:  recipientName || 'Cliente',
@@ -94,12 +112,12 @@ export async function POST(req: NextRequest) {
     })
 
     // Create EmpresaNota if empresa is linked
-    if (empresaId) {
+    if (linkedEmpresaId) {
       const serviceNames = items.map(i => i.name).join(', ')
       const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 0 }).format(total)
       await db.empresaNota.create({
         data: {
-          empresaId,
+          empresaId: linkedEmpresaId,
           organizationId: payload.orgId,
           userId:         payload.userId,
           tipo:           'ENVIO_COTIZACION',

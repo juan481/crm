@@ -23,6 +23,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const VALID_STATUSES = ['PENDING', 'PAID', 'OVERDUE', 'CANCELLED']
     if (status && !VALID_STATUSES.includes(status))
       return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
+    if (amount !== undefined && !(Number(amount) > 0))
+      return NextResponse.json({ error: 'El monto debe ser mayor a cero' }, { status: 400 })
 
     const invoice = await prisma.invoice.update({
       where: { id: params.id },

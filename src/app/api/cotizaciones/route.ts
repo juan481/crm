@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
 
     const empresaIdFilter = searchParams.get('empresaId') ?? ''
     const where: Record<string, unknown> = { organizationId: payload.orgId }
+    // Igual que Deals: un SELLER solo ve sus propias cotizaciones, no las
+    // de otros vendedores de la misma organización.
+    if (payload.role === 'SELLER') where.userId = payload.userId
 
     if (empresaIdFilter) where.empresaId = empresaIdFilter
 

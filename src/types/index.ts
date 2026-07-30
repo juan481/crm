@@ -308,10 +308,11 @@ export interface DashboardMetrics {
   activeClients: number
   pendingPayment: number
   overdueInvoices: number
-  mrr: number
-  mrrGrowth: number
+  // Nunca sumar entre monedas — ver formatMultiCurrency en @/lib/utils.
+  mrrByCurrency: Record<string, number>
+  mrrGrowthByCurrency: Record<string, number>
   newClientsThisMonth: number
-  revenueByMonth: { month: string; revenue: number }[]
+  revenueByMonth: { month: string; byCurrency: Record<string, number> }[]
   invoicesByStatus: { status: string; count: number }[]
   pendingTasks: number
   openTickets: number
@@ -320,7 +321,7 @@ export interface DashboardMetrics {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
-  topClientsByRevenue: { id: string; name: string; total: number }[]
+  topClientsByRevenue: { id: string; name: string; total: number; currency: string }[]
 }
 
 // ─── Email Campaign ────────────────────────────────────────────────────────
