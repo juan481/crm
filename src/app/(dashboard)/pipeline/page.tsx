@@ -185,7 +185,7 @@ export default function PipelinePage() {
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-pipeline'],
     queryFn: async () => {
-      const r = await fetch('/api/empresas?limit=200')
+      const r = await fetch('/api/empresas?limit=2000')
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Array<{ id: string; name: string; city?: string | null }>
     },

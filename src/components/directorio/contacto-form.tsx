@@ -28,7 +28,7 @@ export function ContactoForm({ contacto, defaultEmpresaId, onSuccess }: Props) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
 
   useEffect(() => {
-    fetch('/api/empresas?limit=200')
+    fetch('/api/empresas?limit=2000')
       .then(r => r.json())
       .then(j => setEmpresas(j.data ?? []))
       .catch(() => {})

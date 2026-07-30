@@ -96,7 +96,7 @@ export default function EmpresasPage() {
   const { data: allEmpresasData } = useQuery({
     queryKey: ['empresas-all'],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?limit=200')
+      const res = await fetch('/api/empresas?limit=2000')
       if (!res.ok) throw new Error('Error')
       return res.json()
     },

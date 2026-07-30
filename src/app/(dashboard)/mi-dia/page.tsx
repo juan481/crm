@@ -156,7 +156,7 @@ export default function MiDiaPage() {
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-mi-dia'],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?limit=200')
+      const res = await fetch('/api/empresas?limit=2000')
       const json = await res.json()
       return (json.data ?? []) as Array<{ id: string; name: string }>
     },
