@@ -31,6 +31,25 @@ function horasTrabajadas(entrada: string | null, salida: string | null): string 
   return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`
 }
 
+// Weekdays (Mon–Fri) elapsed in `mes` (YYYY-MM) up to today (or the whole
+// month if it already ended) — the denominator for "días sin fichar".
+// Purely informational: never writes anything, just surfaces the gap that
+// the presentismo % otherwise hides (a day with no record doesn't count
+// against anyone today).
+function weekdaysElapsed(mes: string): number {
+  const [y, m] = mes.split('-').map(Number)
+  const monthStart = new Date(y, m - 1, 1)
+  const monthEnd   = new Date(y, m, 0)
+  const today      = new Date()
+  const end        = today < monthEnd ? today : monthEnd
+  let count = 0
+  for (const d = new Date(monthStart); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay()
+    if (day !== 0 && day !== 6) count++
+  }
+  return count
+}
+
 interface EmpleadoRow {
   userId:    string
   name:      string
@@ -39,6 +58,7 @@ interface EmpleadoRow {
   presentes: number
   ausentes:  number
   tardanzas: number
+  sinFichar: number
   pct:       number
   records:   Asistencia[]
 }
@@ -69,23 +89,43 @@ export default function RrhhPage() {
     staleTime: 30_000,
   })
 
-  const records = data ?? []
+  // Full roster — without this, someone with zero records this month (a
+  // no-show nobody flagged) never even appears as a row, not just as a
+  // better-than-real percentage.
+  const { data: usersData } = useQuery({
+    queryKey: ['usuarios-internos'],
+    queryFn: async () => {
+      const res = await fetch('/api/usuarios')
+      if (!res.ok) return { data: [] }
+      return res.json()
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const roster: Array<{ id: string; name: string; role: string; avatarUrl: string | null }> = usersData?.data ?? []
 
-  // Group by user
-  const byUser = records.reduce<Record<string, EmpleadoRow>>((acc, r) => {
+  const records = data ?? []
+  const totalWeekdays = weekdaysElapsed(mes)
+
+  // Seed one row per active user (so zero-record employees still show up),
+  // then fold in whatever attendance records actually exist.
+  const byUser: Record<string, EmpleadoRow> = {}
+  for (const u of roster) {
+    byUser[u.id] = { userId: u.id, name: u.name, role: u.role, avatarUrl: u.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, sinFichar: 0, pct: 0, records: [] }
+  }
+  for (const r of records) {
     const uid  = r.userId
     const user = r.user
-    if (!user) return acc
-    if (!acc[uid]) acc[uid] = { userId: uid, name: user.name, role: user.role, avatarUrl: user.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, pct: 0, records: [] }
-    acc[uid].records.push(r)
-    if (r.ausente)       acc[uid].ausentes++
-    else if (r.horaEntrada) acc[uid].presentes++
-    if (r.tardanza)      acc[uid].tardanzas++
-    return acc
-  }, {})
+    if (!user) continue
+    if (!byUser[uid]) byUser[uid] = { userId: uid, name: user.name, role: user.role, avatarUrl: user.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, sinFichar: 0, pct: 0, records: [] }
+    byUser[uid].records.push(r)
+    if (r.ausente)          byUser[uid].ausentes++
+    else if (r.horaEntrada) byUser[uid].presentes++
+    if (r.tardanza)         byUser[uid].tardanzas++
+  }
 
   const empleados: EmpleadoRow[] = Object.values(byUser).map(e => ({
     ...e,
+    sinFichar: Math.max(0, totalWeekdays - (e.presentes + e.ausentes)),
     pct: (e.presentes + e.ausentes) > 0 ? Math.round((e.presentes / (e.presentes + e.ausentes)) * 100) : 0,
   })).sort((a, b) => a.name.localeCompare(b.name))
 
@@ -227,6 +267,10 @@ export default function RrhhPage() {
                   <div className="text-center hidden md:block">
                     <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>{e.tardanzas}</p>
                     <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>Tardanzas</p>
+                  </div>
+                  <div className="text-center hidden lg:block" title="Días hábiles de este mes sin ningún registro (ni presente ni ausente marcado) — no afecta el % de presentismo">
+                    <p className="text-lg font-bold" style={{ color: e.sinFichar > 0 ? 'var(--color-text-muted)' : '#10b981' }}>{e.sinFichar}</p>
+                    <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>Sin fichar</p>
                   </div>
                   {/* Presentismo bar */}
                   <div className="text-center min-w-[60px]">
