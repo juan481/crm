@@ -290,6 +290,9 @@ export interface PluginDefinition {
   author: string
   requiresConfig: boolean
   configSchema?: Record<string, { type: string; label: string; required: boolean }>
+  // Whether toggling this plugin actually changes anything in the app today.
+  // Most of these were shipped as placeholders — only advanced-analytics is wired up.
+  implemented: boolean
 }
 
 export interface PluginConfig {

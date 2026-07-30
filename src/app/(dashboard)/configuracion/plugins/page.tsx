@@ -32,16 +32,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   communication: 'info', analytics: 'primary', integration: 'warning', productivity: 'success',
 }
 
+// Only advanced-analytics is actually wired up — every other plugin's
+// toggle is a stored preference with zero effect on the app today. Be
+// honest about that here instead of describing features that don't exist.
 const PLUGIN_EFFECTS: Record<string, { text: string; action?: { label: string; href: string } }> = {
-  'email-campaigns': { text: 'Habilita el módulo Comunicaciones para enviar campañas de email masivo.', action: { label: 'Ir a Comunicaciones', href: '/comunicaciones' } },
-  'export-data': { text: 'Muestra los botones Exportar XLS / CSV en el listado de clientes.', action: { label: 'Ver Clientes', href: '/clientes' } },
-  'global-search': { text: 'Activa el buscador de clientes en la barra superior.' },
   'advanced-analytics': { text: 'Agrega la sección "Top Clientes por Ingreso" en el Dashboard.', action: { label: 'Ir al Dashboard', href: '/dashboard' } },
-  'whatsapp-integration': { text: 'Muestra el botón WhatsApp en la ficha de cada cliente.', action: { label: 'Ver Clientes', href: '/clientes' } },
-  'invoice-automation': { text: 'Permite crear facturas desde la ficha de cada cliente.', action: { label: 'Ir a Facturación', href: '/facturas' } },
-  'zapier-webhooks': { text: 'Envía eventos automáticos a tu webhook cuando se crean clientes o se pagan facturas.' },
-  'google-calendar': { text: 'Configura la integración con Google Calendar para sincronizar eventos.' },
 }
+const NOT_IMPLEMENTED_TEXT = 'Todavía no está construido — activarlo o desactivarlo no cambia nada en el sistema por ahora.'
 
 interface PluginWithState extends PluginDefinition {
   enabled: boolean
@@ -149,7 +146,12 @@ export default function PluginsPage() {
                   <h3 className="font-semibold text-[var(--color-text)] mb-1">{plugin.name}</h3>
                   <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{plugin.description}</p>
                 </div>
-                {plugin.enabled && effect && (
+                {!plugin.implemented ? (
+                  <div className="flex items-start gap-2 bg-[var(--color-surface-raised)] rounded-xl p-3">
+                    <AlertTriangle size={14} className="text-[var(--color-text-subtle)] mt-0.5 shrink-0" />
+                    <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{NOT_IMPLEMENTED_TEXT}</p>
+                  </div>
+                ) : plugin.enabled && effect && (
                   <div className="flex items-start gap-2 bg-[var(--color-primary-light)] rounded-xl p-3">
                     <CheckCircle size={14} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
                     <p className="text-xs text-[var(--color-primary)] leading-relaxed">{effect.text}</p>
@@ -169,6 +171,7 @@ export default function PluginsPage() {
                         {effect.action.label}<ArrowRight size={11} />
                       </Link>
                     )}
+                    {!plugin.implemented && <Badge variant="neutral" size="sm">No implementado</Badge>}
                     <Badge variant={plugin.enabled ? 'success' : 'neutral'} size="sm" dot>{plugin.enabled ? 'Activo' : 'Inactivo'}</Badge>
                   </div>
                 </div>
