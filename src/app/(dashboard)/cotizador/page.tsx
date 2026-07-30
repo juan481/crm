@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -70,8 +71,9 @@ export default function CotizadorPage() {
   const [itemSearch, setItemSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
 
+  const searchParams = useSearchParams()
   const [clientMode,              setClientMode]              = useState<'existing' | 'manual'>('existing')
-  const [selectedEmpresaId,       setSelectedEmpresaId]       = useState('')
+  const [selectedEmpresaId,       setSelectedEmpresaId]       = useState(() => searchParams.get('empresaId') ?? '')
   const [selectedContactEmail,    setSelectedContactEmail]    = useState('')
   const [selectedContactName,     setSelectedContactName]     = useState('')
   const [manualContactInput,      setManualContactInput]      = useState(false)

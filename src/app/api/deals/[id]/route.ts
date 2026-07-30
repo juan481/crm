@@ -10,6 +10,30 @@ const INCLUDE = {
   owner:   { select: { id: true, name: true } },
 }
 
+export async function GET(_: NextRequest, { params }: Params) {
+  try {
+    const payload = await getCurrentUser()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!canAccess(payload.role, 'SELLER'))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+
+    const deal = await prisma.deal.findFirst({
+      where: {
+        id: params.id,
+        organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
+      },
+      include: INCLUDE,
+    })
+    if (!deal) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
+
+    return NextResponse.json({ data: deal })
+  } catch (error) {
+    console.error('[DEAL GET]', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()

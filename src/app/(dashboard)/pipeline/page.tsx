@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, AlertTriangle } from 'lucide-react'
+import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, AlertTriangle, Calculator, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
@@ -43,6 +44,128 @@ const EMPTY_FORM: DealFormState = {
   title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '',
 }
 
+function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => void }) {
+  const qc = useQueryClient()
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string } | null>(null)
+
+  const { data, isLoading } = useQuery<Deal>({
+    queryKey: ['deal', dealId],
+    queryFn: async () => {
+      const res = await fetch(`/api/deals/${dealId}`)
+      if (!res.ok) throw new Error('Deal no encontrado')
+      return res.json().then(j => j.data)
+    },
+    staleTime: 10 * 1000,
+  })
+
+  const d = draft ?? (data ? {
+    amount: String(data.amount),
+    probability: String(data.probability),
+    expectedCloseDate: data.expectedCloseDate ? data.expectedCloseDate.slice(0, 10) : '',
+    notes: data.notes ?? '',
+  } : null)
+
+  const handleSave = async () => {
+    if (!d) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Number(d.amount) || 0,
+          probability: Number(d.probability) || 0,
+          expectedCloseDate: d.expectedCloseDate || null,
+          notes: d.notes.trim() || null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al guardar'); return }
+      toast.success('Deal actualizado')
+      qc.invalidateQueries({ queryKey: ['deal', dealId] })
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      setDraft(null)
+    } catch { toast.error('Error de conexión') } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={data?.title ?? 'Oportunidad'} size="md">
+      {isLoading || !data || !d ? (
+        <div className="space-y-3">
+          <Skeleton className="h-8 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            {data.empresa && (
+              <span className="flex items-center gap-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
+                <Building2 size={11} />{data.empresa.name}
+              </span>
+            )}
+            {data.owner && <span className="flex items-center gap-1"><User size={11} />{data.owner.name}</span>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Monto"
+              type="number" min="0" step="0.01"
+              leftIcon={<DollarSign size={14} />}
+              value={d.amount}
+              onChange={e => setDraft({ ...d, amount: e.target.value })}
+            />
+            <Input
+              label="Probabilidad %"
+              type="number" min="0" max="100"
+              value={d.probability}
+              onChange={e => setDraft({ ...d, probability: e.target.value })}
+            />
+          </div>
+
+          <Input
+            label="Fecha estimada de cierre"
+            type="date"
+            leftIcon={<CalendarClock size={14} />}
+            value={d.expectedCloseDate}
+            onChange={e => setDraft({ ...d, expectedCloseDate: e.target.value })}
+          />
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Notas</label>
+            <textarea
+              className="w-full rounded-xl border bg-[var(--color-surface)] text-[var(--color-text)] px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"
+              style={{ borderColor: 'var(--color-border)' }}
+              rows={4}
+              placeholder="Última llamada, próximos pasos, objeciones..."
+              value={d.notes}
+              onChange={e => setDraft({ ...d, notes: e.target.value })}
+            />
+          </div>
+
+          <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+            Creado {formatDate(data.createdAt)}
+            {data.closedAt && ` · Cerrado ${formatDate(data.closedAt)}`}
+          </p>
+
+          <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            {data.empresa ? (
+              <Link
+                href={`/cotizador?empresaId=${data.empresa.id}`}
+                className="flex items-center gap-1.5 text-sm font-medium hover:underline"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                <Calculator size={14} />Generar cotización
+              </Link>
+            ) : <span />}
+            <Button onClick={handleSave} loading={saving}>Guardar cambios</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 export default function PipelinePage() {
   const qc        = useQueryClient()
   const { user }  = useAuthStore()
@@ -52,6 +175,7 @@ export default function PipelinePage() {
   const [form,     setForm]     = useState<DealFormState>(EMPTY_FORM)
   const [saving,   setSaving]   = useState(false)
   const [movingId, setMovingId] = useState<string | null>(null)
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
 
   // Drag state
   const [dragOverStage, setDragOverStage] = useState<DealStage | null>(null)
@@ -267,7 +391,8 @@ export default function PipelinePage() {
                           <div
                             draggable
                             onDragStart={(e: React.DragEvent<HTMLDivElement>) => onDragStart(e, deal.id)}
-                            className="surface rounded-xl p-3 group relative select-none cursor-grab active:cursor-grabbing"
+                            onClick={() => setSelectedDealId(deal.id)}
+                            className="surface rounded-xl p-3 group relative select-none cursor-grab active:cursor-grabbing hover:border-[var(--color-border-strong)] transition-colors"
                             style={{ opacity: movingId === deal.id ? 0.5 : 1 }}
                           >
                             <p className="text-sm font-medium text-[var(--color-text)] mb-1.5 pr-5 leading-snug">
@@ -303,21 +428,21 @@ export default function PipelinePage() {
 
                             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-0.5 transition-opacity">
                               {stageIdx > 0 && (
-                                <button onClick={() => moveStage(deal, 'prev')} disabled={!!movingId}
+                                <button onClick={e => { e.stopPropagation(); moveStage(deal, 'prev') }} disabled={!!movingId}
                                   className="p-1 rounded bg-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
                                   title="Etapa anterior">
                                   <ChevronLeft size={10} />
                                 </button>
                               )}
                               {stageIdx < STAGES.length - 1 && (
-                                <button onClick={() => moveStage(deal, 'next')} disabled={!!movingId}
+                                <button onClick={e => { e.stopPropagation(); moveStage(deal, 'next') }} disabled={!!movingId}
                                   className="p-1 rounded bg-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
                                   title="Siguiente etapa">
                                   <ChevronRight size={10} />
                                 </button>
                               )}
                               {canDelete && (
-                                <button onClick={() => handleDelete(deal.id)}
+                                <button onClick={e => { e.stopPropagation(); handleDelete(deal.id) }}
                                   className="p-1 rounded bg-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-red-400 transition-colors">
                                   <Trash2 size={10} />
                                 </button>
@@ -389,6 +514,11 @@ export default function PipelinePage() {
           </div>
         </form>
       </Modal>
+
+      {/* Deal detail modal */}
+      {selectedDealId && (
+        <DealDetailModal dealId={selectedDealId} onClose={() => setSelectedDealId(null)} />
+      )}
     </div>
   )
 }
