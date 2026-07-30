@@ -6,8 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Send, Lock, Unlock, User, Clock, Tag, AlertCircle,
-  CheckCircle, XCircle, Edit2, ChevronDown, Paperclip, X, FileText, Image as ImageIcon,
+  CheckCircle, XCircle, Edit2, ChevronDown, Paperclip, X, FileText, Image as ImageIcon, ListPlus,
 } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -70,6 +71,7 @@ export default function TicketDetailPage() {
   const [updating, setUpdating] = useState(false)
   const [attachment, setAttachment] = useState<{ url: string; name: string } | null>(null)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [creatingFollowUp, setCreatingFollowUp] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data, isLoading } = useQuery<TicketDetail>({
@@ -160,6 +162,35 @@ export default function TicketDetailPage() {
       qc.invalidateQueries({ queryKey: ['tickets'] })
       toast.success('Ticket actualizado')
     } catch { toast.error('Error') } finally { setUpdating(false) }
+  }
+
+  const handleCreateFollowUp = async () => {
+    if (!data) return
+    setCreatingFollowUp(true)
+    try {
+      const res = await fetch('/api/tareas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Seguimiento — Ticket #${String(data.number).padStart(4, '0')}: ${data.title}`,
+          description: `Tarea de seguimiento generada desde el ticket #${String(data.number).padStart(4, '0')}.`,
+          assignedToId: data.assignedToId || undefined,
+          empresaId: data.empresaId || undefined,
+          clientId: data.clientId || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al crear la tarea'); return }
+      toast.success((t) => (
+        <span>
+          Tarea creada — <Link href="/tareas" className="underline" onClick={() => toast.dismiss(t.id)}>ver en Tareas</Link>
+        </span>
+      ))
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setCreatingFollowUp(false)
+    }
   }
 
   if (isLoading) {
@@ -389,6 +420,15 @@ export default function TicketDetailPage() {
                 )}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={handleCreateFollowUp}
+              disabled={creatingFollowUp}
+              className="w-full flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 rounded-lg border border-dashed border-[var(--color-border-strong)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)]/40 transition-colors disabled:opacity-50"
+            >
+              <ListPlus size={13} />
+              {creatingFollowUp ? 'Creando...' : 'Crear tarea de seguimiento'}
+            </button>
           </div>
 
           {/* Info */}
