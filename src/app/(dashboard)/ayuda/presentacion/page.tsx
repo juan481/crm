@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   X, ChevronLeft, ChevronRight, LogIn, Users, TrendingUp, Calculator,
   Mail, CheckSquare, ClipboardList, ShieldCheck, Palette, Server, Lock, Building, HelpCircle,
+  Folder, Globe,
 } from 'lucide-react'
 
 const ACCENT = 'linear-gradient(135deg, #6366f1, #8b5cf6)'
@@ -172,19 +173,6 @@ function MockDocument({ label, lines, footer }: { label: string; lines: { l: str
   )
 }
 
-function MockGauge({ used, total, label }: { used: number; total: number; label: string }) {
-  const pct = Math.min(100, Math.round((used / total) * 100))
-  return (
-    <MockFrame label="Uso mensual">
-      <p className="text-[12.5px] text-text-muted mb-2">{label}</p>
-      <div className="h-3 rounded-full bg-surface-raised border border-border overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: ACCENT }} />
-      </div>
-      <p className="text-[12px] text-text-subtle mt-2">{used.toLocaleString()} / {total.toLocaleString()} emails — se reinicia en 12 días</p>
-    </MockFrame>
-  )
-}
-
 function RoleSlideBody({ icon, chips, bullets, usage }: { icon: ReactNode; chips: string[]; bullets: ReactNode[]; usage: string }) {
   return (
     <div className="grid md:grid-cols-[auto_1fr] gap-8 items-start">
@@ -206,6 +194,116 @@ function Divider({ n, title }: { n: string; title: string }) {
       <p className="text-[15px] font-bold tracking-[0.16em] uppercase text-white/70 mb-4">{n}</p>
       <h1 className="text-[40px] md:text-[56px] font-bold text-white tracking-tight text-balance">{title}</h1>
     </div>
+  )
+}
+
+/* Honest "what this doesn't do yet" callout — same visual language as Callout
+   in the standalone docs artifact, kept neutral/informative, not alarming. */
+function RoadmapNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="mt-5 max-w-[62ch] rounded-xl px-4 py-3.5 bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/25">
+      <span className="block text-[11px] font-bold tracking-[0.06em] uppercase text-amber-700 dark:text-amber-400 mb-1.5">Todavía no hace esto</span>
+      <p className="text-[13.5px] text-text-muted leading-relaxed m-0">{children}</p>
+    </div>
+  )
+}
+
+function FixedNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="mt-5 max-w-[62ch] rounded-xl px-4 py-3.5 bg-emerald-50 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/25">
+      <span className="block text-[11px] font-bold tracking-[0.06em] uppercase text-emerald-700 dark:text-emerald-400 mb-1.5">Recién arreglado</span>
+      <p className="text-[13.5px] text-text-muted leading-relaxed m-0">{children}</p>
+    </div>
+  )
+}
+
+function MockTimeline({ empresa, entries }: { empresa: string; entries: { tag: string; text: string; when: string }[] }) {
+  return (
+    <MockFrame label="Ficha de Empresa">
+      <p className="text-[13px] font-bold text-text mb-3">{empresa}</p>
+      <div className="space-y-2.5">
+        {entries.map((e, i) => (
+          <div key={i} className="flex gap-2.5">
+            <span className="mt-0.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: ACCENT }} />
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: '#6366f1' }}>{e.tag} <span className="text-text-subtle font-normal normal-case">· {e.when}</span></p>
+              <p className="text-[12.5px] text-text-muted">{e.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </MockFrame>
+  )
+}
+
+function MockChecklist({ items }: { items: { title: string; done?: boolean; tone: 'neutral' | 'accent' | 'flag' }[] }) {
+  return (
+    <MockFrame label="Tareas">
+      <div className="space-y-2.5">
+        {items.map((it) => (
+          <div key={it.title} className="flex items-center gap-2.5">
+            <span
+              className="w-4 h-4 rounded shrink-0 border-2"
+              style={it.done ? { background: ACCENT, borderColor: 'transparent' } : { borderColor: 'var(--color-border-strong)' }}
+            />
+            <span className={`text-[12.5px] flex-1 ${it.done ? 'line-through text-text-subtle' : 'text-text'}`}>{it.title}</span>
+            <Pill tone={it.tone}>{it.tone === 'flag' ? 'Urgente' : it.tone === 'accent' ? 'Media' : 'Baja'}</Pill>
+          </div>
+        ))}
+      </div>
+    </MockFrame>
+  )
+}
+
+function MockTicketThread() {
+  return (
+    <MockFrame label="Ticket #0042 — Falla sensor perimetral">
+      <div className="flex items-center gap-2 mb-3.5">
+        <Pill tone="flag">En proceso</Pill>
+        <Pill tone="neutral">Alta prioridad</Pill>
+      </div>
+      <div className="space-y-2.5">
+        <div className="bg-surface-raised border border-border rounded-lg p-2.5">
+          <p className="text-[10.5px] font-bold text-text-subtle mb-1">Cliente</p>
+          <p className="text-[12px] text-text">El sensor de la puerta trasera suena solo, sin motivo.</p>
+        </div>
+        <div className="rounded-lg p-2.5 border" style={{ background: 'rgba(180,83,9,0.08)', borderColor: 'rgba(180,83,9,0.25)' }}>
+          <p className="text-[10.5px] font-bold text-amber-700 dark:text-amber-400 mb-1">Nota interna (el cliente no la ve)</p>
+          <p className="text-[12px] text-text">Asignado a técnico — probable batería baja del sensor.</p>
+        </div>
+      </div>
+    </MockFrame>
+  )
+}
+
+function MockWebhookCard() {
+  return (
+    <MockFrame label="Evento — Charla de seguridad barrial">
+      <div className="flex items-center gap-2 mb-2.5 text-text-subtle">
+        <Globe size={14} />
+        <span className="text-[11px] font-bold uppercase tracking-wide">Webhook de inscripción</span>
+      </div>
+      <div className="bg-surface-raised border border-border rounded-lg px-3 py-2.5 font-mono text-[11px] text-text-subtle break-all">
+        https://crm.justcreate.com.ar/api/webhooks/eventos/evt_8f2·····?secret=••••••••
+      </div>
+      <p className="text-[11.5px] text-text-subtle mt-2.5">&quot;Integrá este endpoint en tu sitio web o WordPress para registrar inscripciones automáticamente.&quot;</p>
+    </MockFrame>
+  )
+}
+
+function MockFolders() {
+  const folders = ['Contratos', 'Manuales técnicos', 'Fotos de instalación', 'Facturas proveedores']
+  return (
+    <MockFrame label="Documentos">
+      <div className="grid grid-cols-2 gap-2.5">
+        {folders.map((f) => (
+          <div key={f} className="flex items-center gap-2 bg-surface-raised border border-border rounded-lg p-2.5">
+            <Folder size={16} style={{ color: '#6366f1' }} className="shrink-0" />
+            <span className="text-[12px] text-text font-medium truncate">{f}</span>
+          </div>
+        ))}
+      </div>
+    </MockFrame>
   )
 }
 
@@ -402,10 +500,54 @@ function useSlides() {
         { label: 'Negociación', cards: ['Colegio Rivadavia'] },
         { label: 'Ganado', cards: ['Farmacia del Sol'] },
       ]} />
+      <RoadmapNote>
+        Hoy una tarjeta <b>no se puede abrir</b> — solo se arrastra entre columnas. El monto, la probabilidad y quién la lleva se
+        ven en la tarjeta, pero la fecha estimada de cierre y las notas se guardan sin mostrarse en ningún lado. No se puede generar
+        una cotización directamente desde una oportunidad, ni queda un historial de llamadas/visitas como sí tiene una Empresa.
+      </RoadmapNote>
     </Slide>,
 
-    // 16 — Cotizador (armar)
-    <Slide key="s16" kicker="Módulo" title="Cotizador — armar el presupuesto">
+    // 16 — Directorio: Empresas
+    <Slide key="s16" kicker="Módulo" title="Directorio — Empresas">
+      <div className="grid md:grid-cols-[1fr_1.15fr] gap-8 items-center">
+        <Bullets items={[
+          <>Ficha completa por empresa, con línea de tiempo de <b>notas reales</b>: llamada, reunión, cotización enviada, soporte — con fotos adjuntas.</>,
+          <>Historial de todas las cotizaciones mandadas a esa empresa.</>,
+          <>Botón <b>&quot;Marcar como cliente&quot;</b> — así es literalmente como una Empresa se convierte en &quot;Cliente&quot;: son la misma ficha, no dos bases separadas.</>,
+        ]} />
+        <MockTimeline
+          empresa="Farmacia del Sol"
+          entries={[
+            { tag: 'Llamada', text: 'Confirman instalación para el lunes.', when: 'hace 2 días' },
+            { tag: 'Cotización', text: 'Enviada — Alarma + CCTV, $400.000.', when: 'hace 5 días' },
+          ]}
+        />
+      </div>
+    </Slide>,
+
+    // 17 — Directorio: Contactos
+    <Slide key="s17" kicker="Módulo" title="Directorio — Contactos">
+      <div className="grid md:grid-cols-[1fr_1.2fr] gap-8 items-center">
+        <Bullets items={[
+          <>Cada persona vinculada a una empresa: nombre, cargo, mail, teléfono.</>,
+          <>Import masivo por Excel, con auto-vinculación por dominio de email o coincidencia de nombre.</>,
+        ]} />
+        <MockTable
+          head={['Contacto', 'Empresa', 'Cargo']}
+          rows={[
+            ['Marcela Ríos', 'Farmacia del Sol', 'Gerente'],
+            ['Julián Paz', 'Cerrajería Norte', 'Dueño'],
+          ]}
+        />
+      </div>
+      <RoadmapNote>
+        A diferencia de Empresas, un Contacto <b>no tiene ficha propia</b> — hacer click en uno te lleva a la ficha de su empresa,
+        no a un detalle del contacto en sí. No tiene notas ni historial propio todavía.
+      </RoadmapNote>
+    </Slide>,
+
+    // 18 — Cotizador (armar)
+    <Slide key="s18" kicker="Módulo" title="Cotizador — armar el presupuesto">
       <Bullets items={[
         <>Se eligen servicios y/o productos del catálogo, y se arma el carrito.</>,
         <>Descuento opcional.</>,
@@ -413,8 +555,8 @@ function useSlides() {
       ]} />
     </Slide>,
 
-    // 17 — Cotizador (PDF y envío)
-    <Slide key="s17" kicker="Módulo" title="Cotizador — el PDF y el envío">
+    // 19 — Cotizador (PDF y envío)
+    <Slide key="s19" kicker="Módulo" title="Cotizador — el PDF y el envío">
       <div className="grid md:grid-cols-[1.2fr_1fr] gap-8 items-center">
         <MockDocument
           label="Cotización.pdf"
@@ -432,8 +574,8 @@ function useSlides() {
       </div>
     </Slide>,
 
-    // 18 — Cotizaciones
-    <Slide key="s18" kicker="Módulo" title="Cotizaciones">
+    // 20 — Cotizaciones
+    <Slide key="s20" kicker="Módulo" title="Cotizaciones">
       <p className="text-[15px] text-text-muted mb-5 max-w-[60ch]">El historial de todo lo cotizado, con su estado y reenvío sin rearmar nada.</p>
       <div className="flex flex-wrap gap-2">
         <Pill tone="neutral">Guardada</Pill>
@@ -444,63 +586,94 @@ function useSlides() {
       </div>
     </Slide>,
 
-    // 19 — Directorio
-    <Slide key="s19" kicker="Módulo" title="Directorio — Empresas y Contactos">
-      <div className="grid md:grid-cols-[1fr_1.2fr] gap-8 items-center">
-        <Bullets items={[
-          <><b>Empresas</b> con las que hay o puede haber relación comercial.</>,
-          <><b>Contactos</b>: cada persona vinculada a una empresa.</>,
-          <>Import desde Excel con auto-vinculación por dominio de email o nombre.</>,
-        ]} />
-        <MockTable
-          head={['Contacto', 'Empresa', 'Cargo']}
-          rows={[
-            ['Marcela Ríos', 'Farmacia del Sol', 'Gerente'],
-            ['Julián Paz', 'Cerrajería Norte', 'Dueño'],
-          ]}
-        />
-      </div>
-    </Slide>,
-
-    // 20 — Comunicaciones
-    <Slide key="s20" kicker="Módulo" title="Comunicaciones — campañas de email">
+    // 21 — Comunicaciones: campañas
+    <Slide key="s21" kicker="Módulo" title="Comunicaciones — campañas de email">
       <Bullets items={[
         <>Asunto, cuerpo y plantillas reutilizables.</>,
-        <>Se elige a quién va: Directorio, clientes, o una lista cargada.</>,
+        <>Se elige a quién va, de la <b>base de contactos de campaña</b> de la organización.</>,
         <>Envío por tandas — cada destinatario queda marcado como enviado, rebotado o dado de baja.</>,
       ]} />
+      <RoadmapNote>
+        Ojo: esta base <b>no</b> es la del Directorio — los contactos de Empresas/Directorio hoy no se pueden usar como
+        destinatarios de una campaña. Para escribirle a uno, se usa el botón &quot;Enviar Email&quot; puntual desde la ficha de su
+        empresa (uno por uno, no una campaña masiva).
+      </RoadmapNote>
     </Slide>,
 
-    // 21 — Límite mensual y bajas
-    <Slide key="s21" kicker="Módulo" title="Límite mensual y lista de bajas">
-      <div className="grid md:grid-cols-[1.1fr_1fr] gap-8 items-center">
-        <MockGauge used={4100} total={12000} label="Emails de campaña + cotizaciones este mes" />
+    // 22 — Comunicaciones: lista de bajas
+    <Slide key="s22" kicker="Módulo" title="Comunicaciones — lista de bajas">
+      <div className="grid md:grid-cols-[1.15fr_1fr] gap-8 items-center">
+        <MockTable
+          head={['Email', 'Motivo', 'Fecha']}
+          rows={[
+            ['contacto@viasur.com.ar', <Pill tone="flag">Baja</Pill>, '12/07'],
+            ['info@edificiosm.com.ar', <Pill tone="flag">Rebote</Pill>, '08/07'],
+          ]}
+        />
         <Bullets items={[
-          <>Al llegar al tope, aparece <b>"Solicitar aumento"</b> por WhatsApp.</>,
-          <>Todo email lleva un link de baja — quien lo usa no vuelve a recibir nada de esa organización.</>,
+          <>Todo email de campaña lleva un link de baja al pie.</>,
+          <>Quien lo usa queda excluido de <b>todas</b> las campañas futuras de esa organización, automáticamente.</>,
+          <>Un rebote definitivo o una queja de spam hacen exactamente lo mismo, sin que nadie tenga que hacer nada.</>,
         ]} />
       </div>
     </Slide>,
 
-    // 22 — Tareas y Tickets
-    <Slide key="s22" kicker="Módulo" title="Tareas y Tickets">
-      <MockKanban columns={[
-        { label: 'Tareas', cards: ['Llamar a Depósito Rivas', 'Revisar stock cámaras'] },
-        { label: 'Tickets abiertos', cards: ['Falla sensor — Farmacia del Sol', 'Reprogramar clave — Cerrajería'] },
-      ]} />
-      <p className="mt-5 text-[13.5px] text-text-subtle max-w-[62ch]">Tareas se asignan a una persona con su propio avance; Tickets es soporte al cliente con un hilo de mensajes y un responsable.</p>
+    // 23 — Tareas
+    <Slide key="s23" kicker="Módulo" title="Tareas">
+      <div className="grid md:grid-cols-[1fr_1.1fr] gap-8 items-center">
+        <Bullets items={[
+          <>Tres estados: Pendiente, En curso, Hecha. Prioridad Baja/Media/Alta/Urgente, fecha límite, asignada a una persona.</>,
+          <>Se puede vincular a una Empresa o Cliente puntual.</>,
+          <>Quien la creó ve si el asignado ya la <b>vio</b> o la está trabajando activamente.</>,
+        ]} />
+        <MockChecklist items={[
+          { title: 'Llamar a Depósito Rivas', tone: 'flag' },
+          { title: 'Revisar stock de cámaras', done: true, tone: 'neutral' },
+          { title: 'Presupuestar ampliación Farmacia del Sol', tone: 'accent' },
+        ]} />
+      </div>
+      <RoadmapNote>
+        Sin subtareas, adjuntos ni comentarios. El &quot;visto&quot; es el único aviso que existe — no hay notificación real (ni
+        email ni push) cuando te asignan una tarea o cuando se vence; lo de &quot;vencida&quot; se calcula solo en pantalla. Tampoco
+        hay vínculo a una oportunidad de Pipeline o a un Ticket.
+      </RoadmapNote>
     </Slide>,
 
-    // 23 — Eventos
-    <Slide key="s23" kicker="Módulo" title="Eventos">
-      <Bullets items={[
-        <>Capacitaciones, lanzamientos o cualquier actividad con inscripción.</>,
-        <>Lista de inscriptos propia por evento — sin planilla aparte.</>,
-      ]} />
+    // 24 — Tickets
+    <Slide key="s24" kicker="Módulo" title="Tickets">
+      <div className="grid md:grid-cols-[1.1fr_1fr] gap-8 items-center">
+        <MockTicketThread />
+        <Bullets items={[
+          <>5 estados reales: Abierto → En proceso → Esperando cliente → Resuelto → Cerrado.</>,
+          <>Mensajes internos (solo el equipo) o &quot;públicos&quot;, con reapertura automática si el cliente responde.</>,
+          <>Un técnico ve y responde solo <b>sus</b> tickets asignados, y puede marcarlos resueltos.</>,
+        ]} />
+      </div>
+      <RoadmapNote>
+        El mensaje &quot;público&quot; hoy <b>no le llega de verdad</b> al cliente por email — es una función a medio terminar. Sin
+        adjuntos en los mensajes (no se puede mandar la foto de un sensor roto). Y no existe ningún formulario para que un cliente
+        abra un ticket por su cuenta — siempre lo carga el staff.
+      </RoadmapNote>
     </Slide>,
 
-    // 24 — Facturación
-    <Slide key="s24" kicker="Módulo" title="Facturación">
+    // 25 — Eventos
+    <Slide key="s25" kicker="Módulo" title="Eventos">
+      <div className="grid md:grid-cols-[1fr_1.15fr] gap-8 items-center">
+        <Bullets items={[
+          <>Capacitaciones, charlas o cualquier actividad con inscripción.</>,
+          <>Alta de inscriptos a mano, o de forma automática por un <b>webhook propio de cada evento</b>.</>,
+        ]} />
+        <MockWebhookCard />
+      </div>
+      <FixedNote>
+        Justo esta semana arreglamos que este webhook quedara realmente conectado con la web — estaba armado para eso desde antes,
+        pero una regla interna lo bloqueaba como si fuera una pantalla privada. Ahora si lo enchufás a un formulario del sitio o de
+        WordPress, cada inscripción entra sola al evento.
+      </FixedNote>
+    </Slide>,
+
+    // 26 — Facturación
+    <Slide key="s26" kicker="Módulo" title="Facturación">
       <div className="grid md:grid-cols-[1.2fr_1fr] gap-8 items-center">
         <MockDocument
           label="Factura.pdf"
@@ -517,36 +690,59 @@ function useSlides() {
       </div>
     </Slide>,
 
-    // 25 — Documentos
-    <Slide key="s25" kicker="Módulo" title="Documentos">
-      <Bullets items={[
-        <>Subida directa de archivos, organizados en carpetas.</>,
-        <>Útil para contratos, manuales o material que el equipo necesite sin buscar en el mail.</>,
-      ]} />
+    // 27 — Documentos
+    <Slide key="s27" kicker="Módulo" title="Documentos">
+      <div className="grid md:grid-cols-[1fr_1.15fr] gap-8 items-center">
+        <Bullets items={[
+          <>Carpetas reales, con subcarpetas — no es una lista plana.</>,
+          <>Acceso para Super Admin, Admin y Vendedor. Tipos permitidos: imágenes, PDF, Word, Excel y texto, hasta 30MB.</>,
+          <>Se puede vincular un documento a un cliente puntual (así es como se adjunta, por ejemplo, la foto de una instalación a la ficha de esa empresa).</>,
+        ]} />
+        <MockFolders />
+      </div>
+      <RoadmapNote>
+        Sin versionado: volver a subir el mismo archivo crea uno nuevo suelto, no reemplaza al anterior. Las etiquetas son propias
+        de cada documento, no hay una lista compartida para buscar por categoría en toda la organización.
+      </RoadmapNote>
     </Slide>,
 
-    // 26 — RRHH y asistencia
-    <Slide key="s26" kicker="Módulo" title="RRHH y asistencia">
-      <Bullets items={[
-        <><b>Mi Asistencia</b>: cada persona ficha su entrada y salida.</>,
-        <><b>Mi Día</b>: vista para técnicos en campo, sin el resto del CRM alrededor.</>,
-        <>RRHH ve el resumen de presentes, ausentes y tardanzas de todo el equipo.</>,
-      ]} />
+    // 28 — RRHH y asistencia
+    <Slide key="s28" kicker="Módulo" title="RRHH y asistencia">
+      <div className="grid md:grid-cols-[1fr_1.15fr] gap-8 items-center">
+        <Bullets items={[
+          <><b>Mi Asistencia</b>: cada persona ficha su entrada y salida — llegar después de las 9:15 marca tardanza sola.</>,
+          <><b>Mi Día</b>: vista para técnicos en campo, sin el resto del CRM alrededor.</>,
+          <>RRHH ve presentes, ausentes, tardanzas y el % de presentismo de todo el equipo, por mes o por persona.</>,
+        ]} />
+        <MockTable
+          head={['Empleado', 'Estado', 'Hora']}
+          rows={[
+            ['Roberto Díaz', <Pill tone="good">Presente</Pill>, '08:52'],
+            ['Marina Sosa', <Pill tone="flag">Tardanza</Pill>, '09:41'],
+            ['Diego Farías', <Pill tone="neutral">Sin registro</Pill>, '—'],
+          ]}
+        />
+      </div>
+      <RoadmapNote>
+        La pregunta que más importa: <b>si alguien no ficha, hoy no pasa absolutamente nada</b>. No se crea ningún registro para
+        ese día, y el % de presentismo se calcula solo sobre los días que sí tienen registro — un día sin fichar no resta, incluso
+        puede mostrar un presentismo más alto que el real. No hay ningún aviso automático a RRHH; marcar una ausencia es 100% manual.
+      </RoadmapNote>
     </Slide>,
 
-    // 27 — Mi Perfil
-    <Slide key="s27" kicker="Módulo" title="Mi Perfil">
+    // 29 — Mi Perfil
+    <Slide key="s29" kicker="Módulo" title="Mi Perfil">
       <Bullets items={[
         <>Tema claro u oscuro.</>,
         <>Datos de la cuenta y cambio de contraseña.</>,
       ]} />
     </Slide>,
 
-    // 28 — Divider: administración
-    <Divider key="s28" n="Sección 3" title="Para quienes administran" />,
+    // 30 — Divider: administración
+    <Divider key="s30" n="Sección 3" title="Para quienes administran" />,
 
-    // 29 — Marca
-    <Slide key="s29" kicker="Configuración" title="Marca: dos nombres, dos usos distintos">
+    // 31 — Marca
+    <Slide key="s31" kicker="Configuración" title="Marca: dos nombres, dos usos distintos">
       <div className="grid sm:grid-cols-2 gap-3.5">
         <div className="bg-surface border border-border rounded-2xl p-5 shadow-sm">
           <IconBadge icon={<Palette size={20} />} />
@@ -561,8 +757,8 @@ function useSlides() {
       </div>
     </Slide>,
 
-    // 30 — Correo y SES
-    <Slide key="s30" kicker="Configuración" title="Correo: de SMTP a Amazon SES">
+    // 32 — Correo y SES
+    <Slide key="s32" kicker="Configuración" title="Correo: de SMTP a Amazon SES">
       <Bullets items={[
         <>Por defecto: SMTP tradicional (Gmail, Brevo).</>,
         <>Para más volumen y entregabilidad: <b>Amazon SES</b>, con dominio verificado.</>,
@@ -570,8 +766,8 @@ function useSlides() {
       ]} />
     </Slide>,
 
-    // 31 — Seguridad
-    <Slide key="s31" kicker="Configuración" title="Seguridad de los datos">
+    // 33 — Seguridad
+    <Slide key="s33" kicker="Configuración" title="Seguridad de los datos">
       <RoleSlideBody
         icon={<Lock size={22} />}
         chips={['Multi-empresa', 'Row Level Security']}
@@ -584,16 +780,16 @@ function useSlides() {
       />
     </Slide>,
 
-    // 32 — Panel de la agencia
-    <Slide key="s32" kicker="Configuración" title="Panel de la agencia">
+    // 34 — Panel de la agencia
+    <Slide key="s34" kicker="Configuración" title="Panel de la agencia">
       <Bullets items={[
         <>Una capa aparte, exclusiva de JustCreate — ni el Super Admin de la empresa la ve.</>,
         <>Permite suspender o reactivar una organización completa, sin borrar datos.</>,
       ]} />
     </Slide>,
 
-    // 33 — Cierre
-    <div key="s33" className="h-full w-full flex flex-col items-center justify-center text-center px-10 text-white" style={{ background: '#0f172a' }}>
+    // 35 — Cierre
+    <div key="s35" className="h-full w-full flex flex-col items-center justify-center text-center px-10 text-white" style={{ background: '#0f172a' }}>
       <HelpCircle size={40} className="mb-5 text-white/70" />
       <h1 className="text-[36px] md:text-[48px] font-bold tracking-tight text-balance">¿Preguntas?</h1>
       <p className="text-white/70 text-[16px] mt-4 max-w-[52ch]">Esta guía completa está siempre disponible en Ayuda — con el ícono de arriba en el header.</p>

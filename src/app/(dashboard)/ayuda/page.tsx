@@ -400,10 +400,18 @@ export default function AyudaPage() {
 
             <Section id="e9" n={9} title="Comunicaciones" lede="Campañas de email a listas propias, con freno de seguridad incluido.">
               <P>
-                Se arma una campaña (asunto, cuerpo, con plantillas reutilizables) y se elige a quién va: contactos del Directorio,
-                clientes, o una lista cargada directamente. El envío es por tandas para no saturar nada, y cada destinatario queda
-                marcado como enviado, rebotado o dado de baja.
+                Se arma una campaña (asunto, cuerpo, con plantillas reutilizables) y se elige a quién va, de la base de contactos
+                de campaña de la organización. El envío es por tandas para no saturar nada, y cada destinatario queda marcado como
+                enviado, rebotado o dado de baja.
               </P>
+              <div className="rounded-xl px-4 py-3.5 my-4 bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/25">
+                <span className="block text-[11px] font-bold tracking-[0.06em] uppercase text-amber-700 dark:text-amber-400 mb-1.5">Ojo, esto no es lo mismo que el Directorio</span>
+                <p className="text-[14px] text-text-muted m-0">
+                  Los contactos de Empresas/Directorio <b>no</b> se pueden usar como destinatarios de una campaña — son bases
+                  separadas hoy. Para escribirle a un contacto del Directorio, se usa el botón &quot;Enviar Email&quot; puntual desde
+                  la ficha de su Empresa (uno por uno, no una campaña masiva).
+                </p>
+              </div>
               <H3>Límite mensual</H3>
               <P>
                 Cada organización tiene un tope de emails de campaña por mes (no afecta cotizaciones ni mensajes puntuales a
