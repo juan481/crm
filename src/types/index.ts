@@ -460,6 +460,17 @@ export interface Task {
   updatedAt: string
 }
 
+export interface TaskComment {
+  id: string
+  taskId: string
+  content: string
+  attachmentUrl?: string | null
+  attachmentName?: string | null
+  userId: string
+  user?: { id: string; name: string; avatarUrl: string | null }
+  createdAt: string
+}
+
 // ─── Ticket ───────────────────────────────────────────────────────────────
 export interface Ticket {
   id: string

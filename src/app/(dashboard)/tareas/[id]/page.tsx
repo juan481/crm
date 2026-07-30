@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, CheckSquare, Square, Calendar, User,
-  Building2, Flag, Trash2, Clock,
+  Building2, Flag, Trash2, Clock, Send, Paperclip, X, FileText, Image as ImageIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,8 +14,143 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
-import type { Task, TaskStatus, TaskPriority } from '@/types'
+import type { Task, TaskStatus, TaskPriority, TaskComment } from '@/types'
 import toast from 'react-hot-toast'
+
+function isImageFile(name?: string | null) { return !!name && /\.(png|jpe?g|webp)$/i.test(name) }
+
+function TaskComments({ taskId }: { taskId: string }) {
+  const qc = useQueryClient()
+  const [content, setContent] = useState('')
+  const [attachment, setAttachment] = useState<{ url: string; name: string } | null>(null)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [sending, setSending] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { data, isLoading } = useQuery<TaskComment[]>({
+    queryKey: ['task-comments', taskId],
+    queryFn: async () => {
+      const res = await fetch(`/api/tareas/${taskId}/comments`)
+      if (!res.ok) return []
+      return (await res.json()).data
+    },
+    staleTime: 15 * 1000,
+  })
+  const comments = data ?? []
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/tareas/${taskId}/upload`, { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al subir archivo'); return }
+      setAttachment(json.data)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setUploadingFile(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!content.trim() && !attachment) return
+    setSending(true)
+    try {
+      const res = await fetch(`/api/tareas/${taskId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content.trim(), attachmentUrl: attachment?.url, attachmentName: attachment?.name }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      setContent('')
+      setAttachment(null)
+      qc.invalidateQueries({ queryKey: ['task-comments', taskId] })
+    } catch { toast.error('Error de conexión') } finally { setSending(false) }
+  }
+
+  return (
+    <div className="rounded-2xl p-5 space-y-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+        Comentarios {comments.length > 0 && `(${comments.length})`}
+      </p>
+
+      {isLoading ? (
+        <div className="h-16 rounded-xl animate-pulse" style={{ background: 'var(--color-border)' }} />
+      ) : (
+        <div className="space-y-3">
+          {comments.map((c) => (
+            <div key={c.id} className="flex items-start gap-2.5">
+              <Avatar name={c.user?.name ?? '?'} src={c.user?.avatarUrl ?? undefined} size="xs" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{c.user?.name ?? '—'}</span>
+                  <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>{timeAgo(c.createdAt)}</span>
+                </div>
+                {c.content && <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text-muted)' }}>{c.content}</p>}
+                {c.attachmentUrl && (
+                  isImageFile(c.attachmentName) ? (
+                    <a href={c.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block mt-2 max-w-[220px]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={c.attachmentUrl} alt={c.attachmentName ?? 'adjunto'} className="rounded-lg border max-h-48 object-cover" style={{ borderColor: 'var(--color-border)' }} />
+                    </a>
+                  ) : (
+                    <a href={c.attachmentUrl} target="_blank" rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
+                      <FileText size={12} />{c.attachmentName ?? 'Archivo'}
+                    </a>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+          {comments.length === 0 && (
+            <p className="text-sm text-center py-2" style={{ color: 'var(--color-text-subtle)' }}>Sin comentarios todavía.</p>
+          )}
+        </div>
+      )}
+
+      <form onSubmit={handleSend} className="space-y-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <textarea
+          rows={2}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Escribí un comentario..."
+          className="w-full rounded-xl border px-3 py-2 text-sm resize-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-all"
+          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+        />
+        {attachment && (
+          <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-[var(--color-surface-raised)] w-fit">
+            {isImageFile(attachment.name) ? <ImageIcon size={13} /> : <FileText size={13} />}
+            <span className="max-w-[180px] truncate" style={{ color: 'var(--color-text-muted)' }}>{attachment.name}</span>
+            <button type="button" onClick={() => setAttachment(null)} className="text-[var(--color-text-subtle)] hover:text-red-400"><X size={12} /></button>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={handleFileSelect} />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingFile || !!attachment}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-50"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+          >
+            <Paperclip size={13} />
+            {uploadingFile ? 'Subiendo...' : 'Adjuntar'}
+          </button>
+          <Button type="submit" size="sm" loading={sending} leftIcon={<Send size={13} />}>Comentar</Button>
+        </div>
+      </form>
+    </div>
+  )
+}
 
 const PRIORITY_OPTIONS = [
   { value: 'BAJA',    label: 'Baja' },
@@ -257,6 +392,8 @@ export default function TareaDetailPage() {
           </Button>
         </div>
       )}
+
+      <TaskComments taskId={task.id} />
     </div>
   )
 }

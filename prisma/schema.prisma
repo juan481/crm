@@ -277,6 +277,7 @@ model User {
   assignedTickets Ticket[]     @relation("TicketAssignee")
   createdTickets  Ticket[]     @relation("TicketCreator")
   ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
+  taskComments    TaskComment[]
   empresaNotas    EmpresaNota[]
   cotizaciones    Cotizacion[]
   asistencias     Asistencia[]
@@ -656,10 +657,25 @@ model Task {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  comments       TaskComment[]
 
   @@index([organizationId, status])
   @@index([assignedToId])
   @@index([empresaId])
+}
+
+model TaskComment {
+  id             String   @id @default(cuid())
+  taskId         String
+  task           Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  content        String
+  attachmentUrl  String?
+  attachmentName String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([taskId])
 }
 
 // ─── Support Tickets ───────────────────────────────────────────────────────
