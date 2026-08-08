@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
@@ -19,7 +20,6 @@ export async function GET() {
   // Orgs creadas antes de la Fase 13 pueden no tenerlo todavía (nullable a
   // propósito, ver schema.prisma) — se genera acá mismo, una sola vez.
   if (!org?.publicSupportToken) {
-    const { randomUUID } = await import('crypto')
     org = await db.organization.update({
       where: { id: payload.orgId },
       data: { publicSupportToken: randomUUID() },

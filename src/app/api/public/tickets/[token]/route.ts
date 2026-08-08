@@ -8,6 +8,22 @@ export const dynamic = 'force-dynamic'
 
 interface Params { params: { token: string } }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// buildEmailHtml() interpola subject/body directo en HTML sin escapar (ver
+// src/lib/email.ts) — hoy es aceptable porque todo lo que le llega sale de
+// gente ya autenticada (staff/técnicos). Esta ruta es la primera vez que
+// texto de alguien totalmente anónimo de internet termina en un email —
+// se escapa acá mismo antes de interpolar, sin tocar el helper compartido.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // GET: datos públicos mínimos para pintar el formulario con la marca de la
 // organización (nombre/logo/colores) — nada sensible, pensado para gente
 // sin sesión iniciada.
@@ -46,9 +62,22 @@ export async function POST(req: NextRequest, { params }: Params) {
     })
     if (!org) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
 
-    const { name, email, empresa: companyRaw, title, description, attachmentUrl, attachmentName } = await req.json()
+    const { name, email, empresa: companyRaw, title, description, attachmentUrl, attachmentName, website } = await req.json()
+
+    // Honeypot: campo invisible para humanos (ver soporte/[token]/page.tsx),
+    // los bots de formularios genéricos suelen completarlo igual. A
+    // propósito NO se responde con un falso éxito acá — el autocompletado
+    // agresivo de algunos navegadores a veces llena campos ocultos por
+    // error, y que una persona real crea que su consulta se envió cuando en
+    // realidad se descartó es peor que el spam que esto evita. Devuelve un
+    // error genérico (no delata que se detectó un bot) y no crea nada.
+    if (website?.trim()) {
+      return NextResponse.json({ error: 'No pudimos procesar tu consulta — probá de nuevo.' }, { status: 400 })
+    }
+
     if (!name?.trim())        return NextResponse.json({ error: 'Tu nombre es requerido' },        { status: 400 })
     if (!email?.trim())       return NextResponse.json({ error: 'Tu email es requerido' },          { status: 400 })
+    if (!EMAIL_RE.test(email.trim())) return NextResponse.json({ error: 'Ese email no parece válido' }, { status: 400 })
     if (!title?.trim())       return NextResponse.json({ error: 'El asunto es requerido' },         { status: 400 })
     if (!description?.trim()) return NextResponse.json({ error: 'Contanos el problema o consulta' }, { status: 400 })
 
@@ -111,15 +140,48 @@ export async function POST(req: NextRequest, { params }: Params) {
       },
     })
 
+    const orgName = org.name || org.crmName || 'CRM'
+    const ticketNumber = String(ticket.number).padStart(4, '0')
+    const safeName = escapeHtml(name.trim())
+    const safeTitle = escapeHtml(title.trim())
+
+    // Aviso a ADMIN/SUPER_ADMIN — sin esto, un ticket abierto por un
+    // cliente por su cuenta sólo se nota si alguien entra a mirar la lista;
+    // mismo patrón best-effort que el resto de los emails de esta ruta.
+    if (isOrgEmailConfigured(org)) {
+      try {
+        const staff = await db.user.findMany({
+          where: { organizationId: org.id, status: 'ACTIVE', role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
+          select: { email: true },
+        })
+        const staffHtml = buildEmailHtml(
+          `Nuevo ticket del formulario público — #${ticketNumber}`,
+          `${safeName} (${escapeHtml(email.trim())}) abrió el ticket "${safeTitle}" desde el formulario público.\n\nEntrá al CRM para responder.`,
+          orgName,
+          org.primaryColor || '#6366f1',
+          org.secondaryColor || '#8b5cf6',
+        )
+        for (const s of staff) {
+          if (!s.email) continue
+          await sendEmail({
+            to: s.email,
+            subject: `Nuevo ticket público #${ticketNumber} — ${orgName}`,
+            html: staffHtml,
+            smtpConfig: resolveOrgSmtpConfig(org),
+          })
+        }
+      } catch (err) {
+        console.error('[PUBLIC TICKET] Staff notification failed:', err)
+      }
+    }
+
     // Confirmación al que abrió el ticket — best-effort, no bloquea la
     // creación si la org no tiene correo configurado o el envío falla.
     if (isOrgEmailConfigured(org)) {
       try {
-        const orgName = org.name || org.crmName || 'CRM'
-        const ticketNumber = String(ticket.number).padStart(4, '0')
         const html = buildEmailHtml(
           `Recibimos tu consulta — ticket #${ticketNumber}`,
-          `Hola ${name.trim()},\n\nRecibimos tu consulta "${title.trim()}". Te vamos a responder a este mismo mail apenas la revisemos.`,
+          `Hola ${safeName},\n\nRecibimos tu consulta "${safeTitle}". Te vamos a responder a este mismo mail apenas la revisemos.`,
           orgName,
           org.primaryColor || '#6366f1',
           org.secondaryColor || '#8b5cf6',

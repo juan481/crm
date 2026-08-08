@@ -40,7 +40,9 @@ export default function SoportePublicoPage() {
   const [notFound, setNotFound] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const [form, setForm] = useState({ name: '', email: '', empresa: '', title: '', description: '' })
+  // `website` es el honeypot (ver src/app/api/public/tickets/[token]/route.ts)
+  // — un humano nunca lo completa, queda oculto visualmente.
+  const [form, setForm] = useState({ name: '', email: '', empresa: '', title: '', description: '', website: '' })
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [ticketNumber, setTicketNumber] = useState<number | null>(null)
@@ -128,6 +130,18 @@ export default function SoportePublicoPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          {/* Honeypot — invisible para una persona, los bots que autocompletan
+              formularios genéricos suelen llenarlo igual. */}
+          <input
+            type="text"
+            name="website"
+            value={form.website}
+            onChange={(e) => setForm({ ...form, website: e.target.value })}
+            tabIndex={-1}
+            autoComplete="off"
+            style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+            aria-hidden="true"
+          />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Tu nombre" required>
               <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />

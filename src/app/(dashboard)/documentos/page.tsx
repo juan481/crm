@@ -379,7 +379,15 @@ export default function DocumentosPage() {
         </div>
       </div>
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb — reemplazado por un aviso mientras hay un tag activo:
+          sin esto, la carpeta mostrada en el breadcrumb podía confundir
+          (los resultados filtrados por etiqueta son de toda la organización,
+          no de esa carpeta puntual). */}
+      {activeTag ? (
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Resultados con la etiqueta <strong style={{ color: 'var(--color-text)' }}>&quot;{activeTag}&quot;</strong> en toda la organización
+        </p>
+      ) : (
       <div className="flex items-center gap-1 text-sm flex-wrap">
         {breadcrumb.map((item, idx) => (
           <div key={`${item.id}-${idx}`} className="flex items-center gap-1">
@@ -398,6 +406,7 @@ export default function DocumentosPage() {
           </div>
         ))}
       </div>
+      )}
 
       {/* Filtro por etiqueta — cross-carpeta a propósito, "buscar por categoría en toda la organización" */}
       {(allTagsData ?? []).length > 0 && (
