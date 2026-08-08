@@ -21,57 +21,130 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
   return hierarchy[userRole] >= hierarchy[requiredRole]
 }
 
+const ORG_BRANDING_SELECT = {
+  suspended: true, crmName: true, logoUrl: true, primaryColor: true, secondaryColor: true, vertical: true,
+} as const
+
+type OrgBranding = {
+  suspended: boolean; crmName: string; logoUrl: string | null
+  primaryColor: string; secondaryColor: string; vertical: string | null
+}
+
+interface ResolvedSession {
+  user: {
+    id: string; email: string; name: string; status: string
+    onboardingCompleted: boolean; forcePasswordChange: boolean; avatarUrl: string | null
+    organizationId: string; createdAt: Date; updatedAt: Date
+  }
+  orgId: string
+  role: Role
+  homeSuspended: boolean
+  // Org activa completa (branding + su propio suspended) — null sólo si el
+  // id resuelto no corresponde a ninguna organización real (no debería pasar).
+  org: OrgBranding | null
+}
+
+// Único lugar que resuelve sesión + organización activa — getCurrentUser()
+// (usado por toda ruta de API) y el layout del dashboard (que necesita el
+// perfil completo del usuario + el branding de la org, no sólo el payload
+// chico) comparten esto para no repetir las mismas consultas dos veces.
+// Antes de este refactor, el layout llamaba a getCurrentUser() COMPLETO
+// además de hacer sus propias consultas de usuario/organización — hasta 5
+// round-trips a la DB en cada navegación (el layout corre en cada una,
+// force-dynamic). Ahora son 2 en el caso común (sin cambiar de
+// organización), 3 en el caso de estar en una organización distinta a la
+// de origen.
+//
+// Mismas reglas de siempre, sin cambios de comportamiento: la cookie nunca
+// es la fuente de verdad por sí sola, se revalida la membership contra la
+// DB con el userId que ya salió de la sesión autenticada, y CUALQUIER cosa
+// que no cierre 100% cae en silencio a la organización de origen. La
+// suspensión de la organización de ORIGEN sigue forzando el cierre de
+// sesión siempre — incluso mientras se está viendo otra organización vía
+// membership — exactamente igual que antes de este refactor (por eso
+// homeSuspended se resuelve siempre, no sólo en el camino sin cookie).
+async function resolveSession(): Promise<ResolvedSession | null> {
+  const supabase = await createClient()
+  // getSession() reads the JWT from the cookie locally — fast, no Supabase network call.
+  // The middleware already calls getUser() on every request and refreshes the token,
+  // so the session in the cookie is always fresh when this runs.
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user) return null
+
+  const user = await prisma.user.findUnique({
+    where: { supabaseId: session.user.id },
+    select: {
+      id: true, email: true, name: true, role: true, status: true,
+      onboardingCompleted: true, forcePasswordChange: true, avatarUrl: true,
+      organizationId: true, createdAt: true, updatedAt: true,
+    },
+  })
+  if (!user || user.status !== 'ACTIVE') return null
+
+  let orgId = user.organizationId
+  let role = user.role as Role
+  let org: OrgBranding | null = null
+  let homeSuspended: boolean
+
+  const cookieStore = await cookies()
+  const activeOrgId = cookieStore.get(ACTIVE_ORG_COOKIE)?.value
+
+  if (activeOrgId && activeOrgId !== user.organizationId) {
+    const membership = await prisma.organizationMembership.findUnique({
+      where: { userId_organizationId: { userId: user.id, organizationId: activeOrgId } },
+      select: { role: true, organization: { select: ORG_BRANDING_SELECT } },
+    })
+    if (membership && !membership.organization.suspended) {
+      // Membership válida — la org activa es la del switch. La de origen se
+      // chequea aparte (liviano, sólo el booleano) para no perder la regla
+      // de "origen suspendida = fuera" que ya existía.
+      orgId = activeOrgId
+      role = membership.role as Role
+      org = membership.organization
+      const home = await prisma.organization.findUnique({
+        where: { id: user.organizationId }, select: { suspended: true },
+      })
+      homeSuspended = home?.suspended ?? true
+      return { user, orgId, role, homeSuspended, org }
+    }
+    // Cookie inválida/manipulada o membership a una org suspendida — cae a
+    // home sin excepción, mismo criterio que siempre.
+  }
+
+  // Camino común (sin switch, o cayendo a home): una sola consulta de
+  // organización cubre branding + suspended de la de origen a la vez.
+  org = await prisma.organization.findUnique({ where: { id: orgId }, select: ORG_BRANDING_SELECT })
+  homeSuspended = org?.suspended ?? true
+  return { user, orgId, role, homeSuspended, org }
+}
+
 // Returns the same AuthPayload shape as before — no changes needed in API routes
 export async function getCurrentUser(): Promise<AuthPayload | null> {
   try {
-    const supabase = await createClient()
-    // getSession() reads the JWT from the cookie locally — fast, no Supabase network call.
-    // The middleware already calls getUser() on every request and refreshes the token,
-    // so the session in the cookie is always fresh when this runs.
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return null
+    const resolved = await resolveSession()
+    if (!resolved || resolved.homeSuspended) return null
+    return { userId: resolved.user.id, orgId: resolved.orgId, role: resolved.role, email: resolved.user.email }
+  } catch {
+    return null
+  }
+}
 
-    const user = await prisma.user.findUnique({
-      where: { supabaseId: session.user.id },
-      select: {
-        id: true, organizationId: true, role: true, email: true, status: true,
-        organization: { select: { suspended: true } },
-      },
-    })
+// Para (dashboard)/layout.tsx — evita que además de esto tenga que volver a
+// buscar el usuario y la organización por su cuenta (ver resolveSession()).
+export interface FullSession {
+  payload: AuthPayload
+  user: ResolvedSession['user']
+  org: OrgBranding
+}
 
-    if (!user || user.status !== 'ACTIVE' || user.organization.suspended) return null
-
-    // Organización "de origen" — comportamiento exacto de siempre, para el
-    // 100% de los usuarios que sólo pertenecen a una organización.
-    const home: AuthPayload = {
-      userId: user.id,
-      orgId:  user.organizationId,
-      role:   user.role as Role,
-      email:  user.email,
-    }
-
-    // Multi-organización (ver OrganizationMembership): sólo entra acá si hay
-    // una cookie pidiendo operar en otra org. Nunca se confía en el valor de
-    // la cookie por sí solo — se revalida la membership contra la DB en cada
-    // request, con el userId que ya salió de la sesión autenticada (nunca de
-    // algo que mande el cliente). Cualquier cosa que no cierre 100% (sin
-    // membership, org suspendida, cookie manipulada a mano) cae en silencio
-    // a `home` — jamás un error, jamás una organización ajena.
-    const cookieStore = await cookies()
-    const activeOrgId = cookieStore.get(ACTIVE_ORG_COOKIE)?.value
-    if (!activeOrgId || activeOrgId === user.organizationId) return home
-
-    const membership = await prisma.organizationMembership.findUnique({
-      where: { userId_organizationId: { userId: user.id, organizationId: activeOrgId } },
-      select: { role: true, organization: { select: { suspended: true } } },
-    })
-    if (!membership || membership.organization.suspended) return home
-
+export async function getCurrentUserFull(): Promise<FullSession | null> {
+  try {
+    const resolved = await resolveSession()
+    if (!resolved || resolved.homeSuspended || !resolved.org) return null
     return {
-      userId: user.id,
-      orgId:  activeOrgId,
-      role:   membership.role as Role,
-      email:  user.email,
+      payload: { userId: resolved.user.id, orgId: resolved.orgId, role: resolved.role, email: resolved.user.email },
+      user: resolved.user,
+      org: resolved.org,
     }
   } catch {
     return null

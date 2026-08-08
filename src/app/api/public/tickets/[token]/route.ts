@@ -3,12 +3,14 @@ import { prisma } from '@/lib/db'
 import { SLA_HOURS } from '@/lib/tickets'
 import { findEmpresaMatch } from '@/lib/directorio-link'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 interface Params { params: { token: string } }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const RATE_LIMIT = { max: 5, windowMinutes: 30 }
 
 // buildEmailHtml() interpola subject/body directo en HTML sin escapar (ver
 // src/lib/email.ts) — hoy es aceptable porque todo lo que le llega sale de
@@ -52,6 +54,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const db = prisma as any
+
+    // Rate limit por IP — sin esto, un mismo bot/persona podía crear tickets
+    // sin límite. Se registra el intento ANTES de saber si el resto del
+    // body es válido, para que reintentar con datos distintos no reinicie
+    // el contador. Sin Redis en este proyecto — respaldado en DB, ver
+    // src/lib/rate-limit.ts.
+    const ip = getClientIp(req)
+    const { limited } = await checkRateLimit('ticket_public', ip, RATE_LIMIT)
+    if (limited) {
+      return NextResponse.json(
+        { error: 'Demasiados intentos — probá de nuevo en un rato.' },
+        { status: 429 }
+      )
+    }
+
     const org = await db.organization.findFirst({
       where: { publicSupportToken: params.token, suspended: false },
       select: {

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
+import { claimCronRun } from '@/lib/idempotency'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+
+const JOB_NAME = 'attendance-digest'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +62,7 @@ export async function GET(req: NextRequest) {
     let emailsSent = 0
     let orgsWithNothingToReport = 0
     let orgsSkippedNoEmail = 0
+    let orgsSkippedAlreadySent = 0
 
     for (const org of orgs) {
       const orgUsers = usersByOrg.get(org.id) ?? []
@@ -67,6 +71,11 @@ export async function GET(req: NextRequest) {
 
       if (sinFichar.length === 0 && tarde.length === 0) { orgsWithNothingToReport++; continue }
       if (!isOrgEmailConfigured(org)) { orgsSkippedNoEmail++; continue }
+
+      // Idempotencia: si ya se mandó el digest de este día hábil para esta
+      // org (reintento de Vercel, o disparo manual duplicado), no se manda
+      // de nuevo — ver modelo CronRun.
+      if (!(await claimCronRun(JOB_NAME, org.id, target))) { orgsSkippedAlreadySent++; continue }
 
       const recipients = orgUsers.filter((u: any) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(u.role))
       const recipientUsers = await db.user.findMany({
@@ -111,7 +120,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true, target: target.toISOString().slice(0, 10),
-      emailsSent, orgsWithNothingToReport, orgsSkippedNoEmail, orgsProcessed: orgs.length,
+      emailsSent, orgsWithNothingToReport, orgsSkippedNoEmail, orgsSkippedAlreadySent, orgsProcessed: orgs.length,
     })
   } catch (error) {
     console.error('[CRON ATTENDANCE-DIGEST]', error)

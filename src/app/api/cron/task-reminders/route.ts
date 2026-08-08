@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
+import { claimCronRun } from '@/lib/idempotency'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
+
+const JOB_NAME = 'task-reminders'
 
 // Digest diario: junta por persona las tareas vencidas o que vencen hoy y
 // manda UN email con la lista — no una alerta por tarea. Ver Fase 11 del
@@ -39,6 +42,9 @@ export async function GET(req: NextRequest) {
 
     let emailsSent = 0
     let orgsSkipped = 0
+    let orgsSkippedAlreadySent = 0
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
     for (const [orgId, orgTasks] of Array.from(byOrg.entries())) {
       const org = await db.organization.findUnique({
@@ -50,6 +56,11 @@ export async function GET(req: NextRequest) {
         },
       })
       if (!isOrgEmailConfigured(org)) { orgsSkipped++; continue }
+
+      // Idempotencia: ya se mandó el digest de hoy para esta org (reintento
+      // de Vercel, o disparo manual duplicado) — no se manda de nuevo. Ver
+      // modelo CronRun.
+      if (!(await claimCronRun(JOB_NAME, orgId, today))) { orgsSkippedAlreadySent++; continue }
 
       const byUser = new Map<string, { name: string; email: string; tasks: typeof orgTasks }>()
       for (const t of orgTasks) {
@@ -90,7 +101,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, emailsSent, orgsSkipped, orgsProcessed: byOrg.size })
+    return NextResponse.json({ ok: true, emailsSent, orgsSkipped, orgsSkippedAlreadySent, orgsProcessed: byOrg.size })
   } catch (error) {
     console.error('[CRON TASK-REMINDERS]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

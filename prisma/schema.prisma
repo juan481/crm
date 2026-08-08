@@ -1011,3 +1011,34 @@ model Asistencia {
   @@index([userId])
   @@index([fecha])
 }
+
+// ─── Idempotencia de cron ──────────────────────────────────────────────────
+// Antes de mandar un digest (attendance-digest, task-reminders), cada cron
+// intenta crear una fila acá para el (job, org, día) que le toca. Si ya
+// existe — choca contra el @@unique de abajo — significa que ya corrió para
+// eso y no se manda nada de nuevo, aunque Vercel reintente la invocación.
+// Sin relación formal a Organization a propósito: es tracking operativo
+// descartable, no dato de negocio — no necesita cascada ni back-relation.
+model CronRun {
+  id        String   @id @default(cuid())
+  jobName   String
+  orgId     String
+  forDate   DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  @@unique([jobName, orgId, forDate])
+}
+
+// ─── Rate limiting de formularios públicos ─────────────────────────────────
+// Una fila por intento (se crea SIEMPRE al recibir el request, incluso si
+// después se rechaza por validación o honeypot) — antes de aceptar un envío
+// se cuenta cuántos hubo del mismo `identifier` (IP) en la ventana de
+// tiempo. Mismo criterio que CronRun: tracking descartable, sin relaciones.
+model PublicFormAttempt {
+  id         String   @id @default(cuid())
+  kind       String   // ej. "ticket_public"
+  identifier String   // IP del request (x-forwarded-for)
+  createdAt  DateTime @default(now())
+
+  @@index([kind, identifier, createdAt])
+}

@@ -11,7 +11,6 @@ import { ContactoForm } from '@/components/directorio/contacto-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto } from '@/types'
-import * as XLSX from 'xlsx'
 import toast from 'react-hot-toast'
 
 const CHUNK = 20
@@ -70,6 +69,9 @@ export default function ContactosPage() {
     if (!file) return
     if (fileRef.current) fileRef.current.value = ''
 
+    // xlsx pesa bastante (~500kB) — se carga sólo cuando de verdad se
+    // importa un Excel, no en el bundle inicial de esta pantalla.
+    const XLSX = await import('xlsx')
     const buffer = await file.arrayBuffer()
     const wb   = XLSX.read(buffer, { type: 'buffer' })
     const ws   = wb.Sheets[wb.SheetNames[0]]

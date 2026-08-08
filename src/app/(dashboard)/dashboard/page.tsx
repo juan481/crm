@@ -1,17 +1,32 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import dynamic from 'next/dynamic'
 import { Users, DollarSign, AlertCircle, Clock, UserPlus, TrendingUp, CheckSquare, Headphones, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { MetricCard } from '@/components/dashboard/metric-card'
-import { RevenueChart } from '@/components/dashboard/revenue-chart'
-import { ClientsChart } from '@/components/dashboard/clients-chart'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Avatar } from '@/components/ui/avatar'
 import { formatCurrency, formatMultiCurrency, scaleByCurrency, primaryCurrencyKey } from '@/lib/utils'
 import { usePlugin } from '@/hooks/use-plugin'
 import type { DashboardMetrics } from '@/types'
+
+// recharts es pesado (una de las librerías más grandes del bundle) y no
+// aporta nada a un primer render con SSR — se carga sólo en el cliente,
+// recién cuando el dashboard se abre, en vez de venir en el JS inicial de
+// TODA navegación al dashboard. Mismo esqueleto que ya usaba el estado de
+// isLoading de abajo, para que no haya un salto visual distinto mientras
+// se descarga el chunk del chart.
+const chartSkeleton = <div className="h-72 surface rounded-2xl animate-pulse" />
+const RevenueChart = dynamic(
+  () => import('@/components/dashboard/revenue-chart').then((m) => m.RevenueChart),
+  { ssr: false, loading: () => chartSkeleton }
+)
+const ClientsChart = dynamic(
+  () => import('@/components/dashboard/clients-chart').then((m) => m.ClientsChart),
+  { ssr: false, loading: () => chartSkeleton }
+)
 
 export default function DashboardPage() {
   const { data, isLoading, error } = useQuery<DashboardMetrics>({

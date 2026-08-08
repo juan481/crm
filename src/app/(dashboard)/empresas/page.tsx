@@ -13,7 +13,6 @@ import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
-import * as XLSX from 'xlsx'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -134,6 +133,9 @@ export default function EmpresasPage() {
     if (!file) return
     if (fileRefDir.current) fileRefDir.current.value = ''
 
+    // xlsx pesa bastante (~500kB) — se carga sólo cuando de verdad se
+    // importa un Excel, no en el bundle inicial de esta pantalla.
+    const XLSX = await import('xlsx')
     const buffer = await file.arrayBuffer()
     const wb   = XLSX.read(buffer, { type: 'buffer' })
     const ws   = wb.Sheets[wb.SheetNames[0]]

@@ -2,8 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+import { getCurrentUserFull } from '@/lib/auth'
 import { AppShell } from '@/components/layout/app-shell'
 import type { User } from '@/types'
 
@@ -12,63 +11,35 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const supabase = await createClient()
 
   try {
-    const { data: { user: supabaseUser } } = await supabase.auth.getUser()
-
-    if (!supabaseUser) redirect('/login')
-
-    // dbUser = identidad de origen (para onboardingCompleted/status, que son
-    // por-usuario, no por-organización). homeOrg = su organización de origen
-    // — si ESA está suspendida, se cierra la sesión entera sin importar a
-    // qué más tenga acceso (ver OrganizationMembership).
-    const [dbUser, homeOrg] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.user as any).findUnique({
-        where: { supabaseId: supabaseUser.id },
-        select: {
-          id: true, email: true, name: true, role: true, status: true,
-          onboardingCompleted: true, forcePasswordChange: true,
-          avatarUrl: true, organizationId: true, createdAt: true, updatedAt: true,
-        },
-      }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.organization as any).findFirst({
-        where: { users: { some: { supabaseId: supabaseUser.id } } },
-        select: { suspended: true },
-      }),
-    ])
-
-    if (!dbUser || dbUser.status !== 'ACTIVE') {
+    // Ya no se llama a supabase.auth.getUser() acá (era una segunda
+    // validación de red contra Supabase, redundante): el middleware ya la
+    // hizo para este mismo request antes de llegar acá — mismo criterio que
+    // ya usaba getCurrentUser() internamente (ver el comentario en
+    // src/lib/auth.ts), ahora aplicado también en este punto de entrada.
+    //
+    // getCurrentUserFull() resuelve sesión + usuario + organización activa
+    // (branding incluido) en 2-3 consultas en vez de las 5 que hacía este
+    // layout antes de este fix — corre en CADA navegación (force-dynamic
+    // arriba), así que esto es lo que más pesaba en la lentitud reportada.
+    // Ya incluye el chequeo de organización de origen suspendida (ver
+    // resolveSession() en src/lib/auth.ts) — mismo comportamiento de antes,
+    // sólo sin repetir las mismas consultas dos veces.
+    const session = await getCurrentUserFull()
+    if (!session) {
       await supabase.auth.signOut()
       redirect('/login')
     }
-
-    if (homeOrg?.suspended) {
-      await supabase.auth.signOut()
-      redirect('/login?suspended=1')
-    }
-
-    // A partir de acá, la organización que se MUESTRA es la activa (cookie +
-    // membership revalidada — mismo choke point que usa toda ruta de API).
-    // Para el 100% de los usuarios de un solo tenant esto es idéntico a
-    // `homeOrg`. Ver Fase 0.6 del plan.
-    const payload = await getCurrentUser()
-    if (!payload) { await supabase.auth.signOut(); redirect('/login') }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const activeOrg = await (prisma.organization as any).findUnique({
-      where: { id: payload!.orgId },
-      select: { crmName: true, logoUrl: true, primaryColor: true, secondaryColor: true, vertical: true },
-    })
+    const { payload, user: dbUser, org: activeOrg } = session!
 
     if (!dbUser.onboardingCompleted) redirect('/onboarding')
     // Selector de rubro: es por-organización, no por-usuario — un usuario
     // multi-org que ya completó onboarding una vez igual tiene que elegirlo
     // la primera vez que entra a una organización nueva sin rubro.
-    if (payload!.role === 'SUPER_ADMIN' && !activeOrg?.vertical) redirect('/onboarding')
+    if (payload.role === 'SUPER_ADMIN' && !activeOrg.vertical) redirect('/onboarding')
 
     const user: User = {
       ...dbUser,
-      role:      payload!.role as User['role'],
+      role:      payload.role as User['role'],
       status:    dbUser.status as User['status'],
       createdAt: dbUser.createdAt.toISOString(),
       updatedAt: dbUser.updatedAt.toISOString(),
@@ -77,13 +48,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     return (
       <AppShell
         user={user}
-        branding={activeOrg ? {
+        branding={{
           crmName:        activeOrg.crmName,
           logoUrl:        activeOrg.logoUrl,
           primaryColor:   activeOrg.primaryColor,
           secondaryColor: activeOrg.secondaryColor,
           vertical:       activeOrg.vertical ?? null,
-        } : null}
+        }}
       >
         {children}
       </AppShell>
