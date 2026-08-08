@@ -28,6 +28,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
+  // Modo prueba: ver comentario equivalente en task-reminders/route.ts —
+  // mismas queries, sin mandar mail real ni reclamar el CronRun del día.
+  const dryRun = req.nextUrl.searchParams.get('dryRun') === '1'
+
   try {
     const db = prisma as any
     const target = lastBusinessDay(new Date())
@@ -63,6 +67,7 @@ export async function GET(req: NextRequest) {
     let orgsWithNothingToReport = 0
     let orgsSkippedNoEmail = 0
     let orgsSkippedAlreadySent = 0
+    const wouldSend: { org: string; email: string }[] = []
 
     for (const org of orgs) {
       const orgUsers = usersByOrg.get(org.id) ?? []
@@ -74,8 +79,8 @@ export async function GET(req: NextRequest) {
 
       // Idempotencia: si ya se mandó el digest de este día hábil para esta
       // org (reintento de Vercel, o disparo manual duplicado), no se manda
-      // de nuevo — ver modelo CronRun.
-      if (!(await claimCronRun(JOB_NAME, org.id, target))) { orgsSkippedAlreadySent++; continue }
+      // de nuevo — ver modelo CronRun. En dry run no se reclama nada.
+      if (!dryRun && !(await claimCronRun(JOB_NAME, org.id, target))) { orgsSkippedAlreadySent++; continue }
 
       const recipients = orgUsers.filter((u: any) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(u.role))
       const recipientUsers = await db.user.findMany({
@@ -104,6 +109,10 @@ export async function GET(req: NextRequest) {
       // (ver src/lib/email.ts) — se manda uno por persona, mismo patrón que
       // el resto de la app (siempre 1 destinatario por sendEmail()).
       for (const email of emails) {
+        if (dryRun) {
+          wouldSend.push({ org: orgName, email })
+          continue
+        }
         try {
           await sendEmail({
             to: email,
@@ -119,8 +128,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      ok: true, target: target.toISOString().slice(0, 10),
+      ok: true, dryRun, target: target.toISOString().slice(0, 10),
       emailsSent, orgsWithNothingToReport, orgsSkippedNoEmail, orgsSkippedAlreadySent, orgsProcessed: orgs.length,
+      ...(dryRun ? { wouldSend } : {}),
     })
   } catch (error) {
     console.error('[CRON ATTENDANCE-DIGEST]', error)

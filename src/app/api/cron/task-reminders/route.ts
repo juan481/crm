@@ -16,6 +16,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
+  // Modo prueba: corre exactamente las mismas queries (para confirmar que
+  // encuentra a la gente correcta), pero no manda ningún mail real ni
+  // reclama el CronRun del día — así no interfiere con la corrida real de
+  // hoy/mañana. Pensado para verificar que CRON_SECRET quedó bien
+  // configurado sin efectos sobre gente real. Uso: ?dryRun=1
+  const dryRun = req.nextUrl.searchParams.get('dryRun') === '1'
+
   try {
     const db = prisma as any
     const endOfToday = new Date()
@@ -43,6 +50,7 @@ export async function GET(req: NextRequest) {
     let emailsSent = 0
     let orgsSkipped = 0
     let orgsSkippedAlreadySent = 0
+    const wouldSend: { org: string; name: string; email: string; tasks: number }[] = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
@@ -59,8 +67,8 @@ export async function GET(req: NextRequest) {
 
       // Idempotencia: ya se mandó el digest de hoy para esta org (reintento
       // de Vercel, o disparo manual duplicado) — no se manda de nuevo. Ver
-      // modelo CronRun.
-      if (!(await claimCronRun(JOB_NAME, orgId, today))) { orgsSkippedAlreadySent++; continue }
+      // modelo CronRun. En dry run no se reclama nada, a propósito.
+      if (!dryRun && !(await claimCronRun(JOB_NAME, orgId, today))) { orgsSkippedAlreadySent++; continue }
 
       const byUser = new Map<string, { name: string; email: string; tasks: typeof orgTasks }>()
       for (const t of orgTasks) {
@@ -87,6 +95,11 @@ export async function GET(req: NextRequest) {
           org?.secondaryColor || '#8b5cf6',
         )
 
+        if (dryRun) {
+          wouldSend.push({ org: orgName, name, email, tasks: userTasks.length })
+          continue
+        }
+
         try {
           await sendEmail({
             to: email,
@@ -101,7 +114,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, emailsSent, orgsSkipped, orgsSkippedAlreadySent, orgsProcessed: byOrg.size })
+    return NextResponse.json({
+      ok: true, dryRun, emailsSent, orgsSkipped, orgsSkippedAlreadySent, orgsProcessed: byOrg.size,
+      ...(dryRun ? { wouldSend } : {}),
+    })
   } catch (error) {
     console.error('[CRON TASK-REMINDERS]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
