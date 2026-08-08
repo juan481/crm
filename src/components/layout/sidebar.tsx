@@ -1,9 +1,10 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight,
+  LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
   Building2, UserCircle2, FileText, ClipboardList,
@@ -16,11 +17,21 @@ import Image from 'next/image'
 import type { User } from '@/types'
 import type { NotificationCounts } from '@/app/api/notifications/counts/route'
 
+interface SessionOrg {
+  id: string
+  name: string
+  logoUrl: string | null
+  isActive: boolean
+}
+
 interface NavItem {
   label: string
   href: string
   icon: React.ReactNode
   roles?: string[]
+  // Rubros (src/lib/verticals.ts) que ven este ítem. Sin declarar = visible
+  // para todos — así ningún módulo existente le cambia nada a Abba.
+  verticals?: string[]
   exact?: boolean
   badgeKey?: keyof NotificationCounts
 }
@@ -57,11 +68,12 @@ interface SidebarProps {
   user: User
   crmName: string
   logoUrl: string | null
+  vertical?: string | null
   mobile?: boolean
   onClose?: () => void
 }
 
-export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: SidebarProps) {
+export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const { logout } = useAuthStore()
 
@@ -76,13 +88,33 @@ export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: Sid
     refetchInterval: 60 * 1000,
   })
 
+  // Sólo pega este fetch a la red para gente con más de una organización —
+  // el resultado siempre tiene largo 1 para el resto, así que el switcher
+  // nunca se renderiza y esto es indistinguible de no tener la feature.
+  const { data: orgs } = useQuery<SessionOrg[]>({
+    queryKey: ['session-organizations'],
+    queryFn: async () => {
+      const res = await fetch('/api/session/organizations')
+      const json = await res.json()
+      return json.data ?? []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href
     return pathname === item.href || pathname.startsWith(item.href + '/')
   }
 
-  const filteredNav = navItems.filter((item) => !item.roles || item.roles.includes(user.role))
-  const filteredSettings = settingsItems.filter((item) => !item.roles || item.roles.includes(user.role))
+  const matchesVertical = (item: NavItem) =>
+    !item.verticals || (vertical !== null && item.verticals.includes(vertical))
+
+  const filteredNav = navItems
+    .filter((item) => !item.roles || item.roles.includes(user.role))
+    .filter(matchesVertical)
+  const filteredSettings = settingsItems
+    .filter((item) => !item.roles || item.roles.includes(user.role))
+    .filter(matchesVertical)
 
   return (
     <aside
@@ -107,6 +139,11 @@ export function Sidebar({ user, crmName, logoUrl, mobile = false, onClose }: Sid
           </button>
         )}
       </div>
+
+      {/* Sólo aparece si el usuario tiene acceso a más de una organización
+          (ver OrganizationMembership) — para todo el resto, `orgs` siempre
+          tiene largo <= 1 y este bloque no renderiza nada. */}
+      {orgs && orgs.length > 1 && <OrgSwitcher orgs={orgs} />}
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
         <div className="space-y-0.5">
@@ -180,5 +217,87 @@ function SidebarLink({
       )}
       {active && <ChevronRight size={13} className="text-white/60" />}
     </Link>
+  )
+}
+
+// Sólo se monta cuando `orgs.length > 1` — ver Sidebar arriba. Cambiar de
+// organización hace un POST que valida membership server-side y recién ahí
+// una recarga DURA (no router.push) a propósito: vacía cualquier caché de
+// React Query / estado en memoria que haya quedado de la organización
+// anterior, para no arriesgar un flash con datos mezclados.
+function OrgSwitcher({ orgs }: { orgs: SessionOrg[] }) {
+  const [open, setOpen] = useState(false)
+  const [switching, setSwitching] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const current = orgs.find((o) => o.isActive) ?? orgs[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  const switchTo = async (org: SessionOrg) => {
+    if (org.isActive || switching) { setOpen(false); return }
+    setSwitching(true)
+    try {
+      const res = await fetch('/api/session/active-org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: org.id }),
+      })
+      if (!res.ok) { setSwitching(false); return }
+      window.location.href = '/dashboard'
+    } catch {
+      setSwitching(false)
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative px-3 pt-3 shrink-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={switching}
+        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-white/6 disabled:opacity-60"
+      >
+        {current?.logoUrl ? (
+          <Image src={current.logoUrl} alt={current.name} width={22} height={22} className="rounded-md object-contain shrink-0" />
+        ) : (
+          <div className="w-[22px] h-[22px] rounded-md gradient-bg flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+            {current?.name.charAt(0)}
+          </div>
+        )}
+        <span className="flex-1 min-w-0 text-xs font-medium text-slate-200 truncate">{current?.name}</span>
+        <ChevronsUpDown size={13} className="text-slate-500 shrink-0" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-3 right-3 mt-1 rounded-xl shadow-xl overflow-hidden z-20 py-1"
+          style={{ background: '#1a2233', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          {orgs.map((org) => (
+            <button
+              key={org.id}
+              onClick={() => switchTo(org)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/6 transition-colors"
+            >
+              {org.logoUrl ? (
+                <Image src={org.logoUrl} alt={org.name} width={20} height={20} className="rounded-md object-contain shrink-0" />
+              ) : (
+                <div className="w-5 h-5 rounded-md gradient-bg flex items-center justify-center text-white text-[9px] font-bold shrink-0">
+                  {org.name.charAt(0)}
+                </div>
+              )}
+              <span className="flex-1 min-w-0 text-xs font-medium text-slate-200 truncate">{org.name}</span>
+              {org.isActive && <Check size={13} className="text-emerald-400 shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

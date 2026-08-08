@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { AppShell } from '@/components/layout/app-shell'
 import type { User } from '@/types'
@@ -15,7 +16,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
     if (!supabaseUser) redirect('/login')
 
-    const [dbUser, org] = await Promise.all([
+    // dbUser = identidad de origen (para onboardingCompleted/status, que son
+    // por-usuario, no por-organización). homeOrg = su organización de origen
+    // — si ESA está suspendida, se cierra la sesión entera sin importar a
+    // qué más tenga acceso (ver OrganizationMembership).
+    const [dbUser, homeOrg] = await Promise.all([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (prisma.user as any).findUnique({
         where: { supabaseId: supabaseUser.id },
@@ -28,7 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (prisma.organization as any).findFirst({
         where: { users: { some: { supabaseId: supabaseUser.id } } },
-        select: { crmName: true, logoUrl: true, primaryColor: true, secondaryColor: true, suspended: true },
+        select: { suspended: true },
       }),
     ])
 
@@ -37,16 +42,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
       redirect('/login')
     }
 
-    if (org?.suspended) {
+    if (homeOrg?.suspended) {
       await supabase.auth.signOut()
       redirect('/login?suspended=1')
     }
 
+    // A partir de acá, la organización que se MUESTRA es la activa (cookie +
+    // membership revalidada — mismo choke point que usa toda ruta de API).
+    // Para el 100% de los usuarios de un solo tenant esto es idéntico a
+    // `homeOrg`. Ver Fase 0.6 del plan.
+    const payload = await getCurrentUser()
+    if (!payload) { await supabase.auth.signOut(); redirect('/login') }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const activeOrg = await (prisma.organization as any).findUnique({
+      where: { id: payload!.orgId },
+      select: { crmName: true, logoUrl: true, primaryColor: true, secondaryColor: true, vertical: true },
+    })
+
     if (!dbUser.onboardingCompleted) redirect('/onboarding')
+    // Selector de rubro: es por-organización, no por-usuario — un usuario
+    // multi-org que ya completó onboarding una vez igual tiene que elegirlo
+    // la primera vez que entra a una organización nueva sin rubro.
+    if (payload!.role === 'SUPER_ADMIN' && !activeOrg?.vertical) redirect('/onboarding')
 
     const user: User = {
       ...dbUser,
-      role:      dbUser.role   as User['role'],
+      role:      payload!.role as User['role'],
       status:    dbUser.status as User['status'],
       createdAt: dbUser.createdAt.toISOString(),
       updatedAt: dbUser.updatedAt.toISOString(),
@@ -55,11 +77,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     return (
       <AppShell
         user={user}
-        branding={org ? {
-          crmName:        org.crmName,
-          logoUrl:        org.logoUrl,
-          primaryColor:   org.primaryColor,
-          secondaryColor: org.secondaryColor,
+        branding={activeOrg ? {
+          crmName:        activeOrg.crmName,
+          logoUrl:        activeOrg.logoUrl,
+          primaryColor:   activeOrg.primaryColor,
+          secondaryColor: activeOrg.secondaryColor,
+          vertical:       activeOrg.vertical ?? null,
         } : null}
       >
         {children}

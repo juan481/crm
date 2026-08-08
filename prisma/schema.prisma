@@ -158,6 +158,13 @@ model Organization {
   secondaryColor String   @default("#8b5cf6")
   domain         String?  @unique
   crmName        String   @default("CRM Pro")
+  // Rubro de la organización (ej. "seguridad", "marketing") — determina qué
+  // módulos/plugins ve por defecto y qué tour de onboarding recibe. Lista
+  // curada en src/lib/verticals.ts, a propósito NO es un enum de Prisma:
+  // sumar un rubro nuevo no debe pedir migración. Null = todavía no eligió
+  // (dispara el selector de "primera vez" para el SUPER_ADMIN, ver
+  // POST /api/organization/vertical).
+  vertical       String?
   quoteValidityDays Int   @default(30)
   smtpHost       String?
   smtpPort       Int?
@@ -207,6 +214,7 @@ model Organization {
   asistencias       Asistencia[]
   suppressions      EmailSuppression[]
   emailUsage        EmailUsageMonthly[]
+  memberships       OrganizationMembership[]
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before
@@ -281,9 +289,31 @@ model User {
   empresaNotas    EmpresaNota[]
   cotizaciones    Cotizacion[]
   asistencias     Asistencia[]
+  memberships     OrganizationMembership[]
 }
 
 // Session management is now handled by Supabase Auth
+
+// Acceso ADICIONAL de un usuario a otra organización, aparte de la suya
+// (User.organizationId/role, que sigue siendo su "organización de origen" y
+// no cambia). Puramente aditivo — pensado para gente de la agencia (ej. el
+// dueño) que necesita operar más de un tenant con el mismo login, sin crear
+// una segunda cuenta de Supabase Auth. getCurrentUser() en src/lib/auth.ts
+// revalida esta tabla en cada request antes de confiar en una organización
+// distinta de la de origen — ver esa función para el mecanismo completo.
+model OrganizationMembership {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role     @default(SUPER_ADMIN)
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
 
 // ─── Services catalog ──────────────────────────────────────────────────────
 model Service {

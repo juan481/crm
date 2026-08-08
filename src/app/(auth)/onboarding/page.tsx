@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { User, Lock, LayoutDashboard, Users, ArrowRight, Check, SkipForward } from 'lucide-react'
+import { User, Lock, LayoutDashboard, Users, ArrowRight, Check, SkipForward, Building2 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { VERTICALS } from '@/lib/verticals'
 import toast from 'react-hot-toast'
 
 const schema = z.object({
@@ -22,12 +23,12 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-const STEPS = [
+const BASE_STEPS = [
   {
     id: 'welcome',
     icon: <User size={28} />,
     title: '¡Bienvenido al CRM!',
-    description: 'Estamos felices de tenerte. Vamos a configurar tu cuenta en 3 pasos rápidos.',
+    description: 'Estamos felices de tenerte. Vamos a configurar tu cuenta en unos pasos rápidos.',
     action: 'Comenzar',
   },
   {
@@ -53,11 +54,49 @@ const STEPS = [
   },
 ]
 
+const VERTICAL_STEP = {
+  id: 'vertical',
+  icon: <Building2 size={28} />,
+  title: '¿Qué tipo de empresa sos?',
+  description: 'El sistema ajusta módulos y configuraciones según tu rubro. Podés cambiarlo después desde Configuración.',
+  action: 'Continuar',
+}
+
 export default function OnboardingPage() {
   const router = useRouter()
   const { user, setUser } = useAuthStore()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
+  // null = todavía no sabemos; true = hay que insertar el paso de rubro
+  const [needsVertical, setNeedsVertical] = useState<boolean | null>(null)
+  const [vertical, setVertical] = useState<string | null>(null)
+  const [verticalJustSet, setVerticalJustSet] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/organization/vertical')
+      .then((r) => r.json())
+      .then((json) => {
+        const canSet = json?.data?.canSet
+        const current = json?.data?.vertical
+        setNeedsVertical(Boolean(canSet && !current))
+      })
+      .catch(() => setNeedsVertical(false))
+  }, [])
+
+  // Un usuario multi-organización que ya completó su onboarding personal una
+  // vez (ej. Juan, ya con cuenta en Abba) puede llegar acá de nuevo sólo
+  // porque entró a una organización nueva sin rubro elegido — no tiene
+  // sentido pedirle de nuevo nombre/contraseña, sólo el rubro.
+  const alreadyOnboarded = user?.onboardingCompleted ?? false
+
+  const STEPS = useMemo(() => {
+    if (!needsVertical) return BASE_STEPS
+    if (alreadyOnboarded) return [VERTICAL_STEP]
+    // Va justo después de "welcome" — antes de pedir nombre/contraseña, para
+    // que el resto del wizard (y el tour que sigue) ya sepan el rubro.
+    return [BASE_STEPS[0], VERTICAL_STEP, ...BASE_STEPS.slice(1)]
+  }, [needsVertical, alreadyOnboarded])
+
   const currentStep = STEPS[step]
 
   const {
@@ -66,7 +105,11 @@ export default function OnboardingPage() {
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const completeOnboarding = async (data?: Partial<FormData>) => {
+  // `vertOverride` cubre el caso en que se llama justo después de elegir el
+  // rubro (chooseVertical), donde el estado `vertical`/`verticalJustSet`
+  // todavía no se actualizó en este closure — evita depender de un re-render
+  // antes de decidir a dónde redirigir.
+  const completeOnboarding = async (data?: Partial<FormData>, vertOverride?: string) => {
     setLoading(true)
     try {
       const res = await fetch('/api/auth/onboarding', {
@@ -78,7 +121,40 @@ export default function OnboardingPage() {
       if (!res.ok) { toast.error(json.error); return }
       setUser({ ...user!, ...json.data })
       toast.success('¡Cuenta configurada!')
-      router.push('/dashboard')
+      const v = vertOverride ?? vertical
+      // Si recién eligió el rubro en este mismo wizard, lo llevamos al tour
+      // (ayuda/presentacion) filtrado por ese rubro antes del dashboard —
+      // es la primera vez que ve el sistema, tiene sentido explicárselo.
+      if ((verticalJustSet || vertOverride) && v) {
+        router.push(`/ayuda/presentacion?first=1&vertical=${v}`)
+      } else {
+        router.push('/dashboard')
+      }
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const chooseVertical = async (id: string) => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/organization/vertical', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vertical: id }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo guardar el rubro'); return }
+      setVertical(id)
+      setVerticalJustSet(true)
+      if (step === STEPS.length - 1) {
+        // Único paso (usuario que ya estaba onboarded) — termina directo.
+        await completeOnboarding(undefined, id)
+      } else {
+        setStep((s) => s + 1)
+      }
     } catch {
       toast.error('Error de conexión')
     } finally {
@@ -96,6 +172,11 @@ export default function OnboardingPage() {
 
   const handleSkip = () => completeOnboarding()
 
+  if (needsVertical === null) {
+    // Evita el flash del wizard sin el paso de rubro mientras se resuelve el fetch.
+    return <div className="min-h-screen bg-[var(--color-bg)]" />
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] p-4">
       {/* Progress dots */}
@@ -110,13 +191,15 @@ export default function OnboardingPage() {
         ))}
       </div>
 
-      {/* Skip button */}
-      <button
-        onClick={handleSkip}
-        className="fixed top-5 right-6 flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
-      >
-        Saltar <SkipForward size={14} />
-      </button>
+      {/* Skip button — no aplica en el paso de rubro, es obligatorio elegir uno */}
+      {currentStep.id !== 'vertical' && (
+        <button
+          onClick={handleSkip}
+          className="fixed top-5 right-6 flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+        >
+          Saltar <SkipForward size={14} />
+        </button>
+      )}
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -147,8 +230,26 @@ export default function OnboardingPage() {
               {currentStep.description}
             </p>
 
+            {/* Vertical step: grid de rubros en vez de form/botón */}
+            {currentStep.id === 'vertical' && (
+              <div className="space-y-3 mb-2">
+                {VERTICALS.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => chooseVertical(v.id)}
+                    className="w-full text-left surface border border-[var(--color-border)] rounded-2xl p-4 hover:border-[var(--color-primary)] transition-colors disabled:opacity-50"
+                  >
+                    <p className="font-semibold text-[var(--color-text)]">{v.label}</p>
+                    <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{v.description}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Profile step form */}
-            {step === 1 && (
+            {currentStep.id === 'profile' && (
               <form
                 onSubmit={handleSubmit((data) => {
                   completeOnboarding(data)
@@ -182,8 +283,8 @@ export default function OnboardingPage() {
               </form>
             )}
 
-            {/* Other steps */}
-            {step !== 1 && (
+            {/* Other steps (welcome, clients, dashboard) */}
+            {currentStep.id !== 'profile' && currentStep.id !== 'vertical' && (
               <div className="flex gap-3">
                 {step > 0 && (
                   <Button variant="ghost" size="lg" onClick={() => setStep((s) => s - 1)}>
@@ -204,7 +305,7 @@ export default function OnboardingPage() {
           </div>
 
           {/* Tour preview cards */}
-          {step === 2 && (
+          {currentStep.id === 'clients' && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}

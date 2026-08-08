@@ -2,11 +2,13 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Users, ShieldOff, ShieldCheck } from 'lucide-react'
+import { Building2, Users, ShieldOff, ShieldCheck, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { getVertical } from '@/lib/verticals'
 import { formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -15,15 +17,26 @@ interface AdminOrg {
   name:        string
   domain:      string | null
   crmName:     string
+  vertical:    string | null
   suspended:   boolean
   suspendedAt: string | null
   createdAt:   string
   _count:      { users: number }
 }
 
+function randomPassword() {
+  return Math.random().toString(36).slice(-6) + Math.random().toString(36).slice(-6).toUpperCase() + '!1'
+}
+
+const emptyForm = { orgName: '', domain: '', existingUserEmail: '', adminName: '', adminEmail: '', adminPassword: '' }
+
 export default function AdminOrganizationsPage() {
   const qc = useQueryClient()
   const [actionOrg, setActionOrg] = useState<AdminOrg | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [existingUser, setExistingUser] = useState(false)
 
   const { data, isLoading, isError } = useQuery<AdminOrg[]>({
     queryKey: ['admin-organizations'],
@@ -50,16 +63,50 @@ export default function AdminOrganizationsPage() {
     setActionOrg(null)
   }
 
+  const createOrg = async () => {
+    setSaving(true)
+    try {
+      const body = existingUser
+        ? { orgName: form.orgName, domain: form.domain, existingUserEmail: form.existingUserEmail }
+        : { orgName: form.orgName, domain: form.domain, adminName: form.adminName, adminEmail: form.adminEmail, adminPassword: form.adminPassword }
+      const res = await fetch('/api/admin/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al crear la organización'); return }
+      toast.success(
+        existingUser
+          ? `${json.data.organization.name} creada — ${json.data.user.email} ya puede elegirla desde el switcher`
+          : `${json.data.organization.name} creada — contraseña inicial: ${form.adminPassword}`
+      )
+      qc.invalidateQueries({ queryKey: ['admin-organizations'] })
+      setCreating(false)
+      setForm(emptyForm)
+      setExistingUser(false)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
-          <Building2 size={20} className="text-white" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
+            <Building2 size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--color-text)]">Organizaciones</h1>
+            <p className="text-sm text-[var(--color-text-muted)]">{orgs.length} organizaciones en el sistema</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--color-text)]">Organizaciones</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">{orgs.length} organizaciones en el sistema</p>
-        </div>
+        <Button leftIcon={<Plus size={16} />} onClick={() => { setForm({ ...emptyForm, adminPassword: randomPassword() }); setCreating(true) }}>
+          Nueva organización
+        </Button>
       </div>
 
       <div className="surface rounded-2xl overflow-hidden">
@@ -94,7 +141,7 @@ export default function AdminOrganizationsPage() {
                     </Badge>
                   </div>
                   <p className="text-sm text-[var(--color-text-muted)] truncate">
-                    {org.domain ?? 'sin dominio'} · {org.crmName}
+                    {org.domain ?? 'sin dominio'} · {org.crmName} · {getVertical(org.vertical)?.label ?? 'sin rubro elegido'}
                   </p>
                 </div>
                 <div className="hidden sm:flex items-center gap-4 shrink-0">
@@ -141,6 +188,64 @@ export default function AdminOrganizationsPage() {
             onClick={() => actionOrg && toggleSuspend(actionOrg)}
           >
             {actionOrg?.suspended ? 'Reactivar' : 'Suspender'}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal open={creating} onClose={() => setCreating(false)} title="Nueva organización" size="sm">
+        <div className="space-y-3 mb-4">
+          <Input label="Nombre de la organización" placeholder="Ej. Just Create"
+            value={form.orgName} onChange={(e) => setForm({ ...form, orgName: e.target.value })} />
+          <Input label="Dominio (opcional)" placeholder="Ej. justcreate.com.ar"
+            value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} />
+          <div className="h-px bg-[var(--color-border)] my-1" />
+
+          <label className="flex items-center gap-2.5 py-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={existingUser}
+              onChange={(e) => setExistingUser(e.target.checked)}
+              className="w-4 h-4 rounded accent-[var(--color-primary)]"
+            />
+            <span className="text-sm text-[var(--color-text)]">El primer usuario ya tiene login en el sistema</span>
+          </label>
+
+          {existingUser ? (
+            <>
+              <Input label="Email del usuario existente" type="email" placeholder="ya-tiene-cuenta@dominio.com"
+                value={form.existingUserEmail} onChange={(e) => setForm({ ...form, existingUserEmail: e.target.value })} />
+              <p className="text-xs text-[var(--color-text-muted)]">
+                No se crea una cuenta nueva — ese usuario va a poder elegir esta organización desde el selector del sidebar, sin tocar el acceso que ya tiene a la suya.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-subtle)]">Primer usuario (Super Admin)</p>
+              <Input label="Nombre" placeholder="Ej. Juan Cruz"
+                value={form.adminName} onChange={(e) => setForm({ ...form, adminName: e.target.value })} />
+              <Input label="Email" type="email" placeholder="admin@dominio.com"
+                value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} />
+              <Input label="Contraseña inicial" value={form.adminPassword}
+                onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} />
+              <p className="text-xs text-[var(--color-text-muted)]">
+                Se le va a pedir que la cambie al iniciar sesión por primera vez, junto con elegir el rubro de la empresa.
+              </p>
+            </>
+          )}
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setCreating(false)}>Cancelar</Button>
+          <Button
+            loading={saving}
+            disabled={
+              !form.orgName.trim() ||
+              (existingUser
+                ? !form.existingUserEmail.trim()
+                : !form.adminName.trim() || !form.adminEmail.trim() || !form.adminPassword)
+            }
+            onClick={createOrg}
+          >
+            Crear organización
           </Button>
         </ModalFooter>
       </Modal>

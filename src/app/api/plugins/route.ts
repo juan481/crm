@@ -5,17 +5,26 @@ import { PLUGIN_DEFINITIONS } from '@/plugins/definitions'
 import { unstable_cache, revalidateTag } from 'next/cache'
 
 async function fetchPlugins(orgId: string) {
-  const configs = await prisma.pluginConfig.findMany({
-    where: { organizationId: orgId },
-  })
-  return PLUGIN_DEFINITIONS.map((def) => {
-    const cfg = configs.find((c) => c.pluginId === def.id)
-    let parsedConfig: Record<string, unknown> | null = null
-    if (cfg?.config) {
-      try { parsedConfig = JSON.parse(cfg.config) } catch { parsedConfig = null }
-    }
-    return { ...def, enabled: cfg?.enabled ?? false, config: parsedConfig }
-  })
+  const [configs, org] = await Promise.all([
+    prisma.pluginConfig.findMany({ where: { organizationId: orgId } }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.organization as any).findUnique({ where: { id: orgId }, select: { vertical: true } }),
+  ])
+  const vertical: string | null = org?.vertical ?? null
+
+  return PLUGIN_DEFINITIONS
+    // Sin `verticals` declarado = visible para todos (retrocompat con lo que
+    // ya ve Abba). Con `verticals` declarado, sólo aparece si coincide con
+    // el rubro de la organización.
+    .filter((def) => !def.verticals || (vertical !== null && def.verticals.includes(vertical)))
+    .map((def) => {
+      const cfg = configs.find((c) => c.pluginId === def.id)
+      let parsedConfig: Record<string, unknown> | null = null
+      if (cfg?.config) {
+        try { parsedConfig = JSON.parse(cfg.config) } catch { parsedConfig = null }
+      }
+      return { ...def, enabled: cfg?.enabled ?? false, config: parsedConfig }
+    })
 }
 
 // Plugins change rarely — cache 5 minutes per org

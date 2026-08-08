@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   X, ChevronLeft, ChevronRight, LogIn, Users, TrendingUp, Calculator,
   Mail, CheckSquare, ClipboardList, ShieldCheck, Palette, Server, Lock, Building, HelpCircle,
@@ -309,7 +309,12 @@ function MockFolders() {
 
 /* ── slide deck ───────────────────────────────────────────────────────── */
 
-function useSlides() {
+// `vertical` (id de src/lib/verticals.ts, o null) queda disponible para que
+// fases futuras (ej. Retainers por horas, Links/Assets — sólo aplican a
+// 'marketing') inserten o saquen slides según el rubro de la organización.
+// Hoy el recorrido de módulos es el mismo para todos los rubros — no hay
+// todavía ningún módulo exclusivo de un rubro que amerite ocultar slides.
+function useSlides(vertical: string | null) {
   return useMemo<ReactNode[]>(() => [
     // 1 — Title
     <div key="s1" className="h-full w-full flex flex-col items-center justify-center text-center px-10 text-white" style={{ background: '#0f172a' }}>
@@ -794,14 +799,29 @@ function useSlides() {
       <h1 className="text-[36px] md:text-[48px] font-bold tracking-tight text-balance">¿Preguntas?</h1>
       <p className="text-white/70 text-[16px] mt-4 max-w-[52ch]">Esta guía completa está siempre disponible en Ayuda — con el ícono de arriba en el header.</p>
     </div>,
-  ], [])
+  ], [vertical])
 }
 
 /* ── deck shell ───────────────────────────────────────────────────────── */
 
 export default function PresentacionPage() {
+  return (
+    <Suspense fallback={<div className="fixed inset-0 z-[100] bg-bg" />}>
+      <PresentacionDeck />
+    </Suspense>
+  )
+}
+
+function PresentacionDeck() {
   const router = useRouter()
-  const slides = useSlides()
+  const searchParams = useSearchParams()
+  // ?first=1&vertical=X — cómo llega acá el wizard de onboarding la primera
+  // vez que alguien elige su rubro (ver (auth)/onboarding/page.tsx). En ese
+  // caso "salir" tiene que llevar al dashboard, no al índice de Ayuda.
+  const isFirstRun = searchParams.get('first') === '1'
+  const vertical = searchParams.get('vertical')
+  const exitTo = isFirstRun ? '/dashboard' : '/ayuda'
+  const slides = useSlides(vertical)
   const [i, setI] = useState(0)
   const [reducedMotion, setReducedMotion] = useState(false)
   const total = slides.length
@@ -821,11 +841,11 @@ export default function PresentacionPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next() }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); prev() }
-      else if (e.key === 'Escape') router.push('/ayuda')
+      else if (e.key === 'Escape') router.push(exitTo)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [next, prev, router])
+  }, [next, prev, router, exitTo])
 
   return (
     <div className="fixed inset-0 z-[100] bg-bg flex flex-col">
@@ -837,7 +857,7 @@ export default function PresentacionPage() {
       {/* top bar */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <button
-          onClick={() => router.push('/ayuda')}
+          onClick={() => router.push(exitTo)}
           className="p-2 rounded-xl transition-all hover:bg-[var(--color-surface-raised)]"
           style={{ color: 'var(--color-text-muted)' }}
           title="Salir (Esc)"

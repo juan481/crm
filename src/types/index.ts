@@ -293,6 +293,10 @@ export interface PluginDefinition {
   // Whether toggling this plugin actually changes anything in the app today.
   // Most of these were shipped as placeholders — only advanced-analytics is wired up.
   implemented: boolean
+  // Rubros (ids de src/lib/verticals.ts) que ven este plugin en su catálogo.
+  // Sin declarar = visible para todos los rubros (así ningún plugin existente
+  // le cambia a Abba lo que ya ve hoy).
+  verticals?: string[]
 }
 
 export interface PluginConfig {

@@ -25,6 +25,9 @@ interface Branding {
   logoUrl: string | null
   primaryColor: string
   secondaryColor: string
+  // Rubro de la organización (src/lib/verticals.ts) — filtra qué ítems del
+  // nav ve cada tenant. Null = todavía no eligió (no oculta nada).
+  vertical: string | null
 }
 
 interface AppShellProps {
@@ -67,6 +70,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
         user={user}
         crmName={branding?.crmName ?? 'CRM Pro'}
         logoUrl={branding?.logoUrl ?? null}
+        vertical={branding?.vertical ?? null}
         mobile={false}
       />
 
@@ -82,6 +86,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
               user={user}
               crmName={branding?.crmName ?? 'CRM Pro'}
               logoUrl={branding?.logoUrl ?? null}
+              vertical={branding?.vertical ?? null}
               mobile
               onClose={() => setSidebarOpen(false)}
             />
