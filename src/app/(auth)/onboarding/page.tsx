@@ -71,6 +71,14 @@ export default function OnboardingPage() {
   const [needsVertical, setNeedsVertical] = useState<boolean | null>(null)
   const [vertical, setVertical] = useState<string | null>(null)
   const [verticalJustSet, setVerticalJustSet] = useState(false)
+  // Un usuario multi-organización que ya completó su onboarding personal una
+  // vez (ej. Juan, ya con cuenta en Abba) puede llegar acá de nuevo sólo
+  // porque entró a una organización nueva sin rubro elegido — no tiene
+  // sentido pedirle de nuevo nombre/contraseña, sólo el rubro. Se resuelve
+  // server-side (no desde useAuthStore): cambiar de organización hace una
+  // recarga dura que vacía ese store, así que confiar en él acá siempre daría
+  // "no onboarded" para alguien que sí lo está.
+  const [alreadyOnboarded, setAlreadyOnboarded] = useState(false)
 
   useEffect(() => {
     fetch('/api/organization/vertical')
@@ -79,15 +87,10 @@ export default function OnboardingPage() {
         const canSet = json?.data?.canSet
         const current = json?.data?.vertical
         setNeedsVertical(Boolean(canSet && !current))
+        setAlreadyOnboarded(Boolean(json?.data?.alreadyOnboarded))
       })
       .catch(() => setNeedsVertical(false))
   }, [])
-
-  // Un usuario multi-organización que ya completó su onboarding personal una
-  // vez (ej. Juan, ya con cuenta en Abba) puede llegar acá de nuevo sólo
-  // porque entró a una organización nueva sin rubro elegido — no tiene
-  // sentido pedirle de nuevo nombre/contraseña, sólo el rubro.
-  const alreadyOnboarded = user?.onboardingCompleted ?? false
 
   const STEPS = useMemo(() => {
     if (!needsVertical) return BASE_STEPS
@@ -120,7 +123,7 @@ export default function OnboardingPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
       setUser({ ...user!, ...json.data })
-      toast.success('¡Cuenta configurada!')
+      toast.success(vertOverride ? '¡Listo!' : '¡Cuenta configurada!')
       const v = vertOverride ?? vertical
       // Si recién eligió el rubro en este mismo wizard, lo llevamos al tour
       // (ayuda/presentacion) filtrado por ese rubro antes del dashboard —

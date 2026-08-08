@@ -28,7 +28,13 @@ export async function GET() {
     })
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const orgs = [user.organization, ...user.memberships.map((m) => m.organization)]
+    const all = [user.organization, ...user.memberships.map((m) => m.organization)]
+    // Defensivo: no debería poder existir una membership hacia la propia org
+    // de origen (nada la crea así hoy), pero si alguna vez pasara, no
+    // queremos que el switcher muestre la misma organización dos veces.
+    const seen = new Set<string>()
+    const orgs = all
+      .filter((org) => (seen.has(org.id) ? false : (seen.add(org.id), true)))
       .map((org) => ({ ...org, isActive: org.id === payload.orgId }))
 
     return NextResponse.json({ data: orgs })

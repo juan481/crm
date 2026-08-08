@@ -4,21 +4,37 @@ import { prisma } from '@/lib/db'
 import { VERTICALS, isValidVertical } from '@/lib/verticals'
 
 // GET: estado actual — usado por el wizard de onboarding para decidir si
-// tiene que mostrar el selector de rubro (sólo si todavía es null).
+// tiene que mostrar el selector de rubro (sólo si todavía es null), y si
+// tiene que mostrar el wizard completo o saltar directo al rubro.
+//
+// `alreadyOnboarded` se resuelve acá (server-side, contra la DB) y NO desde
+// useAuthStore en el cliente a propósito: un usuario multi-organización que
+// cambia de organización llega a /onboarding por una recarga dura (ver
+// OrgSwitcher), que vacía el store de Zustand — si el wizard confiara en
+// `user?.onboardingCompleted` del store ahí, siempre daría `false` en ese
+// camino y le volvería a pedir nombre/contraseña a alguien que ya tiene
+// cuenta (y, peor, el submit de esa pantalla SÍ cambia la contraseña real).
 export async function GET() {
   const payload = await getCurrentUser()
   if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const org = await (prisma.organization as any).findUnique({
-    where: { id: payload.orgId },
-    select: { vertical: true },
-  })
+  const [org, user] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.organization as any).findUnique({
+      where: { id: payload.orgId },
+      select: { vertical: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { onboardingCompleted: true },
+    }),
+  ])
 
   return NextResponse.json({
     data: {
       vertical: org?.vertical ?? null,
       canSet: payload.role === 'SUPER_ADMIN',
+      alreadyOnboarded: user?.onboardingCompleted ?? false,
       options: VERTICALS,
     },
   })

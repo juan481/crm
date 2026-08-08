@@ -25,6 +25,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Import dynamically to avoid SSR issues with browser client
     const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
+    // Limpia qué organización estaba activa ANTES de cerrar sesión — así la
+    // próxima persona que loguee en esta compu arranca en su propia org de
+    // origen, no en la que dejó elegida quien se fue. Best-effort: si falla
+    // (offline, lo que sea) no bloquea el logout.
+    try { await fetch('/api/session/active-org', { method: 'DELETE' }) } catch { /* ignore */ }
     await supabase.auth.signOut()
     set({ user: null, isAuthenticated: false })
     window.location.href = '/login'

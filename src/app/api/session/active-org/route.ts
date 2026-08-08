@@ -55,3 +55,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
+
+// Limpia la organización activa — se llama al cerrar sesión (ver
+// useAuthStore.logout). Sin esto, en una compu compartida la próxima
+// persona que loguee heredaría la organización que dejó elegida la
+// anterior: no es una fuga de datos (getCurrentUser() igual revalida la
+// membership contra el usuario que esté logueado en ese momento), pero es
+// una sorpresa evitable — arranca cada login limpio en su propia org de origen.
+export async function DELETE() {
+  const cookieStore = await cookies()
+  cookieStore.delete(ACTIVE_ORG_COOKIE)
+  return NextResponse.json({ data: true })
+}

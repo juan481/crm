@@ -48,6 +48,14 @@ export async function POST(req: NextRequest) {
 
     const db = prisma as any
 
+    // `Organization.name` no tiene constraint único en el schema — sin este
+    // chequeo se puede repetir el error que ya pisamos una vez (dos
+    // "JustCreate" vacías, creadas por accidente el mismo día).
+    const existingName = await db.organization.findFirst({ where: { name: orgName.trim() } })
+    if (existingName) {
+      return NextResponse.json({ error: `Ya existe una organización llamada "${orgName.trim()}"` }, { status: 400 })
+    }
+
     if (domain?.trim()) {
       const existingDomain = await db.organization.findUnique({ where: { domain: domain.trim() } })
       if (existingDomain) return NextResponse.json({ error: 'Ese dominio ya está en uso' }, { status: 400 })
