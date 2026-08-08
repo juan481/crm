@@ -461,6 +461,10 @@ export interface Task {
   client?: { id: string; name: string } | null
   empresaId: string | null
   empresa?: { id: string; name: string } | null
+  dealId: string | null
+  deal?: { id: string; title: string } | null
+  ticketId: string | null
+  ticket?: { id: string; number: number; title: string } | null
   organizationId: string
   createdAt: string
   updatedAt: string

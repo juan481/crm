@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { DealNotas } from '@/components/pipeline/deal-notas'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -187,6 +188,10 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               <Calculator size={14} />Generar cotización
             </Link>
             <Button onClick={handleSave} loading={saving}>Guardar cambios</Button>
+          </div>
+
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <DealNotas dealId={dealId} />
           </div>
         </div>
       )}

@@ -184,6 +184,7 @@ export default function TicketDetailPage() {
           assignedToId: data.assignedToId || undefined,
           empresaId: data.empresaId || undefined,
           clientId: data.clientId || undefined,
+          ticketId: data.id,
         }),
       })
       const json = await res.json()

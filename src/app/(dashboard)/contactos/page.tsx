@@ -208,9 +208,13 @@ export default function ContactosPage() {
               contactos.map(c => (
                 <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td className="px-4 py-3">
-                    <span className="font-medium" style={{ color: 'var(--color-text)' }}>
+                    <button
+                      onClick={() => router.push(`/contactos/${c.id}`)}
+                      className="font-medium hover:underline text-left"
+                      style={{ color: 'var(--color-text)' }}
+                    >
                       {c.firstName} {c.lastName}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>
                     {c.role ?? '—'}

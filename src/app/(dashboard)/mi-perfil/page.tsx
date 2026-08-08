@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
-import { ROLE_LABELS } from '@/lib/utils'
+import { getRoleLabel } from '@/lib/role-labels'
 import toast from 'react-hot-toast'
 
 export default function MiPerfilPage() {
   const { user, setUser } = useAuthStore()
-  const { darkMode, toggleDarkMode } = useThemeStore()
+  const { darkMode, toggleDarkMode, vertical } = useThemeStore()
 
   const [name, setName] = useState(user?.name ?? '')
   const [savingName, setSavingName] = useState(false)
@@ -81,7 +81,7 @@ export default function MiPerfilPage() {
           <p className="font-semibold text-[var(--color-text)] truncate">{user.name}</p>
           <p className="text-sm text-[var(--color-text-muted)] truncate">{user.email}</p>
           <span className="inline-block mt-1.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)]">
-            {ROLE_LABELS[user.role] ?? user.role}
+            {getRoleLabel(user.role, vertical)}
           </span>
         </div>
       </div>

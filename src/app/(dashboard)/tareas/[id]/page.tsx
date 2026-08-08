@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, CheckSquare, Square, Calendar, User,
   Building2, Flag, Trash2, Clock, Send, Paperclip, X, FileText, Image as ImageIcon, Plus,
+  TrendingUp, LifeBuoy,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -483,6 +485,16 @@ export default function TareaDetailPage() {
           <span className="flex items-center gap-1" style={{ color: 'var(--color-primary)' }}>
             <Building2 size={11} />{task.empresa.name}
           </span>
+        )}
+        {task.deal && (
+          <Link href="/pipeline" className="flex items-center gap-1 hover:underline" style={{ color: 'var(--color-primary)' }}>
+            <TrendingUp size={11} />{task.deal.title}
+          </Link>
+        )}
+        {task.ticket && (
+          <Link href={`/tickets/${task.ticket.id}`} className="flex items-center gap-1 hover:underline" style={{ color: 'var(--color-primary)' }}>
+            <LifeBuoy size={11} />Ticket #{String(task.ticket.number).padStart(4, '0')}
+          </Link>
         )}
       </div>
 

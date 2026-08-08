@@ -15,7 +15,9 @@ import { Select } from '@/components/ui/select'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/store/auth-store'
-import { ROLE_LABELS, formatDate } from '@/lib/utils'
+import { useThemeStore } from '@/store/theme-store'
+import { formatDate } from '@/lib/utils'
+import { getRoleLabel } from '@/lib/role-labels'
 import type { User } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -27,20 +29,26 @@ const createSchema = z.object({
 })
 type CreateData = z.infer<typeof createSchema>
 
-const ROLE_OPTIONS = [
-  { value: 'SELLER',     label: 'Vendedor / Comercial' },
-  { value: 'TECHNICIAN', label: 'Técnico' },
-  { value: 'HR',         label: 'RRHH' },
-  { value: 'ADMIN',      label: 'Administrador' },
-]
-
-const ROLE_OPTIONS_SUPER = [
-  ...ROLE_OPTIONS,
-  { value: 'SUPER_ADMIN', label: 'Super Admin' },
-]
+// Labels por rubro (src/lib/role-labels.ts) — "Vendedor / Comercial" queda
+// como default genérico porque combina el nombre de rol con una aclaración
+// que no depende del rubro; el resto sale de getRoleLabel().
+function getRoleOptions(vertical: string | null) {
+  return [
+    { value: 'SELLER',     label: vertical === 'marketing' ? getRoleLabel('SELLER', vertical) : 'Vendedor / Comercial' },
+    { value: 'TECHNICIAN', label: getRoleLabel('TECHNICIAN', vertical) },
+    { value: 'HR',         label: getRoleLabel('HR', vertical) },
+    { value: 'ADMIN',      label: getRoleLabel('ADMIN', vertical) },
+  ]
+}
+function getRoleOptionsSuper(vertical: string | null) {
+  return [...getRoleOptions(vertical), { value: 'SUPER_ADMIN', label: getRoleLabel('SUPER_ADMIN', vertical) }]
+}
 
 export default function UsuariosPage() {
   const { user: me } = useAuthStore()
+  const { vertical } = useThemeStore()
+  const ROLE_OPTIONS = getRoleOptions(vertical)
+  const ROLE_OPTIONS_SUPER = getRoleOptionsSuper(vertical)
   const qc = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
   const [actionUser, setActionUser] = useState<User | null>(null)
@@ -169,7 +177,7 @@ export default function UsuariosPage() {
                 <div className="hidden sm:flex items-center gap-3">
                   <Badge variant="neutral" size="sm">
                     <Shield size={11} className="mr-1" />
-                    {ROLE_LABELS[user.role]}
+                    {getRoleLabel(user.role, vertical)}
                   </Badge>
                   <span className="text-xs text-[var(--color-text-subtle)]">
                     Desde {formatDate(user.createdAt)}
@@ -237,7 +245,7 @@ export default function UsuariosPage() {
 
       <Modal open={action === 'role' && !!actionUser} onClose={() => { setActionUser(null); setAction(null); setNewRole('') }} title="Cambiar Privilegios" size="sm">
         <p className="text-sm text-[var(--color-text-muted)] mb-4">
-          Rol actual de <strong className="text-[var(--color-text)]">{actionUser?.name}</strong>: <strong className="text-[var(--color-text)]">{actionUser && ROLE_LABELS[actionUser.role]}</strong>.
+          Rol actual de <strong className="text-[var(--color-text)]">{actionUser?.name}</strong>: <strong className="text-[var(--color-text)]">{actionUser && getRoleLabel(actionUser.role, vertical)}</strong>.
         </p>
         <Select label="Nuevo rol" options={ROLE_OPTIONS_SUPER} value={newRole} onChange={(e) => setNewRole(e.target.value)} />
         {newRole === 'SUPER_ADMIN' && (

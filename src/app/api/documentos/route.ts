@@ -15,41 +15,46 @@ export async function GET(req: NextRequest) {
     const { searchParams } = req.nextUrl
     const folderId = searchParams.get('folderId') ?? null
     const clientId = searchParams.get('clientId') ?? null
+    // `tags` es un String con un JSON-array serializado, no una columna nativa
+    // — `contains` sobre el string es liviano y suficiente para este volumen
+    // (mismo criterio ya usado en el resto del módulo de documentos).
+    const tag = searchParams.get('tag') ?? null
 
     const page = Math.max(1, Number(searchParams.get('page') ?? 1))
     const limit = Math.min(100, Number(searchParams.get('limit') ?? 50))
     const skip = (page - 1) * limit
 
+    // Con un tag activo, la búsqueda es "por categoría en toda la
+    // organización" (el pedido original), no sólo en la carpeta actual — se
+    // ignora folderId a propósito y no se listan subcarpetas, es una vista
+    // plana de resultados.
+    const documentWhere = {
+      organizationId: payload.orgId,
+      ...(tag ? { tags: { contains: `"${tag}"` } } : { folderId }),
+      ...(clientId && { clientId }),
+      supersededBy: { none: {} }, // only the latest version of each document shows up
+    }
+
     const [folders, documents, total] = await Promise.all([
-      prisma.folder.findMany({
-        where: {
-          organizationId: payload.orgId,
-          parentId: folderId,
-          ...(clientId && { clientId }),
-        },
-        include: { _count: { select: { documents: true, children: true } } },
-        orderBy: { name: 'asc' },
-      }),
+      tag
+        ? Promise.resolve([])
+        : prisma.folder.findMany({
+            where: {
+              organizationId: payload.orgId,
+              parentId: folderId,
+              ...(clientId && { clientId }),
+            },
+            include: { _count: { select: { documents: true, children: true } } },
+            orderBy: { name: 'asc' },
+          }),
       prisma.document.findMany({
-        where: {
-          organizationId: payload.orgId,
-          folderId,
-          ...(clientId && { clientId }),
-          supersededBy: { none: {} }, // only the latest version of each document shows up
-        },
+        where: documentWhere,
         skip,
         take: limit,
         include: { uploadedBy: { select: { name: true } }, supersedes: { select: { id: true } } },
         orderBy: { createdAt: 'desc' },
       }),
-      prisma.document.count({
-        where: {
-          organizationId: payload.orgId,
-          folderId,
-          ...(clientId && { clientId }),
-          supersededBy: { none: {} },
-        },
-      }),
+      prisma.document.count({ where: documentWhere }),
     ])
 
     const docsWithTags = documents.map((d) => ({ ...d, tags: parseJsonArray(d.tags) }))

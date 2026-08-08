@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { notifyTaskAssignment } from '@/lib/task-notifications'
 
 interface Params { params: { id: string } }
 
@@ -9,6 +10,8 @@ const INCLUDE = {
   createdBy:  { select: { id: true, name: true } },
   client:     { select: { id: true, name: true } },
   empresa:    { select: { id: true, name: true } },
+  deal:       { select: { id: true, title: true } },
+  ticket:     { select: { id: true, number: true, title: true } },
 }
 
 export async function GET(_: NextRequest, { params }: Params) {
@@ -55,9 +58,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (isTech && existing.assignedToId !== payload.userId)
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { title, description, priority, dueDate, assignedToId, clientId, empresaId } = body
+    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId } = body
     const isCompleting    = status === 'HECHA' && existing.status !== 'HECHA'
     const shouldMarkViewed = viewed === true && payload.userId === existing.assignedToId && !existing.viewedAt
+    const isReassigning = !isTech && assignedToId && assignedToId !== existing.assignedToId
 
     const task = await db.task.update({
       where: { id: params.id },
@@ -70,12 +74,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...((!isTech && assignedToId)              && { assignedToId }),
         ...((!isTech && clientId !== undefined)    && { clientId:  clientId  || null }),
         ...((!isTech && empresaId !== undefined)   && { empresaId: empresaId || null }),
+        ...((!isTech && dealId !== undefined)      && { dealId:   dealId   || null }),
+        ...((!isTech && ticketId !== undefined)    && { ticketId: ticketId || null }),
         ...(isCompleting                           && { completedAt: new Date() }),
         ...(!isCompleting && status && status !== 'HECHA' && { completedAt: null }),
         ...(shouldMarkViewed                       && { viewedAt: new Date() }),
       },
       include: INCLUDE,
     })
+
+    // Email al nuevo asignado — sólo cuando de verdad cambia a otra persona
+    // (no cuando se re-guarda la misma), y nunca cuando uno se autoasigna.
+    if (isReassigning && assignedToId !== payload.userId) {
+      notifyTaskAssignment(task, payload.orgId).catch((err) => console.error('[TASK REASSIGN EMAIL]', err))
+    }
 
     return NextResponse.json({ data: task })
   } catch (error) {

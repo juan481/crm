@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { notifyTaskAssignment } from '@/lib/task-notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,8 @@ const INCLUDE = {
   createdBy:  { select: { id: true, name: true } },
   client:     { select: { id: true, name: true } },
   empresa:    { select: { id: true, name: true } },
+  deal:       { select: { id: true, title: true } },
+  ticket:     { select: { id: true, number: true, title: true } },
 }
 
 export async function GET(req: NextRequest) {
@@ -55,24 +58,34 @@ export async function POST(req: NextRequest) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { title, description, priority, dueDate, assignedToId, clientId, empresaId } = await req.json()
+    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
     const db = prisma as any
+    const finalAssignedToId = assignedToId || payload.userId
     const task = await db.task.create({
       data: {
         title:          title.trim(),
         description:    description || null,
         priority:       priority    || 'MEDIA',
         dueDate:        dueDate ? new Date(dueDate) : null,
-        assignedToId:   assignedToId || payload.userId,
+        assignedToId:   finalAssignedToId,
         createdById:    payload.userId,
         clientId:       clientId  || null,
         empresaId:      empresaId || null,
+        dealId:         dealId    || null,
+        ticketId:       ticketId  || null,
         organizationId: payload.orgId,
       },
       include: INCLUDE,
     })
+
+    // Email al asignado — sólo si se la asignaron a otra persona (no a uno
+    // mismo) y la org tiene correo configurado. Best-effort: si falla, la
+    // tarea ya se creó igual, no se revierte nada por esto.
+    if (finalAssignedToId !== payload.userId) {
+      notifyTaskAssignment(task, payload.orgId).catch((err) => console.error('[TASK ASSIGN EMAIL]', err))
+    }
 
     return NextResponse.json({ data: task }, { status: 201 })
   } catch (error) {

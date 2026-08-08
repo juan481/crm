@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, MessageSquare, User, Clock, AlertCircle, Filter, Building2, Search } from 'lucide-react'
+import { Plus, MessageSquare, User, Clock, AlertCircle, Filter, Building2, Search, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -88,6 +88,24 @@ export default function TicketsPage() {
   const [form, setForm] = useState<TicketFormState>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
+  const { data: supportLinkData } = useQuery({
+    queryKey: ['support-link'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/support-link')
+      if (!res.ok) return null
+      return res.json()
+    },
+    staleTime: 60 * 60 * 1000,
+  })
+
+  const copySupportLink = () => {
+    const token = supportLinkData?.data?.token
+    if (!token) return
+    const url = `${window.location.origin}/soporte/${token}`
+    navigator.clipboard.writeText(url)
+    toast.success('Link de soporte copiado')
+  }
+
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-tickets'],
     queryFn: async () => {
@@ -162,6 +180,9 @@ export default function TicketsPage() {
           </div>
           <Select options={STATUS_OPTIONS} value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-40" />
           <Select options={CATEGORY_OPTIONS} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-40" />
+          <Button variant="outline" leftIcon={<Link2 size={15} />} onClick={copySupportLink} title="Copiar el link para que un cliente abra su propio ticket">
+            Link de soporte
+          </Button>
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
             Nuevo Ticket
           </Button>

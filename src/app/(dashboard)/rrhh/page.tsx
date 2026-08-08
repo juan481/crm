@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Avatar } from '@/components/ui/avatar'
+import { useThemeStore } from '@/store/theme-store'
+import { getRoleLabel } from '@/lib/role-labels'
 import type { Asistencia } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -66,6 +68,7 @@ interface EmpleadoRow {
 export default function RrhhPage() {
   const router = useRouter()
   const qc     = useQueryClient()
+  const { vertical } = useThemeStore()
   const [mes,    setMes]    = useState(mesActual())
   const [search, setSearch] = useState('')
 
@@ -124,10 +127,15 @@ export default function RrhhPage() {
     if (r.tardanza)         byUser[uid].tardanzas++
   }
 
+  // % sobre días hábiles transcurridos, no sólo sobre días con registro —
+  // antes un día sin fichar y sin marcar ausente no restaba nada del %
+  // (podía incluso mostrar más presentismo del real). Mismo denominador que
+  // ya usa "Sin fichar" (weekdaysElapsed), sólo que ahora también entra en
+  // el cálculo del %, no sólo se exhibe aparte. Ver Fase 12 del plan.
   const empleados: EmpleadoRow[] = Object.values(byUser).map(e => ({
     ...e,
     sinFichar: Math.max(0, totalWeekdays - (e.presentes + e.ausentes)),
-    pct: (e.presentes + e.ausentes) > 0 ? Math.round((e.presentes / (e.presentes + e.ausentes)) * 100) : 0,
+    pct: totalWeekdays > 0 ? Math.round((e.presentes / totalWeekdays) * 100) : 0,
   })).sort((a, b) => a.name.localeCompare(b.name))
 
   const filtered = empleados.filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()))
@@ -254,7 +262,7 @@ export default function RrhhPage() {
                 <Avatar name={e.name} src={e.avatarUrl} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{e.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{e.role}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{getRoleLabel(e.role, vertical)}</p>
                 </div>
                 <div className="flex items-center gap-6 shrink-0">
                   <div className="text-center hidden sm:block">

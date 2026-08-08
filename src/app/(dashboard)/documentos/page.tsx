@@ -139,6 +139,7 @@ export default function DocumentosPage() {
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([{ id: null, name: 'Inicio' }])
+  const [activeTag, setActiveTag] = useState<string | null>(null)
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [creatingFolder, setCreatingFolder] = useState(false)
@@ -166,10 +167,13 @@ export default function DocumentosPage() {
   })
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['documents', currentFolderId],
+    queryKey: ['documents', currentFolderId, activeTag],
     queryFn: async () => {
       const params = new URLSearchParams()
-      if (currentFolderId) params.set('folderId', currentFolderId)
+      // Con un tag activo se ignora la carpeta a propósito — es una
+      // búsqueda por categoría en toda la organización, no de esta carpeta.
+      if (activeTag) params.set('tag', activeTag)
+      else if (currentFolderId) params.set('folderId', currentFolderId)
       const res = await fetch(`/api/documentos?${params}`)
       if (!res.ok) throw new Error('Error al cargar documentos')
       const json = await res.json()
@@ -223,6 +227,18 @@ export default function DocumentosPage() {
         const formData = new FormData()
         formData.append('file', file)
         if (currentFolderId) formData.append('folderId', currentFolderId)
+
+        // Si ya existe un archivo con el mismo nombre en esta carpeta, hoy
+        // se perdía silenciosamente como un duplicado suelto — se ofrece
+        // subirlo como nueva versión en su lugar (mismo mecanismo que ya
+        // usa el botón dedicado de "reemplazar", ver handleReplace).
+        const existing = documents.find((d) => d.originalName === file.name)
+        if (existing) {
+          const wantsVersion = confirm(
+            `Ya existe "${file.name}" en esta carpeta — ¿lo subís como nueva versión de ese archivo en vez de uno aparte?`
+          )
+          if (wantsVersion) formData.append('supersedesId', existing.id)
+        }
 
         const res = await fetch('/api/documentos/upload', { method: 'POST', body: formData })
         const json = await res.json()
@@ -383,6 +399,36 @@ export default function DocumentosPage() {
         ))}
       </div>
 
+      {/* Filtro por etiqueta — cross-carpeta a propósito, "buscar por categoría en toda la organización" */}
+      {(allTagsData ?? []).length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="flex items-center gap-1 text-xs text-[var(--color-text-subtle)] mr-1">
+            <Tag size={12} /> Filtrar por etiqueta:
+          </span>
+          {(allTagsData ?? []).map((t) => (
+            <button
+              key={t}
+              onClick={() => setActiveTag((cur) => (cur === t ? null : t))}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                activeTag === t
+                  ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white'
+                  : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+          {activeTag && (
+            <button
+              onClick={() => setActiveTag(null)}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-full text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
+            >
+              <X size={11} /> Limpiar
+            </button>
+          )}
+        </div>
+      )}
+
       {isError && (
         <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
           <AlertTriangle size={16} />
@@ -404,10 +450,10 @@ export default function DocumentosPage() {
           <div className="text-center py-14">
             <FolderOpen className="mx-auto mb-3 text-[var(--color-text-subtle)]" size={40} />
             <p className="text-[var(--color-text-muted)] text-sm">
-              {currentFolderId ? 'Carpeta vacía' : 'Sin archivos aún'}
+              {activeTag ? `Ningún archivo con la etiqueta "${activeTag}"` : currentFolderId ? 'Carpeta vacía' : 'Sin archivos aún'}
             </p>
             <p className="text-xs text-[var(--color-text-subtle)] mt-1">
-              Arrastrá archivos aquí o usá el botón "Subir Archivo"
+              {activeTag ? 'Probá con otra etiqueta o limpiá el filtro' : 'Arrastrá archivos aquí o usá el botón "Subir Archivo"'}
             </p>
           </div>
         ) : (

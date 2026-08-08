@@ -1,0 +1,82 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+
+export const dynamic = 'force-dynamic'
+
+interface Params { params: { id: string } }
+
+const TIPOS_VALIDOS = ['NOTA', 'LLAMADA', 'REUNION', 'CHAT', 'ENVIO_COTIZACION', 'CONVERSACION', 'SOPORTE'] as const
+
+// Mismo shape que /api/empresas/[id]/notas — ver ese archivo para el patrón
+// original (Fase 8 del plan lo replica para Deal en vez de generalizarlo,
+// a propósito, para no arriesgar una regresión en la feature de Empresa).
+export async function GET(_req: NextRequest, { params }: Params) {
+  try {
+    const payload = await getCurrentUser()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+    const db = prisma as any
+
+    const deal = await db.deal.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: { id: true },
+    })
+    if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada' }, { status: 404 })
+
+    const notas = await db.dealNota.findMany({
+      where: { dealId: params.id, organizationId: payload.orgId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, tipo: true, content: true, estimatedMinutes: true, metadata: true, createdAt: true,
+        user: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    })
+
+    const data = notas.map((n: any) => ({ ...n, createdAt: n.createdAt.toISOString() }))
+    return NextResponse.json({ data })
+  } catch (error) {
+    console.error('[DEAL NOTAS GET]', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest, { params }: Params) {
+  try {
+    const payload = await getCurrentUser()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
+    const db = prisma as any
+
+    const deal = await db.deal.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: { id: true },
+    })
+    if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada' }, { status: 404 })
+
+    const { content, tipo = 'NOTA', estimatedMinutes = 0, metadata } = await req.json()
+    if (!content?.trim()) return NextResponse.json({ error: 'El contenido es requerido' }, { status: 400 })
+    if (!TIPOS_VALIDOS.includes(tipo)) return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+
+    const nota = await db.dealNota.create({
+      data: {
+        dealId: params.id,
+        organizationId: payload.orgId,
+        userId: payload.userId,
+        tipo,
+        content: content.trim(),
+        estimatedMinutes: Number(estimatedMinutes) || 0,
+        metadata: metadata ?? null,
+      },
+      select: {
+        id: true, tipo: true, content: true, estimatedMinutes: true, metadata: true, createdAt: true,
+        user: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    })
+
+    return NextResponse.json({ data: { ...nota, createdAt: nota.createdAt.toISOString() } }, { status: 201 })
+  } catch (error) {
+    console.error('[DEAL NOTAS POST]', error)
+    return NextResponse.json({ error: 'Error al guardar nota' }, { status: 500 })
+  }
+}

@@ -9,6 +9,10 @@ interface ThemeState {
   crmName: string
   logoUrl: string | null
   darkMode: boolean
+  // Rubro de la organización activa (src/lib/verticals.ts) — ya viajaba
+  // dentro de `branding` desde AppShell (Fase 0.4) pero no estaba declarado
+  // acá, así que no se podía leer sin prop-drilling. Ver src/lib/role-labels.ts.
+  vertical: string | null
 
   setPrimaryColor: (color: string) => void
   setSecondaryColor: (color: string) => void
@@ -21,6 +25,7 @@ interface ThemeState {
     secondaryColor: string
     crmName: string
     logoUrl: string | null
+    vertical?: string | null
   }) => void
 }
 
@@ -68,6 +73,7 @@ export const useThemeStore = create<ThemeState>()(
       crmName: 'JustCRM',
       logoUrl: null,
       darkMode: false,
+      vertical: null,
 
       setPrimaryColor: (color) => {
         set({ primaryColor: color })

@@ -17,6 +17,10 @@ const PUBLIC_PATHS = [
   // close (same class as /unsubscribe: no login, single purpose, self-authenticating token).
   '/valorar-ticket',
   '/api/public/ticket-rating',
+  // Formulario público de autogestión de tickets (Fase 13) — mismo criterio
+  // que /valorar-ticket: sin login, token-gated (Organization.publicSupportToken).
+  '/soporte',
+  '/api/public/tickets',
 ]
 
 export async function middleware(req: NextRequest) {

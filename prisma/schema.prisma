@@ -165,6 +165,18 @@ model Organization {
   // (dispara el selector de "primera vez" para el SUPER_ADMIN, ver
   // POST /api/organization/vertical).
   vertical       String?
+  // Token del formulario público de autogestión de tickets
+  // (/soporte/[token]) — mismo espíritu que Event.webhookSecret (línea 578)
+  // pero nullable a propósito: un ALTER TABLE que agrega una columna NOT
+  // NULL (con o sin @unique) contra una tabla con filas existentes no tiene
+  // un valor por default expresable en SQL puro para cuid() — Postgres
+  // rechaza esa migración de plano contra la base compartida de producción.
+  // Se resuelve en dos pasos: nullable acá + backfill por script
+  // (scripts/tmp-backfill-support-token.ts) para las orgs ya existentes;
+  // toda organización NUEVA sí recibe un token automático (default a nivel
+  // Prisma Client, no a nivel SQL). Los API routes tratan null = "todavía
+  // sin token" y lo resuelven on-demand si hiciera falta.
+  publicSupportToken String? @default(cuid())
   quoteValidityDays Int   @default(30)
   smtpHost       String?
   smtpPort       Int?
@@ -210,6 +222,8 @@ model Organization {
   empresas          Empresa[]
   directorioContactos DirectorioContacto[]
   empresaNotas      EmpresaNota[]
+  dealNotas         DealNota[]
+  directorioContactoNotas DirectorioContactoNota[]
   cotizaciones      Cotizacion[]
   asistencias       Asistencia[]
   suppressions      EmailSuppression[]
@@ -287,6 +301,8 @@ model User {
   ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
   taskComments    TaskComment[]
   empresaNotas    EmpresaNota[]
+  dealNotas       DealNota[]
+  directorioContactoNotas DirectorioContactoNota[]
   cotizaciones    Cotizacion[]
   asistencias     Asistencia[]
   memberships     OrganizationMembership[]
@@ -664,11 +680,36 @@ model Deal {
   organizationId    String
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   cotizaciones      Cotizacion[]
+  notas             DealNota[]
+  tasks             Task[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   @@index([organizationId, stage])
   @@index([ownerId])
+}
+
+// ─── Actividad / Notas de Deal ─────────────────────────────────────────────
+// Mismo shape que EmpresaNota (mismo enum EmpresaNotaTipo, aplica igual de
+// bien a una oportunidad) — timeline de llamadas/reuniones/etc. de un Deal,
+// separado del campo Deal.notes (que queda como descripción corta, igual
+// que Empresa.activity convive con EmpresaNota[]).
+model DealNota {
+  id               String   @id @default(cuid())
+  dealId           String
+  deal             Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  tipo             EmpresaNotaTipo @default(NOTA)
+  content          String
+  estimatedMinutes Int      @default(0)
+  metadata         String?  // JSON: { imageUrl? }
+  createdAt        DateTime @default(now())
+
+  @@index([dealId])
+  @@index([organizationId])
 }
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────
@@ -689,6 +730,13 @@ model Task {
   client         Client?   @relation(fields: [clientId], references: [id])
   empresaId      String?
   empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // Vínculo opcional a una oportunidad de Pipeline o a un Ticket — mismo
+  // criterio que empresaId (nullable, onDelete: SetNull, no rompe nada si
+  // se borra el Deal/Ticket de origen). Ver Fase 11 del plan.
+  dealId         String?
+  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  ticketId       String?
+  ticket         Ticket?   @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime  @default(now())
@@ -699,6 +747,8 @@ model Task {
   @@index([organizationId, status])
   @@index([assignedToId])
   @@index([empresaId])
+  @@index([dealId])
+  @@index([ticketId])
 }
 
 model TaskSubitem {
@@ -765,6 +815,7 @@ model Ticket {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages       TicketMessage[]
+  tasks          Task[]
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -841,6 +892,8 @@ model DirectorioContacto {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  notas          DirectorioContactoNota[]
+
   @@index([organizationId])
   @@index([empresaId])
   @@index([email])
@@ -862,6 +915,28 @@ model EmpresaNota {
   createdAt        DateTime @default(now())
 
   @@index([empresaId])
+  @@index([organizationId])
+}
+
+// ─── Actividad / Notas de Contacto (Directorio) ────────────────────────────
+// Mismo patrón que EmpresaNota/DealNota — historial propio de un contacto,
+// independiente del de su Empresa vinculada (un contacto puede cambiar de
+// empresa sin perder su propio historial).
+model DirectorioContactoNota {
+  id               String   @id @default(cuid())
+  contactoId       String
+  contacto         DirectorioContacto @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  tipo             EmpresaNotaTipo @default(NOTA)
+  content          String
+  estimatedMinutes Int      @default(0)
+  metadata         String?  // JSON: { imageUrl? }
+  createdAt        DateTime @default(now())
+
+  @@index([contactoId])
   @@index([organizationId])
 }
 

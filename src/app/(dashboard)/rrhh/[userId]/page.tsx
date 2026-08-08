@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Avatar } from '@/components/ui/avatar'
+import { useThemeStore } from '@/store/theme-store'
+import { getRoleLabel } from '@/lib/role-labels'
 import type { Asistencia } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -29,11 +31,29 @@ function mesActual() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+// Mismo helper que rrhh/page.tsx — días hábiles (lun-vie) transcurridos en
+// `mes` hasta hoy (o el mes entero si ya terminó). Denominador real del %
+// de presentismo, ver Fase 12 del plan.
+function weekdaysElapsed(mes: string): number {
+  const [y, m] = mes.split('-').map(Number)
+  const monthStart = new Date(y, m - 1, 1)
+  const monthEnd   = new Date(y, m, 0)
+  const today      = new Date()
+  const end        = today < monthEnd ? today : monthEnd
+  let count = 0
+  for (const d = new Date(monthStart); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay()
+    if (day !== 0 && day !== 6) count++
+  }
+  return count
+}
+
 export default function EmpleadoRrhhPage() {
   const { userId } = useParams<{ userId: string }>()
   const router     = useRouter()
   const searchParams = useSearchParams()
   const qc         = useQueryClient()
+  const { vertical } = useThemeStore()
   const [mes, setMes] = useState(searchParams.get('mes') ?? mesActual())
 
   const [editRecord, setEditRecord] = useState<Asistencia | null>(null)
@@ -56,8 +76,9 @@ export default function EmpleadoRrhhPage() {
   const presentes = records.filter(r => r.horaEntrada && !r.ausente).length
   const ausentes  = records.filter(r => r.ausente).length
   const tardanzas = records.filter(r => r.tardanza).length
-  const totalDias = presentes + ausentes
-  const pct       = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0
+  const totalWeekdays = weekdaysElapsed(mes)
+  const sinFichar = Math.max(0, totalWeekdays - (presentes + ausentes))
+  const pct       = totalWeekdays > 0 ? Math.round((presentes / totalWeekdays) * 100) : 0
 
   const openEdit = (r: Asistencia) => {
     setEditRecord(r)
@@ -149,7 +170,7 @@ export default function EmpleadoRrhhPage() {
           <Avatar name={empleado.name} src={empleado.avatarUrl} size="lg" />
           <div className="flex-1">
             <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{empleado.name}</h1>
-            <p className="text-sm capitalize" style={{ color: 'var(--color-text-muted)' }}>{empleado.role} — {mesLabel}</p>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{getRoleLabel(empleado.role, vertical)} — {mesLabel}</p>
           </div>
         </div>
       )}
@@ -160,6 +181,7 @@ export default function EmpleadoRrhhPage() {
           { label: 'Presentes',   value: presentes,  color: '#10b981' },
           { label: 'Ausentes',    value: ausentes,   color: '#ef4444' },
           { label: 'Tardanzas',   value: tardanzas,  color: '#f59e0b' },
+          { label: 'Sin fichar',  value: sinFichar,  color: 'var(--color-text-subtle)' },
           { label: 'Presentismo', value: `${pct}%`,  color: 'var(--color-primary)' },
         ].map(s => (
           <div key={s.label} className="rounded-2xl p-4 text-center"
