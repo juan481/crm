@@ -13,6 +13,13 @@ const PUBLIC_PATHS = [
   // Amazon SNS) and authenticate themselves (per-event secret / SNS signature)
   // instead of a Supabase session — must stay reachable past this middleware.
   '/api/webhooks',
+  // Vercel Cron triggers these directly — no Supabase session, ever. Same
+  // class as /api/webhooks: self-authenticates via CRON_SECRET inside the
+  // route (src/lib/cron-auth.ts), not via this middleware. Without this
+  // entry, every cron invocation was silently redirected to /login (307)
+  // before ever reaching the route handler — found in prod after Fase 10-13
+  // shipped, fixed here.
+  '/api/cron',
   // Ticket CSAT — public, token-gated rating link emailed to the client on
   // close (same class as /unsubscribe: no login, single purpose, self-authenticating token).
   '/valorar-ticket',
