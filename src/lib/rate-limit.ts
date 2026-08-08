@@ -12,8 +12,9 @@ export function getClientIp(req: NextRequest): string {
 // Rate limiting simple respaldado en DB (no hay Redis/Upstash en este
 // proyecto, y un contador en memoria no sirve entre invocaciones serverless
 // — cada una puede caer en una instancia distinta). Registra el intento
-// SIEMPRE, incluso si termina rechazado más adelante por otra validación —
-// si no, alguien podría "resetear" el contador mandando intentos inválidos.
+// incluso si termina rechazado más adelante por otra validación (email
+// inválido, honeypot, etc.) — si no, alguien podría "resetear" el contador
+// mandando intentos inválidos a propósito.
 export async function checkRateLimit(
   kind: string,
   identifier: string,
@@ -22,6 +23,15 @@ export async function checkRateLimit(
   const db = prisma as any
   const since = new Date(Date.now() - opts.windowMinutes * 60 * 1000)
   const count = await db.publicFormAttempt.count({ where: { kind, identifier, createdAt: { gte: since } } })
-  await db.publicFormAttempt.create({ data: { kind, identifier } })
-  return { limited: count >= opts.max }
+  const limited = count >= opts.max
+  // Sólo se registra si todavía no estaba bloqueado. Una vez alcanzado el
+  // límite, cada intento adicional de un bot insistiendo ya devuelve 429 sin
+  // necesidad de otra fila — seguir insertando dejaría crecer la tabla sin
+  // límite mientras dure el ataque, sin ganar nada a cambio. Las filas ya
+  // guardadas igual "vencen" solas al salir de la ventana de `since`, así
+  // que pasado windowMinutes se vuelve a permitir con normalidad.
+  if (!limited) {
+    await db.publicFormAttempt.create({ data: { kind, identifier } })
+  }
+  return { limited }
 }
