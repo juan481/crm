@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/select'
 import { ModalFooter } from '@/components/ui/modal'
 import { UserPlus, ChevronDown, ChevronUp } from 'lucide-react'
 import { ARGENTINA_PROVINCES, CITIES_BY_PROVINCE } from '@/lib/argentina-geo'
+import { COUNTRIES } from '@/lib/utils'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -15,6 +16,8 @@ interface FormData {
   name:     string
   activity: string
   address:  string
+  country:  string
+  otherCountry: string
   city:     string
   province: string
   website:  string
@@ -30,6 +33,10 @@ interface Props {
   onSuccess: (empresa: Empresa) => void
 }
 
+const OTHER_COUNTRY = 'Otro'
+const KNOWN_COUNTRIES = COUNTRIES.filter(c => c !== OTHER_COUNTRY)
+const COUNTRY_OPTIONS = COUNTRIES.map(c => ({ value: c, label: c }))
+
 const PROVINCE_OPTIONS = [
   { value: '', label: '— Seleccionar provincia —' },
   ...ARGENTINA_PROVINCES.map(p => ({ value: p, label: p })),
@@ -38,11 +45,24 @@ const PROVINCE_OPTIONS = [
 export function EmpresaForm({ empresa, onSuccess }: Props) {
   const [addContact, setAddContact] = useState(false)
 
+  // Si ya tiene un país cargado que no está en la lista curada, se trata
+  // como "Otro" con el valor real precargado en el campo libre — mismo
+  // criterio que ya usaba `city` para no perder un valor existente que no
+  // está en las listas armadas.
+  const initialCountry = empresa?.country
+    ? (KNOWN_COUNTRIES.includes(empresa.country) ? empresa.country : OTHER_COUNTRY)
+    : 'Argentina'
+  const initialOtherCountry = empresa?.country && !KNOWN_COUNTRIES.includes(empresa.country)
+    ? empresa.country
+    : ''
+
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     defaultValues: {
       name:        empresa?.name     ?? '',
       activity:    empresa?.activity ?? '',
       address:     empresa?.address  ?? '',
+      country:     initialCountry,
+      otherCountry: initialOtherCountry,
       city:        empresa?.city     ?? '',
       province:    empresa?.province ?? '',
       website:     empresa?.website  ?? '',
@@ -55,6 +75,9 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
   })
 
   const selectedProvince = watch('province')
+  const selectedCountry  = watch('country')
+  const isArgentina      = selectedCountry === 'Argentina'
+  const isOtherCountry   = selectedCountry === OTHER_COUNTRY
 
   // Build city options for the selected province. If editing and city isn't in the list, add it.
   const provinceCities = selectedProvince ? (CITIES_BY_PROVINCE[selectedProvince] ?? []) : []
@@ -70,6 +93,9 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
   const onSubmit = async (data: FormData) => {
     const url    = empresa ? `/api/empresas/${empresa.id}` : '/api/empresas'
     const method = empresa ? 'PUT' : 'POST'
+    const finalCountry = data.country === OTHER_COUNTRY
+      ? (data.otherCountry.trim() || OTHER_COUNTRY)
+      : data.country
 
     const res = await fetch(url, {
       method,
@@ -78,6 +104,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         name:     data.name,
         activity: data.activity,
         address:  data.address,
+        country:  finalCountry,
         city:     data.city,
         province: data.province,
         website:  data.website,
@@ -136,21 +163,54 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         <Input {...register('activity')} placeholder="Ej: Seguridad electrónica, Instalaciones CCTV..." />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className={isOtherCountry ? 'grid grid-cols-2 gap-3' : ''}>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Provincia</label>
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>País</label>
           <Select
-            {...register('province')}
-            options={PROVINCE_OPTIONS}
+            {...register('country')}
+            options={COUNTRY_OPTIONS}
           />
         </div>
+        {isOtherCountry && (
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+              ¿Cuál? <span className="text-red-400">*</span>
+            </label>
+            <Input
+              {...register('otherCountry', {
+                validate: v => !isOtherCountry || v.trim() !== '' || 'Especificá el país',
+              })}
+              placeholder="Nombre del país"
+              error={errors.otherCountry?.message}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Argentina tiene listas curadas de provincia/localidad (con
+          autocompletado real); para cualquier otro país no hay esa data
+          armada, así que quedan como texto libre — cubre el caso real de
+          Just Create con clientes en España e Inglaterra. */}
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Localidad</label>
-          <Select
-            {...register('city')}
-            options={CITY_OPTIONS}
-            disabled={!selectedProvince}
-          />
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+            {isArgentina ? 'Provincia' : 'Provincia / Estado'}
+          </label>
+          {isArgentina ? (
+            <Select {...register('province')} options={PROVINCE_OPTIONS} />
+          ) : (
+            <Input {...register('province')} placeholder="Provincia, estado o región" />
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+            {isArgentina ? 'Localidad' : 'Localidad / Ciudad'}
+          </label>
+          {isArgentina ? (
+            <Select {...register('city')} options={CITY_OPTIONS} disabled={!selectedProvince} />
+          ) : (
+            <Input {...register('city')} placeholder="Ciudad" />
+          )}
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Building2, Users, Globe, MapPin, UserCheck } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/table'
 import type { Empresa } from '@/types'
 
@@ -76,14 +77,25 @@ export default function ClientesPage() {
                   ))}
                 </tr>
               ))
-            ) : clientes.length === 0 ? (
+            ) : clientes.length === 0 && total === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-16 text-center" style={{ color: 'var(--color-text-muted)' }}>
                   <UserCheck size={36} className="mx-auto mb-3 opacity-25" />
                   <p className="font-medium text-base">No hay clientes aún</p>
-                  <p className="text-xs mt-1 max-w-xs mx-auto">
-                    Entrá a una empresa en el directorio y marcala como cliente con el botón correspondiente.
+                  <p className="text-xs mt-1 mb-4 max-w-xs mx-auto">
+                    Marcá una o varias empresas del directorio como cliente para que aparezcan acá.
                   </p>
+                  <Button size="sm" onClick={() => router.push('/empresas')}>
+                    <Building2 size={14} /> Ver empresas
+                  </Button>
+                </td>
+              </tr>
+            ) : clientes.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-16 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                  <Search size={36} className="mx-auto mb-3 opacity-25" />
+                  <p className="font-medium text-base">Sin resultados</p>
+                  <p className="text-xs mt-1">Probá con otra búsqueda</p>
                 </td>
               </tr>
             ) : (

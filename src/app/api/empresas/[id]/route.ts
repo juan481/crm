@@ -62,16 +62,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const exists = await db.empresa.findFirst({ where: { id: params.id, organizationId: payload.orgId }, select: { id: true, isCliente: true } })
     if (!exists) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
-    const updateData: Record<string, unknown> = {
-      name:         name.trim(),
-      activity:     activity?.trim()     || null,
-      address:      address?.trim()      || null,
-      codigoPostal: codigoPostal?.trim() || null,
-      city:         city?.trim()         || null,
-      province:     province?.trim()     || null,
-      country:      country?.trim()      || null,
-      website:      website?.trim()      || null,
-    }
+    // Sólo se tocan los campos que vienen en el body — antes cualquier campo
+    // ausente (ej. codigoPostal, que el form de edición nunca mandaba) se
+    // pisaba con null en cada guardado, perdiendo silenciosamente datos que
+    // sí estaban cargados (típicamente por la importación de Excel). Mismo
+    // criterio que ya usaban isCliente/monthlyAmount más abajo, extendido al
+    // resto de los campos. Para borrar un campo a propósito, se sigue
+    // pudiendo mandar '' explícito.
+    const updateData: Record<string, unknown> = { name: name.trim() }
+    if (activity     !== undefined) updateData.activity     = activity?.trim()     || null
+    if (address      !== undefined) updateData.address      = address?.trim()      || null
+    if (codigoPostal !== undefined) updateData.codigoPostal = codigoPostal?.trim() || null
+    if (city         !== undefined) updateData.city         = city?.trim()         || null
+    if (province     !== undefined) updateData.province     = province?.trim()     || null
+    if (country      !== undefined) updateData.country      = country?.trim()      || null
+    if (website      !== undefined) updateData.website      = website?.trim()      || null
 
     // Toggle cliente status — registra fecha si se activa
     if (typeof isCliente === 'boolean') {

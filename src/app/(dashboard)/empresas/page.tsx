@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2,
-  CheckCircle2, XCircle, Merge, Filter, X, AlertTriangle,
+  CheckCircle2, XCircle, Merge, Filter, X, AlertTriangle, UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -72,6 +72,13 @@ export default function EmpresasPage() {
   const [mergeSecond,  setMergeSecond]  = useState('')
   const [merging,      setMerging]      = useState(false)
 
+  // Selección múltiple — para marcar/desmarcar como cliente en lote sin
+  // entrar empresa por empresa. Acotada a la página visible a propósito
+  // (evita la ambigüedad de "seleccionar los 400 resultados" sin traerlos
+  // todos); se limpia sola al cambiar de página o filtro.
+  const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set())
+  const [bulkUpdating,  setBulkUpdating]  = useState(false)
+
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
   const activeFilters = [filterActividadInput, filterCiudadInput, tieneWeb].filter(Boolean).length
@@ -90,6 +97,12 @@ export default function EmpresasPage() {
     },
     staleTime: 30_000,
   })
+
+  // La selección es por página/resultado visible — si cambia el filtro o de
+  // página, los ids seleccionados ya no corresponden a lo que se ve.
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [search, filterActividad, filterCiudad, tieneWeb, page])
 
   // All empresas for merge selects (only loaded when merge modal is open)
   const { data: allEmpresasData } = useQuery({
@@ -192,6 +205,49 @@ export default function EmpresasPage() {
       setProgress(p => p ? { ...p, error: 'Error de conexión' } : null)
     } finally {
       setImporting(false)
+    }
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  // Marca/desmarca como cliente todas las empresas seleccionadas de una —
+  // reusa el mismo PUT que ya usa la ficha individual, una request por
+  // empresa (los lotes acá son de a lo sumo 20, el tamaño de una página).
+  const handleBulkSetCliente = async (value: boolean) => {
+    const rows = empresas.filter(e => selectedIds.has(e.id))
+    if (rows.length === 0) return
+    setBulkUpdating(true)
+    try {
+      const results = await Promise.allSettled(
+        rows.map(e =>
+          fetch(`/api/empresas/${e.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: e.name, isCliente: value }),
+          }).then(res => { if (!res.ok) throw new Error() })
+        )
+      )
+      const failed = results.filter(r => r.status === 'rejected').length
+      const okCount = rows.length - failed
+      if (okCount > 0) {
+        toast.success(
+          value
+            ? `${okCount} empresa${okCount !== 1 ? 's' : ''} marcada${okCount !== 1 ? 's' : ''} como cliente`
+            : `${okCount} empresa${okCount !== 1 ? 's' : ''} desmarcada${okCount !== 1 ? 's' : ''} como cliente`
+        )
+      }
+      if (failed > 0) toast.error(`${failed} no se pudo${failed !== 1 ? 'ieron' : ''} actualizar`)
+      qc.invalidateQueries({ queryKey: ['empresas'] })
+      qc.invalidateQueries({ queryKey: ['empresas-clientes'] })
+      setSelectedIds(new Set())
+    } finally {
+      setBulkUpdating(false)
     }
   }
 
@@ -356,11 +412,52 @@ export default function EmpresasPage() {
         </div>
       )}
 
+      {/* Bulk action bar — sólo con algo seleccionado, para no marcar/quitar
+          cliente una por una desde el directorio */}
+      {canManage && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}>
+          <span className="text-sm font-medium">
+            {selectedIds.size} empresa{selectedIds.size !== 1 ? 's' : ''} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="secondary" disabled={bulkUpdating} onClick={() => handleBulkSetCliente(true)}>
+              <UserCheck size={14} /> Marcar como cliente
+            </Button>
+            <Button size="sm" variant="outline" disabled={bulkUpdating} onClick={() => handleBulkSetCliente(false)}
+              style={{ borderColor: 'rgba(255,255,255,0.4)', color: '#fff' }}>
+              Quitar de clientes
+            </Button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              disabled={bulkUpdating}
+              className="text-xs underline opacity-90 hover:opacity-100 px-1"
+            >
+              Cancelar selección
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: 'var(--color-surface-raised)', borderBottom: '1px solid var(--color-border)' }}>
+              {canManage && (
+                <th className="px-3 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    className="rounded cursor-pointer"
+                    checked={empresas.length > 0 && empresas.every(e => selectedIds.has(e.id))}
+                    onChange={e => {
+                      if (e.target.checked) setSelectedIds(new Set(empresas.map(e => e.id)))
+                      else setSelectedIds(new Set())
+                    }}
+                    title="Seleccionar todas"
+                  />
+                </th>
+              )}
               <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--color-text-muted)' }}>Empresa</th>
               <th className="px-4 py-3 text-left font-semibold hidden md:table-cell" style={{ color: 'var(--color-text-muted)' }}>Actividad</th>
               <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell" style={{ color: 'var(--color-text-muted)' }}>Localidad</th>
@@ -373,7 +470,7 @@ export default function EmpresasPage() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: canManage ? 7 : 6 }).map((_, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 rounded animate-pulse" style={{ background: 'var(--color-border)', width: j === 0 ? '60%' : '40%' }} />
                     </td>
@@ -382,7 +479,7 @@ export default function EmpresasPage() {
               ))
             ) : empresas.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                <td colSpan={canManage ? 7 : 6} className="px-4 py-12 text-center" style={{ color: 'var(--color-text-muted)' }}>
                   <Building2 size={32} className="mx-auto mb-3 opacity-30" />
                   <p className="font-medium">No hay empresas aún</p>
                   <p className="text-xs mt-1">Cargá una manualmente o importá un Excel</p>
@@ -392,10 +489,20 @@ export default function EmpresasPage() {
               empresas.map(e => (
                 <tr
                   key={e.id}
-                  className="cursor-pointer transition-colors hover:bg-[var(--color-surface-raised)]"
+                  className={`cursor-pointer transition-colors ${selectedIds.has(e.id) ? 'bg-[var(--color-primary)]/5' : 'hover:bg-[var(--color-surface-raised)]'}`}
                   style={{ borderBottom: '1px solid var(--color-border)' }}
                   onClick={() => router.push(`/empresas/${e.id}`)}
                 >
+                  {canManage && (
+                    <td className="px-3 py-3" onClick={ev => ev.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="rounded cursor-pointer"
+                        checked={selectedIds.has(e.id)}
+                        onChange={() => toggleSelected(e.id)}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"

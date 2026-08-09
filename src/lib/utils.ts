@@ -122,11 +122,16 @@ export const ROLE_LABELS: Record<string, string> = {
   HR:          'RRHH',
 }
 
-// Country list
+// Country list — cubre LatAm (base histórica de Abba) + los países más
+// comunes para una agencia con clientes internacionales (Just Create tiene
+// clientes en España e Inglaterra). 'Otro' siempre al final, como escape
+// hatch para cualquier país no listado (ver EmpresaForm).
 export const COUNTRIES = [
   'Argentina', 'México', 'Colombia', 'Chile', 'Uruguay', 'Paraguay',
-  'Bolivia', 'Perú', 'Ecuador', 'Venezuela', 'Brasil', 'España',
-  'Estados Unidos', 'Otro',
+  'Bolivia', 'Perú', 'Ecuador', 'Venezuela', 'Brasil',
+  'España', 'Reino Unido', 'Estados Unidos', 'Canadá',
+  'Alemania', 'Francia', 'Italia', 'Portugal',
+  'Otro',
 ]
 
 // MRR growth calculation

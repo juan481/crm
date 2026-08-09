@@ -271,10 +271,10 @@ export default function EmpresaDetailPage() {
               </p>
             )}
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              {(empresa.city || empresa.province) && (
+              {(empresa.city || empresa.province || empresa.country) && (
                 <span className="flex items-center gap-1.5">
                   <MapPin size={13} />
-                  {[empresa.city, empresa.province].filter(Boolean).join(', ')}
+                  {[empresa.city, empresa.province, empresa.country].filter(Boolean).join(', ')}
                 </span>
               )}
               {empresa.address && (
