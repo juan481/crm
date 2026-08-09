@@ -220,6 +220,17 @@ export default function DocumentosPage() {
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return
+    // Con un filtro de etiqueta activo, `documents` deja de ser "los archivos
+    // de esta carpeta" y pasa a ser una vista plana de toda la organización
+    // (ver /api/documentos GET) — el chequeo de duplicado de más abajo
+    // comparaba contra esa lista sin darse cuenta, así que podía "encontrar"
+    // un archivo con el mismo nombre en una carpeta de OTRO cliente y
+    // ofrecer versionarlo, moviéndolo de hecho a la carpeta actual. Más
+    // simple y seguro pedir que se limpie el filtro antes de subir.
+    if (activeTag) {
+      toast.error('Limpiá el filtro de etiqueta antes de subir un archivo')
+      return
+    }
     setUploading(true)
     let uploaded = 0
     try {
@@ -357,6 +368,8 @@ export default function DocumentosPage() {
           <Button
             leftIcon={uploading ? undefined : <Upload size={15} />}
             loading={uploading}
+            disabled={!!activeTag}
+            title={activeTag ? 'Limpiá el filtro de etiqueta antes de subir' : undefined}
             onClick={() => fileInputRef.current?.click()}
           >
             Subir Archivo
