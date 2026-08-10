@@ -1,12 +1,7 @@
+import { waitUntil } from '@vercel/functions'
 import { getPluginConfig } from '@/lib/plugins'
 
-// Dispara el webhook saliente configurado por la organización (plugin
-// zapier-webhooks) para un evento del CRM. Best-effort a propósito — nunca
-// debe bloquear ni revertir la operación real que lo dispara (crear un
-// deal, cobrar una factura, etc.) si el webhook falla o tarda. Se llama
-// siempre "fire and forget" con .catch(), nunca con await directo en el
-// camino crítico de la request.
-export async function fireWebhook(orgId: string, event: string, data: unknown): Promise<void> {
+async function doFireWebhook(orgId: string, event: string, data: unknown): Promise<void> {
   try {
     const config = await getPluginConfig(orgId, 'zapier-webhooks')
     const url = typeof config?.webhookUrl === 'string' ? config.webhookUrl.trim() : ''
@@ -27,4 +22,20 @@ export async function fireWebhook(orgId: string, event: string, data: unknown): 
   } catch (err) {
     console.error('[WEBHOOK]', event, err)
   }
+}
+
+// Dispara el webhook saliente configurado por la organización (plugin
+// zapier-webhooks) para un evento del CRM. Best-effort a propósito — nunca
+// debe bloquear ni revertir la operación real que lo dispara (crear un
+// deal, cobrar una factura, etc.) si el webhook falla o tarda.
+//
+// waitUntil (no un simple "fire and forget" con .catch()) porque en
+// funciones serverless de Vercel una promesa no esperada puede cortarse a
+// mitad de camino apenas se manda la respuesta — sin esto, el webhook
+// podía fallar en silencio de forma intermitente, sin ningún error visible
+// (el fetch nunca llegaba a completarse). waitUntil le dice al runtime que
+// mantenga la función viva hasta que esta promesa termine, sin retrasar la
+// respuesta al usuario.
+export function fireWebhook(orgId: string, event: string, data: unknown): void {
+  waitUntil(doFireWebhook(orgId, event, data))
 }

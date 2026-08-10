@@ -37,12 +37,17 @@ export async function GET(req: NextRequest) {
   }
   const redirectUri = `${appUrl}/api/plugins/google-calendar/callback`
 
-  // Nonce anti-CSRF: se compara contra el que vuelve en `state` en el
-  // callback, para que un tercero no pueda completar el flujo por su
-  // cuenta y hacer que termine asociado a esta organización.
+  // Nonce anti-CSRF + la org activa en ESTE momento — un SUPER_ADMIN
+  // multi-organización podría cambiar de organización activa (switcher)
+  // mientras el consentimiento de Google está pendiente en otra pestaña;
+  // sin guardar acá la org de origen, el callback tomaría la que esté
+  // activa en ese momento (la cookie de sesión es la misma para todas las
+  // pestañas del navegador) y la conexión terminaría asociada a la
+  // organización equivocada.
   const state = crypto.randomUUID()
+  const cookieValue = `${state}:${payload.orgId}`
   const cookieStore = await cookies()
-  cookieStore.set(STATE_COOKIE, state, {
+  cookieStore.set(STATE_COOKIE, cookieValue, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',

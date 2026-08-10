@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     fireWebhook(payload.orgId, 'ticket.created', {
       id: ticket.id, number: ticket.number, title: ticket.title, priority: ticket.priority,
       category: ticket.category, empresa: ticket.empresa?.name ?? null, client: ticket.client?.name ?? null,
-    }).catch(() => {})
+    })
 
     return NextResponse.json({ data: ticket }, { status: 201 })
   } catch (error) {

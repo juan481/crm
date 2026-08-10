@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     // mismo) y la org tiene correo configurado. Best-effort: si falla, la
     // tarea ya se creó igual, no se revierte nada por esto.
     if (finalAssignedToId !== payload.userId) {
-      notifyTaskAssignment(task, payload.orgId).catch((err) => console.error('[TASK ASSIGN EMAIL]', err))
+      notifyTaskAssignment(task, payload.orgId)
     }
 
     return NextResponse.json({ data: task }, { status: 201 })

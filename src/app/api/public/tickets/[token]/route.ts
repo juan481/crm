@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     fireWebhook(org.id, 'ticket.created', {
       id: ticket.id, number: ticket.number, title: title.trim(), priority: 'MEDIA',
       category: 'CONSULTA', source: 'formulario_publico',
-    }).catch(() => {})
+    })
 
     await db.ticketMessage.create({
       data: {

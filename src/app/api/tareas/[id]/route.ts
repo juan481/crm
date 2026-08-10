@@ -86,7 +86,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // Email al nuevo asignado — sólo cuando de verdad cambia a otra persona
     // (no cuando se re-guarda la misma), y nunca cuando uno se autoasigna.
     if (isReassigning && assignedToId !== payload.userId) {
-      notifyTaskAssignment(task, payload.orgId).catch((err) => console.error('[TASK REASSIGN EMAIL]', err))
+      notifyTaskAssignment(task, payload.orgId)
     }
 
     return NextResponse.json({ data: task })

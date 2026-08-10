@@ -33,14 +33,22 @@ export async function GET(req: NextRequest) {
   const code = searchParams.get('code')
   const state = searchParams.get('state')
   const cookieStore = await cookies()
-  const expectedState = cookieStore.get(STATE_COOKIE)?.value
+  const cookieValue = cookieStore.get(STATE_COOKIE)?.value
   cookieStore.delete(STATE_COOKIE)
 
-  if (!code || !state || !expectedState || state !== expectedState) {
+  // El cookie guarda "{nonce}:{orgId}" — el orgId es el que estaba activo
+  // cuando se inició el flujo (ver comentario en authorize/route.ts), no
+  // necesariamente el activo ahora mismo si el usuario cambió de
+  // organización en otra pestaña mientras Google pedía consentimiento.
+  const sepIdx = cookieValue?.indexOf(':') ?? -1
+  const expectedState = sepIdx > -1 ? cookieValue!.slice(0, sepIdx) : undefined
+  const originOrgId = sepIdx > -1 ? cookieValue!.slice(sepIdx + 1) : undefined
+
+  if (!code || !state || !expectedState || state !== expectedState || !originOrgId) {
     return NextResponse.redirect(pluginsUrl(req, 'error'))
   }
 
-  const config = await getPluginConfig(payload.orgId, 'google-calendar')
+  const config = await getPluginConfig(originOrgId, 'google-calendar')
   const clientId = typeof config?.clientId === 'string' ? config.clientId.trim() : ''
   const clientSecret = typeof config?.clientSecret === 'string' ? config.clientSecret.trim() : ''
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
@@ -77,7 +85,7 @@ export async function GET(req: NextRequest) {
 
     const db = prisma as any
     await db.googleCalendarConnection.upsert({
-      where: { organizationId: payload.orgId },
+      where: { organizationId: originOrgId },
       update: {
         connectedById: payload.userId,
         accessToken: tokenJson.access_token,
@@ -85,7 +93,7 @@ export async function GET(req: NextRequest) {
         expiresAt: new Date(Date.now() + (tokenJson.expires_in ?? 3600) * 1000),
       },
       create: {
-        organizationId: payload.orgId,
+        organizationId: originOrgId,
         connectedById: payload.userId,
         accessToken: tokenJson.access_token,
         refreshToken: tokenJson.refresh_token,

@@ -94,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       fireWebhook(payload.orgId, 'deal.won', {
         id: deal.id, title: deal.title, amount: deal.amount, currency: deal.currency,
         empresa: deal.empresa?.name ?? null, client: deal.client?.name ?? null,
-      }).catch(() => {})
+      })
     }
 
     return NextResponse.json({ data: deal })

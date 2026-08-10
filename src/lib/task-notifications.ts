@@ -1,11 +1,8 @@
+import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
-// Email corto al asignar/reasignar una tarea — mismo patrón que el aviso de
-// mensaje "público" de Tickets (src/app/api/tickets/[id]/messages/route.ts):
-// busca la config de correo de la org, arma el HTML con buildEmailHtml, y no
-// tira si la org no tiene el correo configurado (sólo no manda nada).
-export async function notifyTaskAssignment(
+async function doNotifyTaskAssignment(
   task: { id: string; title: string; dueDate: Date | string | null; assignedToId: string },
   orgId: string
 ): Promise<void> {
@@ -43,4 +40,21 @@ export async function notifyTaskAssignment(
     html,
     smtpConfig: resolveOrgSmtpConfig(org),
   })
+}
+
+// Email corto al asignar/reasignar una tarea — mismo patrón que el aviso de
+// mensaje "público" de Tickets (src/app/api/tickets/[id]/messages/route.ts):
+// busca la config de correo de la org, arma el HTML con buildEmailHtml, y no
+// tira si la org no tiene el correo configurado (sólo no manda nada).
+//
+// waitUntil en vez de fire-and-forget con .catch(): en funciones serverless
+// de Vercel una promesa no esperada puede cortarse a mitad de camino apenas
+// se manda la respuesta — el mail podía no llegar a enviarse de forma
+// intermitente, sin ningún error visible. waitUntil mantiene la función
+// viva hasta que termine, sin retrasar la respuesta al usuario.
+export function notifyTaskAssignment(
+  task: { id: string; title: string; dueDate: Date | string | null; assignedToId: string },
+  orgId: string
+): void {
+  waitUntil(doNotifyTaskAssignment(task, orgId).catch((err) => console.error('[TASK ASSIGN EMAIL]', err)))
 }
