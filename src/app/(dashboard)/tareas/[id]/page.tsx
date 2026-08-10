@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { usePlugin } from '@/hooks/use-plugin'
 import type { Task, TaskStatus, TaskPriority, TaskComment, TaskSubitem } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -280,6 +281,8 @@ export default function TareaDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [form, setForm]         = useState<Partial<Task & { dueDate: string }>>({})
   const [dirty, setDirty]       = useState(false)
+  const [syncingGcal, setSyncingGcal] = useState(false)
+  const { enabled: gcalEnabled } = usePlugin('google-calendar')
 
   const { data: task, isLoading } = useQuery<Task>({
     queryKey: ['task', id],
@@ -375,6 +378,20 @@ export default function TareaDetailPage() {
     } catch { toast.error('Error') } finally { setDeleting(false) }
   }
 
+  const handleAddToGoogleCalendar = async () => {
+    setSyncingGcal(true)
+    try {
+      const res = await fetch(`/api/tareas/${id}/google-calendar`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al agregar a Google Calendar'); return }
+      toast.success('Agregada a Google Calendar')
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setSyncingGcal(false)
+    }
+  }
+
   const toggleStatus = () => {
     const next: TaskStatus = form.status === 'HECHA' ? 'PENDIENTE' : 'HECHA'
     setForm(f => ({ ...f, status: next })); setDirty(true)
@@ -408,6 +425,11 @@ export default function TareaDetailPage() {
           <ArrowLeft size={15} /> Tareas
         </button>
         <div className="flex gap-2">
+          {gcalEnabled && task.dueDate && (
+            <Button size="sm" variant="outline" onClick={handleAddToGoogleCalendar} loading={syncingGcal} leftIcon={<Calendar size={13} />}>
+              Google Calendar
+            </Button>
+          )}
           {dirty && (
             <Button size="sm" onClick={handleSave} loading={saving} leftIcon={<Save size={13} />}>
               Guardar

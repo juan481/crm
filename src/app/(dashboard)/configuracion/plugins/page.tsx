@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -41,6 +42,8 @@ const PLUGIN_EFFECTS: Record<string, { text: string; action?: { label: string; h
   'export-data': { text: 'Agrega un botón "Exportar" en Empresas y Facturas.', action: { label: 'Ir a Empresas', href: '/empresas' } },
   'invoice-automation': { text: 'El día 1 de cada mes genera solas las facturas recurrentes y te avisa por mail — quedan Pendientes, no se envían solas al cliente.' },
   'zapier-webhooks': { text: 'Manda un POST a la URL configurada cuando ganás un deal, cobrás una factura o entra un ticket nuevo.' },
+  'whatsapp-integration': { text: 'Agrega un botón "Enviar WhatsApp" en la ficha de contacto.', action: { label: 'Ir a Contactos', href: '/contactos' } },
+  'google-calendar': { text: 'Conectá tu cuenta de Google para poder agregar tareas del CRM a tu calendario.', action: { label: 'Conectar con Google', href: '/api/plugins/google-calendar/authorize' } },
 }
 const NOT_IMPLEMENTED_TEXT = 'Todavía no está construido — activarlo o desactivarlo no cambia nada en el sistema por ahora.'
 
@@ -69,7 +72,7 @@ function ConfigModal({ plugin, onClose, onSaved }: { plugin: PluginWithState; on
   return (
     <div className="space-y-4">
       {Object.entries(plugin.configSchema).map(([key, field]) => (
-        <Input key={key} label={field.label} placeholder={field.label} type={field.type === 'number' ? 'number' : 'text'} value={values[key] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))} />
+        <Input key={key} label={field.label} placeholder={field.label} type={field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'} value={values[key] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))} />
       ))}
       <div className="flex justify-end gap-3 pt-2">
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
@@ -79,11 +82,33 @@ function ConfigModal({ plugin, onClose, onSaved }: { plugin: PluginWithState; on
   )
 }
 
+const GCAL_MESSAGES: Record<string, { type: 'success' | 'error'; text: string }> = {
+  connected: { type: 'success', text: 'Google Calendar conectado correctamente' },
+  denied: { type: 'error', text: 'Cancelaste el consentimiento de Google — no se conectó nada' },
+  not_configured: { type: 'error', text: 'Cargá Client ID y Client Secret antes de conectar' },
+  forbidden: { type: 'error', text: 'Sólo el Super Admin puede conectar Google Calendar' },
+  error: { type: 'error', text: 'No se pudo conectar con Google — revisá las credenciales cargadas' },
+}
+
 export default function PluginsPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const [configPlugin, setConfigPlugin] = useState<PluginWithState | null>(null)
+
+  // Vuelta del flujo OAuth de Google Calendar (ver
+  // /api/plugins/google-calendar/callback) — un solo toast, y se limpia el
+  // query param para que no vuelva a aparecer si se refresca la página.
+  useEffect(() => {
+    const gcal = searchParams.get('gcal')
+    if (!gcal) return
+    const msg = GCAL_MESSAGES[gcal]
+    if (msg) toast[msg.type](msg.text)
+    router.replace('/configuracion/plugins')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const { data, isLoading, isError } = useQuery<PluginWithState[]>({
     queryKey: ['plugins'],
@@ -171,9 +196,18 @@ export default function PluginsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {plugin.enabled && effect?.action && (
-                      <Link href={effect.action.href} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
-                        {effect.action.label}<ArrowRight size={11} />
-                      </Link>
+                      effect.action.href.startsWith('/api/') ? (
+                        // Ruta de API (ej. iniciar el OAuth de Google), no una
+                        // página — <a> normal para no disparar el prefetch de
+                        // next/link contra un endpoint que setea cookies/redirige.
+                        <a href={effect.action.href} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+                          {effect.action.label}<ArrowRight size={11} />
+                        </a>
+                      ) : (
+                        <Link href={effect.action.href} className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+                          {effect.action.label}<ArrowRight size={11} />
+                        </Link>
+                      )
                     )}
                     {!plugin.implemented && <Badge variant="neutral" size="sm">No implementado</Badge>}
                     <Badge variant={plugin.enabled ? 'success' : 'neutral'} size="sm" dot>{plugin.enabled ? 'Activo' : 'Inactivo'}</Badge>

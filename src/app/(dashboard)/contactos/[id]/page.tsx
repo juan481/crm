@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
 import { ContactoForm } from '@/components/directorio/contacto-form'
 import { ContactoNotas } from '@/components/directorio/contacto-notas'
+import { WhatsAppSendButton } from '@/components/integrations/whatsapp-send-button'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto } from '@/types'
 import toast from 'react-hot-toast'
@@ -131,14 +132,17 @@ export default function ContactoDetailPage() {
             </a>
           )}
           {data.phone && (
-            <a
-              href={`https://wa.me/${data.phone.replace(/\D/g, '')}`}
-              target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm hover:underline"
-              style={{ color: 'var(--color-text)' }}
-            >
-              <MessageCircle size={14} style={{ color: '#22c55e' }} /> {data.phone}
-            </a>
+            <div className="flex items-center gap-3 flex-wrap">
+              <a
+                href={`https://wa.me/${data.phone.replace(/\D/g, '')}`}
+                target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm hover:underline"
+                style={{ color: 'var(--color-text)' }}
+              >
+                <MessageCircle size={14} style={{ color: '#22c55e' }} /> {data.phone}
+              </a>
+              <WhatsAppSendButton phone={data.phone} name={`${data.firstName} ${data.lastName}`} />
+            </div>
           )}
           {!data.email && !data.phone && (
             <p className="text-sm" style={{ color: 'var(--color-text-subtle)' }}>Sin mail ni teléfono cargados.</p>

@@ -2,17 +2,6 @@ import type { PluginDefinition } from '@/types'
 
 export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
-    id: 'email-campaigns',
-    name: 'Campañas de Email',
-    description: 'Envío de campañas de email masivo — ya es parte del módulo Comunicaciones, disponible siempre, sin depender de este interruptor.',
-    icon: 'Mail',
-    category: 'communication',
-    version: '1.0.0',
-    author: 'CRM Core',
-    requiresConfig: false,
-    implemented: false,
-  },
-  {
     id: 'export-data',
     name: 'Exportación de Datos',
     description: 'Agrega un botón "Exportar" en Empresas y Facturas para bajar a Excel (.xlsx) todo lo que matchea los filtros activos.',
@@ -22,17 +11,6 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
     author: 'CRM Core',
     requiresConfig: false,
     implemented: true,
-  },
-  {
-    id: 'global-search',
-    name: 'Búsqueda Global',
-    description: 'El buscador de la barra superior — ya está siempre activo para todo el equipo, no depende de este interruptor.',
-    icon: 'Search',
-    category: 'productivity',
-    version: '1.0.0',
-    author: 'CRM Core',
-    requiresConfig: false,
-    implemented: false,
   },
   {
     id: 'advanced-analytics',
@@ -48,17 +26,17 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
     id: 'whatsapp-integration',
     name: 'WhatsApp Business',
-    description: 'Enviar mensajes de WhatsApp desde la ficha de un cliente vía la API de WhatsApp Business. Todavía no está construido.',
+    description: 'Agrega un botón "Enviar WhatsApp" en la ficha de contacto, que manda el mensaje vía la API de WhatsApp Business de Meta. Necesitás una cuenta de WhatsApp Business API (Meta for Developers) — sin el API Token y el Phone Number ID cargados acá abajo, el botón no aparece.',
     icon: 'MessageCircle',
     category: 'communication',
     version: '1.0.0',
     author: 'CRM Core',
     requiresConfig: true,
     configSchema: {
-      apiToken: { type: 'string', label: 'WhatsApp API Token', required: true },
+      apiToken: { type: 'password', label: 'WhatsApp API Token', required: true },
       phoneNumberId: { type: 'string', label: 'Phone Number ID', required: true },
     },
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'invoice-automation',
@@ -88,7 +66,7 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
     id: 'google-calendar',
     name: 'Google Calendar',
-    description: 'Sincronizar reuniones y tareas del CRM con Google Calendar. Todavía no está construido.',
+    description: 'Conectá una cuenta de Google (OAuth) y agregá tareas del CRM a tu Google Calendar con un botón desde la ficha de la tarea. Necesitás crear una app OAuth en Google Cloud Console con el redirect URI que te mostramos al conectar — sin Client ID y Client Secret cargados acá abajo, no se puede iniciar la conexión.',
     icon: 'Calendar',
     category: 'integration',
     version: '1.0.0',
@@ -96,8 +74,9 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
     requiresConfig: true,
     configSchema: {
       clientId: { type: 'string', label: 'Google Client ID', required: true },
+      clientSecret: { type: 'password', label: 'Google Client Secret', required: true },
     },
-    implemented: false,
+    implemented: true,
   },
 ]
 

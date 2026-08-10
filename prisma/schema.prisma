@@ -1042,3 +1042,19 @@ model PublicFormAttempt {
 
   @@index([kind, identifier, createdAt])
 }
+
+// ─── Plugin Google Calendar ─────────────────────────────────────────────
+// Tokens OAuth de la cuenta de Google que conectó la organización (una
+// sola por org, quien la conectó queda en connectedById sólo a modo de
+// referencia). Sin relación a Organization/User a propósito — mismo
+// criterio "superficie mínima" que CronRun/PublicFormAttempt.
+model GoogleCalendarConnection {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  connectedById  String
+  accessToken    String
+  refreshToken   String
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
