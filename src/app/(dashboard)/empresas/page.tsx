@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Search, Upload, Building2, Users, Globe, MapPin, Trash2,
+  Plus, Search, Upload, Download, Building2, Users, Globe, MapPin, Trash2,
   CheckCircle2, XCircle, Merge, Filter, X, AlertTriangle, UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,8 @@ import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
+import { usePlugin } from '@/hooks/use-plugin'
+import { exportToExcel } from '@/lib/xlsx-export'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -80,6 +82,8 @@ export default function EmpresasPage() {
   const [bulkUpdating,  setBulkUpdating]  = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const { enabled: exportEnabled } = usePlugin('export-data')
+  const [exporting, setExporting] = useState(false)
 
   const activeFilters = [filterActividadInput, filterCiudadInput, tieneWeb].filter(Boolean).length
 
@@ -208,6 +212,50 @@ export default function EmpresasPage() {
     }
   }
 
+  // Exporta TODO lo que matchea los filtros activos (no sólo la página
+  // visible) — trae los datos por el mismo endpoint que ya usa el listado,
+  // con un límite alto en vez de paginar, y arma el .xlsx en el navegador.
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams({ limit: '2000' })
+      if (search.length >= 2)          p.set('search',          search)
+      if (filterActividad.length >= 2) p.set('filterActividad', filterActividad)
+      if (filterCiudad.length >= 2)    p.set('filterCiudad',    filterCiudad)
+      if (tieneWeb)                    p.set('tieneWeb',        tieneWeb)
+      const res = await fetch(`/api/empresas?${p}`)
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      const rows: Empresa[] = json.data ?? []
+      if (rows.length === 0) { toast.error('No hay empresas para exportar con estos filtros'); return }
+
+      await exportToExcel(
+        `empresas-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        'Empresas',
+        rows.map(e => ({
+          Empresa: e.name,
+          Actividad: e.activity ?? '',
+          Cliente: e.isCliente ? 'Sí' : 'No',
+          'Cliente desde': e.clienteDesde ? new Date(e.clienteDesde).toLocaleDateString('es-AR') : '',
+          Dirección: e.address ?? '',
+          'Código postal': e.codigoPostal ?? '',
+          Localidad: e.city ?? '',
+          'Provincia/Estado': e.province ?? '',
+          País: e.country ?? '',
+          Web: e.website ?? '',
+          'Monto mensual': e.monthlyAmount ?? '',
+          Moneda: e.billingCurrency ?? '',
+          Contactos: e._count?.contactos ?? 0,
+        }))
+      )
+      toast.success(`${rows.length} empresa${rows.length !== 1 ? 's' : ''} exportada${rows.length !== 1 ? 's' : ''}`)
+    } catch {
+      toast.error('Error al exportar')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -306,25 +354,32 @@ export default function EmpresasPage() {
             Directorio de empresas y sus contactos vinculados
           </p>
         </div>
-        {canManage && (
-          <div className="flex gap-2 flex-wrap">
-            <input ref={fileRef}    type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
-            <input ref={fileRefDir} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportDirectorio} />
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
-              <Upload size={14} /> Solo empresas
+        <div className="flex gap-2 flex-wrap">
+          {exportEnabled && (
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+              <Download size={14} /> {exporting ? 'Exportando...' : 'Exportar'}
             </Button>
-            <Button variant="outline" onClick={() => fileRefDir.current?.click()} disabled={importing}>
-              <Upload size={15} />
-              {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
-            </Button>
-            <Button variant="outline" onClick={() => setShowMerge(true)}>
-              <Merge size={14} /> Unificar duplicados
-            </Button>
-            <Button onClick={() => setShowForm(true)}>
-              <Plus size={15} /> Nueva empresa
-            </Button>
-          </div>
-        )}
+          )}
+          {canManage && (
+            <>
+              <input ref={fileRef}    type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
+              <input ref={fileRefDir} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportDirectorio} />
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
+                <Upload size={14} /> Solo empresas
+              </Button>
+              <Button variant="outline" onClick={() => fileRefDir.current?.click()} disabled={importing}>
+                <Upload size={15} />
+                {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowMerge(true)}>
+                <Merge size={14} /> Unificar duplicados
+              </Button>
+              <Button onClick={() => setShowForm(true)}>
+                <Plus size={15} /> Nueva empresa
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Search + filter toggle */}

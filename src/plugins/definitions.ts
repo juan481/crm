@@ -15,13 +15,13 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
     id: 'export-data',
     name: 'Exportación de Datos',
-    description: 'Exportar clientes, facturas y reportes a XLS/CSV con un botón directo en cada listado. Todavía no está construido.',
+    description: 'Agrega un botón "Exportar" en Empresas y Facturas para bajar a Excel (.xlsx) todo lo que matchea los filtros activos.',
     icon: 'Download',
     category: 'productivity',
     version: '1.0.0',
     author: 'CRM Core',
     requiresConfig: false,
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'global-search',
@@ -63,18 +63,18 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
     id: 'invoice-automation',
     name: 'Facturación Automática',
-    description: 'Generar y enviar facturas automáticamente según contratos recurrentes. Hoy existe "Generar Facturas del Mes" en Facturación, pero manual — este automatizado todavía no está construido.',
+    description: 'El día 1 de cada mes genera solas las facturas de los clientes con monto mensual cargado (mismo criterio que "Generar del Mes", pero automático) y te avisa por mail lo que se generó. No las envía al cliente — quedan como Pendiente para que las revises antes de avisarle a cada uno.',
     icon: 'FileText',
     category: 'productivity',
     version: '1.0.0',
     author: 'CRM Core',
     requiresConfig: false,
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'zapier-webhooks',
     name: 'Zapier / Webhooks',
-    description: 'Conectar el CRM con otras aplicaciones vía Zapier o webhooks propios. Todavía no está construido.',
+    description: 'Manda un POST con los datos del evento a la URL que cargues cada vez que se gana una oportunidad, se cobra una factura o entra un ticket nuevo — para conectar con Zapier, Make o tu propio endpoint.',
     icon: 'Zap',
     category: 'integration',
     version: '1.0.0',
@@ -83,7 +83,7 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
     configSchema: {
       webhookUrl: { type: 'string', label: 'Webhook URL', required: false },
     },
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'google-calendar',

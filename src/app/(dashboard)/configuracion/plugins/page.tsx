@@ -32,11 +32,15 @@ const CATEGORY_COLORS: Record<string, string> = {
   communication: 'info', analytics: 'primary', integration: 'warning', productivity: 'success',
 }
 
-// Only advanced-analytics is actually wired up — every other plugin's
-// toggle is a stored preference with zero effect on the app today. Be
-// honest about that here instead of describing features that don't exist.
+// Plugins con efecto real listado acá — el resto sigue siendo un
+// interruptor guardado sin ningún efecto en el sistema, y se lo decimos
+// directo al usuario (NOT_IMPLEMENTED_TEXT) en vez de simular una feature
+// que no existe.
 const PLUGIN_EFFECTS: Record<string, { text: string; action?: { label: string; href: string } }> = {
   'advanced-analytics': { text: 'Agrega la sección "Top Clientes por Ingreso" en el Dashboard.', action: { label: 'Ir al Dashboard', href: '/dashboard' } },
+  'export-data': { text: 'Agrega un botón "Exportar" en Empresas y Facturas.', action: { label: 'Ir a Empresas', href: '/empresas' } },
+  'invoice-automation': { text: 'El día 1 de cada mes genera solas las facturas recurrentes y te avisa por mail — quedan Pendientes, no se envían solas al cliente.' },
+  'zapier-webhooks': { text: 'Manda un POST a la URL configurada cuando ganás un deal, cobrás una factura o entra un ticket nuevo.' },
 }
 const NOT_IMPLEMENTED_TEXT = 'Todavía no está construido — activarlo o desactivarlo no cambia nada en el sistema por ahora.'
 

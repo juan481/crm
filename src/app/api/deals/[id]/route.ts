@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { fireWebhook } from '@/lib/webhooks'
 
 interface Params { params: { id: string } }
 
@@ -86,6 +87,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       },
       include: INCLUDE,
     })
+
+    // Sólo dispara al ENTRAR a Ganado — no en cada guardado subsiguiente de
+    // un deal que ya estaba ganado (ej. editar el monto después).
+    if (stage === 'GANADO' && existing.stage !== 'GANADO') {
+      fireWebhook(payload.orgId, 'deal.won', {
+        id: deal.id, title: deal.title, amount: deal.amount, currency: deal.currency,
+        empresa: deal.empresa?.name ?? null, client: deal.client?.name ?? null,
+      }).catch(() => {})
+    }
 
     return NextResponse.json({ data: deal })
   } catch (error) {

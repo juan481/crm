@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { fireWebhook } from '@/lib/webhooks'
 
 interface Params { params: { id: string } }
 
@@ -42,6 +43,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         client:  { select: { id: true, name: true } },
       },
     })
+
+    if (status === 'PAID' && existing.status !== 'PAID') {
+      fireWebhook(payload.orgId, 'invoice.paid', {
+        id: invoice.id, amount: invoice.amount, currency: invoice.currency,
+        description: invoice.description, empresa: invoice.empresa?.name ?? null, client: invoice.client?.name ?? null,
+      }).catch(() => {})
+    }
 
     return NextResponse.json({ data: invoice })
   } catch (error) {

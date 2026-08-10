@@ -4,6 +4,7 @@ import { SLA_HOURS } from '@/lib/tickets'
 import { findEmpresaMatch } from '@/lib/directorio-link'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
+import { fireWebhook } from '@/lib/webhooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -145,6 +146,11 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
     if (!ticket) return NextResponse.json({ error: 'Error al crear el ticket' }, { status: 500 })
+
+    fireWebhook(org.id, 'ticket.created', {
+      id: ticket.id, number: ticket.number, title: title.trim(), priority: 'MEDIA',
+      category: 'CONSULTA', source: 'formulario_publico',
+    }).catch(() => {})
 
     await db.ticketMessage.create({
       data: {

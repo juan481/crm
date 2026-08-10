@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
     const status    = searchParams.get('status')    ?? ''
     const empresaId = searchParams.get('empresaId') ?? ''
     const page      = Math.max(1, Number(searchParams.get('page')  ?? 1))
-    const limit     = Math.min(50, Number(searchParams.get('limit') ?? 20))
+    // Tope alto (no sólo 50) para permitir traer "todo lo filtrado" de una
+    // — lo usa la exportación a Excel (plugin export-data), mismo criterio
+    // que ya usa /api/empresas.
+    const limit     = Math.min(2000, Number(searchParams.get('limit') ?? 20))
     const skip      = (page - 1) * limit
 
     const orgId = payload.orgId

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { SLA_HOURS } from '@/lib/tickets'
+import { fireWebhook } from '@/lib/webhooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -111,6 +112,11 @@ export async function POST(req: NextRequest) {
         if (err.code !== 'P2002' || attempt === 4) throw err
       }
     }
+
+    fireWebhook(payload.orgId, 'ticket.created', {
+      id: ticket.id, number: ticket.number, title: ticket.title, priority: ticket.priority,
+      category: ticket.category, empresa: ticket.empresa?.name ?? null, client: ticket.client?.name ?? null,
+    }).catch(() => {})
 
     return NextResponse.json({ data: ticket }, { status: 201 })
   } catch (error) {

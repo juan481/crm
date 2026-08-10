@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle } from 'lucide-react'
+import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,8 @@ import { InvoiceForm } from '@/components/invoices/invoice-form'
 import { InvoicePreview } from '@/components/invoices/invoice-preview'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { usePlugin } from '@/hooks/use-plugin'
+import { exportToExcel } from '@/lib/xlsx-export'
 import toast from 'react-hot-toast'
 
 interface RecurringClient {
@@ -122,6 +124,8 @@ export default function FacturasPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRow | null>(null)
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const { enabled: exportEnabled } = usePlugin('export-data')
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
@@ -153,6 +157,40 @@ export default function FacturasPage() {
     } catch { toast.error('Error al actualizar') }
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams({ limit: '2000' })
+      if (statusFilter)       params.set('status', statusFilter)
+      if (search.length >= 2) params.set('search', search)
+      const res = await fetch(`/api/invoices?${params}`)
+      if (!res.ok) throw new Error()
+      const json: InvoicesResponse = await res.json()
+      const rows = json.data ?? []
+      if (rows.length === 0) { toast.error('No hay facturas para exportar con estos filtros'); return }
+
+      await exportToExcel(
+        `facturas-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        'Facturas',
+        rows.map(r => ({
+          Cliente: r.empresa?.name ?? r.client?.name ?? 'Sin cliente',
+          Descripción: r.description ?? '',
+          Monto: r.amount,
+          Moneda: r.currency,
+          Estado: STATUS_LABELS[r.status] ?? r.status,
+          Vencimiento: formatDate(r.dueDate),
+          'Pagada el': r.paidAt ? formatDate(r.paidAt) : '',
+          'Creada el': formatDate(r.createdAt),
+        }))
+      )
+      toast.success(`${rows.length} factura${rows.length !== 1 ? 's' : ''} exportada${rows.length !== 1 ? 's' : ''}`)
+    } catch {
+      toast.error('Error al exportar')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const deleteInvoice = async (id: string) => {
     try {
       const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' })
@@ -172,6 +210,11 @@ export default function FacturasPage() {
         </div>
         {canManage && (
           <div className="flex items-center gap-2">
+            {exportEnabled && (
+              <Button variant="outline" leftIcon={<Download size={16} />} onClick={handleExport} disabled={exporting}>
+                {exporting ? 'Exportando...' : 'Exportar'}
+              </Button>
+            )}
             <Button variant="secondary" leftIcon={<RefreshCw size={16} />} onClick={() => setShowRecurring(true)}>Generar del Mes</Button>
             <Button leftIcon={<Plus size={16} />} onClick={() => setShowCreate(true)}>Nueva Factura</Button>
           </div>
