@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2, MessageCircle } from 'lucide-react'
@@ -9,8 +10,16 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
-import { CampaignComposer } from '@/components/communications/campaign-composer'
 import { TemplateManager } from '@/components/communications/template-manager'
+
+// CampaignComposer (react-hook-form + zod + el editor de texto enriquecido)
+// sólo hace falta al abrir "Nueva Campaña" — antes iba en el bundle inicial
+// de la pantalla aunque el modal esté cerrado. Mismo criterio que las
+// gráficas del Dashboard (RevenueChart/ClientsChart).
+const CampaignComposer = dynamic(
+  () => import('@/components/communications/campaign-composer').then((m) => m.CampaignComposer),
+  { ssr: false, loading: () => <div className="h-96 flex items-center justify-center text-sm text-[var(--color-text-muted)]">Cargando…</div> }
+)
 import { formatDateTime } from '@/lib/utils'
 import { EMAIL_LIMIT_WHATSAPP_URL } from '@/lib/upsell'
 import { useAuthStore } from '@/store/auth-store'
