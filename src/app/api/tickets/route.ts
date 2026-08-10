@@ -79,6 +79,23 @@ export async function POST(req: NextRequest) {
     if (!description?.trim()) return NextResponse.json({ error: 'La descripción es requerida' },  { status: 400 })
 
     const db = prisma as any
+
+    // Sin esto, clientId/empresaId/assignedToId de OTRA organización se
+    // aceptaban igual — el ticket quedaba vinculado a un registro ajeno,
+    // expuesto vía los include de las rutas de lectura.
+    if (clientId) {
+      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    }
+    if (empresaId) {
+      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    }
+    if (assignedToId) {
+      const assignee = await db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } })
+      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    }
+
     const priorityValue = priority || 'MEDIA'
     const ticketData = {
       title:          title.trim(),

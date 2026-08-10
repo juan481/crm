@@ -103,6 +103,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       : undefined
     const resetSatisfaction = isResolving && !!existing.satisfactionRatedAt
 
+    // Sin esto, un assignedToId/empresaId/clientId de OTRA organización se
+    // aceptaba igual — antes sólo se validaba que quien pide el cambio sea
+    // admin, no que el destino pertenezca a esta org.
+    if (isAdmin && assignedToId) {
+      const assignee = await db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } })
+      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    }
+    if (!isTech && empresaId) {
+      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    }
+    if (!isTech && clientId) {
+      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    }
+
     const ticket = await db.ticket.update({
       where: { id: params.id },
       data: {

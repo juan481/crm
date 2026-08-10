@@ -77,7 +77,18 @@ export async function POST(req: NextRequest) {
 
     let resolvedEmpresaId: string | null = empresaId ?? null
 
-    if (!resolvedEmpresaId) {
+    // Si viene un empresaId explícito del body, validar que sea de esta
+    // organización — sin esto se aceptaba igual el de otra org (el FK de
+    // Prisma sólo exige que exista en algún lado), y el contacto quedaba
+    // vinculado a una empresa ajena, expuesta vía el include de abajo.
+    if (resolvedEmpresaId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const empresa = await (prisma as any).empresa.findFirst({
+        where: { id: resolvedEmpresaId, organizationId: payload.orgId },
+        select: { id: true },
+      })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const empresas = await (prisma as any).empresa.findMany({
         where: { organizationId: payload.orgId },

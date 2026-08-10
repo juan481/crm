@@ -49,7 +49,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     let resolvedEmpresaId: string | null = empresaId ?? null
 
-    if (!resolvedEmpresaId) {
+    // Mismo chequeo que ya hace POST /api/contactos — faltaba acá.
+    if (resolvedEmpresaId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const empresa = await (prisma as any).empresa.findFirst({
+        where: { id: resolvedEmpresaId, organizationId: payload.orgId },
+        select: { id: true },
+      })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    } else {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const empresas = await (prisma as any).empresa.findMany({
         where: { organizationId: payload.orgId },

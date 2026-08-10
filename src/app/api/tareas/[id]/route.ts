@@ -63,6 +63,28 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const shouldMarkViewed = viewed === true && payload.userId === existing.assignedToId && !existing.viewedAt
     const isReassigning = !isTech && assignedToId && assignedToId !== existing.assignedToId
 
+    // Mismo chequeo que ya hace POST /api/tareas — faltaba acá en el PATCH.
+    if (!isTech && assignedToId && assignedToId !== existing.assignedToId) {
+      const assignee = await db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } })
+      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    }
+    if (!isTech && clientId) {
+      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    }
+    if (!isTech && empresaId) {
+      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    }
+    if (!isTech && dealId) {
+      const deal = await db.deal.findFirst({ where: { id: dealId, organizationId: payload.orgId }, select: { id: true } })
+      if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada en esta organización' }, { status: 400 })
+    }
+    if (!isTech && ticketId) {
+      const ticket = await db.ticket.findFirst({ where: { id: ticketId, organizationId: payload.orgId }, select: { id: true } })
+      if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado en esta organización' }, { status: 400 })
+    }
+
     const task = await db.task.update({
       where: { id: params.id },
       data: {

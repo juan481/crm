@@ -63,6 +63,34 @@ export async function POST(req: NextRequest) {
 
     const db = prisma as any
     const finalAssignedToId = assignedToId || payload.userId
+
+    // Sin esto, cualquiera de estos ids podía ser de OTRA organización — el
+    // FK de Prisma sólo exige que exista en algún lado, no que sea de esta
+    // org. La tarea quedaba vinculada a un registro ajeno, y su nombre
+    // terminaba expuesto acá mismo (vía el include de abajo) o, en el caso
+    // de assignedToId, se le mandaba el mail de "tarea asignada" a alguien
+    // de otra empresa por completo.
+    if (finalAssignedToId !== payload.userId) {
+      const assignee = await db.user.findFirst({ where: { id: finalAssignedToId, organizationId: payload.orgId }, select: { id: true } })
+      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    }
+    if (clientId) {
+      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    }
+    if (empresaId) {
+      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    }
+    if (dealId) {
+      const deal = await db.deal.findFirst({ where: { id: dealId, organizationId: payload.orgId }, select: { id: true } })
+      if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada en esta organización' }, { status: 400 })
+    }
+    if (ticketId) {
+      const ticket = await db.ticket.findFirst({ where: { id: ticketId, organizationId: payload.orgId }, select: { id: true } })
+      if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado en esta organización' }, { status: 400 })
+    }
+
     const task = await db.task.create({
       data: {
         title:          title.trim(),

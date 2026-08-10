@@ -70,6 +70,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const db = prisma as any
+
+    // Mismo chequeo que ya hace POST /api/deals — faltaba acá en el PATCH.
+    if (empresaId) {
+      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    }
+    if (clientId) {
+      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    }
+
     const deal = await db.deal.update({
       where: { id: params.id },
       data: {

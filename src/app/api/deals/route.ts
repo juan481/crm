@@ -67,6 +67,20 @@ export async function POST(req: NextRequest) {
     }
 
     const db2 = prisma as any
+
+    // Sin esto, un empresaId/clientId de OTRA organización se aceptaba
+    // igual (el FK de Prisma sólo exige que el id exista en algún lado, no
+    // que sea de esta org) — el deal quedaba vinculado a un registro ajeno,
+    // y su nombre terminaba expuesto acá mismo vía el include de arriba.
+    if (empresaId) {
+      const empresa = await db2.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    }
+    if (clientId) {
+      const client = await db2.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
+      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    }
+
     const deal = await db2.deal.create({
       data: {
         title:             title.trim(),
