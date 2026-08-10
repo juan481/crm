@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Faltaba este chequeo — la ruta hermana (empresas/importar) sí lo
+    // tiene, y el botón que llega acá en la UI ya está oculto para
+    // cualquiera que no sea SUPER_ADMIN/ADMIN, pero la API en sí quedaba
+    // abierta a cualquier usuario autenticado (hasta un TECHNICIAN podía
+    // importar en lote llamándola directo, sin pasar por la UI).
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json() as { rows: ImportRow[] }
     const rows = body.rows ?? []
