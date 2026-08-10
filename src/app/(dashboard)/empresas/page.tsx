@@ -640,7 +640,7 @@ export default function EmpresasPage() {
       <Modal open={showMerge} onClose={() => { setShowMerge(false); setMergePrimary(''); setMergeSecond('') }} title="Unificar empresas duplicadas" size="sm">
         <div className="space-y-4">
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Seleccioná las dos empresas a unificar. La <strong>empresa principal</strong> conserva su nombre y sus datos tienen prioridad. Los contactos de la empresa a eliminar pasan a la principal.
+            Seleccioná las dos empresas a unificar. La <strong>empresa principal</strong> conserva su nombre y sus datos tienen prioridad. Todo lo de la empresa a eliminar (contactos, facturas, tareas, oportunidades, tickets, cotizaciones y notas) pasa a la principal antes de borrarla — no se pierde nada.
           </p>
 
           <div>
