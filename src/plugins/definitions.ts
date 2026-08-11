@@ -64,6 +64,17 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
     implemented: true,
   },
   {
+    id: 'attendance-alerts',
+    name: 'Avisos de Asistencia',
+    description: 'Manda un mail diario a ADMIN/SUPER_ADMIN/RRHH con quién no fichó o llegó tarde el último día hábil. Apagado por defecto — activalo sólo si tu equipo quiere que RRHH reciba este aviso automático.',
+    icon: 'Bell',
+    category: 'productivity',
+    version: '1.0.0',
+    author: 'CRM Core',
+    requiresConfig: false,
+    implemented: true,
+  },
+  {
     id: 'google-calendar',
     name: 'Google Calendar',
     description: 'Conectá una cuenta de Google (OAuth) y agregá tareas del CRM a tu Google Calendar con un botón desde la ficha de la tarea. Necesitás crear una app OAuth en Google Cloud Console con el redirect URI que te mostramos al conectar — sin Client ID y Client Secret cargados acá abajo, no se puede iniciar la conexión.',

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
-  Mail, Download, Search, BarChart3, MessageCircle, FileText, Zap, Calendar, Puzzle,
+  Mail, Download, Search, BarChart3, MessageCircle, FileText, Zap, Calendar, Puzzle, Bell,
   Settings, ArrowRight, CheckCircle, BookOpen, AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -23,6 +23,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Mail: <Mail size={20} />, Download: <Download size={20} />, Search: <Search size={20} />,
   BarChart3: <BarChart3 size={20} />, MessageCircle: <MessageCircle size={20} />,
   FileText: <FileText size={20} />, Zap: <Zap size={20} />, Calendar: <Calendar size={20} />,
+  Bell: <Bell size={20} />,
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -43,6 +44,7 @@ const PLUGIN_EFFECTS: Record<string, { text: string; action?: { label: string; h
   'invoice-automation': { text: 'El día 1 de cada mes genera solas las facturas recurrentes y te avisa por mail — quedan Pendientes, no se envían solas al cliente.' },
   'zapier-webhooks': { text: 'Manda un POST a la URL configurada cuando ganás un deal, cobrás una factura o entra un ticket nuevo.' },
   'whatsapp-integration': { text: 'Agrega un botón "Enviar WhatsApp" en la ficha de contacto.', action: { label: 'Ir a Contactos', href: '/contactos' } },
+  'attendance-alerts': { text: 'RRHH/Admin recibe un mail diario con quién no fichó o llegó tarde el último día hábil.', action: { label: 'Ir a RRHH', href: '/rrhh' } },
   'google-calendar': { text: 'Conectá tu cuenta de Google para poder agregar tareas del CRM a tu calendario.', action: { label: 'Conectar con Google', href: '/api/plugins/google-calendar/authorize' } },
 }
 const NOT_IMPLEMENTED_TEXT = 'Todavía no está construido — activarlo o desactivarlo no cambia nada en el sistema por ahora.'

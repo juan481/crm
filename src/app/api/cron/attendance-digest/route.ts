@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
+import { isPluginEnabled } from '@/lib/plugins'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
 const JOB_NAME = 'attendance-digest'
@@ -67,9 +68,16 @@ export async function GET(req: NextRequest) {
     let orgsWithNothingToReport = 0
     let orgsSkippedNoEmail = 0
     let orgsSkippedAlreadySent = 0
+    let orgsSkippedDisabled = 0
     const wouldSend: { org: string; email: string }[] = []
 
     for (const org of orgs) {
+      // Plugin "attendance-alerts" — apagado por defecto para toda
+      // organización que nunca lo tocó (PluginConfig sin fila = enabled:
+      // false, ver /api/plugins). Antes este aviso salía siempre, sin
+      // forma de pausarlo por organización.
+      if (!(await isPluginEnabled(org.id, 'attendance-alerts'))) { orgsSkippedDisabled++; continue }
+
       const orgUsers = usersByOrg.get(org.id) ?? []
       const sinFichar = orgUsers.filter((u: any) => !recordByUser.has(u.id))
       const tarde = orgUsers.filter((u: any) => recordByUser.get(u.id)?.tardanza)
@@ -129,7 +137,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true, dryRun, target: target.toISOString().slice(0, 10),
-      emailsSent, orgsWithNothingToReport, orgsSkippedNoEmail, orgsSkippedAlreadySent, orgsProcessed: orgs.length,
+      emailsSent, orgsWithNothingToReport, orgsSkippedNoEmail, orgsSkippedAlreadySent, orgsSkippedDisabled, orgsProcessed: orgs.length,
       ...(dryRun ? { wouldSend } : {}),
     })
   } catch (error) {
