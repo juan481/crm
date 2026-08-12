@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Search, Upload, Download, Building2, Users, Globe, MapPin, Trash2,
+  Plus, Search, Upload, Download, FileDown, Building2, Users, Globe, MapPin, Trash2,
   CheckCircle2, XCircle, Merge, Filter, X, AlertTriangle, UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -256,6 +256,41 @@ export default function EmpresasPage() {
     }
   }
 
+  // Plantillas descargables — mismas columnas (y sinonimos) que ya acepta
+  // cada importador, con una fila de ejemplo para que quede claro el
+  // formato esperado. Reusa el mismo generador que "Exportar".
+  const handleDownloadTemplateEmpresas = () => {
+    exportToExcel('plantilla-empresas.xlsx', 'Empresas', [
+      {
+        Empresa: 'Municipalidad de Ejemplo',
+        Actividad: 'Municipio',
+        Domicilio: 'Av. San Martin 123',
+        Localidad: 'Santa Rosa',
+        Provincia: 'La Pampa',
+        Web: 'https://ejemplo.gob.ar',
+      },
+    ])
+  }
+
+  const handleDownloadTemplateDirectorio = () => {
+    exportToExcel('plantilla-directorio.xlsx', 'Contactos', [
+      {
+        Nombre: 'Juan',
+        Apellido: 'Perez',
+        Empresa: 'Municipalidad de Ejemplo',
+        Cargo: 'Intendente',
+        Mail: 'juan.perez@ejemplo.gob.ar',
+        Telefono: '02302 123456',
+        Actividad: 'Municipio',
+        Domicilio: 'Av. San Martin 123',
+        Localidad: 'Santa Rosa',
+        Provincia: 'La Pampa',
+        Pais: 'Argentina',
+        Web: 'https://ejemplo.gob.ar',
+      },
+    ])
+  }
+
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -364,13 +399,43 @@ export default function EmpresasPage() {
             <>
               <input ref={fileRef}    type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
               <input ref={fileRefDir} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportDirectorio} />
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={importing}>
-                <Upload size={14} /> Solo empresas
-              </Button>
-              <Button variant="outline" onClick={() => fileRefDir.current?.click()} disabled={importing}>
-                <Upload size={15} />
-                {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
-              </Button>
+              <div className="flex items-stretch rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border-strong)' }}>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-sm transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  <Upload size={14} /> Solo empresas
+                </button>
+                <button
+                  onClick={handleDownloadTemplateEmpresas}
+                  title="Descargar plantilla de ejemplo"
+                  className="flex items-center px-2 transition-colors hover:bg-[var(--color-surface-raised)]"
+                  style={{ color: 'var(--color-text-muted)', borderLeft: '1px solid var(--color-border-strong)' }}
+                >
+                  <FileDown size={13} />
+                </button>
+              </div>
+              <div className="flex items-stretch rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border-strong)' }}>
+                <button
+                  onClick={() => fileRefDir.current?.click()}
+                  disabled={importing}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
+                  style={{ color: 'var(--color-text)' }}
+                >
+                  <Upload size={15} />
+                  {importing ? 'Importando...' : 'Importar directorio (empresas + contactos)'}
+                </button>
+                <button
+                  onClick={handleDownloadTemplateDirectorio}
+                  title="Descargar plantilla de ejemplo"
+                  className="flex items-center px-2 transition-colors hover:bg-[var(--color-surface-raised)]"
+                  style={{ color: 'var(--color-text-muted)', borderLeft: '1px solid var(--color-border-strong)' }}
+                >
+                  <FileDown size={13} />
+                </button>
+              </div>
               <Button variant="outline" onClick={() => setShowMerge(true)}>
                 <Merge size={14} /> Unificar duplicados
               </Button>
