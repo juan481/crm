@@ -25,7 +25,9 @@ interface ImportProgress {
   total: number
   empresasCreadas: number
   empresasExistentes: number
+  empresasActualizadas: number
   contactosCreados: number
+  contactosActualizados: number
   filasOmitidas: number
   done?: boolean
   error?: string
@@ -161,12 +163,14 @@ export default function EmpresasPage() {
     if (rows.length === 0) { toast.error('El archivo está vacío'); return }
 
     setImporting(true)
-    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, contactosCreados: 0, filasOmitidas: 0 })
+    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, empresasActualizadas: 0, contactosCreados: 0, contactosActualizados: 0, filasOmitidas: 0 })
 
-    let empresasCreadas    = 0
-    let empresasExistentes = 0
-    let contactosCreados   = 0
-    let filasOmitidas      = 0
+    let empresasCreadas      = 0
+    let empresasExistentes   = 0
+    let empresasActualizadas = 0
+    let contactosCreados     = 0
+    let contactosActualizados = 0
+    let filasOmitidas        = 0
 
     try {
       for (let i = 0; i < rows.length; i += CHUNK) {
@@ -184,17 +188,21 @@ export default function EmpresasPage() {
         }
 
         const result = await res.json()
-        empresasCreadas    += result.empresasCreadas    ?? 0
-        empresasExistentes += result.empresasExistentes ?? 0
-        contactosCreados   += result.contactosCreados   ?? 0
-        filasOmitidas      += result.filasOmitidas      ?? 0
+        empresasCreadas      += result.empresasCreadas      ?? 0
+        empresasExistentes   += result.empresasExistentes   ?? 0
+        empresasActualizadas += result.empresasActualizadas ?? 0
+        contactosCreados     += result.contactosCreados     ?? 0
+        contactosActualizados += result.contactosActualizados ?? 0
+        filasOmitidas        += result.filasOmitidas        ?? 0
 
         setProgress({
           processed: Math.min(i + CHUNK, rows.length),
           total: rows.length,
           empresasCreadas,
           empresasExistentes,
+          empresasActualizadas,
           contactosCreados,
+          contactosActualizados,
           filasOmitidas,
         })
 
@@ -803,10 +811,11 @@ export default function EmpresasPage() {
 
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: 'Empresas nuevas',     value: progress.empresasCreadas,    color: '#10b981' },
-                { label: 'Empresas existentes', value: progress.empresasExistentes, color: 'var(--color-text-muted)' },
-                { label: 'Contactos creados',   value: progress.contactosCreados,   color: 'var(--color-primary)' },
-                { label: 'Filas omitidas',      value: progress.filasOmitidas,      color: 'var(--color-text-muted)' },
+                { label: 'Empresas nuevas',       value: progress.empresasCreadas,       color: '#10b981' },
+                { label: 'Empresas actualizadas', value: progress.empresasActualizadas,  color: '#f59e0b' },
+                { label: 'Contactos creados',     value: progress.contactosCreados,      color: 'var(--color-primary)' },
+                { label: 'Contactos actualizados',value: progress.contactosActualizados, color: '#f59e0b' },
+                { label: 'Filas omitidas',        value: progress.filasOmitidas,         color: 'var(--color-text-muted)' },
               ].map(s => (
                 <div key={s.label} className="rounded-xl p-3 text-center"
                   style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>

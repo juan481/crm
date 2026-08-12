@@ -52,17 +52,18 @@ export async function POST(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existing = await (prisma.empresa as any).findFirst({
         where: { organizationId: payload.orgId, name: { equals: name, mode: 'insensitive' } },
-        select: { id: true },
+        select: { id: true, activity: true, address: true, city: true, province: true, website: true },
       })
 
       if (existing) {
-        // Update only fields that have a value in the Excel row (don't overwrite with empty)
+        // Completa sólo los campos vacíos en la base -- nunca pisa un dato
+        // que ya está cargado (a mano o de una importación anterior).
         const patch: Record<string, unknown> = {}
-        if (activity) patch.activity = activity
-        if (address)  patch.address  = address
-        if (city)     patch.city     = city
-        if (province) patch.province = province
-        if (website)  patch.website  = website
+        if (!existing.activity && activity) patch.activity = activity
+        if (!existing.address  && address)  patch.address  = address
+        if (!existing.city     && city)     patch.city     = city
+        if (!existing.province && province) patch.province = province
+        if (!existing.website  && website)  patch.website  = website
 
         if (Object.keys(patch).length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

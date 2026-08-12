@@ -58,10 +58,12 @@ export async function POST(req: NextRequest) {
     const db    = prisma as any
     const orgId = payload.orgId
 
-    let empresasCreadas    = 0
-    let empresasExistentes = 0
-    let contactosCreados   = 0
-    let filasOmitidas      = 0
+    let empresasCreadas      = 0
+    let empresasExistentes   = 0
+    let empresasActualizadas = 0
+    let contactosCreados     = 0
+    let contactosActualizados = 0
+    let filasOmitidas        = 0
 
     for (const rawRow of rows) {
       try {
@@ -72,10 +74,17 @@ export async function POST(req: NextRequest) {
 
         if (!empresaName || !firstName) { filasOmitidas++; continue }
 
-        // Upsert empresa
+        const newActivity = col(row, 'actividad', 'rubro', 'sector')
+        const newAddress  = col(row, 'domicilio laboral', 'domicilio', 'direccion', 'address')
+        const newCp       = col(row, 'codigo postal', 'cp')
+        const newCity     = col(row, 'localidad', 'ciudad', 'city')
+        const newProvince = col(row, 'provincia', 'province')
+        const newCountry  = col(row, 'pais', 'country')
+        const newWebsite  = col(row, 'web', 'website', 'sitio web', 'url')
+
         let empresa = await db.empresa.findFirst({
           where: { organizationId: orgId, name: { equals: empresaName, mode: 'insensitive' } },
-          select: { id: true },
+          select: { id: true, activity: true, address: true, codigoPostal: true, city: true, province: true, country: true, website: true },
         })
 
         if (!empresa) {
@@ -83,18 +92,30 @@ export async function POST(req: NextRequest) {
             data: {
               organizationId: orgId,
               name:         empresaName,
-              activity:     col(row, 'actividad', 'rubro', 'sector')                        || null,
-              address:      col(row, 'domicilio laboral', 'domicilio', 'direccion', 'address') || null,
-              codigoPostal: col(row, 'codigo postal', 'cp')                                  || null,
-              city:         col(row, 'localidad', 'ciudad', 'city')                          || null,
-              province:     col(row, 'provincia', 'province')                                || null,
-              country:      col(row, 'pais', 'country')                                      || null,
-              website:      col(row, 'web', 'website', 'sitio web', 'url')                   || null,
+              activity:     newActivity || null,
+              address:      newAddress  || null,
+              codigoPostal: newCp       || null,
+              city:         newCity     || null,
+              province:     newProvince || null,
+              country:      newCountry  || null,
+              website:      newWebsite  || null,
             },
             select: { id: true },
           })
           empresasCreadas++
         } else {
+          const empresaPatch: Record<string, unknown> = {}
+          if (!empresa.activity     && newActivity) empresaPatch.activity     = newActivity
+          if (!empresa.address      && newAddress)  empresaPatch.address      = newAddress
+          if (!empresa.codigoPostal && newCp)       empresaPatch.codigoPostal = newCp
+          if (!empresa.city         && newCity)     empresaPatch.city        = newCity
+          if (!empresa.province     && newProvince) empresaPatch.province    = newProvince
+          if (!empresa.country      && newCountry)  empresaPatch.country     = newCountry
+          if (!empresa.website      && newWebsite)  empresaPatch.website     = newWebsite
+          if (Object.keys(empresaPatch).length > 0) {
+            await db.empresa.update({ where: { id: empresa.id }, data: empresaPatch })
+            empresasActualizadas++
+          }
           empresasExistentes++
         }
 
@@ -107,11 +128,28 @@ export async function POST(req: NextRequest) {
         // personas en silencio, sin ningún aviso.
         const email    = col(row, 'mail', 'email', 'correo').toLowerCase() || null
         const lastName = col(row, 'apellido', 'last name', 'lastname') || null
+        const newRole  = col(row, 'cargo', 'rol', 'puesto', 'role')
+        const newPhone = col(row, 'telefono', 'tel', 'celular', 'whatsapp', 'phone')
         const dupWhere = { organizationId: orgId, firstName, lastName: lastName ?? '', empresaId: empresa.id }
 
-        const existing = await db.directorioContacto.findFirst({ where: dupWhere, select: { id: true } })
+        const existing = await db.directorioContacto.findFirst({
+          where: dupWhere,
+          select: { id: true, role: true, email: true, phone: true },
+        })
 
-        if (existing) { filasOmitidas++; continue }
+        if (existing) {
+          const contactoPatch: Record<string, unknown> = {}
+          if (!existing.role  && newRole)  contactoPatch.role  = newRole
+          if (!existing.email && email)    contactoPatch.email = email
+          if (!existing.phone && newPhone) contactoPatch.phone = newPhone
+          if (Object.keys(contactoPatch).length > 0) {
+            await db.directorioContacto.update({ where: { id: existing.id }, data: contactoPatch })
+            contactosActualizados++
+          } else {
+            filasOmitidas++
+          }
+          continue
+        }
 
         await db.directorioContacto.create({
           data: {
@@ -119,9 +157,9 @@ export async function POST(req: NextRequest) {
             firstName,
             lastName,
             companyRaw:  empresaName,
-            role:        col(row, 'cargo', 'rol', 'puesto', 'role') || null,
+            role:        newRole || null,
             email,
-            phone:       col(row, 'telefono', 'tel', 'celular', 'whatsapp', 'phone') || null,
+            phone:       newPhone || null,
             empresaId:   empresa.id,
           },
         })
@@ -133,7 +171,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ empresasCreadas, empresasExistentes, contactosCreados, filasOmitidas })
+    return NextResponse.json({ empresasCreadas, empresasExistentes, empresasActualizadas, contactosCreados, contactosActualizados, filasOmitidas })
   } catch (error) {
     console.error('[DIRECTORIO IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el lote' }, { status: 500 })
