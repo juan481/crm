@@ -5,20 +5,38 @@ import { prisma } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 interface ImportRow {
-  Nombre?: string
-  Apellido?: string
-  Empresa?: string
-  Cargo?: string
-  Actividad?: string
-  Mail?: string
-  Telefono?: string | number
-  'Domicilio Laboral'?: string
-  'Codigo Postal'?: string | number
-  Localidad?: string
-  Provincia?: string
-  Pais?: string
-  Web?: string
   [key: string]: unknown
+}
+
+// Saca tildes ("Teléfono" -> "telefono") y pasa a minúscula, para que el
+// matching de columnas no dependa de que el Excel use exactamente el mismo
+// wording/acentuación que se probó acá. Encontrado en un caso real: un
+// archivo con la columna "Teléfono" (con tilde) hacía que el teléfono se
+// perdiera en silencio porque el código buscaba literal "Telefono" (sin
+// tilde) — mismo problema podía pasar con cualquier otro campo. Mismo
+// criterio que ya usaba /api/empresas/importar, extendido acá.
+function normalizeKey(k: string): string {
+  return k
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function normalizeRow(row: ImportRow): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(row)) out[normalizeKey(k)] = (v ?? '').toString().trim()
+  return out
+}
+
+// Primer valor no vacío entre varios nombres de columna posibles (ya
+// normalizados: sin tildes, en minúscula).
+function col(r: Record<string, string>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = r[k]
+    if (v?.trim()) return v.trim()
+  }
+  return ''
 }
 
 export async function POST(req: NextRequest) {
@@ -45,12 +63,12 @@ export async function POST(req: NextRequest) {
     let contactosCreados   = 0
     let filasOmitidas      = 0
 
-    for (const row of rows) {
+    for (const rawRow of rows) {
       try {
-        const str = (key: string) => (row[key] ?? '').toString().trim()
+        const row = normalizeRow(rawRow)
 
-        const empresaName = str('Empresa')
-        const firstName   = str('Nombre')
+        const empresaName = col(row, 'empresa', 'company', 'razon social', 'nombre empresa')
+        const firstName   = col(row, 'nombre', 'first name', 'firstname')
 
         if (!empresaName || !firstName) { filasOmitidas++; continue }
 
@@ -65,13 +83,13 @@ export async function POST(req: NextRequest) {
             data: {
               organizationId: orgId,
               name:         empresaName,
-              activity:     str('Actividad')         || null,
-              address:      str('Domicilio Laboral') || null,
-              codigoPostal: str('Codigo Postal')     || null,
-              city:         str('Localidad')         || null,
-              province:     str('Provincia')         || null,
-              country:      str('Pais')              || null,
-              website:      str('Web')               || null,
+              activity:     col(row, 'actividad', 'rubro', 'sector')                        || null,
+              address:      col(row, 'domicilio laboral', 'domicilio', 'direccion', 'address') || null,
+              codigoPostal: col(row, 'codigo postal', 'cp')                                  || null,
+              city:         col(row, 'localidad', 'ciudad', 'city')                          || null,
+              province:     col(row, 'provincia', 'province')                                || null,
+              country:      col(row, 'pais', 'country')                                      || null,
+              website:      col(row, 'web', 'website', 'sitio web', 'url')                   || null,
             },
             select: { id: true },
           })
@@ -81,8 +99,8 @@ export async function POST(req: NextRequest) {
         }
 
         // Dedup contacto
-        const email    = str('Mail').toLowerCase() || null
-        const lastName = str('Apellido') || null
+        const email    = col(row, 'mail', 'email', 'correo').toLowerCase() || null
+        const lastName = col(row, 'apellido', 'last name', 'lastname') || null
         const dupWhere = email
           ? { organizationId: orgId, email }
           : { organizationId: orgId, firstName, lastName: lastName ?? '', empresaId: empresa.id }
@@ -97,9 +115,9 @@ export async function POST(req: NextRequest) {
             firstName,
             lastName,
             companyRaw:  empresaName,
-            role:        str('Cargo')    || null,
+            role:        col(row, 'cargo', 'rol', 'puesto', 'role') || null,
             email,
-            phone:       str('Telefono') || null,
+            phone:       col(row, 'telefono', 'tel', 'celular', 'whatsapp', 'phone') || null,
             empresaId:   empresa.id,
           },
         })
