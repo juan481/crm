@@ -30,6 +30,7 @@ export default function EmpresaDetailPage() {
 
   const [editOpen,          setEditOpen]          = useState(false)
   const [addContactoOpen,   setAddContactoOpen]   = useState(false)
+  const [editingContacto,   setEditingContacto]   = useState<DirectorioContacto | null>(null)
   const [deleteOpen,        setDeleteOpen]        = useState(false)
   const [deleteContactoId,  setDeleteContactoId]  = useState<string | null>(null)
   const [deleting,          setDeleting]          = useState(false)
@@ -456,13 +457,24 @@ export default function EmpresaDetailPage() {
                       </td>
                       {canManage && (
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => setDeleteContactoId(c.id)}
-                            className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
-                            style={{ color: 'var(--color-text-muted)' }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setEditingContacto(c)}
+                              className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
+                              style={{ color: 'var(--color-text-muted)' }}
+                              title="Editar contacto"
+                            >
+                              <Edit size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteContactoId(c.id)}
+                              className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
+                              style={{ color: 'var(--color-text-muted)' }}
+                              title="Eliminar contacto"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -528,6 +540,18 @@ export default function EmpresaDetailPage() {
             qc.invalidateQueries({ queryKey: ['empresa', id] })
           }}
         />
+      </Modal>
+
+      <Modal open={!!editingContacto} onClose={() => setEditingContacto(null)} title="Editar contacto" size="md">
+        {editingContacto && (
+          <ContactoForm
+            contacto={editingContacto}
+            onSuccess={() => {
+              setEditingContacto(null)
+              qc.invalidateQueries({ queryKey: ['empresa', id] })
+            }}
+          />
+        )}
       </Modal>
 
       <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Eliminar empresa" size="sm">
