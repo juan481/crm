@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Users, ShieldOff, ShieldCheck, Plus } from 'lucide-react'
+import { Building2, Users, ShieldOff, ShieldCheck, Plus, Gauge, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Modal, ModalFooter } from '@/components/ui/modal'
@@ -30,6 +30,15 @@ function randomPassword() {
 
 const emptyForm = { orgName: '', domain: '', existingUserEmail: '', adminName: '', adminEmail: '', adminPassword: '' }
 
+interface DiagResult {
+  region: string
+  pingMs: number
+  queryMs: number
+  totalMs: number
+  orgCount: number
+  timestamp: string
+}
+
 export default function AdminOrganizationsPage() {
   const qc = useQueryClient()
   const [actionOrg, setActionOrg] = useState<AdminOrg | null>(null)
@@ -37,6 +46,26 @@ export default function AdminOrganizationsPage() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [existingUser, setExistingUser] = useState(false)
+
+  // Diagnostico de velocidad real -- mide en el momento cuanto tarda la
+  // funcion serverless en hablar con la base (ping puro + una query real),
+  // para poder contestar "esta lento ahora?" con un numero, no una sensacion.
+  const [diag, setDiag] = useState<DiagResult | null>(null)
+  const [checkingSpeed, setCheckingSpeed] = useState(false)
+
+  const checkSpeed = async () => {
+    setCheckingSpeed(true)
+    try {
+      const res = await fetch('/api/admin/diagnostics')
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al medir'); return }
+      setDiag(json.data)
+    } catch {
+      toast.error('Error de conexion')
+    } finally {
+      setCheckingSpeed(false)
+    }
+  }
 
   const { data, isLoading, isError } = useQuery<AdminOrg[]>({
     queryKey: ['admin-organizations'],
@@ -107,6 +136,46 @@ export default function AdminOrganizationsPage() {
         <Button leftIcon={<Plus size={16} />} onClick={() => { setForm({ ...emptyForm, adminPassword: randomPassword() }); setCreating(true) }}>
           Nueva organización
         </Button>
+      </div>
+
+      <div className="surface rounded-2xl p-5 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
+              <Gauge size={18} className="text-white" />
+            </div>
+            <div>
+              <p className="font-medium text-[var(--color-text)]">Diagnostico de velocidad</p>
+              <p className="text-xs text-[var(--color-text-muted)]">Mide en el momento cuanto tarda la funcion en hablar con la base</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" leftIcon={<RefreshCw size={14} />} loading={checkingSpeed} onClick={checkSpeed}>
+            Probar ahora
+          </Button>
+        </div>
+        {diag && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+            <div className="rounded-xl p-3 text-center" style={{ background: 'var(--color-surface-raised)' }}>
+              <p className="text-lg font-bold text-[var(--color-text)]">{diag.region}</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Region de la funcion</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: 'var(--color-surface-raised)' }}>
+              <p className="text-lg font-bold" style={{ color: diag.pingMs > 300 ? '#ef4444' : diag.pingMs > 150 ? '#f59e0b' : '#10b981' }}>{diag.pingMs}ms</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Ping puro a la base</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: 'var(--color-surface-raised)' }}>
+              <p className="text-lg font-bold" style={{ color: diag.queryMs > 300 ? '#ef4444' : diag.queryMs > 150 ? '#f59e0b' : '#10b981' }}>{diag.queryMs}ms</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Query real</p>
+            </div>
+            <div className="rounded-xl p-3 text-center" style={{ background: 'var(--color-surface-raised)' }}>
+              <p className="text-lg font-bold" style={{ color: diag.totalMs > 800 ? '#ef4444' : diag.totalMs > 400 ? '#f59e0b' : '#10b981' }}>{diag.totalMs}ms</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Total del pedido</p>
+            </div>
+          </div>
+        )}
+        {!diag && (
+          <p className="text-xs text-[var(--color-text-subtle)]">Todavia no probaste — toca "Probar ahora" para ver los tiempos reales de este momento.</p>
+        )}
       </div>
 
       <div className="surface rounded-2xl overflow-hidden">
