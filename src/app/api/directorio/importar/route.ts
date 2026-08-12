@@ -98,12 +98,16 @@ export async function POST(req: NextRequest) {
           empresasExistentes++
         }
 
-        // Dedup contacto
+        // Dedup contacto — SIEMPRE por nombre+empresa, nunca sólo por mail.
+        // Bug real encontrado: varias personas de una misma repartición
+        // suelen compartir un mail genérico ("secgobierno@...",
+        // "obraspublicas@..."); dedupear sólo por mail hacía que la 2ª y
+        // 3ª persona con el mismo mail se descartaran como "ya existe" —
+        // en un caso real (Municipalidad de Realicó) esto borró 2 de 3
+        // personas en silencio, sin ningún aviso.
         const email    = col(row, 'mail', 'email', 'correo').toLowerCase() || null
         const lastName = col(row, 'apellido', 'last name', 'lastname') || null
-        const dupWhere = email
-          ? { organizationId: orgId, email }
-          : { organizationId: orgId, firstName, lastName: lastName ?? '', empresaId: empresa.id }
+        const dupWhere = { organizationId: orgId, firstName, lastName: lastName ?? '', empresaId: empresa.id }
 
         const existing = await db.directorioContacto.findFirst({ where: dupWhere, select: { id: true } })
 
