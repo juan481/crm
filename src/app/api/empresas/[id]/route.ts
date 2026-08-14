@@ -15,6 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const empresa = await db.empresa.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       include: {
+        owner: { select: { id: true, name: true } },
         contactos: {
           orderBy: { lastName: 'asc' },
           select: {
@@ -54,7 +55,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
-    const { name, activity, address, codigoPostal, city, province, country, website, isCliente, monthlyAmount, billingCurrency } = body
+    const {
+      name, activity, address, codigoPostal, city, province, country, website,
+      isCliente, monthlyAmount, billingCurrency,
+      cuit, condicionIva, formaPagoHabitual, ownerId,
+    } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
@@ -86,6 +91,25 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     if (monthlyAmount !== undefined)  updateData.monthlyAmount  = monthlyAmount === null || monthlyAmount === '' ? null : Number(monthlyAmount)
     if (billingCurrency !== undefined) updateData.billingCurrency = billingCurrency || 'USD'
+
+    if (cuit              !== undefined) updateData.cuit              = cuit?.trim()              || null
+    if (condicionIva      !== undefined) updateData.condicionIva      = condicionIva?.trim()       || null
+    if (formaPagoHabitual !== undefined) updateData.formaPagoHabitual = formaPagoHabitual?.trim()  || null
+
+    // Asignar/reasignar cartera es cosa de ADMIN+ — un SELLER no se
+    // auto-asigna ni le saca clientes a otro vendedor. Re-validar que el id
+    // recibido sea un usuario DE ESTA organización antes de guardarlo — ver
+    // el mismo comentario en api/empresas/route.ts (POST). Sin esto, un
+    // ownerId de otra organización pasado a mano por la API directa quedaría
+    // guardado y su nombre se filtraría en la ficha de esta empresa.
+    if (ownerId !== undefined && canAccess(payload.role, 'ADMIN')) {
+      if (ownerId?.trim()) {
+        const owner = await db.user.findFirst({ where: { id: ownerId.trim(), organizationId: payload.orgId }, select: { id: true } })
+        updateData.ownerId = owner?.id ?? null
+      } else {
+        updateData.ownerId = null
+      }
+    }
 
     const empresa = await db.empresa.update({ where: { id: params.id }, data: updateData })
 

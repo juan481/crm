@@ -295,6 +295,14 @@ export default function EmpresaDetailPage() {
                 </a>
               )}
             </div>
+            {(empresa.cuit || empresa.condicionIva || empresa.formaPagoHabitual || empresa.owner) && (
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs mt-2" style={{ color: 'var(--color-text-subtle)' }}>
+                {empresa.cuit && <span>CUIT: <span style={{ color: 'var(--color-text-muted)' }}>{empresa.cuit}</span></span>}
+                {empresa.condicionIva && <span>IVA: <span style={{ color: 'var(--color-text-muted)' }}>{empresa.condicionIva}</span></span>}
+                {empresa.formaPagoHabitual && <span>Pago habitual: <span style={{ color: 'var(--color-text-muted)' }}>{empresa.formaPagoHabitual}</span></span>}
+                {empresa.owner && <span>Vendedor: <span style={{ color: 'var(--color-text-muted)' }}>{empresa.owner.name}</span></span>}
+              </div>
+            )}
           </div>
         </div>
       </div>

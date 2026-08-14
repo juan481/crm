@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -9,7 +10,9 @@ import { ModalFooter } from '@/components/ui/modal'
 import { UserPlus, ChevronDown, ChevronUp } from 'lucide-react'
 import { ARGENTINA_PROVINCES, CITIES_BY_PROVINCE } from '@/lib/argentina-geo'
 import { COUNTRIES } from '@/lib/utils'
-import type { Empresa } from '@/types'
+import { CONDICIONES_IVA, OTRA_CONDICION_IVA, FORMAS_PAGO, OTRA_FORMA_PAGO } from '@/lib/fiscal'
+import { useAuthStore } from '@/store/auth-store'
+import type { Empresa, User } from '@/types'
 import toast from 'react-hot-toast'
 
 interface FormData {
@@ -21,6 +24,12 @@ interface FormData {
   city:     string
   province: string
   website:  string
+  cuit:              string
+  condicionIva:      string
+  otherCondicionIva: string
+  formaPagoHabitual:      string
+  otherFormaPagoHabitual: string
+  ownerId: string
   tcFirstName: string
   tcLastName:  string
   tcRole:      string
@@ -42,8 +51,40 @@ const PROVINCE_OPTIONS = [
   ...ARGENTINA_PROVINCES.map(p => ({ value: p, label: p })),
 ]
 
+const CONDICION_IVA_OPTIONS = [
+  { value: '', label: '— Sin especificar —' },
+  ...CONDICIONES_IVA.map(c => ({ value: c, label: c })),
+  { value: OTRA_CONDICION_IVA, label: OTRA_CONDICION_IVA },
+]
+
+const FORMA_PAGO_OPTIONS = [
+  { value: '', label: '— Sin especificar —' },
+  ...FORMAS_PAGO.map(f => ({ value: f, label: f })),
+  { value: OTRA_FORMA_PAGO, label: OTRA_FORMA_PAGO },
+]
+
 export function EmpresaForm({ empresa, onSuccess }: Props) {
   const [addContact, setAddContact] = useState(false)
+  const { user } = useAuthStore()
+  const canAssignOwner = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+
+  // Sólo se pide si hace falta — un SELLER/TECHNICIAN ni ve el campo, así
+  // que no dispara este fetch (mismo endpoint que ya usa Configuración >
+  // Usuarios, gateado ADMIN+ del lado del servidor también).
+  const { data: sellers } = useQuery<User[]>({
+    queryKey: ['org-sellers'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/users')
+      const json = await res.json()
+      return (json.data ?? []).filter((u: User) => u.role === 'SELLER' && u.status === 'ACTIVE')
+    },
+    enabled: canAssignOwner,
+    staleTime: 5 * 60 * 1000,
+  })
+  const OWNER_OPTIONS = [
+    { value: '', label: 'Sin asignar' },
+    ...(sellers ?? []).map(s => ({ value: s.id, label: s.name })),
+  ]
 
   // Si ya tiene un país cargado que no está en la lista curada, se trata
   // como "Otro" con el valor real precargado en el campo libre — mismo
@@ -66,6 +107,12 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
       city:        empresa?.city     ?? '',
       province:    empresa?.province ?? '',
       website:     empresa?.website  ?? '',
+      cuit:              empresa?.cuit ?? '',
+      condicionIva:      empresa?.condicionIva && !CONDICIONES_IVA.includes(empresa.condicionIva) ? OTRA_CONDICION_IVA : (empresa?.condicionIva ?? ''),
+      otherCondicionIva: empresa?.condicionIva && !CONDICIONES_IVA.includes(empresa.condicionIva) ? empresa.condicionIva : '',
+      formaPagoHabitual:      empresa?.formaPagoHabitual && !FORMAS_PAGO.includes(empresa.formaPagoHabitual) ? OTRA_FORMA_PAGO : (empresa?.formaPagoHabitual ?? ''),
+      otherFormaPagoHabitual: empresa?.formaPagoHabitual && !FORMAS_PAGO.includes(empresa.formaPagoHabitual) ? empresa.formaPagoHabitual : '',
+      ownerId: empresa?.ownerId ?? '',
       tcFirstName: '',
       tcLastName:  '',
       tcRole:      '',
@@ -78,6 +125,8 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
   const selectedCountry  = watch('country')
   const isArgentina      = selectedCountry === 'Argentina'
   const isOtherCountry   = selectedCountry === OTHER_COUNTRY
+  const selectedCondicionIva = watch('condicionIva')
+  const selectedFormaPago    = watch('formaPagoHabitual')
 
   // Build city options for the selected province. If editing and city isn't in the list, add it.
   const provinceCities = selectedProvince ? (CITIES_BY_PROVINCE[selectedProvince] ?? []) : []
@@ -96,6 +145,12 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
     const finalCountry = data.country === OTHER_COUNTRY
       ? (data.otherCountry.trim() || OTHER_COUNTRY)
       : data.country
+    const finalCondicionIva = data.condicionIva === OTRA_CONDICION_IVA
+      ? data.otherCondicionIva.trim()
+      : data.condicionIva
+    const finalFormaPago = data.formaPagoHabitual === OTRA_FORMA_PAGO
+      ? data.otherFormaPagoHabitual.trim()
+      : data.formaPagoHabitual
 
     const res = await fetch(url, {
       method,
@@ -108,6 +163,10 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         city:     data.city,
         province: data.province,
         website:  data.website,
+        cuit:              data.cuit,
+        condicionIva:      finalCondicionIva,
+        formaPagoHabitual: finalFormaPago,
+        ...(canAssignOwner && { ownerId: data.ownerId || null }),
       }),
     })
     const json = await res.json()
@@ -223,6 +282,47 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Web</label>
         <Input {...register('website')} placeholder="https://empresa.com" />
       </div>
+
+      {/* Datos fiscales */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>CUIT</label>
+          <Input {...register('cuit')} placeholder="30-12345678-9" />
+        </div>
+        <div className={selectedCondicionIva === OTRA_CONDICION_IVA ? 'grid grid-cols-2 gap-2' : ''}>
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Condición frente al IVA</label>
+            <Select {...register('condicionIva')} options={CONDICION_IVA_OPTIONS} />
+          </div>
+          {selectedCondicionIva === OTRA_CONDICION_IVA && (
+            <div>
+              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>¿Cuál?</label>
+              <Input {...register('otherCondicionIva')} placeholder="Especificar" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className={selectedFormaPago === OTRA_FORMA_PAGO ? 'grid grid-cols-2 gap-3' : ''}>
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Forma de pago habitual</label>
+          <Select {...register('formaPagoHabitual')} options={FORMA_PAGO_OPTIONS} />
+        </div>
+        {selectedFormaPago === OTRA_FORMA_PAGO && (
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>¿Cuál?</label>
+            <Input {...register('otherFormaPagoHabitual')} placeholder="Especificar" />
+          </div>
+        )}
+      </div>
+
+      {/* Cartera de Ventas — sólo ADMIN+ puede asignar/reasignar dueño */}
+      {canAssignOwner && (
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Vendedor asignado</label>
+          <Select {...register('ownerId')} options={OWNER_OPTIONS} />
+        </div>
+      )}
 
       {/* Primer contacto (solo en alta nueva) */}
       {!empresa && (

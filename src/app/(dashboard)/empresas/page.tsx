@@ -110,18 +110,19 @@ export default function EmpresasPage() {
     setSelectedIds(new Set())
   }, [search, filterActividad, filterCiudad, tieneWeb, page])
 
-  // All empresas for merge selects (only loaded when merge modal is open)
+  // All empresas for merge selects (only loaded when merge modal is open) —
+  // endpoint liviano, sólo trae lo que este picker usa (id/name/_count).
   const { data: allEmpresasData } = useQuery({
     queryKey: ['empresas-all'],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?limit=2000')
+      const res = await fetch('/api/empresas/options')
       if (!res.ok) throw new Error('Error')
       return res.json()
     },
     enabled: showMerge,
     staleTime: 60_000,
   })
-  const allEmpresas: Empresa[] = allEmpresasData?.data ?? []
+  const allEmpresas: Pick<Empresa, 'id' | 'name' | '_count'>[] = allEmpresasData?.data ?? []
 
   const empresas: Empresa[] = data?.data ?? []
   const total: number       = data?.total ?? 0

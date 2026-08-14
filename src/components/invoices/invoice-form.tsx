@@ -50,7 +50,7 @@ export function InvoiceForm({ defaultEmpresaId, onSuccess, onCancel }: InvoiceFo
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-clientes-all'],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?isCliente=true&limit=2000')
+      const res = await fetch('/api/empresas/options?isCliente=true')
       if (!res.ok) return []
       const json = await res.json()
       return (json.data ?? []) as EmpresaOption[]

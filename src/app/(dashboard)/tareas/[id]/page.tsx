@@ -307,7 +307,7 @@ export default function TareaDetailPage() {
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-tareas'],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?limit=2000')
+      const res = await fetch('/api/empresas/options')
       if (!res.ok) return { data: [] }
       return res.json()
     },

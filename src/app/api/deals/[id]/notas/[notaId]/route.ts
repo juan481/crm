@@ -17,8 +17,10 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     })
     if (!nota) return NextResponse.json({ error: 'Nota no encontrada' }, { status: 404 })
 
-    if (nota.userId !== payload.userId && !canAccess(payload.role, 'ADMIN')) {
-      return NextResponse.json({ error: 'Solo podés eliminar tus propias notas' }, { status: 403 })
+    // Notas de auditoría: sólo Super Admin puede borrarlas — ver el mismo
+    // cambio y comentario en api/empresas/[id]/notas/[notaId]/route.ts.
+    if (!canAccess(payload.role, 'SUPER_ADMIN')) {
+      return NextResponse.json({ error: 'Solo Super Admin puede eliminar notas' }, { status: 403 })
     }
 
     await db.dealNota.delete({ where: { id: params.notaId } })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Plus, UserCog, Shield, UserX, KeyRound, Trash2 } from 'lucide-react'
@@ -133,9 +134,16 @@ export default function UsuariosPage() {
             <p className="text-sm text-[var(--color-text-muted)]">{users.length} usuarios en el sistema</p>
           </div>
         </div>
-        <Button leftIcon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>
-          Nuevo Usuario
-        </Button>
+        <div className="flex items-center gap-3">
+          {isSuperAdmin && (
+            <Link href="/configuracion/permisos" className="text-sm text-[var(--color-primary)] hover:underline whitespace-nowrap">
+              Gestionar qué ve cada rol →
+            </Link>
+          )}
+          <Button leftIcon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>
+            Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       <div className="surface rounded-2xl overflow-hidden">

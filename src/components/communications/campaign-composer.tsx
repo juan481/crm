@@ -108,9 +108,9 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-campaign-all'],
     queryFn:  async () => {
-      const r = await fetch('/api/empresas?limit=2000')
+      const r = await fetch('/api/empresas/options')
       if (!r.ok) return []
-      return ((await r.json()).data ?? []) as Empresa[]
+      return ((await r.json()).data ?? []) as Pick<Empresa, 'id' | 'name' | 'city' | 'activity' | '_count'>[]
     },
     enabled: source === 'empresas',
     staleTime: 0,

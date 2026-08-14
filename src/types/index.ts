@@ -310,14 +310,7 @@ export interface PluginConfig {
 // ─── Dashboard Metrics ────────────────────────────────────────────────────
 export interface DashboardMetrics {
   activeClients: number
-  pendingPayment: number
-  overdueInvoices: number
-  // Nunca sumar entre monedas — ver formatMultiCurrency en @/lib/utils.
-  mrrByCurrency: Record<string, number>
-  mrrGrowthByCurrency: Record<string, number>
   newClientsThisMonth: number
-  revenueByMonth: { month: string; byCurrency: Record<string, number> }[]
-  invoicesByStatus: { status: string; count: number }[]
   pendingTasks: number
   openTickets: number
   activeDealsCount: number
@@ -325,7 +318,18 @@ export interface DashboardMetrics {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
-  topClientsByRevenue: { id: string; name: string; total: number; currency: string }[]
+  // Bloque financiero — undefined para roles sin acceso (hoy: SELLER). El
+  // backend (api/dashboard/metrics/route.ts) ni siquiera corre esas
+  // queries ni las manda en el JSON para esos roles — no es sólo un
+  // ocultamiento visual. Chequear `!== undefined` antes de renderizar.
+  pendingPayment?: number
+  overdueInvoices?: number
+  // Nunca sumar entre monedas — ver formatMultiCurrency en @/lib/utils.
+  mrrByCurrency?: Record<string, number>
+  mrrGrowthByCurrency?: Record<string, number>
+  revenueByMonth?: { month: string; byCurrency: Record<string, number> }[]
+  invoicesByStatus?: { status: string; count: number }[]
+  topClientsByRevenue?: { id: string; name: string; total: number; currency: string }[]
 }
 
 // ─── Email Campaign ────────────────────────────────────────────────────────
@@ -549,6 +553,12 @@ export interface Empresa {
   website: string | null
   monthlyAmount: number | null
   billingCurrency: string
+  cuit: string | null
+  condicionIva: string | null
+  formaPagoHabitual: string | null
+  // Cartera de Ventas — reparto de trabajo, no aislamiento (ver schema).
+  ownerId: string | null
+  owner?: { id: string; name: string } | null
   organizationId: string
   createdAt: string
   updatedAt: string

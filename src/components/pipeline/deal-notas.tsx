@@ -373,7 +373,7 @@ export function DealNotas({ dealId }: Props) {
                         <span className="text-xs ml-auto" style={{ color: 'var(--color-text-muted)' }} title={formatDate(nota.createdAt)}>
                           {timeAgo(nota.createdAt)}
                         </span>
-                        {(nota.user.id === user?.id || ['ADMIN', 'SUPER_ADMIN'].includes(user?.role ?? '')) && (
+                        {user?.role === 'SUPER_ADMIN' && (
                           <button
                             type="button"
                             onClick={() => handleDelete(nota.id)}

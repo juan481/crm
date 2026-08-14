@@ -14,6 +14,12 @@ export const metadata: Metadata = {
   title: 'CRM Pro',
   description: 'CRM White-Label para agencias digitales y empresas.',
   robots: 'noindex, nofollow',
+  manifest: '/manifest.json',
+  icons: {
+    // iOS no lee manifest.json para el ícono de "agregar a inicio" — necesita
+    // este link explícito además del manifest (que sí cubre Android/desktop).
+    apple: '/icons/icon-192.png',
+  },
 }
 
 export const viewport: Viewport = {

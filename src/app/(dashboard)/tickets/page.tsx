@@ -109,7 +109,7 @@ export default function TicketsPage() {
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-tickets'],
     queryFn: async () => {
-      const res = await fetch('/api/empresas?limit=2000')
+      const res = await fetch('/api/empresas/options')
       if (!res.ok) return { data: [] }
       return res.json()
     },

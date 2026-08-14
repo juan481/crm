@@ -110,7 +110,7 @@ export default function CotizadorPage() {
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-cotizador'],
     queryFn:  async () => {
-      const r = await fetch('/api/empresas?limit=2000')
+      const r = await fetch('/api/empresas/options')
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Array<{ id: string; name: string; city?: string | null }>
     },

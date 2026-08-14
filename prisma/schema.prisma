@@ -151,20 +151,20 @@ enum SmtpProvider {
 
 // ─── Multi-tenant White-label organizations ────────────────────────────────
 model Organization {
-  id             String   @id @default(cuid())
-  name           String
-  logoUrl        String?
-  primaryColor   String   @default("#6366f1")
-  secondaryColor String   @default("#8b5cf6")
-  domain         String?  @unique
-  crmName        String   @default("CRM Pro")
+  id                  String       @id @default(cuid())
+  name                String
+  logoUrl             String?
+  primaryColor        String       @default("#6366f1")
+  secondaryColor      String       @default("#8b5cf6")
+  domain              String?      @unique
+  crmName             String       @default("CRM Pro")
   // Rubro de la organización (ej. "seguridad", "marketing") — determina qué
   // módulos/plugins ve por defecto y qué tour de onboarding recibe. Lista
   // curada en src/lib/verticals.ts, a propósito NO es un enum de Prisma:
   // sumar un rubro nuevo no debe pedir migración. Null = todavía no eligió
   // (dispara el selector de "primera vez" para el SUPER_ADMIN, ver
   // POST /api/organization/vertical).
-  vertical       String?
+  vertical            String?
   // Token del formulario público de autogestión de tickets
   // (/soporte/[token]) — mismo espíritu que Event.webhookSecret (línea 578)
   // pero nullable a propósito: un ALTER TABLE que agrega una columna NOT
@@ -176,71 +176,72 @@ model Organization {
   // toda organización NUEVA sí recibe un token automático (default a nivel
   // Prisma Client, no a nivel SQL). Los API routes tratan null = "todavía
   // sin token" y lo resuelven on-demand si hiciera falta.
-  publicSupportToken String? @default(cuid())
-  quoteValidityDays Int   @default(30)
-  smtpHost       String?
-  smtpPort       Int?
-  smtpUser       String?
-  smtpPass       String?
-  smtpFrom       String?
-  smtpProvider   SmtpProvider @default(SMTP)
-  sesRegion      String?
-  sesAccessKeyId String?
-  sesSecretKey   String?
-  sesFrom        String?
-  sesConfigSet   String?
+  publicSupportToken  String?      @default(cuid())
+  quoteValidityDays   Int          @default(30)
+  smtpHost            String?
+  smtpPort            Int?
+  smtpUser            String?
+  smtpPass            String?
+  smtpFrom            String?
+  smtpProvider        SmtpProvider @default(SMTP)
+  sesRegion           String?
+  sesAccessKeyId      String?
+  sesSecretKey        String?
+  sesFrom             String?
+  sesConfigSet        String?
   // Campaign-send cap. Agency-managed only — not exposed as an editable
   // field in any org-facing settings screen (see scripts/set-email-limit.ts).
-  emailMonthlyLimit Int @default(9000)
+  emailMonthlyLimit   Int          @default(9000)
   // Agency kill switch (e.g. non-payment). Blocks login for every user in
   // this org without deleting anything. Only ever changed from /admin —
   // never client-facing.
-  suspended   Boolean   @default(false)
-  suspendedAt DateTime?
+  suspended           Boolean      @default(false)
+  suspendedAt         DateTime?
   // Datos de facturación
   billingAddress      String?
   billingEmail        String?
   billingPhone        String?
   billingTaxId        String?
   paymentInstructions String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  users          User[]
-  clients        Client[]
-  plugins        PluginConfig[]
-  emailCampaigns EmailCampaign[]
-  emailTemplates EmailTemplate[]
-  services       Service[]
-  products       Product[]
-  events         Event[]
-  folders        Folder[]
-  documents      Document[]
-  deals          Deal[]
-  tasks          Task[]
-  tickets        Ticket[]
-  empresas          Empresa[]
-  directorioContactos DirectorioContacto[]
-  empresaNotas      EmpresaNota[]
-  dealNotas         DealNota[]
+  users                   User[]
+  clients                 Client[]
+  plugins                 PluginConfig[]
+  modulePermissions       ModulePermission[]
+  emailCampaigns          EmailCampaign[]
+  emailTemplates          EmailTemplate[]
+  services                Service[]
+  products                Product[]
+  events                  Event[]
+  folders                 Folder[]
+  documents               Document[]
+  deals                   Deal[]
+  tasks                   Task[]
+  tickets                 Ticket[]
+  empresas                Empresa[]
+  directorioContactos     DirectorioContacto[]
+  empresaNotas            EmpresaNota[]
+  dealNotas               DealNota[]
   directorioContactoNotas DirectorioContactoNota[]
-  cotizaciones      Cotizacion[]
-  asistencias       Asistencia[]
-  suppressions      EmailSuppression[]
-  emailUsage        EmailUsageMonthly[]
-  memberships       OrganizationMembership[]
+  cotizaciones            Cotizacion[]
+  asistencias             Asistencia[]
+  suppressions            EmailSuppression[]
+  emailUsage              EmailUsageMonthly[]
+  memberships             OrganizationMembership[]
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before
 // creating campaign recipients and again right before sending (in case someone
 // unsubscribes while a large campaign is still batching out).
 model EmailSuppression {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String
-  reason         String   @default("unsubscribed")
-  createdAt      DateTime @default(now())
+  reason         String       @default("unsubscribed")
+  createdAt      DateTime     @default(now())
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -252,14 +253,14 @@ model EmailSuppression {
 // src/lib/email-usage.ts) — quote emails and empresa-contact emails are
 // explicitly excluded from this counter.
 model EmailUsageMonthly {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   year           Int
-  month          Int      // 1-12
-  count          Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  month          Int // 1-12
+  count          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([organizationId, year, month])
   @@index([organizationId])
@@ -267,45 +268,46 @@ model EmailUsageMonthly {
 
 // ─── Users & Auth ──────────────────────────────────────────────────────────
 model User {
-  id                  String   @id @default(cuid())
-  supabaseId          String?  @unique  // links to Supabase auth.users.id
-  email               String   @unique
+  id                  String       @id @default(cuid())
+  supabaseId          String?      @unique // links to Supabase auth.users.id
+  email               String       @unique
   name                String
-  role                Role       @default(SELLER)
-  status              UserStatus @default(ACTIVE)
-  onboardingCompleted Boolean  @default(false)
-  forcePasswordChange Boolean  @default(false)
+  role                Role         @default(SELLER)
+  status              UserStatus   @default(ACTIVE)
+  onboardingCompleted Boolean      @default(false)
+  forcePasswordChange Boolean      @default(false)
   // Agency operator flag — orthogonal to Role (SUPER_ADMIN is per-org, this
   // is cross-tenant). Never settable from any in-app UI — only via
   // scripts/set-platform-admin.ts. See getPlatformAdmin() in src/lib/auth.ts.
-  isPlatformAdmin     Boolean  @default(false)
+  isPlatformAdmin     Boolean      @default(false)
   avatarUrl           String?
   organizationId      String
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  notes                   Note[]
+  activityLogs            ActivityLog[]
+  assignedClients         Client[]                 @relation("SellerClients")
+  sales                   Sale[]
+  uploadedDocs            Document[]
+  emailTemplates          EmailTemplate[]
+  ownedDeals              Deal[]                   @relation("DealOwner")
+  ownedEmpresas           Empresa[]                @relation("EmpresaOwner")
+  assignedTasks           Task[]                   @relation("TaskAssignee")
+  createdTasks            Task[]                   @relation("TaskCreator")
+  assignedTickets         Ticket[]                 @relation("TicketAssignee")
+  createdTickets          Ticket[]                 @relation("TicketCreator")
+  ticketMessages          TicketMessage[]          @relation("TicketMessageAuthor")
+  taskComments            TaskComment[]
+  empresaNotas            EmpresaNota[]
+  dealNotas               DealNota[]
+  directorioContactoNotas DirectorioContactoNota[]
+  cotizaciones            Cotizacion[]
+  asistencias             Asistencia[]
+  memberships             OrganizationMembership[]
 
   @@index([organizationId])
-
-  notes          Note[]
-  activityLogs   ActivityLog[]
-  assignedClients Client[]     @relation("SellerClients")
-  sales          Sale[]
-  uploadedDocs   Document[]
-  emailTemplates EmailTemplate[]
-  ownedDeals     Deal[]        @relation("DealOwner")
-  assignedTasks  Task[]        @relation("TaskAssignee")
-  createdTasks   Task[]        @relation("TaskCreator")
-  assignedTickets Ticket[]     @relation("TicketAssignee")
-  createdTickets  Ticket[]     @relation("TicketCreator")
-  ticketMessages  TicketMessage[] @relation("TicketMessageAuthor")
-  taskComments    TaskComment[]
-  empresaNotas    EmpresaNota[]
-  dealNotas       DealNota[]
-  directorioContactoNotas DirectorioContactoNota[]
-  cotizaciones    Cotizacion[]
-  asistencias     Asistencia[]
-  memberships     OrganizationMembership[]
 }
 
 // Session management is now handled by Supabase Auth
@@ -318,13 +320,13 @@ model User {
 // revalida esta tabla en cada request antes de confiar en una organización
 // distinta de la de origen — ver esa función para el mecanismo completo.
 model OrganizationMembership {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role           Role     @default(SUPER_ADMIN)
-  createdAt      DateTime @default(now())
+  role           Role         @default(SUPER_ADMIN)
+  createdAt      DateTime     @default(now())
 
   @@unique([userId, organizationId])
   @@index([userId])
@@ -333,64 +335,64 @@ model OrganizationMembership {
 
 // ─── Services catalog ──────────────────────────────────────────────────────
 model Service {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   description    String?
-  price          Float    @default(0)
-  currency       String   @default("USD")
+  price          Float        @default(0)
+  currency       String       @default("USD")
   billingCycle   BillingCycle @default(MONTHLY)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   clients        Client[]
   sales          Sale[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
 }
 
 // ─── Clients ───────────────────────────────────────────────────────────────
 model Client {
-  id             String   @id @default(cuid())
-  name           String
-  email          String
-  phone          String?
-  company        String?
-  country        String?
-  city           String?
-  address        String?
-  postalCode     String?
-  province       String?
-  website        String?
-  status         ClientStatus @default(ACTIVE)
-  isEnabled      Boolean      @default(true)
-  clientType     ClientType   @default(B2B)
-  serviceType    String?
-  tags           String   @default("[]")
-  mrr            Float    @default(0)
-  contractStart  DateTime?
-  contractEnd    DateTime?
-  serviceId      String?
-  service        Service?  @relation(fields: [serviceId], references: [id])
+  id                 String       @id @default(cuid())
+  name               String
+  email              String
+  phone              String?
+  company            String?
+  country            String?
+  city               String?
+  address            String?
+  postalCode         String?
+  province           String?
+  website            String?
+  status             ClientStatus @default(ACTIVE)
+  isEnabled          Boolean      @default(true)
+  clientType         ClientType   @default(B2B)
+  serviceType        String?
+  tags               String       @default("[]")
+  mrr                Float        @default(0)
+  contractStart      DateTime?
+  contractEnd        DateTime?
+  serviceId          String?
+  service            Service?     @relation(fields: [serviceId], references: [id])
   // Licencia
   licenseSerial      String?
   licenseVersion     String?
   maxWorkstations    Int?
   subscriptionStart  DateTime?
   subscriptionEnd    DateTime?
-  licenseHibernated  Boolean  @default(false)
-  licenseRepurchased Boolean  @default(false)
-  isActive24x7       Boolean  @default(false)
+  licenseHibernated  Boolean      @default(false)
+  licenseRepurchased Boolean      @default(false)
+  isActive24x7       Boolean      @default(false)
   // Comercial
-  distributorName  String?
-  totalInvestment  Float?
-  renewalCount     Int      @default(0)
-  assignedSellerId String?
-  assignedSeller   User?    @relation("SellerClients", fields: [assignedSellerId], references: [id])
-  organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  distributorName    String?
+  totalInvestment    Float?
+  renewalCount       Int          @default(0)
+  assignedSellerId   String?
+  assignedSeller     User?        @relation("SellerClients", fields: [assignedSellerId], references: [id])
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   invoices     Invoice[]
   notes        Note[]
@@ -411,14 +413,14 @@ model Client {
 }
 
 model Contact {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
   email     String?
   phone     String?
   whatsapp  String?
   role      String?
   clientId  String
-  client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@index([clientId])
@@ -426,22 +428,22 @@ model Contact {
 
 // ─── Invoices ──────────────────────────────────────────────────────────────
 model Invoice {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   // clientId (legacy) kept only for the old, no-longer-navigable /clients pages —
   // every invoice created from the live Facturación screen uses empresaId instead.
   clientId       String?
-  client         Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   empresaId      String?
-  empresa        Empresa? @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa        Empresa?      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   organizationId String
   amount         Float
-  currency       String   @default("USD")
+  currency       String        @default("USD")
   status         InvoiceStatus @default(PENDING)
   description    String?
   dueDate        DateTime
   paidAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([organizationId])
   @@index([organizationId, status])
@@ -456,7 +458,7 @@ model Note {
   id        String   @id @default(cuid())
   content   String
   type      NoteType @default(NOTE)
-  metadata  String?  // JSON: { estimatedHours?, estimatedMinutes?, complexity?, estimatedCost?, imageUrl? }
+  metadata  String? // JSON: { estimatedHours?, estimatedMinutes?, complexity?, estimatedCost?, imageUrl? }
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId    String
@@ -469,33 +471,33 @@ model Note {
 
 // ─── Activity Log ──────────────────────────────────────────────────────────
 model ActivityLog {
-  id          String   @id @default(cuid())
+  id          String         @id @default(cuid())
   clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  user        User           @relation(fields: [userId], references: [id])
   action      ActivityAction @default(NOTE)
   description String
   metadata    String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime       @default(now())
 
   @@index([clientId, createdAt])
 }
 
 // ─── Sales ─────────────────────────────────────────────────────────────────
 model Sale {
-  id         String   @id @default(cuid())
-  clientId   String
-  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  sellerId   String
-  seller     User     @relation(fields: [sellerId], references: [id])
-  serviceId  String?
-  service    Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  amount     Float
-  currency   String   @default("USD")
-  closedAt   DateTime @default(now())
-  notes      String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sellerId  String
+  seller    User     @relation(fields: [sellerId], references: [id])
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  amount    Float
+  currency  String   @default("USD")
+  closedAt  DateTime @default(now())
+  notes     String?
+  createdAt DateTime @default(now())
 
   @@index([sellerId])
   @@index([clientId])
@@ -503,42 +505,62 @@ model Sale {
 
 // ─── Plugin System ─────────────────────────────────────────────────────────
 model PluginConfig {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   pluginId       String
-  enabled        Boolean  @default(false)
+  enabled        Boolean      @default(false)
   config         String?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime     @updatedAt
 
   @@unique([pluginId, organizationId])
 }
 
+// Visibilidad de nav configurable por rol (Configuración > Gestión de
+// Usuarios > Permisos). Aditivo/restrictivo sobre canAccess() — nunca lo
+// reemplaza: el endpoint que escribe esta tabla rechaza habilitar un módulo
+// para un rol que no supera el piso real de canAccess() en las rutas de ese
+// módulo (ver src/lib/modules.ts). Sin fila = usa el default declarado en
+// MODULE_DEFINITIONS (así una org sin ninguna fila acá se comporta
+// exactamente igual que antes de que existiera esta tabla).
+model ModulePermission {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  moduleId       String
+  role           Role
+  enabled        Boolean      @default(true)
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, moduleId, role])
+  @@index([organizationId])
+}
+
 // ─── Communications ────────────────────────────────────────────────────────
 model EmailCampaign {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   name           String
   subject        String
   body           String
   status         CampaignStatus @default(DRAFT)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sentAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   // Tracking aggregates (populated by SES webhooks)
-  totalDelivered Int      @default(0)
-  totalBounced   Int      @default(0)
-  totalSpam      Int      @default(0)
-  totalOpened    Int      @default(0)
+  totalDelivered Int            @default(0)
+  totalBounced   Int            @default(0)
+  totalSpam      Int            @default(0)
+  totalOpened    Int            @default(0)
 
   recipients CampaignRecipient[]
 }
 
 model CampaignRecipient {
-  id            String        @id @default(cuid())
+  id            String          @id @default(cuid())
   campaignId    String
-  campaign      EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign      EmailCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   email         String
   name          String?
   status        RecipientStatus @default(pending)
@@ -552,36 +574,36 @@ model CampaignRecipient {
   bounceSubType String?
   spamAt        DateTime?
   openedAt      DateTime?
-  openCount     Int           @default(0)
+  openCount     Int             @default(0)
 }
 
 // ─── Email Templates ───────────────────────────────────────────────────────
 model EmailTemplate {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   subject        String
   body           String
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdById    String
-  createdBy      User     @relation(fields: [createdById], references: [id])
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 // ─── Events ────────────────────────────────────────────────────────────────
 model Event {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   description    String?
   eventDate      DateTime?
   location       String?
-  isActive       Boolean  @default(true)
-  webhookSecret  String   @default(cuid())
+  isActive       Boolean      @default(true)
+  webhookSecret  String       @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   attendees EventAttendee[]
 
@@ -606,22 +628,22 @@ model EventAttendee {
 
 // ─── Document Repository ───────────────────────────────────────────────────
 model Folder {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   parentId       String?
-  parent         Folder?  @relation("FolderTree", fields: [parentId], references: [id])
-  children       Folder[] @relation("FolderTree")
+  parent         Folder?      @relation("FolderTree", fields: [parentId], references: [id])
+  children       Folder[]     @relation("FolderTree")
   clientId       String?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   documents      Document[]
-  createdAt      DateTime @default(now())
+  createdAt      DateTime     @default(now())
 
   @@index([organizationId])
 }
 
 model Document {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   originalName   String
   mimeType       String
@@ -633,15 +655,15 @@ model Document {
   // Nullable: filas viejas subidas antes de este campo no lo tienen.
   storagePath    String?
   folderId       String?
-  folder         Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder         Folder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   clientId       String?
-  client         Client?  @relation(fields: [clientId], references: [id])
+  client         Client?      @relation(fields: [clientId], references: [id])
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  tags           String   @default("[]")
+  tags           String       @default("[]")
   uploadedById   String
-  uploadedBy     User     @relation(fields: [uploadedById], references: [id])
-  createdAt      DateTime @default(now())
+  uploadedBy     User         @relation(fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
 
   // Versioning: uploading a "replacement" creates a new row pointing back at
   // the one it supersedes, instead of two unrelated documents with the same
@@ -650,10 +672,10 @@ model Document {
   // No DB-level unique constraint here on purpose (would need --accept-data-loss
   // for a fresh column with no possible duplicates yet) — the upload route
   // enforces "at most one row supersedes a given document" itself.
-  version        Int       @default(1)
-  supersedesId   String?
-  supersedes     Document? @relation("DocumentVersions", fields: [supersedesId], references: [id])
-  supersededBy   Document[] @relation("DocumentVersions")
+  version      Int        @default(1)
+  supersedesId String?
+  supersedes   Document?  @relation("DocumentVersions", fields: [supersedesId], references: [id])
+  supersededBy Document[] @relation("DocumentVersions")
 
   @@index([organizationId])
   @@index([clientId])
@@ -662,28 +684,28 @@ model Document {
 
 // ─── Sales Pipeline ────────────────────────────────────────────────────────
 model Deal {
-  id                String    @id @default(cuid())
+  id                String       @id @default(cuid())
   title             String
-  amount            Float     @default(0)
-  currency          String    @default("USD")
-  probability       Int       @default(0)
-  stage             DealStage @default(LEAD)
+  amount            Float        @default(0)
+  currency          String       @default("USD")
+  probability       Int          @default(0)
+  stage             DealStage    @default(LEAD)
   expectedCloseDate DateTime?
   closedAt          DateTime?
   notes             String?
   clientId          String?
-  client            Client?   @relation(fields: [clientId], references: [id])
+  client            Client?      @relation(fields: [clientId], references: [id])
   empresaId         String?
-  empresa           Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa           Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   ownerId           String
-  owner             User      @relation("DealOwner", fields: [ownerId], references: [id])
+  owner             User         @relation("DealOwner", fields: [ownerId], references: [id])
   organizationId    String
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   cotizaciones      Cotizacion[]
   notas             DealNota[]
   tasks             Task[]
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   @@index([organizationId, stage])
   @@index([ownerId])
@@ -695,18 +717,18 @@ model Deal {
 // separado del campo Deal.notes (que queda como descripción corta, igual
 // que Empresa.activity convive con EmpresaNota[]).
 model DealNota {
-  id               String   @id @default(cuid())
+  id               String          @id @default(cuid())
   dealId           String
-  deal             Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  deal             Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
   organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId           String
-  user             User     @relation(fields: [userId], references: [id])
+  user             User            @relation(fields: [userId], references: [id])
   tipo             EmpresaNotaTipo @default(NOTA)
   content          String
-  estimatedMinutes Int      @default(0)
-  metadata         String?  // JSON: { imageUrl? }
-  createdAt        DateTime @default(now())
+  estimatedMinutes Int             @default(0)
+  metadata         String? // JSON: { imageUrl? }
+  createdAt        DateTime        @default(now())
 
   @@index([dealId])
   @@index([organizationId])
@@ -714,33 +736,33 @@ model DealNota {
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────
 model Task {
-  id             String    @id @default(cuid())
+  id             String        @id @default(cuid())
   title          String
   description    String?
-  status         TaskStatus @default(PENDIENTE)
-  priority       Priority   @default(MEDIA)
+  status         TaskStatus    @default(PENDIENTE)
+  priority       Priority      @default(MEDIA)
   dueDate        DateTime?
   completedAt    DateTime?
   viewedAt       DateTime?
   assignedToId   String
-  assignedTo     User      @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedTo     User          @relation("TaskAssignee", fields: [assignedToId], references: [id])
   createdById    String
-  createdBy      User      @relation("TaskCreator", fields: [createdById], references: [id])
+  createdBy      User          @relation("TaskCreator", fields: [createdById], references: [id])
   clientId       String?
-  client         Client?   @relation(fields: [clientId], references: [id])
+  client         Client?       @relation(fields: [clientId], references: [id])
   empresaId      String?
-  empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa        Empresa?      @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Vínculo opcional a una oportunidad de Pipeline o a un Ticket — mismo
   // criterio que empresaId (nullable, onDelete: SetNull, no rompe nada si
   // se borra el Deal/Ticket de origen). Ver Fase 11 del plan.
   dealId         String?
-  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  deal           Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
   ticketId       String?
-  ticket         Ticket?   @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   comments       TaskComment[]
   subitems       TaskSubitem[]
 
@@ -779,45 +801,45 @@ model TaskComment {
 
 // ─── Support Tickets ───────────────────────────────────────────────────────
 model Ticket {
-  id             String    @id @default(cuid())
-  number         Int
-  title          String
-  description    String
-  status         TicketStatus   @default(ABIERTO)
-  priority       Priority       @default(MEDIA)
-  category       TicketCategory @default(SOPORTE)
-  clientId       String?
-  client         Client?   @relation(fields: [clientId], references: [id])
-  empresaId      String?
-  empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  id                  String          @id @default(cuid())
+  number              Int
+  title               String
+  description         String
+  status              TicketStatus    @default(ABIERTO)
+  priority            Priority        @default(MEDIA)
+  category            TicketCategory  @default(SOPORTE)
+  clientId            String?
+  client              Client?         @relation(fields: [clientId], references: [id])
+  empresaId           String?
+  empresa             Empresa?        @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Direct contact for client-facing notifications — independent of
   // Client/Empresa (which don't reliably carry a single contact email),
   // same pattern already used by Cotizacion.recipientEmail.
-  recipientEmail String?
-  recipientName  String?
-  assignedToId   String?
-  assignedTo     User?     @relation("TicketAssignee", fields: [assignedToId], references: [id])
-  createdById    String
-  createdBy      User      @relation("TicketCreator", fields: [createdById], references: [id])
-  resolvedAt     DateTime?
+  recipientEmail      String?
+  recipientName       String?
+  assignedToId        String?
+  assignedTo          User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  createdById         String
+  createdBy           User            @relation("TicketCreator", fields: [createdById], references: [id])
+  resolvedAt          DateTime?
   // SLA — calculado al crear (o al recategorizar prioridad mientras sigue
   // abierto) según Priority; ver SLA_HOURS en la API de tickets.
-  slaDueAt              DateTime?
+  slaDueAt            DateTime?
   // CSAT — link público de un solo uso, generado recién al cerrar/resolver
   // el ticket (no @default: evita requerir backfill en filas existentes).
   // Unicidad garantizada en la app (crypto.randomUUID), no a nivel de DB,
   // para evitar el flag --accept-data-loss en el push de este constraint.
   // No requiere login ni portal de cliente.
-  satisfactionToken     String?
-  satisfactionRating    Int?
-  satisfactionComment   String?
-  satisfactionRatedAt   DateTime?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  messages       TicketMessage[]
-  tasks          Task[]
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  satisfactionToken   String?
+  satisfactionRating  Int?
+  satisfactionComment String?
+  satisfactionRatedAt DateTime?
+  organizationId      String
+  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages            TicketMessage[]
+  tasks               Task[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 
   @@unique([number, organizationId])
   @@index([organizationId, status])
@@ -844,41 +866,55 @@ model TicketMessage {
 
 // ─── Directorio de Empresas y Técnicos ────────────────────────────────────
 model Empresa {
-  id             String   @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  isCliente      Boolean  @default(false)
-  clienteDesde   DateTime?
-  activity       String?
-  address        String?
-  codigoPostal   String?
-  city           String?
-  province       String?
-  country        String?
-  website        String?
+  id                String       @id @default(cuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  isCliente         Boolean      @default(false)
+  clienteDesde      DateTime?
+  activity          String?
+  address           String?
+  codigoPostal      String?
+  city              String?
+  province          String?
+  country           String?
+  website           String?
   // Recurring billing — only meaningful once isCliente=true. Powers
   // "Generar Facturas del Mes" (previously read from the legacy Client.mrr,
   // a table the live Clientes/Empresas workflow never populates).
-  monthlyAmount    Float?
-  billingCurrency  String   @default("USD")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  monthlyAmount     Float?
+  billingCurrency   String       @default("USD")
+  // Datos fiscales (AR) — texto libre en vez de enum de Prisma a propósito,
+  // mismo criterio que país/ciudad más arriba: una lista de categorías (IVA,
+  // formas de pago) puede cambiar sin pedir una migración de schema. Ver
+  // src/lib/fiscal.ts para las listas curadas que alimentan el <select> del
+  // formulario.
+  cuit              String?
+  condicionIva      String?
+  formaPagoHabitual String?
+  // Cartera de Ventas — reparto de trabajo, NO aislamiento de datos (eso
+  // sigue siendo organizationId exclusivamente). Nullable: una empresa sin
+  // dueño asignado sigue viendo todo el resto del sistema igual que hoy.
+  ownerId           String?
+  owner             User?        @relation("EmpresaOwner", fields: [ownerId], references: [id])
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  contactos      DirectorioContacto[]
-  notas          EmpresaNota[]
-  cotizaciones   Cotizacion[]
-  deals          Deal[]
-  tasks          Task[]
-  tickets        Ticket[]
-  invoices       Invoice[]
+  contactos    DirectorioContacto[]
+  notas        EmpresaNota[]
+  cotizaciones Cotizacion[]
+  deals        Deal[]
+  tasks        Task[]
+  tickets      Ticket[]
+  invoices     Invoice[]
 
   @@index([organizationId])
   @@index([organizationId, name])
+  @@index([organizationId, ownerId])
 }
 
 model DirectorioContacto {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   firstName      String
@@ -888,11 +924,11 @@ model DirectorioContacto {
   email          String?
   phone          String?
   empresaId      String?
-  empresa        Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  empresa        Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  notas          DirectorioContactoNota[]
+  notas DirectorioContactoNota[]
 
   @@index([organizationId])
   @@index([empresaId])
@@ -901,18 +937,18 @@ model DirectorioContacto {
 
 // ─── Actividad / Notas de Empresa ─────────────────────────────────────────
 model EmpresaNota {
-  id               String   @id @default(cuid())
+  id               String          @id @default(cuid())
   empresaId        String
-  empresa          Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa          Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId           String
-  user             User     @relation(fields: [userId], references: [id])
+  user             User            @relation(fields: [userId], references: [id])
   tipo             EmpresaNotaTipo @default(NOTA)
   content          String
-  estimatedMinutes Int      @default(0)
-  metadata         String?  // JSON: { imageUrl? }
-  createdAt        DateTime @default(now())
+  estimatedMinutes Int             @default(0)
+  metadata         String? // JSON: { imageUrl? }
+  createdAt        DateTime        @default(now())
 
   @@index([empresaId])
   @@index([organizationId])
@@ -923,18 +959,18 @@ model EmpresaNota {
 // independiente del de su Empresa vinculada (un contacto puede cambiar de
 // empresa sin perder su propio historial).
 model DirectorioContactoNota {
-  id               String   @id @default(cuid())
+  id               String             @id @default(cuid())
   contactoId       String
   contacto         DirectorioContacto @relation(fields: [contactoId], references: [id], onDelete: Cascade)
   organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId           String
-  user             User     @relation(fields: [userId], references: [id])
-  tipo             EmpresaNotaTipo @default(NOTA)
+  user             User               @relation(fields: [userId], references: [id])
+  tipo             EmpresaNotaTipo    @default(NOTA)
   content          String
-  estimatedMinutes Int      @default(0)
-  metadata         String?  // JSON: { imageUrl? }
-  createdAt        DateTime @default(now())
+  estimatedMinutes Int                @default(0)
+  metadata         String? // JSON: { imageUrl? }
+  createdAt        DateTime           @default(now())
 
   @@index([contactoId])
   @@index([organizationId])
@@ -942,46 +978,46 @@ model DirectorioContactoNota {
 
 // ─── Catálogo de Productos (venta única) ──────────────────────────────────
 model Product {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   name           String
   description    String?
-  price          Float    @default(0)
-  currency       String   @default("USD")
-  unit           String   @default("unidad")
+  price          Float        @default(0)
+  currency       String       @default("USD")
+  unit           String       @default("unidad")
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
 }
 
 // ─── Historial de Cotizaciones ────────────────────────────────────────────
 model Cotizacion {
-  id             String    @id @default(cuid())
+  id             String           @id @default(cuid())
   ref            String
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
-  user           User      @relation(fields: [userId], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
   empresaId      String?
-  empresa        Empresa?  @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa        Empresa?         @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Vínculo estructurado a la oportunidad de Pipeline que originó (o recibió)
   // esta cotización — antes solo existía como texto libre en Deal.notes.
   dealId         String?
-  deal           Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  deal           Deal?            @relation(fields: [dealId], references: [id], onDelete: SetNull)
   recipientEmail String
   recipientName  String
   items          Json
   total          Float
-  discount       Float     @default(0)
-  finalTotal     Float     @default(0)
-  currency       String    @default("USD")
+  discount       Float            @default(0)
+  finalTotal     Float            @default(0)
+  currency       String           @default("USD")
   notes          String?
-  validityDays   Int       @default(30)
+  validityDays   Int              @default(30)
   status         CotizacionStatus @default(ENVIADA)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@index([organizationId])
   @@index([empresaId])
@@ -991,20 +1027,20 @@ model Cotizacion {
 
 // ─── Módulo RRHH: Asistencia ──────────────────────────────────────────────
 model Asistencia {
-  id             String    @id @default(cuid())
+  id             String       @id @default(cuid())
   userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fecha          DateTime  @db.Date
+  fecha          DateTime     @db.Date
   horaEntrada    DateTime?
   horaSalida     DateTime?
-  ausente        Boolean   @default(false)
-  tardanza       Boolean   @default(false)
+  ausente        Boolean      @default(false)
+  tardanza       Boolean      @default(false)
   observaciones  String?
   creadoPorId    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([userId, fecha, organizationId])
   @@index([organizationId])
@@ -1036,8 +1072,8 @@ model CronRun {
 // tiempo. Mismo criterio que CronRun: tracking descartable, sin relaciones.
 model PublicFormAttempt {
   id         String   @id @default(cuid())
-  kind       String   // ej. "ticket_public"
-  identifier String   // IP del request (x-forwarded-for)
+  kind       String // ej. "ticket_public"
+  identifier String // IP del request (x-forwarded-for)
   createdAt  DateTime @default(now())
 
   @@index([kind, identifier, createdAt])
