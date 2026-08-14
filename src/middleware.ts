@@ -33,11 +33,20 @@ const PUBLIC_PATHS = [
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Static assets — skip entirely
+  // Static assets — skip entirely. Manifest/service worker/íconos deben ser
+  // alcanzables SIN sesión: el navegador puede pedirlos estando todavía en
+  // /login (para el prompt de "instalar app"), y si el middleware los
+  // redirige a /login, el browser recibe el HTML del login en vez del JS/
+  // JSON esperado — el registro del service worker fallaría en ese caso
+  // límite. Encontrado en revisión propia antes de que llegara a pasar en
+  // producción.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/uploads') ||
-    pathname === '/favicon.ico'
+    pathname === '/favicon.ico' ||
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js' ||
+    pathname.startsWith('/icons/')
   ) {
     return NextResponse.next()
   }
