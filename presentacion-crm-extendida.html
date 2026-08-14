@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JustCRM · by JustCreate — Presentación completa</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+  :root{
+    --accent1:#6366f1; --accent2:#8b5cf6;
+    --dark-bg:#0f172a; --dark-surface:#1a2233;
+    --bg:#f1f5f9; --surface:#ffffff; --surface-raised:#f8fafc;
+    --text:#1e293b; --text-muted:#64748b; --text-subtle:#94a3b8;
+    --border:rgba(0,0,0,0.08);
+    --good:#10b981; --warn:#f59e0b; --danger:#ef4444; --info:#3b82f6;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:'Poppins',system-ui,sans-serif;
+    background:var(--dark-bg);
+    color:var(--text);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #deck{position:relative; width:100vw; height:100vh; overflow:hidden;}
+  .slide{
+    position:absolute; inset:0;
+    display:none;
+    background:var(--bg);
+    overflow-y:auto;
+  }
+  .slide.active{display:flex; flex-direction:column;}
+  .slide.dark{background:var(--dark-bg); color:#f1f5f9;}
+  .slide-inner{
+    max-width:1100px; width:100%; margin:0 auto;
+    padding:64px 56px 100px 56px;
+    flex:1;
+  }
+  @media (max-width:780px){ .slide-inner{padding:32px 22px 100px 22px;} }
+
+  .kicker{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent1); margin-bottom:14px;
+  }
+  .dark .kicker{color:#a5b4fc;}
+  .kicker .dot{width:6px; height:6px; border-radius:50%; background:linear-gradient(135deg,var(--accent1),var(--accent2));}
+
+  h1.slide-title{font-size:38px; font-weight:700; line-height:1.15; margin-bottom:10px; color:var(--text);}
+  .dark h1.slide-title{color:#fff;}
+  .slide-subtitle{font-size:16px; color:var(--text-muted); margin-bottom:30px; max-width:760px; line-height:1.6;}
+  .dark .slide-subtitle{color:#94a3b8;}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:28px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+  @media (max-width:900px){ .grid2,.grid3{grid-template-columns:1fr;} }
+
+  .bullets{list-style:none; display:flex; flex-direction:column; gap:12px;}
+  .bullets li{display:flex; gap:12px; align-items:flex-start; font-size:15px; line-height:1.55; color:var(--text);}
+  .dark .bullets li{color:#e2e8f0;}
+  .bullets li .dotmark{
+    width:7px; height:7px; border-radius:50%; margin-top:7px; flex-shrink:0;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2));
+  }
+  .bullets b{color:var(--text); font-weight:600;}
+  .dark .bullets b{color:#fff;}
+
+  .icon-badge{
+    width:44px; height:44px; border-radius:13px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2));
+    color:#fff; box-shadow:0 6px 16px -4px rgba(99,102,241,.5);
+  }
+  .icon-badge svg{width:22px; height:22px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:20px; display:flex; flex-direction:column; gap:10px;
+  }
+  .dark .card{background:var(--dark-surface); border-color:rgba(255,255,255,.08);}
+  .card-title{font-weight:600; font-size:14.5px; color:var(--text); display:flex; align-items:center; gap:9px;}
+  .dark .card-title{color:#fff;}
+  .card-body{font-size:13.5px; color:var(--text-muted); line-height:1.55;}
+  .dark .card-body{color:#94a3b8;}
+
+  .pill{
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:11.5px; font-weight:600; padding:4px 11px; border-radius:999px;
+    white-space:nowrap;
+  }
+  .pill.neutral{background:#f1f5f9; color:#475569;}
+  .pill.accent{background:rgba(99,102,241,.12); color:#6366f1;}
+  .pill.good{background:rgba(16,185,129,.12); color:#059669;}
+  .pill.warn{background:rgba(245,158,11,.12); color:#b45309;}
+  .pill.danger{background:rgba(239,68,68,.12); color:#dc2626;}
+  .pill.info{background:rgba(59,130,246,.12); color:#2563eb;}
+  .dark .pill.neutral{background:rgba(255,255,255,.08); color:#cbd5e1;}
+
+  /* Mock browser frame */
+  .mock{
+    border-radius:16px; overflow:hidden; border:1px solid var(--border);
+    background:var(--surface); box-shadow:0 20px 45px -20px rgba(15,23,42,.25);
+  }
+  .dark .mock{border-color:rgba(255,255,255,.1);}
+  .mock-bar{
+    height:34px; background:var(--surface-raised); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:6px; padding:0 14px;
+  }
+  .dark .mock-bar{background:#141b2e; border-color:rgba(255,255,255,.08);}
+  .mock-bar .dotc{width:9px; height:9px; border-radius:50%;}
+  .mock-bar-title{margin-left:10px; font-size:11px; color:var(--text-subtle); font-weight:500;}
+  .mock-body{padding:18px;}
+
+  .mock-row{
+    display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:9px;
+    font-size:12.5px; color:var(--text);
+  }
+  .dark .mock-row{color:#e2e8f0;}
+  .mock-row:nth-child(odd){background:var(--surface-raised);}
+  .dark .mock-row:nth-child(odd){background:rgba(255,255,255,.03);}
+
+  .kanban{display:grid; grid-template-columns:repeat(5,1fr); gap:10px;}
+  .kanban-col{background:var(--surface-raised); border-radius:11px; padding:9px; min-height:150px;}
+  .dark .kanban-col{background:rgba(255,255,255,.03);}
+  .kanban-col-h{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; color:var(--text-muted);}
+  .kanban-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:9px;
+    padding:9px; font-size:11.5px; margin-bottom:7px; box-shadow:0 3px 8px -4px rgba(0,0,0,.1);
+  }
+  .dark .kanban-card{background:var(--dark-surface); border-color:rgba(255,255,255,.08);}
+
+  .stat-tile{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px;}
+  .dark .stat-tile{background:var(--dark-surface); border-color:rgba(255,255,255,.08);}
+  .stat-tile .num{font-size:26px; font-weight:700; color:var(--text);}
+  .dark .stat-tile .num{color:#fff;}
+  .stat-tile .lbl{font-size:12px; color:var(--text-muted); margin-top:2px;}
+
+  .callout{
+    border-radius:14px; padding:16px 18px; font-size:13.5px; line-height:1.6;
+    display:flex; gap:12px; align-items:flex-start;
+  }
+  .callout.roadmap{background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); color:#92400e;}
+  .dark .callout.roadmap{color:#fcd34d;}
+  .callout.fixed{background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.25); color:#065f46;}
+  .dark .callout.fixed{color:#6ee7b7;}
+  .callout.info{background:rgba(99,102,241,.08); border:1px solid rgba(99,102,241,.25); color:#3730a3;}
+  .dark .callout.info{color:#c7d2fe;}
+
+  .phone-frame{
+    width:230px; border-radius:32px; border:8px solid #1e293b; background:#1e293b;
+    box-shadow:0 25px 50px -18px rgba(0,0,0,.4); overflow:hidden; flex-shrink:0;
+  }
+  .phone-screen{background:var(--surface); min-height:400px; border-radius:24px; overflow:hidden;}
+  .phone-notch{height:20px; background:#1e293b; display:flex; align-items:center; justify-content:center;}
+  .phone-notch::after{content:''; width:60px; height:6px; background:#0f172a; border-radius:4px;}
+
+  /* Divider slide */
+  .divider-slide{
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    text-align:center; height:100%; padding:40px;
+  }
+  .divider-num{
+    font-size:15px; font-weight:700; color:#a5b4fc; letter-spacing:.2em; margin-bottom:18px;
+  }
+  .divider-title{font-size:52px; font-weight:700; color:#fff; line-height:1.1; max-width:820px;}
+  .divider-sub{font-size:16px; color:#94a3b8; margin-top:16px; max-width:560px;}
+
+  /* Cover slide */
+  .cover{display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding:40px;}
+  .cover-mark{
+    width:74px; height:74px; margin-bottom:28px;
+    background:linear-gradient(135deg,var(--accent1),var(--accent2));
+    clip-path:polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    box-shadow:0 20px 45px -12px rgba(99,102,241,.6);
+  }
+  .cover h1{font-size:58px; font-weight:800; color:#fff; line-height:1.08; max-width:900px;}
+  .cover .grad{background:linear-gradient(135deg,#818cf8,#c4b5fd); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .cover p.tag{color:#94a3b8; font-size:17px; margin-top:20px; max-width:640px; line-height:1.6;}
+  .cover .brandline{margin-top:44px; color:#64748b; font-size:13px; letter-spacing:.05em;}
+
+  /* Nav chrome */
+  #chrome{position:fixed; inset:0; pointer-events:none; z-index:50;}
+  #progress-track{position:fixed; top:0; left:0; right:0; height:3px; background:rgba(255,255,255,.08); z-index:60;}
+  #progress-bar{height:100%; background:linear-gradient(90deg,var(--accent1),var(--accent2)); width:0%; transition:width .2s ease;}
+  #counter{
+    position:fixed; top:16px; right:20px; font-size:12px; color:#94a3b8;
+    background:rgba(15,23,42,.55); backdrop-filter:blur(6px); padding:6px 12px; border-radius:999px;
+    pointer-events:auto; z-index:60; font-weight:500;
+  }
+  #closebtn{
+    position:fixed; top:14px; left:20px; width:32px; height:32px; border-radius:10px;
+    background:rgba(15,23,42,.55); backdrop-filter:blur(6px); color:#cbd5e1; border:none;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; z-index:60;
+    font-size:16px;
+  }
+  #closebtn:hover{background:rgba(15,23,42,.85);}
+  .navbtn{
+    position:fixed; bottom:24px; width:44px; height:44px; border-radius:50%;
+    background:rgba(15,23,42,.6); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.1);
+    color:#e2e8f0; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    pointer-events:auto; z-index:60; font-size:18px; transition:all .15s;
+  }
+  .navbtn:hover{background:rgba(99,102,241,.7); transform:scale(1.06);}
+  .navbtn:disabled{opacity:.25; cursor:default; pointer-events:none;}
+  #prevbtn{left:calc(50% - 60px);}
+  #nextbtn{left:calc(50% + 16px);}
+  #tocbtn{
+    position:fixed; bottom:24px; right:20px; height:36px; padding:0 14px; border-radius:999px;
+    background:rgba(15,23,42,.55); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.1);
+    color:#cbd5e1; display:flex; align-items:center; gap:6px; cursor:pointer; pointer-events:auto; z-index:60;
+    font-size:12px; font-weight:500; font-family:inherit;
+  }
+  #tocbtn:hover{background:rgba(15,23,42,.85);}
+
+  /* Table of contents overlay */
+  #toc-overlay{
+    position:fixed; inset:0; background:rgba(15,23,42,.92); backdrop-filter:blur(8px);
+    z-index:100; display:none; overflow-y:auto; padding:60px 24px;
+  }
+  #toc-overlay.open{display:block;}
+  .toc-wrap{max-width:760px; margin:0 auto;}
+  .toc-wrap h2{color:#fff; font-size:26px; margin-bottom:24px;}
+  .toc-list{display:grid; grid-template-columns:1fr 1fr; gap:6px;}
+  @media (max-width:700px){.toc-list{grid-template-columns:1fr;}}
+  .toc-item{
+    display:flex; gap:10px; align-items:baseline; padding:9px 12px; border-radius:9px;
+    color:#cbd5e1; cursor:pointer; font-size:13.5px; transition:background .1s;
+  }
+  .toc-item:hover{background:rgba(255,255,255,.06);}
+  .toc-item .n{color:#64748b; font-variant-numeric:tabular-nums; width:22px; flex-shrink:0;}
+  .toc-item.section{color:#a5b4fc; font-weight:600; margin-top:10px;}
+
+  code, .mono{font-family:'SF Mono',Consolas,monospace;}
+
+  @keyframes slideIn{ from{opacity:0; transform:translateX(14px);} to{opacity:1; transform:translateX(0);} }
+  .slide.active .slide-inner{animation:slideIn .28s ease-out;}
+  @media (prefers-reduced-motion:reduce){ .slide.active .slide-inner{animation:none;} }
+</style>
+</head>
+<body>
+
+<div id="progress-track"><div id="progress-bar"></div></div>
+<button id="closebtn" title="Cerrar (Esc)" onclick="if(confirm('¿Cerrar la presentación?'))window.close();">✕</button>
+<div id="counter"></div>
+<button id="prevbtn" class="navbtn" onclick="go(-1)">‹</button>
+<button id="nextbtn" class="navbtn" onclick="go(1)">›</button>
+<button id="tocbtn" onclick="toggleToc()">☰ Índice</button>
+
+<div id="toc-overlay">
+  <div class="toc-wrap">
+    <h2>Índice</h2>
+    <div class="toc-list" id="toc-list"></div>
+  </div>
+</div>
+
+<div id="deck"></div>
+
+<script>
+/* ============================= ICONOS (SVG inline, sin dependencias) ============================= */
+const ICONS = {
+  check:'<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>',
+  users:'<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14a5 5 0 0 1 5.5 5"/>',
+  user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
+  building:'<rect x="5" y="3" width="14" height="18" rx="1.4"/><path d="M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1"/>',
+  dollar:'<path d="M12 2v20"/><path d="M17 6.5c0-2-2.2-3.2-5-3.2-3 0-5 1.4-5 3.5 0 4.4 10 2.3 10 6.8 0 2.1-2.2 3.6-5 3.6-2.8 0-5-1.2-5-3.4"/>',
+  phone:'<rect x="6" y="2.5" width="12" height="19" rx="2.2"/><path d="M10 19h4"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  alert:'<path d="M12 3.5L2 20h20L12 3.5z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.3" r="0.4" fill="currentColor"/>',
+  shield:'<path d="M12 3l7 3v6c0 4.6-3 8.2-7 9-4-.8-7-4.4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4.5"/>',
+  smartphone:'<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  folder:'<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2.5h9A1.5 1.5 0 0 1 21 9v9.5A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5v-12z"/>',
+  tag:'<path d="M3 11.5l9-9h6.5V9l-9 9L3 11.5z"/><circle cx="15" cy="7" r="1.3"/>',
+  send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>',
+  star:'<path d="M12 2.5l3 6.3 6.8.9-5 4.9 1.2 6.9L12 17.8l-6 3.7 1.2-6.9-5-4.9 6.8-.9L12 2.5z"/>',
+  settings:'<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.3M12 18.7V21M21 12h-2.3M5.3 12H3M18 6l-1.6 1.6M7.6 16.4L6 18M18 18l-1.6-1.6M7.6 7.6L6 6"/>',
+  lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  refresh:'<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
+  chat:'<path d="M4 5h16v11H8l-4 4V5z"/>',
+  file:'<path d="M6 2.5h8l4.5 4.5V21H6V2.5z"/><path d="M14 2.5V7h4.5"/>',
+  creditcard:'<rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19"/>',
+  trending:'<path d="M3 17l6-6 4 4 8-8"/><path d="M21 7h-4v4"/>',
+  headphones:'<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+  clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="3.5" rx="1"/><path d="M8.5 11h7M8.5 15h7"/>',
+  zap:'<path d="M12 2L4 14h6l-1 8 9-13h-6l1-7z"/>',
+  download:'<path d="M12 3v12M7 11l5 5 5-5"/><path d="M4 20h16"/>',
+  key:'<circle cx="8" cy="15" r="4.2"/><path d="M11 12l9-9M17 6l2.5 2.5M14 9l2 2"/>',
+  bell:'<path d="M6 10a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10.5 20a1.7 1.7 0 0 0 3 0"/>',
+  wifi:'<path d="M2 8.5a16 16 0 0 1 20 0"/><path d="M5.5 12.5a11 11 0 0 1 13 0"/><path d="M9 16.5a5.5 5.5 0 0 1 6 0"/><circle cx="12" cy="20" r="0.6" fill="currentColor"/>',
+  checksquare:'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l2.5 2.5L16 9"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  robot:'<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1.2"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/><path d="M9 17h6"/>',
+  store:'<path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v10.5h16V9"/><path d="M9.5 19.5V14h5v5.5"/>',
+  layers:'<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+  pin:'<path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/>',
+  branch:'<circle cx="6" cy="4.5" r="2"/><circle cx="6" cy="19.5" r="2"/><circle cx="18" cy="9.5" r="2"/><path d="M6 6.5v11M6 9.5c0 3 3 3 6 3h4"/>',
+  puzzle:'<path d="M7 4h4v2.2a1.8 1.8 0 0 0 3.5 0V4H19v4.5h-2.2a1.8 1.8 0 0 0 0 3.5H19V16h-4.5v-2.2a1.8 1.8 0 0 0-3.5 0V16H7v-4.5H4.8a1.8 1.8 0 0 1 0-3.5H7V4z"/>',
+};
+function icon(name, size){
+  size = size || 22;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.check}</svg>`;
+}
+function badge(name, size){ return `<div class="icon-badge">${icon(name, size||22)}</div>`; }
+
+/* ============================= HELPERS DE CONTENIDO ============================= */
+function K(text){ return `<div class="kicker"><span class="dot"></span>${text}</div>`; }
+function B(items){
+  return `<ul class="bullets">${items.map(t=>`<li><span class="dotmark"></span><span>${t}</span></li>`).join('')}</ul>`;
+}
+function pill(text, tone){ return `<span class="pill ${tone||'neutral'}">${text}</span>`; }
+function card(iconName, title, body){
+  return `<div class="card"><div class="card-title">${icon(iconName,17)} ${title}</div><div class="card-body">${body}</div></div>`;
+}
+function stat(num, lbl){ return `<div class="stat-tile"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`; }
+function callout(kind, iconName, text){
+  return `<div class="callout ${kind}">${icon(iconName,17)}<div>${text}</div></div>`;
+}
+function mockBar(title, dots){
+  dots = dots===false ? '' : `<span class="dotc" style="background:#ef4444"></span><span class="dotc" style="background:#f59e0b"></span><span class="dotc" style="background:#10b981"></span>`;
+  return `<div class="mock-bar">${dots}<span class="mock-bar-title">${title}</span></div>`;
+}
+function mock(title, bodyHtml, opts){
+  opts = opts || {};
+  return `<div class="mock" style="${opts.style||''}">${mockBar(title)}<div class="mock-body">${bodyHtml}</div></div>`;
+}
+function mockRow(left, right, rightTone){
+  return `<div class="mock-row"><span style="flex:1">${left}</span><span>${pill(right, rightTone||'neutral')}</span></div>`;
+}
+
+function SLIDE(id, kicker, title, subtitle, bodyHtml, opts){
+  opts = opts || {};
+  return {id, dark:false, html:`
+    <div class="slide-inner">
+      ${K(kicker)}
+      <h1 class="slide-title">${title}</h1>
+      ${subtitle ? `<p class="slide-subtitle">${subtitle}</p>` : ''}
+      ${bodyHtml}
+    </div>`};
+}
+function DIVIDER(id, num, title, sub){
+  return {id, dark:true, html:`
+    <div class="divider-slide">
+      <div class="divider-num">${num}</div>
+      <div class="divider-title">${title}</div>
+      ${sub ? `<div class="divider-sub">${sub}</div>`:''}
+    </div>`};
+}
+function COVER(){
+  return {id:'cover', dark:true, toc:'Portada', html:`
+    <div class="cover">
+      <div class="cover-mark"></div>
+      <h1>JustCRM <span class="grad">by JustCreate</span></h1>
+      <p class="tag">Todo lo que hoy vive en WhatsApp, planillas de Excel y la memoria de cada uno, en un solo lugar — con un usuario y un rol para cada persona del equipo.</p>
+      <p class="brandline">Presentación completa del sistema · usá las flechas o la barra espaciadora para avanzar</p>
+    </div>`};
+}
+
+/* ============================= SLIDES ============================= */
+const SLIDES = [];
+SLIDES.push(COVER());
+
+SLIDES.push(SLIDE('agenda','Agenda','Qué vamos a ver hoy', 'Un recorrido completo: por qué un CRM, quién ve qué, cada módulo con el detalle real de cómo funciona, cómo se usa desde el celular, y qué sigue en el roadmap.', `
+  <div class="grid2">
+    <div class="card">${icon('clock',18)}<div class="card-title">1. Por qué un CRM</div><div class="card-body">Cuánto tiempo se pierde hoy sin uno, y cuánto se recupera.</div></div>
+    <div class="card">${icon('users',18)}<div class="card-title">2. Roles y accesos</div><div class="card-body">Quién es cada usuario y qué ve exactamente — configurable por vos.</div></div>
+    <div class="card">${icon('layers',18)}<div class="card-title">3. Cada módulo, al detalle</div><div class="card-body">Empresas, Pipeline, Tareas, Cotizador, Tickets, Facturación, Documentos, Comunicaciones, RRHH, Eventos.</div></div>
+    <div class="card">${icon('smartphone',18)}<div class="card-title">4. Uso desde el celular</div><div class="card-body">Qué se puede instalar y usar en el campo, sin computadora.</div></div>
+    <div class="card">${icon('shield',18)}<div class="card-title">5. Seguridad y administración</div><div class="card-body">Aislamiento de datos, permisos, marca propia.</div></div>
+    <div class="card">${icon('robot',18)}<div class="card-title">6. Qué sigue (roadmap)</div><div class="card-body">Bot de WhatsApp con IA y catálogo B2B/B2C.</div></div>
+  </div>
+`));
+
+SLIDES.push(SLIDE('ahorro','Por qué un CRM','¿Cuánto tiempo se pierde hoy sin esto?', 'No es una exageración: cada uno de estos puntos es tiempo real, medible, que hoy se va en buscar información que ya se cargó una vez, en algún lado.', `
+  <div class="grid3" style="margin-bottom:22px;">
+    ${stat('15-20 min','buscando un dato de un cliente entre WhatsApp, mails y planillas')}
+    ${stat('1 de cada 3','seguimientos comerciales que se pierden por no anotarlos a tiempo')}
+    ${stat('0','trazabilidad real de quién habló con quién, cuándo, y qué quedó pendiente')}
+  </div>
+  ${B([
+    '<b>Un solo lugar para cada cliente</b>: teléfono, contactos, notas, cotizaciones, facturas, tickets — todo en la misma ficha, no repartido en 4 apps distintas.',
+    '<b>Nada se pierde cuando alguien se va de vacaciones o deja el puesto</b>: el historial de conversaciones y gestiones queda en el sistema, no en el celular personal de una persona.',
+    '<b>Menos "¿en qué quedamos con este cliente?"</b>: cualquiera con acceso puede abrir la ficha y ver la última llamada, el último mail, la última cotización.',
+    '<b>Reportes en tiempo real</b> en vez de armar un Excel a mano una vez por mes.',
+  ])}
+`));
+
+/* ============================= SECCIÓN 1 — ROLES ============================= */
+SLIDES.push(DIVIDER('sec-roles','SECCIÓN 1','Roles y accesos','Cada persona del equipo entra con su propio usuario y ve exactamente lo que necesita para su trabajo — ni más, ni menos.'));
+
+SLIDES.push(SLIDE('roles-overview','Roles','5 tipos de usuario, un sistema', 'Cada organización puede tener usuarios de cualquiera de estos 5 roles. Vos (Super Admin) decidís quién es cada uno al crear su usuario.', `
+  <div class="grid3">
+    ${card('shield','Super Admin','El dueño del sistema. Ve y configura absolutamente todo, incluyendo qué ve cada uno de los otros roles.')}
+    ${card('settings','Admin','Gestión completa del día a día: clientes, ventas, facturación, equipo — sin poder tocar la configuración más sensible de la cuenta.')}
+    ${card('trending','Vendedor','Su cartera de clientes, el Pipeline, el Cotizador. No ve números de facturación de toda la empresa.')}
+    ${card('headphones','Técnico','Su día de trabajo: tareas asignadas, tickets, fichaje. Pantalla simple, pensada para el celular en la calle.')}
+    ${card('clipboard','RRHH','Asistencia y personal del equipo — nada de ventas ni de plata.')}
+  </div>
+  ${callout('info','key','<b>Nuevo:</b> ahora el Super Admin puede además ajustar, módulo por módulo, qué ve cada rol — sin tocar código, desde Configuración → Permisos. Lo vemos en detalle más adelante.')}
+`));
+
+SLIDES.push(SLIDE('role-superadmin','Rol: Super Admin','Control total de la cuenta', null, `
+  <div class="grid2">
+    <div>
+      ${B([
+        'Crea y elimina usuarios, cambia contraseñas, asigna cualquier rol.',
+        'Configura la marca (logo, colores, nombre del sistema).',
+        'Activa y desactiva plugins/extensiones.',
+        'Decide qué módulos ve cada rol (panel de permisos).',
+        'Único rol que puede eliminar notas de auditoría una vez guardadas.',
+        'Único rol que puede conectar Google Calendar para toda la organización.',
+      ])}
+    </div>
+    ${mock('Configuración', `
+      ${mockRow(icon('shield',14)+' Marca','')}
+      ${mockRow(icon('users',14)+' Usuarios','')}
+      ${mockRow(icon('key',14)+' Permisos','nuevo','accent')}
+      ${mockRow(icon('puzzle',14)+' Plugins','')}
+      ${mockRow(icon('tag',14)+' Servicios','')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('role-admin','Rol: Admin','Gestión operativa completa', null, `
+  ${B([
+    'Ve y edita todos los clientes, oportunidades, tareas y tickets de la organización (no sólo los propios).',
+    'Gestiona facturación: crea facturas, marca como pagadas, genera las recurrentes del mes.',
+    'Puede crear y enviar campañas de email.',
+    'Asigna cartera de clientes a los vendedores.',
+    'No puede tocar la configuración de marca ni el panel de permisos (eso queda para Super Admin, para que no haya dos personas pisándose la configuración de la cuenta).',
+  ])}
+`));
+
+SLIDES.push(SLIDE('role-seller','Rol: Vendedor','Su cartera, su pipeline, su cotizador', 'Antes veía todos los clientes de la organización. Ahora, con la nueva restricción de cartera, ve por defecto los que tiene asignados — más ordenado para equipos comerciales con varias personas.', `
+  <div class="grid2">
+    ${B([
+      'Pipeline: sólo sus propias oportunidades (a menos que un Admin le asigne otras).',
+      'Clientes: por defecto, sólo su cartera asignada.',
+      'Cotizador y Cotizaciones: acceso completo para armar y enviar presupuestos.',
+      '<b>No ve el bloque financiero del Dashboard</b> — nada de ingresos totales, facturas pendientes ni el ranking de mejores clientes por facturación. Sí ve todo lo operativo: tareas, tickets, su pipeline.',
+    ])}
+    ${mock('Dashboard — vista Vendedor', `
+      ${mockRow(icon('users',14)+' Clientes activos','')}
+      ${mockRow(icon('checksquare',14)+' Tareas pendientes','')}
+      ${mockRow(icon('headphones',14)+' Tickets abiertos','')}
+      ${mockRow(icon('trending',14)+' Valor esperado del pipeline','')}
+      <div style="margin-top:8px; padding:10px; border-radius:9px; background:rgba(0,0,0,.03); font-size:11.5px; color:var(--text-subtle); text-align:center;">— el bloque de ingresos/facturación no aparece acá —</div>
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('role-technician','Rol: Técnico','Pantalla simple, pensada para el celular en la calle', 'Al entrar, el Técnico cae directo en "Mi Día" — no en un Dashboard con números que no le sirven.', `
+  <div class="grid2">
+    ${B([
+      '<b>Mi Día</b>: sus tareas de hoy, sus tickets asignados, y el botón de fichar entrada/salida, todo en una sola pantalla.',
+      '<b>Tareas</b>: sólo las que tiene asignadas.',
+      '<b>Tickets</b>: sólo los asignados a él.',
+      '<b>Eventos</b>: puede ver y cargar inscripciones — pensado para cuando está representando a la empresa en una feria o capacitación.',
+      'No ve Clientes, Facturación, Cotizador ni el Dashboard de ventas — su mundo es "qué tengo que hacer hoy".',
+      'Se puede <b>instalar como app</b> en el celular (ver sección de uso mobile).',
+    ])}
+    ${mock('Mi Día — Técnico', `
+      <div style="font-size:11px; color:var(--text-subtle); margin-bottom:8px;">Buenos días, Franco 👋</div>
+      ${mockRow(icon('checksquare',14)+' 3 tareas para hoy','')}
+      ${mockRow(icon('headphones',14)+' 1 ticket activo','')}
+      <div style="margin:10px 0; padding:10px; border-radius:10px; background:rgba(16,185,129,.08); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px;">${icon('clock',13)} Asistencia — en jornada</span>
+        <span class="pill good">09:02</span>
+      </div>
+      ${mockRow('Revisar cámara — Cliente Norte',pill('ALTA','warn'))}
+      ${mockRow('Instalar sensor — Depósito Sur',pill('MEDIA','info'))}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('role-hr','Rol: RRHH','Asistencia y personal, nada más', null, `
+  ${B([
+    'Ve la planilla de asistencia de todo el equipo: quién fichó, quién llegó tarde, quién no fichó.',
+    'Puede marcar ausencias manualmente y editar un registro si hubo un error.',
+    'Ve y edita Tareas (sin poder tocar Clientes, Pipeline ni Facturación).',
+    'No tiene acceso a Tickets, Cotizador, ni a ningún dato de ventas o facturación.',
+  ])}
+`));
+
+SLIDES.push(SLIDE('permisos','Nuevo: Panel de Permisos','Vos decidís qué ve cada rol, sin tocar código', 'Todo lo que acabamos de mostrar (qué ve cada rol) son los valores por defecto. Ahora el Super Admin puede ajustarlos módulo por módulo desde Configuración → Permisos.', `
+  ${mock('Configuración → Permisos', `
+    <table style="width:100%; font-size:11.5px; border-collapse:collapse;">
+      <tr style="color:var(--text-subtle); text-align:center;"><td style="text-align:left; padding:6px;">Módulo</td><td>Admin</td><td>Vendedor</td><td>RRHH</td><td>Técnico</td></tr>
+      <tr><td style="padding:6px;">Facturación</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center; opacity:.25;">${icon('check',14)}</td><td style="text-align:center; opacity:.25;">${icon('check',14)}</td><td style="text-align:center; opacity:.25;">${icon('check',14)}</td></tr>
+      <tr style="background:var(--surface-raised)"><td style="padding:6px;">Pipeline</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center; opacity:.25;">${icon('check',14)}</td><td style="text-align:center; opacity:.25;">${icon('check',14)}</td></tr>
+      <tr><td style="padding:6px;">Tareas</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center;">${icon('check',14)}</td></tr>
+      <tr style="background:var(--surface-raised)"><td style="padding:6px;">Eventos</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center;">${icon('check',14)}</td><td style="text-align:center; opacity:.25;">${icon('check',14)}</td><td style="text-align:center;">${icon('check',14)}</td></tr>
+    </table>
+  `)}
+  ${callout('fixed','shield','Con un límite no negociable: el panel nunca puede darle a un rol algo que el sistema ya le bloquea por seguridad de fondo. Sólo puede sacar cosas del menú, nunca abrir una puerta que no debería estar abierta.')}
+`));
+
+/* ============================= SECCIÓN 2 — MÓDULOS ============================= */
+SLIDES.push(DIVIDER('sec-modulos','SECCIÓN 2','Cada módulo, al detalle','No un resumen de una línea — cómo funciona realmente cada pantalla que tu equipo va a usar todos los días.'));
+
+SLIDES.push(SLIDE('dashboard','Dashboard','Tu negocio de un vistazo', 'La primera pantalla al entrar (para Admin, Super Admin y Vendedor). Se actualiza solo, sin que nadie tenga que armar un reporte.', `
+  <div class="grid2">
+    ${B([
+      'Clientes activos, nuevos del mes, tareas pendientes, tickets abiertos.',
+      'Ingresos del mes y crecimiento vs. el mes anterior, separado por moneda (nunca se mezcla USD con ARS).',
+      'Gráfico de facturación de los últimos 6 meses.',
+      'Estado del pipeline: cuántas oportunidades hay en cada etapa y su valor esperado.',
+      'Top clientes por ingreso (con el plugin de Analíticas Avanzadas activado).',
+      '<b>Cambia según el rol</b>: un Vendedor ve todo lo operativo pero no el bloque de plata (visto en la sección anterior).',
+    ])}
+    ${mock('Dashboard', `
+      <div class="grid2" style="gap:8px;">
+        ${stat('182','clientes activos')}
+        ${stat('$4.2M','ingresos del mes')}
+        ${stat('7','pagos pendientes')}
+        ${stat('23','tareas pendientes')}
+      </div>
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('empresas','Empresas / Clientes','La ficha completa de cada cliente', 'El corazón del sistema. Todo lo demás (cotizaciones, facturas, tickets, tareas) cuelga de acá.', `
+  <div class="grid2">
+    ${B([
+      'Datos generales: actividad, dirección, ciudad, provincia, sitio web.',
+      '<b>Nuevo — datos fiscales</b>: CUIT, condición frente al IVA (Responsable Inscripto, Monotributo, Exento, etc.) y forma de pago habitual (transferencia, cheque, efectivo...).',
+      '<b>Nuevo — cartera de Ventas</b>: un Admin puede asignar cada empresa a un vendedor puntual.',
+      'Facturación recurrente: si el cliente paga un monto fijo todos los meses, se carga acá una sola vez y después se genera solo.',
+      'Contactos vinculados (ver módulo siguiente), notas y timeline de actividad, cotizaciones enviadas.',
+      'Importación masiva desde Excel, con plantilla descargable para que no falte ningún dato.',
+    ])}
+    ${mock('Ficha de Empresa', `
+      <div style="font-weight:600; font-size:13px; margin-bottom:4px;">${icon('building',15)} Abba Seguridad</div>
+      <div style="font-size:11px; color:var(--text-subtle); margin-bottom:10px;">Seguridad Electrónica · Córdoba</div>
+      ${mockRow('CUIT','30-71234567-8')}
+      ${mockRow('Condición IVA','Responsable Inscripto')}
+      ${mockRow('Forma de pago','Transferencia')}
+      ${mockRow('Vendedor asignado','María G.')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('contactos','Contactos','Cada persona dentro de cada empresa', 'Una empresa puede tener muchos contactos — el dueño, el técnico de mantenimiento, la persona de compras. Cada uno con su propia ficha.', `
+  <div class="grid2">
+    ${B([
+      'Nombre, cargo (con sugerencias como Gerente, Compras, Encargado de Mantenimiento — pero siempre editable a mano), email y teléfono.',
+      'Link directo a WhatsApp desde el teléfono cargado.',
+      '<b>Timeline propio</b>: igual que en la ficha de empresa, se puede registrar cada llamada, reunión o conversación con esa persona puntual, no sólo con la empresa en general.',
+      'Vinculación automática: si un contacto nuevo tiene el mismo dominio de email que una empresa ya cargada, se linkea solo.',
+    ])}
+    ${mock('Ficha de Contacto', `
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent1),var(--accent2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;">NR</div>
+        <div><div style="font-weight:600; font-size:13px;">Norma Rodríguez</div><div style="font-size:11px; color:var(--text-subtle);">Encargada de Compras</div></div>
+      </div>
+      ${mockRow(icon('phone',13)+' +54 9 351 555-1234','')}
+      ${mockRow(icon('mail',13)+' norma@abba.com','')}
+      <div style="margin-top:8px; font-size:11px; color:var(--text-subtle);">Actividad reciente</div>
+      ${mockRow(icon('phone',13)+' Llamada — coordinó visita técnica','hace 2d','info')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('pipeline','Pipeline','El embudo de ventas, arrastrable', 'Un tablero visual con 6 etapas — arrastrás la tarjeta de una columna a otra a medida que avanza la negociación.', `
+  <div class="kanban" style="margin-bottom:20px;">
+    <div class="kanban-col"><div class="kanban-col-h">Lead</div><div class="kanban-card">Municipio Realicó<br><span style="color:var(--text-subtle)">$850.000</span></div></div>
+    <div class="kanban-col"><div class="kanban-col-h">Contactado</div><div class="kanban-card">Farmacia del Sol<br><span style="color:var(--text-subtle)">$420.000</span></div></div>
+    <div class="kanban-col"><div class="kanban-col-h">Propuesta</div><div class="kanban-card">Depósito Rivas<br><span style="color:var(--text-subtle)">$1.100.000</span></div></div>
+    <div class="kanban-col"><div class="kanban-col-h">Negociación</div><div class="kanban-card">Cerrajería Norte<br><span style="color:var(--text-subtle)">$630.000</span></div></div>
+    <div class="kanban-col"><div class="kanban-col-h" style="color:#059669">Ganado</div><div class="kanban-card" style="border-color:#10b981">24G Security<br><span style="color:var(--text-subtle)">$2.300.000</span></div></div>
+  </div>
+  ${B([
+    '<b>Valor esperado</b> calculado solo: monto de cada oportunidad × su probabilidad de cierre, sumado en el header del tablero.',
+    'Tarjetas <b>estancadas</b> (14+ días sin movimiento) se marcan con un borde de aviso, para que no se pierdan de vista.',
+    'Desde el detalle de una oportunidad se puede generar una cotización directo, ya precargada con esa empresa.',
+    'Timeline de actividad por oportunidad — llamadas, reuniones, envíos de cotización — igual que en Empresas y Contactos.',
+    'Un Vendedor ve sólo sus propias oportunidades; un Admin ve todas y puede reasignarlas.',
+  ])}
+`));
+
+SLIDES.push(SLIDE('tareas','Tareas','Quién tiene que hacer qué, y para cuándo', 'No es una lista simple — tiene todo lo que un equipo necesita para no perder nada en el camino.', `
+  <div class="grid2">
+    ${B([
+      '<b>Prioridad</b>: Baja, Media, Alta o Urgente — con su propio color en cada tarjeta.',
+      '<b>Asignada a una persona puntual</b> — cada uno con su usuario ve sus propias tareas.',
+      'Subtareas (checklist interno) y comentarios con adjuntos (fotos, PDFs) dentro de cada tarea.',
+      'Indicador de si el asignado ya la vio o todavía no.',
+      'Se puede vincular a un Ticket o a una Oportunidad — por ejemplo, "Crear tarea de seguimiento" directo desde un ticket.',
+      'Notificación automática por email al asignar, y un resumen diario de lo vencido o por vencer.',
+    ])}
+    ${mock('Tareas', `
+      <div style="display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border);">
+        <div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent1);"></div>
+        <span style="flex:1; font-size:12.5px;">Instalar sensor — Depósito Sur</span>
+        ${pill('URGENTE','danger')}
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--border);">
+        <div style="width:16px;height:16px;border-radius:50%;border:2px solid var(--accent1);"></div>
+        <span style="flex:1; font-size:12.5px;">Revisar cámara — Cliente Norte</span>
+        ${pill('ALTA','warn')}
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; padding:9px 0;">
+        <div style="width:16px;height:16px;border-radius:50%;background:var(--accent1);"></div>
+        <span style="flex:1; font-size:12.5px; text-decoration:line-through; color:var(--text-subtle);">Cargar factura mensual</span>
+        ${pill('MEDIA','info')}
+      </div>
+      <div style="margin-top:10px; padding:9px; border-radius:9px; background:var(--surface-raised); font-size:11.5px;">
+        <b>Subtareas (2/3)</b> · Comentarios (4) · 📎 1 foto adjunta
+      </div>
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('cotizador','Cotizador','Un presupuesto en menos de 2 minutos', 'Se elige del catálogo de servicios y productos, y el PDF sale con la marca de tu empresa, listo para mandar.', `
+  <div class="grid2">
+    ${B([
+      'Catálogo propio de Servicios y Productos (cargado por Admin/Super Admin), con precio y moneda.',
+      'Cotización automática del dólar oficial en vivo, para mostrar el equivalente en pesos.',
+      'Descuento por porcentaje, con el ahorro recalculado en vivo.',
+      'Validez del presupuesto configurable (ej. "válido por 30 días").',
+      'Destinatario: elegís una empresa/contacto ya cargado, o un email manual.',
+      'PDF con tu logo, tu color de marca, y firma automática al pie.',
+      'Envío directo por mail desde el sistema, o por WhatsApp con un link.',
+    ])}
+    ${mock('Presupuesto — vista previa', `
+      <div style="height:6px; background:linear-gradient(135deg,var(--accent1),var(--accent2)); border-radius:3px; margin-bottom:10px;"></div>
+      <div style="font-size:10px; color:var(--text-subtle); text-transform:uppercase; letter-spacing:.08em;">Presupuesto</div>
+      ${mockRow('Monitoreo 24x7 (mensual)','$45.000')}
+      ${mockRow('Cámara IP exterior x4','$180.000')}
+      ${mockRow('Instalación','$60.000')}
+      <div style="display:flex; justify-content:space-between; font-weight:700; padding-top:8px; margin-top:6px; border-top:1px solid var(--border); font-size:13px;">
+        <span>Total</span><span>$285.000</span>
+      </div>
+      <div style="font-size:10px; color:var(--text-subtle); margin-top:8px;">Válido por 30 días · Cotización realizada con JustCRM</div>
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('cotizaciones','Cotizaciones','El historial completo de presupuestos enviados', null, `
+  <div class="grid2">
+    ${B([
+      'Cada cotización queda guardada con su referencia, empresa, total y estado.',
+      `Estados: ${pill('Guardada','neutral')} ${pill('Enviada','info')} ${pill('Aceptada','good')} ${pill('Rechazada','danger')} ${pill('Vencida','warn')}`,
+      'Se puede vincular (o re-vincular) a una oportunidad del Pipeline en cualquier momento.',
+      'Cada envío queda registrado automáticamente en el timeline de la empresa — sin cargar nada a mano.',
+      'Un Vendedor ve sólo las que él generó.',
+    ])}
+    ${mock('Cotizaciones', `
+      ${mockRow('#0042 · 24G Security · $2.3M', 'Aceptada','good')}
+      ${mockRow('#0041 · Farmacia del Sol · $420K', 'Enviada','info')}
+      ${mockRow('#0040 · Depósito Rivas · $1.1M', 'Guardada','neutral')}
+      ${mockRow('#0039 · Cerrajería Norte · $630K', 'Vencida','warn')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('tickets','Tickets de soporte','Cada reclamo o consulta, con seguimiento real', 'No se pierde en un chat de WhatsApp — queda numerado, con historial, y con un tiempo de respuesta esperado según la prioridad.', `
+  <div class="grid2">
+    ${B([
+      'Categorías: Soporte técnico, Bug/Error, Facturación, Consulta.',
+      '<b>SLA automático</b> según prioridad: Urgente 4hs, Alta 8hs, Media 24hs, Baja 72hs — se marca "Vencido" si se pasa.',
+      'Mensajes <b>internos</b> (solo el equipo los ve) o <b>públicos</b> (le llegan por mail al cliente automáticamente).',
+      'Se pueden adjuntar fotos o PDFs en cualquier mensaje.',
+      'Al cerrar el ticket, se manda una encuesta de satisfacción de 1 a 5 estrellas al cliente.',
+      '<b>Formulario público</b>: cada organización tiene un link propio para que cualquier cliente cargue un ticket sin necesitar usuario ni contraseña.',
+      'Un Técnico ve sólo los tickets que tiene asignados.',
+    ])}
+    ${mock('Ticket #0042', `
+      ${mockRow('Cámara no conecta al WiFi', pill('ALTA','warn'))}
+      <div style="font-size:11px; color:var(--text-subtle); margin:8px 0 4px;">Mensajes</div>
+      <div style="padding:8px; border-radius:8px; background:rgba(245,158,11,.08); font-size:11.5px; margin-bottom:6px;">🔒 Nota interna: revisar firmware del router</div>
+      <div style="padding:8px; border-radius:8px; background:var(--surface-raised); font-size:11.5px;">Público: ya estamos coordinando la visita técnica</div>
+      <div style="margin-top:8px; font-size:11px; color:var(--text-subtle);">SLA vence en 3h 20m</div>
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('facturacion','Facturación','Cobros, sin planillas aparte', null, `
+  <div class="grid2">
+    ${B([
+      'Monto, moneda, descripción y vencimiento — simple y directo.',
+      `Estados: ${pill('Pendiente','warn')} ${pill('Pagada','good')} ${pill('Vencida','danger')} ${pill('Cancelada','neutral')}`,
+      '<b>Facturación recurrente</b>: si un cliente paga un monto fijo mensual, se carga una vez en su ficha y después el sistema arma la lista de "a quién facturar este mes" solo.',
+      'Botón "Generar Facturas del Mes" — revisa, elegís y confirma, en dos clics.',
+      'También hay una versión 100% automática (opcional, se activa como plugin) que corre el día 1 de cada mes y te manda un resumen por mail — a propósito no le manda la factura al cliente sola, para que siempre haya un humano revisando antes de cobrar.',
+      'Tus propios datos fiscales (CUIT, dirección, cuenta para transferencias) se cargan una vez en Configuración → Marca y aparecen en todas las facturas.',
+    ])}
+    ${mock('Generar Facturas del Mes', `
+      <div style="font-size:11px; color:var(--text-subtle); margin-bottom:8px;">Agosto 2026 · 4 clientes pendientes</div>
+      ${mockRow('☑ Abba Seguridad','$45.000')}
+      ${mockRow('☑ Farmacia del Sol','$28.000')}
+      ${mockRow('☐ Depósito Rivas','$62.000')}
+      ${mockRow('☑ 24G Security','$95.000')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('documentos','Documentos','Un repositorio central, con historial', null, `
+  <div class="grid2">
+    ${B([
+      'Carpetas y subcarpetas, como un explorador de archivos — arrastrás y soltás para subir.',
+      'Formatos permitidos: imágenes, PDF, Word, Excel, texto — hasta 30MB por archivo.',
+      '<b>Versionado real</b>: si subís un archivo con el mismo nombre, el sistema te pregunta si querés que sea la "versión nueva" del mismo documento (con historial completo) en vez de crear un duplicado suelto.',
+      'Etiquetas compartidas en toda la organización, con autocompletado, y filtro por etiqueta que busca en todas las carpetas a la vez.',
+    ])}
+    ${mock('Documentos', `
+      ${mockRow(icon('folder',14)+' Contratos','12')}
+      ${mockRow(icon('folder',14)+' Manuales técnicos','8')}
+      ${mockRow(icon('file',14)+' Presupuesto_2026.pdf v3','')}
+      ${mockRow(icon('tag',14)+' urgente · seguridad','')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('comunicaciones','Comunicaciones','Campañas de email masivo', null, `
+  <div class="grid2">
+    ${B([
+      'Editor con formato rico (negrita, links, imágenes) y plantillas reutilizables.',
+      'Los destinatarios se arman desde Clientes, Empresas o Contactos del Directorio — o los tres combinados sin duplicados.',
+      'Uso mensual visible con barra de progreso — y baja automática de cualquiera que se dio de baja, en cada envío.',
+      'Tracking de apertura por destinatario.',
+    ])}
+    ${mock('Nueva Campaña', `
+      ${mockRow('Destinatarios: Empresas','340 emails')}
+      ${mockRow('Uso mensual','2.100 / 9.000')}
+      <div style="height:6px; background:var(--surface-raised); border-radius:3px; margin-top:4px; overflow:hidden;"><div style="width:23%; height:100%; background:linear-gradient(90deg,var(--accent1),var(--accent2));"></div></div>
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('eventos','Eventos','Inscripciones automáticas desde tu web', 'Pensado para ferias, capacitaciones o lanzamientos — cualquier actividad donde la gente se anota.', `
+  ${B([
+    'Cada evento genera un link único de "webhook" para conectar a un formulario de tu sitio web o WordPress.',
+    'Cada persona que se anota en tu web aparece sola en la lista de inscritos del CRM, sin cargar nada a mano.',
+    'También se pueden cargar inscripciones manuales desde el CRM.',
+    'Técnico tiene acceso a este módulo — útil para consultar la lista de inscritos estando en el lugar del evento.',
+  ])}
+`));
+
+SLIDES.push(SLIDE('rrhh','RRHH y Asistencia','Fichaje y presentismo, sin planilla en papel', null, `
+  <div class="grid2">
+    ${B([
+      'Cada persona ficha su entrada y salida con un botón, desde la computadora o el celular.',
+      '% de presentismo calculado sobre los días hábiles del mes — no sólo sobre los días que alguien decidió fichar.',
+      'Detección automática de tardanza según el horario de entrada.',
+      'RRHH puede marcar una ausencia manualmente y corregir un registro si hubo un error de carga.',
+      'Aviso diario opcional por email a RRHH con quién no fichó o llegó tarde el día anterior (se activa como plugin, apagado por defecto).',
+    ])}
+    ${mock('RRHH — Agosto 2026', `
+      ${mockRow('Franco M. — Presentes 18/20','90%')}
+      ${mockRow('María G. — Presentes 19/20','95%')}
+      ${mockRow('Diego R. — 2 tardanzas','85%')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('notas-auditoria','Nuevo: Notas de auditoría','Un "Deudor" o "No vender" que nadie puede borrar', 'Antes cualquier vendedor podía borrar una nota que había cargado él mismo, o un Admin podía borrar cualquiera. Eso cambió.', `
+  ${callout('fixed','lock','A partir de ahora, <b>una vez guardada una nota, sólo el Super Admin puede eliminarla</b> — ni el autor, ni un Admin. Pensado exactamente para casos como "Cliente moroso" o "No vender sin adelanto": una vez que queda registrado, queda registrado.')}
+  ${B([
+    'Aplica en Empresas, Oportunidades del Pipeline y Contactos — mismo criterio en los tres lugares.',
+    'No hace falta marcar nada como "protegida" — es el comportamiento por defecto de toda nota nueva.',
+  ])}
+`));
+
+/* ============================= SECCIÓN 3 — MOBILE ============================= */
+SLIDES.push(DIVIDER('sec-mobile','SECCIÓN 3','Uso desde el celular','Para el equipo que no está sentado en un escritorio — técnicos en la calle, vendedores visitando clientes.'));
+
+SLIDES.push(SLIDE('pwa','Se instala como una app', 'Sin pasar por ninguna tienda de aplicaciones', 'El CRM ahora se puede "instalar" en el celular — queda como un ícono más, se abre a pantalla completa, sin la barra del navegador.', `
+  <div style="display:flex; gap:40px; align-items:center; flex-wrap:wrap;">
+    <div class="phone-frame">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div style="background:linear-gradient(135deg,var(--accent1),var(--accent2)); height:70px; display:flex; align-items:center; padding:0 16px;">
+          <div style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;">C</div>
+          <span style="color:#fff; font-weight:600; font-size:13px; margin-left:10px;">Mi Día</span>
+        </div>
+        <div style="padding:14px;">
+          ${mockRow(icon('checksquare',13)+' 3 tareas hoy','')}
+          ${mockRow(icon('headphones',13)+' 1 ticket','')}
+          <div style="margin-top:8px; padding:10px; border-radius:10px; background:rgba(16,185,129,.1); font-size:11px; text-align:center;">${icon('clock',13)} En jornada · 09:02</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1; min-width:280px;">
+      ${B([
+        '<b>Android / Chrome</b>: aparece la opción "Instalar app" sola, o desde el menú del navegador.',
+        '<b>iPhone / Safari</b>: botón Compartir → "Agregar a pantalla de inicio".',
+        'Una vez instalado, funciona como cualquier app — ícono propio, sin la barra de direcciones del navegador arriba.',
+        'Ideal para Técnicos: entran directo a "Mi Día" para fichar y ver sus tareas del día sin tener que buscar la página web cada vez.',
+      ])}
+    </div>
+  </div>
+`));
+
+SLIDES.push(SLIDE('mobile-uso','Qué se puede hacer desde el celular', 'Todo lo mismo que en la computadora', 'No es una versión recortada — es el mismo sistema, adaptado a pantalla chica.', `
+  <div class="grid3">
+    ${card('clock','Fichar entrada y salida','Desde Mi Día o Mi Asistencia, con un botón.')}
+    ${card('checksquare','Ver y completar tareas','Marcar como hecha, agregar un comentario o una foto desde la cámara del celular.')}
+    ${card('headphones','Atender tickets','Responder, adjuntar una foto del problema, cambiar el estado.')}
+    ${card('users','Consultar un cliente','Teléfono, dirección, historial — útil antes de tocar timbre.')}
+    ${card('send','Mandar una cotización','Armarla y enviarla por WhatsApp directo desde el lugar.')}
+    ${card('calendar','Cargar una inscripción','En un evento o feria, sin cargar papel.')}
+  </div>
+`));
+
+/* ============================= SECCIÓN 4 — SEGURIDAD ============================= */
+SLIDES.push(DIVIDER('sec-seguridad','SECCIÓN 4','Seguridad y administración','La parte que no se ve todos los días, pero es la que sostiene todo lo demás.'));
+
+SLIDES.push(SLIDE('multitenant','Aislamiento de datos','Cada organización, en su propio compartimento', 'Si el sistema alguna vez tiene más de una empresa usándolo, los datos de una nunca se mezclan ni son visibles para la otra — a nivel de base de datos, no sólo de pantalla.', `
+  ${B([
+    'Cada registro (cliente, factura, tarea, ticket) pertenece a una sola organización, siempre.',
+    'Cada consulta al sistema se filtra automáticamente por la organización del usuario que la hace — no depende de que nadie "se acuerde" de poner el filtro.',
+    'Un usuario con acceso a más de una organización (por ejemplo, vos como dueño de la agencia) puede cambiar entre ellas con un selector, pero nunca ve las dos mezcladas en la misma pantalla.',
+  ])}
+`));
+
+SLIDES.push(SLIDE('plugins','Plugins y extensiones','Prendés sólo lo que necesitás', null, `
+  <div class="grid2">
+    ${B([
+      'Exportación de datos a Excel.',
+      'Analíticas avanzadas (top clientes por ingreso).',
+      'Integración con WhatsApp Business.',
+      'Facturación 100% automática.',
+      'Zapier / Webhooks para conectar con otras herramientas.',
+      'Avisos de asistencia para RRHH.',
+      'Google Calendar (una sola cuenta conectada para toda la organización — cualquier usuario puede mandar una tarea puntual a ese calendario compartido).',
+    ])}
+    ${mock('Plugins & Extensiones', `
+      ${mockRow(icon('chart',14)+' Analíticas Avanzadas', 'Activo','good')}
+      ${mockRow(icon('download',14)+' Exportación de Datos', 'Activo','good')}
+      ${mockRow(icon('bell',14)+' Avisos de Asistencia', 'Inactivo','neutral')}
+      ${mockRow(icon('calendar',14)+' Google Calendar', 'Inactivo','neutral')}
+    `)}
+  </div>
+`));
+
+SLIDES.push(SLIDE('marca','Marca propia','Tu logo, tus colores, tu nombre', null, `
+  ${B([
+    'Logo y paleta de colores propios en toda la interfaz, en los PDFs de cotizaciones y en el header de las facturas.',
+    'Nombre del sistema personalizable (aparece en el menú y en el título de la pestaña del navegador).',
+    'Datos de facturación propios (CUIT, dirección, cuenta para transferencias) en un solo lugar.',
+  ])}
+`));
+
+/* ============================= SECCIÓN 5 — PRÓXIMAMENTE ============================= */
+SLIDES.push(DIVIDER('sec-proximo','SECCIÓN 5','Próximamente','Dos desarrollos que ya están en análisis, pensados para dar el siguiente paso.'));
+
+SLIDES.push(SLIDE('bot-whatsapp','Próximamente: Bot de WhatsApp con IA', 'Filtro y derivación automática de mensajes', 'La idea: que el primer mensaje de WhatsApp de un cliente no dependa de que alguien esté mirando el teléfono en ese momento.', `
+  <div class="grid2">
+    ${B([
+      'Un bot recibe el primer mensaje y lo clasifica solo: ¿es un pago, una consulta de soporte, o una venta nueva?',
+      'Deriva automáticamente a la persona correspondiente del equipo (ej. pagos → administración, soporte → técnico, ventas → comercial).',
+      'Se integraría directo con Tickets y Contactos — la conversación queda registrada en el CRM, no se pierde en el teléfono de una persona.',
+      'Corre sobre la infraestructura de IA de Anthropic (la misma detrás de este análisis) para entender la intención real del mensaje, no sólo palabras clave sueltas.',
+    ])}
+    ${mock('WhatsApp Bot — vista previa', `
+      <div style="padding:8px; border-radius:10px; background:var(--surface-raised); font-size:11.5px; margin-bottom:6px;">👤 "Hola, la cámara del depósito dejó de andar"</div>
+      <div style="padding:8px; border-radius:10px; background:rgba(99,102,241,.1); font-size:11.5px; margin-bottom:6px;">🤖 Clasificado: Soporte técnico → derivado a Franco</div>
+      <div style="padding:8px; border-radius:10px; background:var(--surface-raised); font-size:11.5px;">🎫 Ticket #0089 creado automáticamente</div>
+    `)}
+  </div>
+  ${callout('info','robot','Ya se hizo un análisis de factibilidad con costos y requisitos estimados — próximo paso es una reunión puntual para definir alcance y arrancar.')}
+`));
+
+SLIDES.push(SLIDE('catalogo-b2b-b2c','Próximamente: Gestión de catálogos B2B y B2C', 'Un catálogo de productos propio, para vender directo', 'Hoy el catálogo de Servicios/Productos alimenta al Cotizador. El siguiente paso es convertirlo en un catálogo navegable por el cliente final.', `
+  ${B([
+    '<b>B2B</b>: catálogo con precios diferenciados por cliente o por volumen, para que un cliente recurrente vea sus condiciones particulares.',
+    '<b>B2C</b>: catálogo público, pensado para venta directa al consumidor final, con carrito simple.',
+    'Se integraría con Cotizador y Facturación ya existentes — no un sistema aparte.',
+    'Todavía en etapa de diseño — se define el alcance según qué necesite cada organización primero.',
+  ])}
+`));
+
+/* ============================= CIERRE ============================= */
+SLIDES.push({id:'cierre', dark:true, toc:'Cierre', html:`
+  <div class="divider-slide">
+    <div class="cover-mark" style="margin-bottom:26px;"></div>
+    <div class="divider-title" style="font-size:42px;">Eso es todo lo que hoy hace el sistema</div>
+    <div class="divider-sub">Un lugar para cada cliente, cada tarea, cada peso — con el rol justo para cada persona del equipo.</div>
+    <div style="margin-top:34px; color:#64748b; font-size:13px;">JustCRM · by JustCreate</div>
+  </div>`});
+
+/* ============================= MOTOR DE LA PRESENTACIÓN ============================= */
+let current = 0;
+const deck = document.getElementById('deck');
+const counter = document.getElementById('counter');
+const tocList = document.getElementById('toc-list');
+
+function render(){
+  deck.innerHTML = SLIDES.map((s,i)=>`<div class="slide ${s.dark?'dark':''}" data-i="${i}">${s.html}</div>`).join('');
+}
+function show(i){
+  if(i<0) i=0;
+  if(i>=SLIDES.length) i=SLIDES.length-1;
+  current = i;
+  document.querySelectorAll('.slide').forEach((el)=>el.classList.remove('active'));
+  const el = deck.querySelector(`.slide[data-i="${i}"]`);
+  if(el){ el.classList.add('active'); el.scrollTop = 0; }
+  counter.textContent = `${i+1} / ${SLIDES.length}`;
+  document.getElementById('progress-bar').style.width = `${((i+1)/SLIDES.length)*100}%`;
+  document.getElementById('prevbtn').disabled = i===0;
+  document.getElementById('nextbtn').disabled = i===SLIDES.length-1;
+  document.querySelectorAll('.toc-item').forEach(t=>t.style.background = (+t.dataset.i===i) ? 'rgba(99,102,241,.18)' : '');
+}
+function go(delta){ show(current+delta); }
+function toggleToc(){
+  const ov = document.getElementById('toc-overlay');
+  ov.classList.toggle('open');
+}
+function buildToc(){
+  let lastSection = null;
+  tocList.innerHTML = SLIDES.map((s,i)=>{
+    const label = s.toc || (s.html.match(/slide-title">([^<]+)</)?.[1]) || (s.html.match(/divider-title">([^<]+)</)?.[1]) || s.id;
+    return `<div class="toc-item" data-i="${i}" onclick="show(${i}); toggleToc();"><span class="n">${i+1}</span><span>${label}</span></div>`;
+  }).join('');
+}
+
+document.addEventListener('keydown', (e)=>{
+  if(document.getElementById('toc-overlay').classList.contains('open')){
+    if(e.key==='Escape') toggleToc();
+    return;
+  }
+  if(e.key==='ArrowRight' || e.key===' '){ e.preventDefault(); go(1); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); go(-1); }
+});
+document.getElementById('toc-overlay').addEventListener('click', (e)=>{
+  if(e.target.id==='toc-overlay') toggleToc();
+});
+
+render();
+buildToc();
+show(0);
+</script>
+</body>
+</html>
