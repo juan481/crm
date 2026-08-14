@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 
 interface Params { params: { id: string } }
 
+// Mismo criterio que /api/public/tickets/[token] (que sí lo tenía y este no)
+// — el webhookSecret es impredecible (cuid), pero está pensado para vivir
+// pegado en la config de un form externo (WordPress/Zapier/Make, ver el GET
+// de abajo), así que es realista que termine logueado/filtrado ahí. Sin
+// límite, alguien con el secret podía crear EventAttendee sin tope (es
+// idempotente por email, así que alcanza con variar el email para saltear
+// esa protección). Ventana generosa para no frenar un evento real con
+// mucho tráfico legítimo.
+const RATE_LIMIT = { max: 30, windowMinutes: 10 }
+
 export async function POST(req: NextRequest, { params }: Params) {
   try {
+    const ip = getClientIp(req)
+    const { limited } = await checkRateLimit('event_webhook', `${params.id}:${ip}`, RATE_LIMIT)
+    if (limited) {
+      return NextResponse.json({ error: 'Demasiados intentos — probá de nuevo en un rato.' }, { status: 429 })
+    }
+
     // Accept secret from Authorization header (Bearer) or legacy query param
     const authHeader = req.headers.get('authorization') ?? ''
     const secret = authHeader.startsWith('Bearer ')

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 
 // Returns empresas that would be billed (preview) or creates invoices (action).
 // Uses Empresa.monthlyAmount — the legacy Client.mrr this used to read from
@@ -13,8 +14,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const argToday = argentinaDayStart(now)
+    const startOfMonth = new Date(Date.UTC(argToday.getUTCFullYear(), argToday.getUTCMonth(), 1))
+    const endOfMonth = new Date(Date.UTC(argToday.getUTCFullYear(), argToday.getUTCMonth() + 1, 1))
 
     const billableEmpresas = await prisma.empresa.findMany({
       where: { organizationId: payload.orgId, isCliente: true, monthlyAmount: { gt: 0 } },
@@ -39,7 +41,7 @@ export async function GET() {
       data: {
         pending,
         alreadyBilled,
-        month: now.toLocaleString('es', { month: 'long', year: 'numeric' }),
+        month: now.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' }),
       },
     })
   } catch (error) {
@@ -62,8 +64,12 @@ export async function POST(req: NextRequest) {
     }
 
     const now = new Date()
-    const monthName = now.toLocaleString('es', { month: 'long', year: 'numeric' })
-    const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 5) // due on 5th of next month
+    const argToday = argentinaDayStart(now)
+    const monthName = now.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
+    // dateOnlyArgentina, no new Date(y, m, 5) — ese constructor arma
+    // medianoche UTC, que renderizada en el navegador (timezone Argentina)
+    // se mostraba como "día 4" en vez de "5". Ver src/lib/timezone.ts.
+    const dueDate = dateOnlyArgentina(argToday.getUTCFullYear(), argToday.getUTCMonth() + 1, 5)
 
     const empresas = await prisma.empresa.findMany({
       where: { id: { in: empresaIds }, organizationId: payload.orgId, isCliente: true },

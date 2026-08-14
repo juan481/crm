@@ -47,14 +47,23 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Este ticket fue reabierto y todavía no fue resuelto de nuevo' }, { status: 409 })
     }
 
-    await db.ticket.update({
-      where: { id: existing.id },
+    // updateMany con satisfactionRatedAt:null en el where, no update directo
+    // por id — el chequeo de arriba (`existing.satisfactionRatedAt`) es
+    // check-then-act sin protección: dos submits casi simultáneos del mismo
+    // link (doble click, o un reintento de red) podían pasar ambos esa
+    // validación y el segundo pisaba la calificación del primero sin aviso.
+    // Este where hace que sólo uno de los dos UPDATE realmente aplique.
+    const result = await db.ticket.updateMany({
+      where: { id: existing.id, satisfactionRatedAt: null },
       data: {
         satisfactionRating: ratingNum,
         satisfactionComment: comment?.trim() || null,
         satisfactionRatedAt: new Date(),
       },
     })
+    if (result.count === 0) {
+      return NextResponse.json({ error: 'Este ticket ya fue calificado' }, { status: 409 })
+    }
 
     return NextResponse.json({ message: 'Calificación registrada' })
   } catch (error) {

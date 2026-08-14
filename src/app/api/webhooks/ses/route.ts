@@ -73,6 +73,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // Mismo chequeo que SubscriptionConfirmation, acá también — antes sólo
+    // se aplicaba a la confirmación de suscripción, no a los eventos
+    // normales. verifySnsSignature() sólo prueba que el mensaje lo firmó
+    // GENUINAMENTE el servicio SNS de AWS — no que venga del topic de ESTA
+    // cuenta/organización. Cualquiera con su propia cuenta AWS puede armar
+    // su propio topic SNS y publicar un evento (ej. "Complaint") con un
+    // messageId real conocido/filtrado, firmado legítimamente por AWS —
+    // sin este chequeo pasaba igual y suprimía ese email de todas las
+    // campañas futuras (DoS de marketing dirigido).
+    const expectedArn = process.env.AWS_SNS_TOPIC_ARN
+    if (expectedArn && body.TopicArn !== expectedArn) {
+      console.warn('[SES WEBHOOK] Notification TopicArn mismatch — ignored')
+      return NextResponse.json({ ok: true })
+    }
+
     let msg: Record<string, any>
     try { msg = JSON.parse(body.Message) }
     catch { return NextResponse.json({ ok: true }) }

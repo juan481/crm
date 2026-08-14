@@ -61,13 +61,44 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     // Tracking pixel base URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
+    // Auto-recuperación: una fila puede quedar "sending" para siempre si un
+    // request anterior murió a mitad de camino (timeout de Vercel, crash) —
+    // sin esto, esos destinatarios no se reenviaban nunca más (ni aparecían
+    // en `pending`, así que "Reenviar pendientes" los ignoraba). 3 minutos
+    // es sobra de margen: un batch de 5 emails tarda segundos, no minutos.
+    await db.campaignRecipient.updateMany({
+      where: { campaignId: params.id, status: 'sending', updatedAt: { lt: new Date(Date.now() - 3 * 60 * 1000) } },
+      data:  { status: 'pending' },
+    })
+
     // Fetch next batch of pending recipients, capped to whatever quota allows
     const takeCount = Math.min(BATCH, quota.remaining)
-    const pending = await db.campaignRecipient.findMany({
+    const candidates = await db.campaignRecipient.findMany({
       where:   { campaignId: params.id, status: 'pending' },
       take:    takeCount,
-      select:  { id: true, email: true, name: true },
+      select:  { id: true },
     })
+
+    // Claim atómico: sólo las filas que EN ESTE MOMENTO siguen en 'pending'
+    // pasan a 'sending'. Si dos requests concurrentes (dos pestañas, doble
+    // click en "Reenviar pendientes") leyeron el mismo batch, Postgres
+    // serializa el UPDATE fila por fila — sólo uno de los dos logra
+    // reclamar cada fila, el otro se queda con count menor (o 0) y no
+    // reenvía nada de lo que el primero ya se llevó. Antes ambos mandaban
+    // el mismo email dos veces y descontaban cupo dos veces.
+    let pending: { id: string; email: string; name: string | null }[] = []
+    if (candidates.length > 0) {
+      const claim = await db.campaignRecipient.updateMany({
+        where: { id: { in: candidates.map((c: { id: string }) => c.id) }, status: 'pending' },
+        data:  { status: 'sending' },
+      })
+      if (claim.count > 0) {
+        pending = await db.campaignRecipient.findMany({
+          where:  { id: { in: candidates.map((c: { id: string }) => c.id) }, status: 'sending' },
+          select: { id: true, email: true, name: true },
+        })
+      }
+    }
 
     // Re-check suppression right before sending — someone may have unsubscribed
     // since this campaign's recipients were created (batching a large list can

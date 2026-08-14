@@ -42,3 +42,15 @@ export function argentinaDayKey(d: Date = new Date()): string {
 export function argentinaTimeToInstant(dayStart: Date, hours: number, minutes: number): Date {
   return new Date(dayStart.getTime() - ARGENTINA_OFFSET_MS + hours * 60 * 60 * 1000 + minutes * 60 * 1000)
 }
+
+/** Fecha "sin hora" (ej. vencimiento de una factura) construida a partir de
+ *  año/mes/día explícitos — mediodía UTC de ese día, no medianoche: así, al
+ *  formatearse en el navegador del usuario (timezone Argentina) o en
+ *  cualquier timezone cercana, siempre muestra el día correcto sin que la
+ *  franja de medianoche la corra un día para atrás. Bug real encontrado:
+ *  `new Date(y, m, 5)` construido en el server (UTC) se mostraba como "4"
+ *  en el navegador (Argentina). `month` es 0-indexado, igual que el
+ *  constructor nativo de Date. */
+export function dateOnlyArgentina(year: number, month: number, day: number): Date {
+  return new Date(Date.UTC(year, month, day, 12, 0, 0))
+}

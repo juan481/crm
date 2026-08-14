@@ -99,6 +99,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!title?.trim())       return NextResponse.json({ error: 'El asunto es requerido' },         { status: 400 })
     if (!description?.trim()) return NextResponse.json({ error: 'Contanos el problema o consulta' }, { status: 400 })
 
+    // El formulario público (soporte/[token]/page.tsx) a propósito todavía
+    // no ofrece subir adjuntos, pero esta API igual aceptaba estos dos
+    // campos vía POST directo (curl/Postman) sin validar nada — un
+    // attachmentUrl arbitrario de un origen no autenticado terminaba
+    // renderizado como link/img en el panel del staff (tickets/[id]/page.tsx)
+    // al ver el ticket. Sólo se acepta si es realmente una URL del storage
+    // de este proyecto — cualquier otra cosa se descarta en silencio, no
+    // rechaza el ticket entero por esto.
+    const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const safeAttachmentUrl = (typeof attachmentUrl === 'string' && supabaseOrigin && attachmentUrl.startsWith(supabaseOrigin))
+      ? attachmentUrl
+      : null
+    const safeAttachmentName = safeAttachmentUrl && typeof attachmentName === 'string' ? attachmentName.slice(0, 200) : null
+
     // Atribución técnica: el SUPER_ADMIN más antiguo de la org (siempre
     // existe — es quien completó el alta de la organización).
     const admin = await db.user.findFirst({
@@ -157,8 +171,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         ticketId: ticket.id,
         content: description.trim(),
         isInternal: false,
-        attachmentUrl: attachmentUrl || null,
-        attachmentName: attachmentName || null,
+        attachmentUrl: safeAttachmentUrl,
+        attachmentName: safeAttachmentName,
         userId: admin.id,
       },
     })

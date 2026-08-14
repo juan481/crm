@@ -4,6 +4,7 @@ import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
 import { isPluginEnabled } from '@/lib/plugins'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,10 +33,18 @@ export async function GET(req: NextRequest) {
 
   try {
     const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    const monthName = now.toLocaleString('es', { month: 'long', year: 'numeric' })
-    const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 5)
+    // Y/M derivados del día calendario ARGENTINA (argentinaDayStart), no de
+    // los getters "locales" de `now` (=UTC en Vercel) — y dueDate armado con
+    // dateOnlyArgentina para que se muestre como "día 5" en el navegador del
+    // usuario, no "día 4" (bug real encontrado: medianoche UTC de un "5"
+    // renderiza como "4" en timezone Argentina). Ver src/lib/timezone.ts.
+    const argToday = argentinaDayStart(now)
+    const y = argToday.getUTCFullYear()
+    const m = argToday.getUTCMonth()
+    const startOfMonth = new Date(Date.UTC(y, m, 1))
+    const endOfMonth = new Date(Date.UTC(y, m + 1, 1))
+    const monthName = now.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
+    const dueDate = dateOnlyArgentina(y, m + 1, 5)
 
     const orgs = await prisma.organization.findMany({
       select: {
@@ -83,22 +92,22 @@ export async function GET(req: NextRequest) {
       // nuevo. Ver modelo CronRun.
       if (!(await claimCronRun(JOB_NAME, org.id, startOfMonth))) { orgsSkippedAlreadySent++; continue }
 
-      const invoices = await prisma.$transaction(
-        pending.map((e) =>
-          prisma.invoice.create({
-            data: {
-              empresaId: e.id,
-              organizationId: org.id,
-              amount: e.monthlyAmount ?? 0,
-              currency: e.billingCurrency || 'USD',
-              description: `Facturación recurrente — ${monthName}`,
-              dueDate,
-              status: 'PENDING' as const,
-            },
-          })
-        )
-      )
-      invoicesCreated += invoices.length
+      // createMany en vez de $transaction(array de creates) — este último NO
+      // paraleliza, ejecuta cada create como un INSERT secuencial (mismo
+      // anti-patrón ya corregido en generate-recurring/route.ts, el botón
+      // manual equivalente).
+      const created = await prisma.invoice.createMany({
+        data: pending.map((e) => ({
+          empresaId: e.id,
+          organizationId: org.id,
+          amount: e.monthlyAmount ?? 0,
+          currency: e.billingCurrency || 'USD',
+          description: `Facturación recurrente — ${monthName}`,
+          dueDate,
+          status: 'PENDING' as const,
+        })),
+      })
+      invoicesCreated += created.count
 
       if (isOrgEmailConfigured(org)) {
         try {
@@ -109,7 +118,7 @@ export async function GET(req: NextRequest) {
           const orgName = org.name || org.crmName || 'CRM'
           const lines = pending.map((e) => `• ${e.name} — ${e.billingCurrency || 'USD'} ${(e.monthlyAmount ?? 0).toLocaleString('es-AR')}`).join('\n')
           const html = buildEmailHtml(
-            `${invoices.length} factura${invoices.length !== 1 ? 's' : ''} generada${invoices.length !== 1 ? 's' : ''} automáticamente`,
+            `${created.count} factura${created.count !== 1 ? 's' : ''} generada${created.count !== 1 ? 's' : ''} automáticamente`,
             `Facturación recurrente de ${monthName}:\n\n${lines}\n\nQuedaron en estado "Pendiente" — entrá a Facturación para revisarlas antes de avisarle a cada cliente.`,
             orgName,
             org.primaryColor || '#6366f1',
@@ -119,7 +128,7 @@ export async function GET(req: NextRequest) {
             if (!s.email) continue
             await sendEmail({
               to: s.email,
-              subject: `${invoices.length} factura${invoices.length !== 1 ? 's' : ''} generada${invoices.length !== 1 ? 's' : ''} — ${monthName} — ${orgName}`,
+              subject: `${created.count} factura${created.count !== 1 ? 's' : ''} generada${created.count !== 1 ? 's' : ''} — ${monthName} — ${orgName}`,
               html,
               smtpConfig: resolveOrgSmtpConfig(org),
             })

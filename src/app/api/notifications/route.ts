@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { unstable_cache } from 'next/cache'
 
@@ -62,11 +62,20 @@ export async function GET() {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const data = await getCachedNotifications(payload.orgId)
+    const all = await getCachedNotifications(payload.orgId)
+    // Facturación es ADMIN+ (GET /api/invoices ya lo exige, y
+    // /api/notifications/counts ya oculta este mismo conteo a otros
+    // roles) — la caché es por organización, no por rol, así que el
+    // filtro va acá, después de leerla, para no fragmentar la caché por
+    // rol y sin arriesgar que quede alguna respuesta cacheada
+    // "abierta". Antes esto llegaba a TECHNICIAN/SELLER vía la campanita
+    // del header sin ningún chequeo de rol.
+    const canSeeFinancials = canAccess(payload.role, 'ADMIN')
+    const data = canSeeFinancials ? all : all.filter(n => n.type !== 'overdue_invoice')
 
     return NextResponse.json(
       { data },
-      { headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=300' } }
+      { headers: { 'Cache-Control': 'private, s-maxage=60, stale-while-revalidate=300' } }
     )
   } catch (error) {
     console.error('[NOTIFICATIONS GET]', error)

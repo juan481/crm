@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { argentinaDayStart, argentinaTimeToInstant } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,8 +26,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const db = prisma as any
-    const endOfToday = new Date()
-    endOfToday.setHours(23, 59, 59, 999)
+    // argentinaDayStart/argentinaTimeToInstant, no getters/setters "locales"
+    // de Date — mismo bug que ya se encontró y arregló en
+    // attendance-digest (Vercel corre en UTC, no Argentina), que acá nunca
+    // se había aplicado. Ver src/lib/timezone.ts.
+    const todayStart = argentinaDayStart()
+    // Medianoche de mañana (Argentina) menos 1ms = 23:59:59.999 de hoy —
+    // más preciso que pasar hours=23/minutes=59 (perdería los últimos 59s).
+    const endOfToday = new Date(argentinaTimeToInstant(todayStart, 24, 0).getTime() - 1)
 
     const tasks = await db.task.findMany({
       where: {
@@ -51,8 +58,7 @@ export async function GET(req: NextRequest) {
     let orgsSkipped = 0
     let orgsSkippedAlreadySent = 0
     const wouldSend: { org: string; name: string; email: string; tasks: number }[] = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = todayStart
 
     for (const [orgId, orgTasks] of Array.from(byOrg.entries())) {
       const org = await db.organization.findUnique({
@@ -80,7 +86,7 @@ export async function GET(req: NextRequest) {
 
       const orgName = org?.name || org?.crmName || 'CRM'
       for (const { name, email, tasks: userTasks } of Array.from(byUser.values())) {
-        const overdue = userTasks.filter((t: any) => new Date(t.dueDate) < new Date(new Date().setHours(0, 0, 0, 0)))
+        const overdue = userTasks.filter((t: any) => new Date(t.dueDate) < todayStart)
         const dueToday = userTasks.filter((t: any) => !overdue.includes(t))
         const lines = [
           ...overdue.map((t: any) => `⚠️ VENCIDA — ${t.title}`),

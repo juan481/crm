@@ -1,10 +1,10 @@
 import { prisma } from '@/lib/db'
-import { suppressEmail } from '@/lib/suppression'
-import { MailX, CheckCircle2 } from 'lucide-react'
+import { UnsubscribeConfirm } from '@/components/unsubscribe/unsubscribe-confirm'
+import { MailX } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
-function Shell({ ok, title, message }: { ok: boolean; title: string; message: string }) {
+function InvalidShell() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -18,41 +18,39 @@ function Shell({ ok, title, message }: { ok: boolean; title: string; message: st
         <div style={{
           width: 56, height: 56, borderRadius: 16, margin: '0 auto 20px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: ok ? 'rgba(16,185,129,0.12)' : 'rgba(148,163,184,0.12)',
-          color: ok ? '#10b981' : 'var(--color-text-muted)',
+          background: 'rgba(148,163,184,0.12)', color: 'var(--color-text-muted)',
         }}>
-          {ok ? <CheckCircle2 size={26} /> : <MailX size={26} />}
+          <MailX size={26} />
         </div>
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', margin: '0 0 8px' }}>{title}</h1>
-        <p style={{ fontSize: 14, color: 'var(--color-text-muted)', lineHeight: 1.6, margin: 0 }}>{message}</p>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text)', margin: '0 0 8px' }}>Enlace inválido</h1>
+        <p style={{ fontSize: 14, color: 'var(--color-text-muted)', lineHeight: 1.6, margin: 0 }}>
+          Este enlace de baja no es válido o ya expiró. Si seguís recibiendo correos que no querés, respondé a alguno de ellos para que lo resolvamos manualmente.
+        </p>
       </div>
     </div>
   )
 }
 
+// Sólo LEE — la baja real (suppressEmail) vive en
+// POST /api/unsubscribe/[recipientId], disparada por un click explícito en
+// <UnsubscribeConfirm>, nunca por cargar esta página. Antes esto mutaba en
+// el propio render del Server Component (efectivamente "en un GET"), lo que
+// hacía que escáneres de enlaces (Safe Links, antiphishing de gateway de
+// correo, previews de Slack/WhatsApp) dieran de baja gente sin que nadie
+// hubiera abierto el mail.
 export default async function UnsubscribePage({ params }: { params: { recipientId: string } }) {
   const db = prisma as any
   const recipient = await db.campaignRecipient.findUnique({
     where:  { id: params.recipientId },
     select: {
       email: true,
-      campaign: { select: { organizationId: true, organization: { select: { name: true, crmName: true } } } },
+      campaign: { select: { organization: { select: { name: true, crmName: true } } } },
     },
   })
 
-  if (!recipient) {
-    return (
-      <Shell ok={false} title="Enlace inválido"
-        message="Este enlace de baja no es válido o ya expiró. Si seguís recibiendo correos que no querés, respondé a alguno de ellos para que lo resolvamos manualmente." />
-    )
-  }
-
-  await suppressEmail(recipient.campaign.organizationId, recipient.email)
+  if (!recipient) return <InvalidShell />
 
   const orgName = recipient.campaign.organization?.name || recipient.campaign.organization?.crmName || 'esta organización'
 
-  return (
-    <Shell ok title="Listo, te dimos de baja"
-      message={`${recipient.email} no va a recibir más comunicaciones de ${orgName}. Podés cerrar esta ventana.`} />
-  )
+  return <UnsubscribeConfirm recipientId={params.recipientId} email={recipient.email} orgName={orgName} />
 }

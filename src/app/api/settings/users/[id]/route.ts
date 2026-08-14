@@ -28,6 +28,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const { status, role, forcePasswordChange, newPassword } = await req.json()
 
+    // Sin esto, el ÚNICO SUPER_ADMIN activo de la org podía bajarse su
+    // propio rango o suspenderse a sí mismo (DELETE ya bloqueaba
+    // autoeliminación, este PATCH no) — dejando la organización sin nadie
+    // que pueda tocar el panel de permisos, plugins, marca o crear otro
+    // SUPER_ADMIN. No hay "romper vidrio" a nivel plataforma para eso, así
+    // que quedaría varada hasta una intervención manual en la base.
+    const wouldLoseRank    = target.id === payload.userId && role && role !== 'SUPER_ADMIN'
+    const wouldDeactivate  = target.id === payload.userId && status && status !== 'ACTIVE'
+    if ((wouldLoseRank || wouldDeactivate) && target.role === 'SUPER_ADMIN') {
+      const otherActiveSuperAdmins = await prisma.user.count({
+        where: { organizationId: payload.orgId, role: 'SUPER_ADMIN', status: 'ACTIVE', id: { not: target.id } },
+      })
+      if (otherActiveSuperAdmins === 0) {
+        return NextResponse.json({ error: 'Sos el único Super Admin activo — no podés bajar tu propio rango ni suspenderte' }, { status: 400 })
+      }
+    }
+
     const updateData: Record<string, unknown> = {}
     if (status) updateData.status = status
     const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN']

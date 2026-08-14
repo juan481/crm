@@ -75,6 +75,13 @@ enum CampaignStatus {
 
 enum RecipientStatus {
   pending
+  // Estado transitorio: "reclamado" por un request de envío en curso, antes
+  // de que termine de mandar el email. Ver claim atómico en
+  // campaigns/[id]/send/route.ts — sin esto, dos requests concurrentes
+  // (dos pestañas, doble click en "Reenviar pendientes") podían leer el
+  // mismo batch de `pending` y mandar el mismo email dos veces,
+  // descontando cupo dos veces.
+  sending
   sent
   failed
   bounced
@@ -589,6 +596,12 @@ model CampaignRecipient {
   spamAt        DateTime?
   openedAt      DateTime?
   openCount     Int             @default(0)
+  // Necesario para detectar filas "sending" abandonadas por un request que
+  // murió a mitad de camino (ver auto-recuperación en
+  // campaigns/[id]/send/route.ts) — se actualiza solo en cada UPDATE,
+  // incluido el propio claim atómico, así que marca el momento exacto en
+  // que se reclamó la fila.
+  updatedAt     DateTime        @default(now()) @updatedAt
 }
 
 // ─── Email Templates ───────────────────────────────────────────────────────
