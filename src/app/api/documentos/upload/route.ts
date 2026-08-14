@@ -122,7 +122,16 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ data: { ...document, tags: inheritedTags } }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
+    // Dos reemplazos casi simultáneos del mismo documento (doble click, dos
+    // personas subiendo la versión nueva a la vez): el chequeo de arriba
+    // (`previous.supersededBy.length > 0`) puede pasar en ambos requests
+    // antes de que cualquiera termine de crear — el @@unique([supersedesId])
+    // del schema es la protección real, esto sólo lo convierte en un 409
+    // legible en vez de un 500 genérico.
+    if (error?.code === 'P2002' && error?.meta?.target?.includes?.('supersedesId')) {
+      return NextResponse.json({ error: 'Ese documento ya tiene una versión más nueva' }, { status: 409 })
+    }
     console.error('[DOC UPLOAD]', error)
     return NextResponse.json({ error: 'Error al subir archivo' }, { status: 500 })
   }

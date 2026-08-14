@@ -14,6 +14,7 @@ import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Avatar } from '@/components/ui/avatar'
 import { useThemeStore } from '@/store/theme-store'
 import { getRoleLabel } from '@/lib/role-labels'
+import { argentinaDayKey } from '@/lib/timezone'
 import type { Asistencia } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -70,7 +71,8 @@ interface EmpleadoRow {
 // hoy?" es la pregunta del día a día ahora que todo el equipo ficha, no
 // sólo Técnico.
 function hoyStatus(records: Asistencia[]): { label: string; tone: 'good' | 'warn' | 'danger' | 'neutral' } {
-  const hoyKey = new Date().toISOString().slice(0, 10)
+  // argentinaDayKey, no toISOString (siempre UTC) — ver src/lib/timezone.ts.
+  const hoyKey = argentinaDayKey()
   const r = records.find(r => r.fecha.slice(0, 10) === hoyKey)
   if (!r) return { label: 'Sin fichar hoy', tone: 'neutral' }
   if (r.ausente) return { label: 'Ausente hoy', tone: 'danger' }
@@ -100,7 +102,7 @@ export default function RrhhPage() {
 
   // Mark absent modal
   const [absenteModal, setAbsenteModal] = useState<{ userId: string; name: string } | null>(null)
-  const [absenteDate,  setAbsenteDate]  = useState(new Date().toISOString().slice(0, 10))
+  const [absenteDate,  setAbsenteDate]  = useState(argentinaDayKey())
   const [markingAbs,   setMarkingAbs]   = useState(false)
 
   // Configuración de horario laboral (hora de entrada + tolerancia) — antes

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { argentinaDayStart } from '@/lib/timezone'
 
 export async function POST() {
   try {
@@ -9,7 +10,8 @@ export async function POST() {
 
     const db  = prisma as any
     const now  = new Date()
-    const hoy  = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // Mismo fix que check-in — ver src/lib/timezone.ts.
+    const hoy  = argentinaDayStart(now)
 
     const existing = await db.asistencia.findFirst({
       where: { userId: payload.userId, organizationId: payload.orgId, fecha: hoy },

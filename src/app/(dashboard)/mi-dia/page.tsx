@@ -20,6 +20,7 @@ import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/store/auth-store'
 import { formatDate } from '@/lib/utils'
+import { argentinaDayKey } from '@/lib/timezone'
 import type { Task, Ticket, TaskStatus, TaskPriority, TicketCategory } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -74,8 +75,9 @@ export default function MiDiaPage() {
   // Check-in widget state
   const [checkingIn,  setCheckingIn]  = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
-  const hoy = new Date().toISOString().slice(0, 10)
-  const mesCurrent = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  // argentinaDayKey, no toISOString (siempre UTC) — ver src/lib/timezone.ts.
+  const hoy = argentinaDayKey()
+  const mesCurrent = hoy.slice(0, 7)
 
   const { data: asistenciaHoy, refetch: refetchAsistencia } = useQuery({
     queryKey: ['asistencia-hoy', user?.id],

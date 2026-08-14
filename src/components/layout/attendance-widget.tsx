@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, LogIn, LogOut, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { argentinaDayKey } from '@/lib/timezone'
 
 interface AsistenciaHoy {
   fecha: string
@@ -27,8 +28,11 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   const [autoNudgeFired, setAutoNudgeFired] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const mesCurrent = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-  const hoyKey = new Date().toISOString().slice(0, 10)
+  // argentinaDayKey, no toISOString (siempre UTC) — a la noche (hora
+  // Argentina) toISOString ya cae en el día siguiente y este "hoy" dejaba
+  // de encontrar el fichaje recién hecho. Ver src/lib/timezone.ts.
+  const mesCurrent = argentinaDayKey().slice(0, 7)
+  const hoyKey = argentinaDayKey()
 
   const { data: hoy, refetch } = useQuery({
     queryKey: ['asistencia-hoy', userId],

@@ -7,6 +7,7 @@ import { LogIn, LogOut, Clock, CheckCircle, AlertCircle, Calendar, AlertTriangle
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import type { Asistencia } from '@/types'
+import { argentinaDayKey } from '@/lib/timezone'
 import toast from 'react-hot-toast'
 
 function formatHora(dt: string | null): string {
@@ -63,7 +64,10 @@ export default function MiAsistenciaPage() {
     return () => clearInterval(t)
   }, [])
 
-  const hoy      = now.toISOString().slice(0, 10)
+  // argentinaDayKey, no toISOString (siempre UTC) — a la noche ya caía en
+  // el día siguiente y esta pantalla dejaba de reconocer el fichaje de hoy
+  // como propio. Ver src/lib/timezone.ts.
+  const hoy      = argentinaDayKey(now)
   const horaStr  = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   const fechaStr = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 

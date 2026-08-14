@@ -15,6 +15,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Faltaba acá también (ver mismo fix en POST más abajo) — /api/deals
+    // exige SELLER+ en todos sus verbos; sin este chequeo, cualquier
+    // usuario autenticado de la org (HR, TECHNICIAN) podía leer notas
+    // privadas de negociación de un deal con sólo conocer su id, aunque no
+    // pudiera ver el deal en sí vía /api/deals/[id].
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
 

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatMultiCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { DealNotas } from '@/components/pipeline/deal-notas'
 import type { Deal, DealStage } from '@/types'
@@ -249,9 +249,16 @@ export default function PipelinePage() {
     return acc
   }, {} as Record<DealStage, Deal[]>)
 
-  const totalPipeline = deals
+  // Agrupado por moneda, nunca sumado entre monedas — un deal en USD y
+  // otro en ARS no son la misma unidad (mismo criterio que ya usa el
+  // dashboard vía formatMultiCurrency; acá faltaba, y el total mostraba
+  // una cifra sin sentido de negocio si había deals en más de una moneda).
+  const totalPipelineByCurrency = deals
     .filter(d => d.stage !== 'PERDIDO')
-    .reduce((acc, d) => acc + d.amount * (d.probability / 100), 0)
+    .reduce((acc, d) => {
+      acc[d.currency] = (acc[d.currency] ?? 0) + d.amount * (d.probability / 100)
+      return acc
+    }, {} as Record<string, number>)
 
   // ── Create deal ───────────────────────────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {
@@ -363,7 +370,7 @@ export default function PipelinePage() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-xs text-[var(--color-text-muted)]">Valor esperado</p>
-            <p className="text-lg font-bold text-[var(--color-text)]">{formatCurrency(totalPipeline)}</p>
+            <p className="text-lg font-bold text-[var(--color-text)]">{formatMultiCurrency(totalPipelineByCurrency)}</p>
           </div>
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
             Nuevo Deal
@@ -387,7 +394,12 @@ export default function PipelinePage() {
         <div className="flex gap-4 overflow-x-auto pb-4">
           {STAGES.map(stage => {
             const columnDeals = dealsByStage[stage.key] ?? []
-            const columnTotal = columnDeals.reduce((a, d) => a + d.amount, 0)
+            // Mismo criterio que el total del header — agrupado por
+            // moneda, nunca sumado entre monedas distintas.
+            const columnTotalByCurrency = columnDeals.reduce((acc, d) => {
+              acc[d.currency] = (acc[d.currency] ?? 0) + d.amount
+              return acc
+            }, {} as Record<string, number>)
             const isDragOver  = dragOverStage === stage.key
             return (
               <div
@@ -402,8 +414,8 @@ export default function PipelinePage() {
                   <span className="text-xs font-semibold">{stage.label}</span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs">{columnDeals.length}</span>
-                    {columnTotal > 0 && (
-                      <span className="text-[10px] opacity-70">{formatCurrency(columnTotal)}</span>
+                    {Object.keys(columnTotalByCurrency).length > 0 && (
+                      <span className="text-[10px] opacity-70">{formatMultiCurrency(columnTotalByCurrency)}</span>
                     )}
                   </div>
                 </div>

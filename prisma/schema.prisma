@@ -683,11 +683,19 @@ model Document {
   // the one it supersedes, instead of two unrelated documents with the same
   // display name. The document browser only lists the tip of each chain
   // (the one nothing else supersedes).
-  // No DB-level unique constraint here on purpose (would need --accept-data-loss
-  // for a fresh column with no possible duplicates yet) — the upload route
-  // enforces "at most one row supersedes a given document" itself.
+  // @@unique([supersedesId]) — antes esto dependía 100% de un find-then-create
+  // en la app (upload/route.ts: lee supersededBy, si está vacío crea la nueva
+  // versión) sin protección transaccional: dos reemplazos casi simultáneos
+  // del mismo documento (doble click, o dos personas subiendo la versión
+  // nueva a la vez) podían leer ambos "sin versión más nueva" y crear dos
+  // filas superseding el mismo original — las dos aparecían como "versión
+  // vigente" en el listado. NULL no cuenta para el unique (Postgres permite
+  // múltiples filas con supersedesId=NULL), así que esto sólo impide DOS
+  // documentos apuntando al MISMO original — exactamente la garantía que
+  // faltaba. Verificado antes de aplicar: cero duplicados ya existentes en
+  // producción.
   version      Int        @default(1)
-  supersedesId String?
+  supersedesId String?    @unique
   supersedes   Document?  @relation("DocumentVersions", fields: [supersedesId], references: [id])
   supersededBy Document[] @relation("DocumentVersions")
 

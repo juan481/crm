@@ -4,6 +4,7 @@ import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
 import { isPluginEnabled } from '@/lib/plugins'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { argentinaDayStart } from '@/lib/timezone'
 
 const JOB_NAME = 'attendance-digest'
 
@@ -12,11 +13,14 @@ export const dynamic = 'force-dynamic'
 // Último día hábil (lun-vie) antes de `from` — con vercel.json corriendo
 // este cron sólo de lunes a viernes, esto siempre da el día correcto sin
 // duplicar ni saltear ninguno (lunes → viernes anterior, martes → lunes...).
+// `from` tiene que ser ya una medianoche UTC que representa un día
+// argentino (ver argentinaDayStart) — de acá para atrás es aritmética de
+// días calendario pura en UTC, sin pasar por los getters/setters "locales"
+// de Date (que en Vercel resuelven como UTC, no Argentina).
 function lastBusinessDay(from: Date): Date {
   const d = new Date(from)
-  d.setDate(d.getDate() - 1)
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
-  d.setHours(0, 0, 0, 0)
+  d.setUTCDate(d.getUTCDate() - 1)
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() - 1)
   return d
 }
 
@@ -35,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const db = prisma as any
-    const target = lastBusinessDay(new Date())
+    const target = lastBusinessDay(argentinaDayStart())
 
     const [users, records, orgs] = await Promise.all([
       db.user.findMany({
