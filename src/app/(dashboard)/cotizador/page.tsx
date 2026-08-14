@@ -88,8 +88,12 @@ export default function CotizadorPage() {
   const [saving,                  setSaving]                  = useState(false)
   const [sendingEmail,            setSendingEmail]            = useState(false)
   const [showArs,                 setShowArs]                 = useState(false)
-  const [addingToPipeline,        setAddingToPipeline]        = useState(false)
-  const [pipelineAdded,           setPipelineAdded]           = useState(false)
+  // Antes preguntaba "¿Agregar al Pipeline?" con botones Sí/No — ahora se
+  // agrega solo al guardar la cotización (ver handleSave) y esto sólo
+  // trackea el estado para mostrarlo, más la opción de deshacerlo.
+  const [pipelineBusy,  setPipelineBusy]  = useState(false)
+  const [pipelineState, setPipelineState] = useState<'idle' | 'added' | 'removed' | 'error'>('idle')
+  const [autoDealId,    setAutoDealId]    = useState<string | null>(null)
 
   const [savedQuote,  setSavedQuote]  = useState<SavedQuote | null>(null)
   const [pdfBlobUrl,  setPdfBlobUrl]  = useState<string | null>(null)
@@ -280,11 +284,22 @@ export default function CotizadorPage() {
       doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
       doc.text(ci.item.name, mg + 3, y + 7)
 
-      // Type badge
+      // Type badge — ancho dinámico según el texto real (doc.getTextWidth),
+      // no un pill fijo de 22mm centrado en un punto (mg+cw*0.55) distinto
+      // al del rect (mg+cw*0.44, ancho 22 → centro real en mg+cw*0.44+11).
+      // Con ese desfase, "SERVICIO" entraba de casualidad (tiene dos "I",
+      // carácter angosto en Helvetica) pero "PRODUCTO" (misma cantidad de
+      // letras, más ancho) se salía del pill por la derecha — y como el
+      // texto es blanco, esa parte quedaba invisible sobre el fondo blanco
+      // de la página: se veía "PRODUC" cortado, no un bug de datos.
+      const badgeLabel = ci.type === 'SERVICE' ? 'SERVICIO' : 'PRODUCTO'
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal')
+      const badgeW = doc.getTextWidth(badgeLabel) + 6
+      const badgeCx = mg + cw * 0.52
       doc.setFillColor(ci.type === 'SERVICE' ? pr : 245, ci.type === 'SERVICE' ? pg : 158, ci.type === 'SERVICE' ? pb : 11)
-      doc.roundedRect(mg + cw * 0.44, y + 2.5, 22, 5, 1, 1, 'F')
-      doc.setTextColor(255, 255, 255); doc.setFontSize(7)
-      doc.text(ci.type === 'SERVICE' ? 'SERVICIO' : 'PRODUCTO', mg + cw * 0.55, y + 6.3, { align: 'center' })
+      doc.roundedRect(badgeCx - badgeW / 2, y + 2.5, badgeW, 5, 1, 1, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.text(badgeLabel, badgeCx, y + 6.3, { align: 'center' })
 
       doc.setTextColor(100, 116, 139); doc.setFontSize(8)
       doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.70, y + 7, { align: 'center' })
@@ -405,6 +420,12 @@ export default function CotizadorPage() {
       const dataUri = doc.output('datauristring') as unknown as string
 
       setSavedQuote(quote); setPdfBlobUrl(blobUrl); setPdfBase64(dataUri); setShowPreview(true)
+
+      // Auto-agregar al Pipeline — antes había que confirmar "¿Agregar al
+      // Pipeline?" con un botón; ahora pasa solo salvo que la cotización ya
+      // venga vinculada a una oportunidad existente (dealId de la URL, ver
+      // arriba). Se pasa `quote` directo, no se espera al re-render.
+      if (!quote.dealId) addToPipeline(quote)
     } catch (err) {
       console.error(err); toast.error('Error al generar el presupuesto')
     } finally { setSaving(false) }
@@ -460,32 +481,53 @@ export default function CotizadorPage() {
     return `https://wa.me/?text=${encodeURIComponent(t)}`
   }
 
-  const addToPipeline = async () => {
-    if (!savedQuote) return
-    setAddingToPipeline(true)
+  // Recibe `quote` por parámetro (no lee `savedQuote` del closure) — se
+  // dispara automáticamente desde handleSave() justo después de construir
+  // el objeto, antes de que el setState del preview termine de aplicarse.
+  const addToPipeline = async (quote: SavedQuote) => {
+    setPipelineBusy(true)
     try {
       const res = await fetch('/api/deals', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title:       `${savedQuote.empresaName ?? savedQuote.recipientName} — ${savedQuote.ref}`,
-          amount:      savedQuote.finalTotal,
-          currency:    savedQuote.currency,
+          title:       `${quote.empresaName ?? quote.recipientName} — ${quote.ref}`,
+          amount:      quote.finalTotal,
+          currency:    quote.currency,
           probability: 50, stage: 'PROPUESTA',
-          notes:       `Generado desde cotización ${savedQuote.ref}`,
+          notes:       `Generado automáticamente desde cotización ${quote.ref}`,
           empresaId:   clientMode === 'existing' ? selectedEmpresaId || null : null,
         }),
       })
       const json = await res.json()
-      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      if (!res.ok) { setPipelineState('error'); return }
 
       // Vincular estructuralmente la cotización al deal recién creado.
-      await fetch(`/api/cotizaciones/${savedQuote.cotizacionId}`, {
+      await fetch(`/api/cotizaciones/${quote.cotizacionId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dealId: json.data.id }),
       })
 
-      setPipelineAdded(true); toast.success('Deal creado en Pipeline → Propuesta')
-    } catch { toast.error('Error al crear el deal') } finally { setAddingToPipeline(false) }
+      setAutoDealId(json.data.id); setPipelineState('added')
+    } catch { setPipelineState('error') } finally { setPipelineBusy(false) }
+  }
+
+  // "Deshacer" el auto-agregado. Borrar el deal en sí requiere ADMIN+
+  // (DELETE /api/deals/[id]) — un SELLER (el rol principal que usa el
+  // Cotizador) no puede. Si el borrado no está permitido, degrada a sólo
+  // desvincular la cotización del deal (éste queda huérfano en Pipeline,
+  // visible para un admin) en vez de fallar en silencio o romper.
+  const removeFromPipeline = async () => {
+    if (!autoDealId || !savedQuote) return
+    setPipelineBusy(true)
+    try {
+      const del = await fetch(`/api/deals/${autoDealId}`, { method: 'DELETE' })
+      await fetch(`/api/cotizaciones/${savedQuote.cotizacionId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dealId: null }),
+      })
+      setAutoDealId(null); setPipelineState('removed')
+      if (!del.ok) toast('Se desvinculó, pero la oportunidad sigue en Pipeline — pedile a un admin que la borre', { icon: '⚠️' })
+    } catch { toast.error('No se pudo quitar del Pipeline') } finally { setPipelineBusy(false) }
   }
 
   const reset = () => {
@@ -493,7 +535,7 @@ export default function CotizadorPage() {
     setSavedQuote(null); setPdfBlobUrl(null); setPdfBase64(null); setShowPreview(false)
     setCart({}); setManualEmail(''); setManualName(''); setNotes(''); setDiscount(0)
     setSelectedEmpresaId(''); setSelectedContactEmail(''); setSelectedContactName('')
-    setManualContactInput(false); setPipelineAdded(false)
+    setManualContactInput(false); setPipelineState('idle'); setAutoDealId(null)
   }
 
   // ── Preview ────────────────────────────────────────────────────────────────
@@ -556,30 +598,35 @@ export default function CotizadorPage() {
             style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
             <CheckCircle size={15} /> Cotización vinculada a la oportunidad en Pipeline.
           </div>
-        ) : !pipelineAdded ? (
-          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(99,102,241,0.12)' }}>
-                <TrendingUp size={16} style={{ color: 'var(--color-primary)' }} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>¿Agregar esta cotización al Pipeline?</p>
-                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  Deal en etapa <strong>Propuesta</strong> por {formatCurrency(savedQuote.finalTotal, savedQuote.currency)}
-                  {savedQuote.empresaName && ` · ${savedQuote.empresaName}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button size="sm" onClick={addToPipeline} loading={addingToPipeline} leftIcon={<TrendingUp size={13} />}>Sí, agregar</Button>
-              <Button size="sm" variant="ghost" onClick={() => setPipelineAdded(true)}>No</Button>
-            </div>
+        ) : pipelineState === 'added' ? (
+          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl text-sm"
+            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
+            <span className="flex items-center gap-2">
+              <CheckCircle size={15} /> Se agregó automáticamente al Pipeline, etapa Propuesta.
+            </span>
+            <button onClick={removeFromPipeline} disabled={pipelineBusy}
+              className="text-xs font-semibold shrink-0 hover:underline disabled:opacity-60" style={{ color: '#10b981' }}>
+              {pipelineBusy ? 'Quitando...' : 'No agregar'}
+            </button>
+          </div>
+        ) : pipelineState === 'removed' ? (
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm"
+            style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+            No se agregó al Pipeline.
+          </div>
+        ) : pipelineState === 'error' ? (
+          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-2xl text-sm"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+            <span>No se pudo agregar automáticamente al Pipeline.</span>
+            <button onClick={() => addToPipeline(savedQuote)} disabled={pipelineBusy}
+              className="text-xs font-semibold shrink-0 hover:underline disabled:opacity-60">
+              {pipelineBusy ? 'Reintentando...' : 'Reintentar'}
+            </button>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm"
-            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
-            <CheckCircle size={15} /> Deal agregado al Pipeline en etapa Propuesta.
+            style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+            <TrendingUp size={14} className="animate-pulse" /> Agregando al Pipeline...
           </div>
         )}
 
