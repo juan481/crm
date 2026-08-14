@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+// Product.currency es String libre en el schema (sin enum/check en la DB).
+// Intl.NumberFormat tira un RangeError síncrono ante cualquier código no
+// ISO-4217 — un producto con una moneda corrupta rompía con un error
+// genérico cualquier pantalla que después intentara mostrar su precio
+// (Cotizador, este mismo catálogo, cotizaciones ya guardadas). El único
+// punto de entrada sin whitelist era la importación CSV (el alta manual ya
+// estaba acotada a un <select> fijo en el frontend) — se valida acá,
+// server-side, para blindar también contra un POST directo.
+const VALID_CURRENCIES = new Set(['USD', 'ARS', 'EUR'])
+
 export async function GET() {
   try {
     const payload = await getCurrentUser()
@@ -31,6 +41,9 @@ export async function POST(req: NextRequest) {
     const { name, description, price, currency, unit } = await req.json()
     if (!name || price === undefined) {
       return NextResponse.json({ error: 'Nombre y precio son requeridos' }, { status: 400 })
+    }
+    if (currency !== undefined && !VALID_CURRENCIES.has(currency)) {
+      return NextResponse.json({ error: `Moneda inválida: "${currency}". Usá USD, ARS o EUR.` }, { status: 400 })
     }
 
     const db = prisma as any

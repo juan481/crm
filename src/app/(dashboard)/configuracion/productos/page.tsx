@@ -55,12 +55,25 @@ function parseCsv(text: string): CsvRow[] {
     const cols  = splitCsvLine(line)
     const name  = cols[nameIdx]  ?? ''
     const price = priceIdx !== -1 ? (cols[priceIdx] ?? '') : ''
-    const error = !name.trim() ? 'Nombre vacío' : (isNaN(Number(price)) || price === '') ? 'Precio inválido' : undefined
+    const currencyRaw = currIdx !== -1 ? (cols[currIdx] || 'USD') : 'USD'
+    // Antes cualquier texto no vacío en la columna moneda/currency pasaba
+    // sin validar (sólo se completaba "USD" si la celda venía vacía) — el
+    // alta manual sí está acotada a un <select> fijo, pero por acá se
+    // colaba cualquier cosa, y un producto con una moneda inválida rompía
+    // Intl.NumberFormat (con un error genérico) en cualquier pantalla que
+    // después mostrara su precio: Cotizador, este mismo catálogo,
+    // cotizaciones ya guardadas. Ver también la validación server-side en
+    // /api/products (segunda barrera, por si se postea directo a la API).
+    const currency = currencyRaw.trim().toUpperCase()
+    const error = !name.trim() ? 'Nombre vacío'
+      : (isNaN(Number(price)) || price === '') ? 'Precio inválido'
+      : !VALID_CURRENCIES.has(currency) ? `Moneda inválida: "${currencyRaw}" (usá USD, ARS o EUR)`
+      : undefined
     return {
       name,
       description: descIdx !== -1 ? (cols[descIdx] ?? '') : '',
       price,
-      currency:    currIdx !== -1 ? (cols[currIdx] || 'USD') : 'USD',
+      currency,
       unit:        unitIdx !== -1 ? (cols[unitIdx] || 'unidad') : 'unidad',
       valid:       !error,
       error,
@@ -73,6 +86,7 @@ const CURRENCY_OPTIONS = [
   { value: 'ARS', label: 'ARS — Peso arg.' },
   { value: 'EUR', label: 'EUR — Euro' },
 ]
+const VALID_CURRENCIES = new Set(CURRENCY_OPTIONS.map(o => o.value))
 
 const EMPTY_FORM = { name: '', description: '', price: '', currency: 'USD', unit: 'unidad' }
 

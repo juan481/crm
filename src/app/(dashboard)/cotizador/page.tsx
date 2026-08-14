@@ -99,13 +99,27 @@ export default function CotizadorPage() {
   useEffect(() => { return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) } }, [pdfBlobUrl])
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  const { data: servicesData, isLoading: loadingServices } = useQuery({
+  // Antes: `.json().then(j => j.data as Service[])` sin chequear `r.ok` —
+  // si el fetch fallaba (401/500), la promesa igual resolvía OK (con
+  // `j.data === undefined`), react-query nunca marcaba `isError`, y el
+  // catálogo quedaba en silencio como "Sin servicios/productos
+  // configurados" — indistinguible de una organización que genuinamente no
+  // cargó nada. Ahora un fetch fallido tira, así isError se puede mostrar.
+  const { data: servicesData, isLoading: loadingServices, isError: errorServices } = useQuery({
     queryKey: ['services'],
-    queryFn:  async () => (await fetch('/api/services')).json().then(j => j.data as Service[]),
+    queryFn:  async () => {
+      const r = await fetch('/api/services')
+      if (!r.ok) throw new Error('Error al cargar servicios')
+      return (await r.json()).data as Service[]
+    },
   })
-  const { data: productsData, isLoading: loadingProducts } = useQuery({
+  const { data: productsData, isLoading: loadingProducts, isError: errorProducts } = useQuery({
     queryKey: ['products'],
-    queryFn:  async () => (await fetch('/api/products')).json().then(j => j.data as Product[]),
+    queryFn:  async () => {
+      const r = await fetch('/api/products')
+      if (!r.ok) throw new Error('Error al cargar productos')
+      return (await r.json()).data as Product[]
+    },
   })
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-cotizador'],
@@ -576,6 +590,7 @@ export default function CotizadorPage() {
 
   // ── Main form ──────────────────────────────────────────────────────────────
   const loadingCatalog = activeTab === 'SERVICE' ? loadingServices : loadingProducts
+  const errorCatalog   = activeTab === 'SERVICE' ? errorServices   : errorProducts
 
   return (
     <div className="pb-44 lg:pb-32">
@@ -643,6 +658,20 @@ export default function CotizadorPage() {
 
         {loadingCatalog ? (
           <div className="h-11 rounded-xl animate-pulse" style={{ background: 'var(--color-surface)' }} />
+        ) : errorCatalog ? (
+          <div className="rounded-2xl p-6 text-center flex flex-col items-center gap-2"
+            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <p className="text-sm font-medium" style={{ color: '#ef4444' }}>
+              No pudimos cargar {activeTab === 'SERVICE' ? 'los servicios' : 'los productos'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+              style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}
+            >
+              Reintentar
+            </button>
+          </div>
         ) : catalog.length === 0 ? (
           <div className="rounded-2xl p-6 text-center" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             {activeTab === 'SERVICE' ? <Wrench size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />

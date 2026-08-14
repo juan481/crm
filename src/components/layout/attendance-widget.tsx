@@ -37,7 +37,15 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   const { data: hoy, refetch } = useQuery({
     queryKey: ['asistencia-hoy', userId],
     queryFn: async () => {
-      const r = await fetch(`/api/asistencia?mes=${mesCurrent}`)
+      // &userId= explícito — SIN esto, para SUPER_ADMIN/ADMIN/HR (que
+      // pueden ver la asistencia de toda la org, ver /api/asistencia
+      // route.ts) esta consulta devolvía los registros de TODO el equipo, y
+      // el .find() de abajo agarraba el primero que matcheara la fecha de
+      // hoy — el de OTRA persona, no el propio. Por eso un SUPER_ADMIN veía
+      // "En jornada, fichar salida" en este widget (registro ajeno) mientras
+      // Mi Asistencia (que sí manda userId) mostraba correctamente "todavía
+      // no fichaste". Mismo criterio que ya usaba mi-asistencia/page.tsx.
+      const r = await fetch(`/api/asistencia?mes=${mesCurrent}&userId=${userId}`)
       if (!r.ok) return null
       const records = ((await r.json()).data ?? []) as AsistenciaHoy[]
       return records.find(rec => rec.fecha.slice(0, 10) === hoyKey) ?? null

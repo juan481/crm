@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
 
+// Mismo motivo que en route.ts (POST) — ver comentario ahí.
+const VALID_CURRENCIES = new Set(['USD', 'ARS', 'EUR'])
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
@@ -17,6 +20,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!existing) return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
 
     const { name, description, price, currency, unit } = await req.json()
+    if (currency !== undefined && !VALID_CURRENCIES.has(currency)) {
+      return NextResponse.json({ error: `Moneda inválida: "${currency}". Usá USD, ARS o EUR.` }, { status: 400 })
+    }
     const product = await db.product.update({
       where: { id: params.id },
       data: {

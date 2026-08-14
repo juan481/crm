@@ -7,12 +7,26 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// `Intl.NumberFormat` tira un RangeError SÍNCRONO en el constructor si
+// `currency` no es un código ISO-4217 válido (ej. vacío, en minúsculas mal
+// formado, texto libre) — no devuelve un valor raro, directamente explota.
+// `Product.currency`/`Service.currency` son `String` libre en el schema
+// (sin enum/check en la DB), y el import CSV de Productos históricamente no
+// validaba esa columna antes de postearla — un solo producto con una
+// moneda corrupta podía tirar abajo con un error genérico ("Algo salió
+// mal") cualquier pantalla que liste precios (Cotizador, catálogo de
+// Productos, cotizaciones guardadas). Fallback: formatear sólo el número y
+// anteponer el código tal cual vino, nunca crashear por esto.
 export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-  }).format(amount)
+  try {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+    }).format(amount)
+  } catch {
+    return `${currency || '?'} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0 }).format(amount)}`
+  }
 }
 
 // Un monto en USD y otro en ARS no son la misma unidad — nunca se suman
