@@ -32,6 +32,25 @@ function mesActual() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+// Mismo cálculo que RRHH (rrhh/page.tsx) — antes acá el % se calculaba
+// sobre presentes+ausentes, así que un día sin fichar y sin marcar ausente
+// no restaba nada y el empleado veía un % más alto que el que ve RRHH de
+// esa misma persona en el mismo mes. Ahora ambas pantallas usan el mismo
+// denominador (días hábiles transcurridos del mes).
+function weekdaysElapsed(mes: string): number {
+  const [y, m] = mes.split('-').map(Number)
+  const monthStart = new Date(y, m - 1, 1)
+  const monthEnd   = new Date(y, m, 0)
+  const today      = new Date()
+  const end        = today < monthEnd ? today : monthEnd
+  let count = 0
+  for (const d = new Date(monthStart); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay()
+    if (day !== 0 && day !== 6) count++
+  }
+  return count
+}
+
 export default function MiAsistenciaPage() {
   const { user } = useAuthStore()
   const qc   = useQueryClient()
@@ -97,8 +116,8 @@ export default function MiAsistenciaPage() {
   const presentes  = historial.filter(r => r.horaEntrada && !r.ausente).length
   const ausentes   = historial.filter(r => r.ausente).length
   const tardanzas  = historial.filter(r => r.tardanza).length
-  const totalDias  = presentes + ausentes
-  const pctPresent = totalDias > 0 ? Math.round((presentes / totalDias) * 100) : 0
+  const diasHabiles = weekdaysElapsed(mesActual())
+  const pctPresent = diasHabiles > 0 ? Math.round((presentes / diasHabiles) * 100) : 0
 
   return (
     <div className="space-y-6 max-w-2xl">
