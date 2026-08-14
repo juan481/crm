@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import {
   ClipboardList, ChevronRight, CheckCircle, AlertCircle, Clock, Search,
-  AlertTriangle, X, Pencil, Calendar,
+  AlertTriangle, X, Pencil, Calendar, Settings2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,6 +65,27 @@ interface EmpleadoRow {
   records:   Asistencia[]
 }
 
+// Estado de HOY de un empleado, para el vistazo rápido de RRHH — separado
+// de los totales del mes (que ya muestra la fila), porque "¿quién fichó
+// hoy?" es la pregunta del día a día ahora que todo el equipo ficha, no
+// sólo Técnico.
+function hoyStatus(records: Asistencia[]): { label: string; tone: 'good' | 'warn' | 'danger' | 'neutral' } {
+  const hoyKey = new Date().toISOString().slice(0, 10)
+  const r = records.find(r => r.fecha.slice(0, 10) === hoyKey)
+  if (!r) return { label: 'Sin fichar hoy', tone: 'neutral' }
+  if (r.ausente) return { label: 'Ausente hoy', tone: 'danger' }
+  if (!r.horaEntrada) return { label: 'Sin fichar hoy', tone: 'neutral' }
+  if (r.tardanza) return { label: `Tardanza · ${formatHora(r.horaEntrada)}`, tone: 'warn' }
+  if (!r.horaSalida) return { label: `En jornada · ${formatHora(r.horaEntrada)}`, tone: 'good' }
+  return { label: `Completo · ${formatHora(r.horaEntrada)}-${formatHora(r.horaSalida)}`, tone: 'good' }
+}
+const TONE_STYLES: Record<string, { bg: string; color: string }> = {
+  good:    { bg: 'rgba(16,185,129,0.12)', color: '#059669' },
+  warn:    { bg: 'rgba(245,158,11,0.12)', color: '#b45309' },
+  danger:  { bg: 'rgba(239,68,68,0.12)',  color: '#dc2626' },
+  neutral: { bg: 'rgba(148,163,184,0.12)', color: '#64748b' },
+}
+
 export default function RrhhPage() {
   const router = useRouter()
   const qc     = useQueryClient()
@@ -81,6 +102,44 @@ export default function RrhhPage() {
   const [absenteModal, setAbsenteModal] = useState<{ userId: string; name: string } | null>(null)
   const [absenteDate,  setAbsenteDate]  = useState(new Date().toISOString().slice(0, 10))
   const [markingAbs,   setMarkingAbs]   = useState(false)
+
+  // Configuración de horario laboral (hora de entrada + tolerancia) — antes
+  // era fijo 09:15 para todo el mundo, ahora lo define cada organización.
+  const [configOpen, setConfigOpen] = useState(false)
+  const [configForm, setConfigForm] = useState({ attendanceStartTime: '09:00', attendanceToleranceMinutes: 15 })
+  const [savingConfig, setSavingConfig] = useState(false)
+
+  const { data: configData } = useQuery({
+    queryKey: ['asistencia-config'],
+    queryFn: async () => {
+      const r = await fetch('/api/asistencia/config')
+      if (!r.ok) return null
+      return ((await r.json()).data ?? null) as { attendanceStartTime: string; attendanceToleranceMinutes: number } | null
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const openConfig = () => {
+    if (configData) setConfigForm(configData)
+    setConfigOpen(v => !v)
+  }
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true)
+    try {
+      const res = await fetch('/api/asistencia/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configForm),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success('Horario laboral actualizado')
+      qc.invalidateQueries({ queryKey: ['asistencia-config'] })
+      setConfigOpen(false)
+    } catch { toast.error('Error de conexión') }
+    finally { setSavingConfig(false) }
+  }
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['asistencia-rrhh', mes],
@@ -220,8 +279,51 @@ export default function RrhhPage() {
           <input type="month" value={mes} onChange={e => setMes(e.target.value)}
             className="px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+          <button onClick={openConfig}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm border transition-colors"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
+            <Settings2 size={14} /> Horario laboral
+            {configOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
         </div>
       </div>
+
+      {/* Configuración de horario laboral / tolerancia de tardanza */}
+      {configOpen && (
+        <div className="rounded-2xl p-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Horario laboral</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+            Define a qué hora arranca la jornada y cuántos minutos de margen hay antes de marcar tardanza al fichar entrada.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Hora de entrada</label>
+              <input type="time" value={configForm.attendanceStartTime}
+                onChange={e => setConfigForm(f => ({ ...f, attendanceStartTime: e.target.value }))}
+                className="px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Tolerancia (minutos)</label>
+              <input type="number" min={0} max={120} value={configForm.attendanceToleranceMinutes}
+                onChange={e => setConfigForm(f => ({ ...f, attendanceToleranceMinutes: Number(e.target.value) }))}
+                className="w-28 px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <Button onClick={handleSaveConfig} loading={savingConfig}>Guardar</Button>
+          </div>
+          <p className="text-xs mt-3" style={{ color: 'var(--color-text-subtle)' }}>
+            Con los valores de arriba, cualquier entrada después de las{' '}
+            <b style={{ color: 'var(--color-text-muted)' }}>
+              {(() => {
+                const [h, m] = configForm.attendanceStartTime.split(':').map(Number)
+                const total = (h || 0) * 60 + (m || 0) + (configForm.attendanceToleranceMinutes || 0)
+                return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+              })()}
+            </b>{' '}se marca como tardanza.
+          </p>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative max-w-xs">
@@ -261,7 +363,18 @@ export default function RrhhPage() {
                 onClick={() => router.push(`/rrhh/${e.userId}?mes=${mes}`)}>
                 <Avatar name={e.name} src={e.avatarUrl} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{e.name}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{e.name}</p>
+                    {(() => {
+                      const s = hoyStatus(e.records)
+                      const t = TONE_STYLES[s.tone]
+                      return (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: t.bg, color: t.color }}>
+                          {s.label}
+                        </span>
+                      )
+                    })()}
+                  </div>
                   <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{getRoleLabel(e.role, vertical)}</p>
                 </div>
                 <div className="flex items-center gap-6 shrink-0">

@@ -487,10 +487,16 @@ export default function AyudaPage() {
               </P>
             </Section>
 
-            <Section id="e14" n={14} title="RRHH y asistencia" lede="Fichado de entrada/salida y la vista del día para técnicos.">
+            <Section id="e14" n={14} title="RRHH y asistencia" lede="Fichado de entrada/salida, para todo el equipo.">
               <P>
-                <b>Mi Asistencia</b> es donde cada persona ficha su entrada y salida. <b>Mi Día</b> es la vista pensada para técnicos
-                en campo: lo que tienen asignado para hoy, sin el resto del CRM alrededor distrayendo.
+                Cualquier persona puede fichar entrada y salida desde el <b>reloj que aparece arriba de cualquier pantalla</b>{' '}
+                (ícono de reloj, al lado de Ayuda) — no hace falta ir a buscar una pantalla especial. <b>Mi Asistencia</b> además
+                muestra el historial completo del mes propio. <b>Mi Día</b> es la vista pensada para técnicos en campo: lo que
+                tienen asignado para hoy, con el mismo fichaje incluido ahí también.
+              </P>
+              <P>
+                Si tu entrada queda marcada como <b>tardanza</b>, es porque fichaste después del horario + tolerancia que RRHH
+                configuró para la organización (por defecto, 09:00 con 15 minutos de margen).
               </P>
             </Section>
 

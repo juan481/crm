@@ -151,20 +151,20 @@ enum SmtpProvider {
 
 // ─── Multi-tenant White-label organizations ────────────────────────────────
 model Organization {
-  id                  String       @id @default(cuid())
-  name                String
-  logoUrl             String?
-  primaryColor        String       @default("#6366f1")
-  secondaryColor      String       @default("#8b5cf6")
-  domain              String?      @unique
-  crmName             String       @default("CRM Pro")
+  id                         String       @id @default(cuid())
+  name                       String
+  logoUrl                    String?
+  primaryColor               String       @default("#6366f1")
+  secondaryColor             String       @default("#8b5cf6")
+  domain                     String?      @unique
+  crmName                    String       @default("CRM Pro")
   // Rubro de la organización (ej. "seguridad", "marketing") — determina qué
   // módulos/plugins ve por defecto y qué tour de onboarding recibe. Lista
   // curada en src/lib/verticals.ts, a propósito NO es un enum de Prisma:
   // sumar un rubro nuevo no debe pedir migración. Null = todavía no eligió
   // (dispara el selector de "primera vez" para el SUPER_ADMIN, ver
   // POST /api/organization/vertical).
-  vertical            String?
+  vertical                   String?
   // Token del formulario público de autogestión de tickets
   // (/soporte/[token]) — mismo espíritu que Event.webhookSecret (línea 578)
   // pero nullable a propósito: un ALTER TABLE que agrega una columna NOT
@@ -176,35 +176,43 @@ model Organization {
   // toda organización NUEVA sí recibe un token automático (default a nivel
   // Prisma Client, no a nivel SQL). Los API routes tratan null = "todavía
   // sin token" y lo resuelven on-demand si hiciera falta.
-  publicSupportToken  String?      @default(cuid())
-  quoteValidityDays   Int          @default(30)
-  smtpHost            String?
-  smtpPort            Int?
-  smtpUser            String?
-  smtpPass            String?
-  smtpFrom            String?
-  smtpProvider        SmtpProvider @default(SMTP)
-  sesRegion           String?
-  sesAccessKeyId      String?
-  sesSecretKey        String?
-  sesFrom             String?
-  sesConfigSet        String?
+  publicSupportToken         String?      @default(cuid())
+  quoteValidityDays          Int          @default(30)
+  // Horario laboral para el cálculo de tardanza en Asistencia — antes esto
+  // estaba hardcodeado a las 09:15 en el código (09:00 + 15 min), fijo para
+  // toda organización sin importar su horario real. "HH:MM" en texto simple
+  // (no un tipo Time de Postgres) para no pelear con conversión de huso
+  // horario en Prisma; se parsea a mano en check-in. Configurable por HR o
+  // superior desde RRHH — no requiere Configuración general.
+  attendanceStartTime        String       @default("09:00")
+  attendanceToleranceMinutes Int          @default(15)
+  smtpHost                   String?
+  smtpPort                   Int?
+  smtpUser                   String?
+  smtpPass                   String?
+  smtpFrom                   String?
+  smtpProvider               SmtpProvider @default(SMTP)
+  sesRegion                  String?
+  sesAccessKeyId             String?
+  sesSecretKey               String?
+  sesFrom                    String?
+  sesConfigSet               String?
   // Campaign-send cap. Agency-managed only — not exposed as an editable
   // field in any org-facing settings screen (see scripts/set-email-limit.ts).
-  emailMonthlyLimit   Int          @default(9000)
+  emailMonthlyLimit          Int          @default(9000)
   // Agency kill switch (e.g. non-payment). Blocks login for every user in
   // this org without deleting anything. Only ever changed from /admin —
   // never client-facing.
-  suspended           Boolean      @default(false)
-  suspendedAt         DateTime?
+  suspended                  Boolean      @default(false)
+  suspendedAt                DateTime?
   // Datos de facturación
-  billingAddress      String?
-  billingEmail        String?
-  billingPhone        String?
-  billingTaxId        String?
-  paymentInstructions String?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  billingAddress             String?
+  billingEmail               String?
+  billingPhone               String?
+  billingTaxId               String?
+  paymentInstructions        String?
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
 
   users                   User[]
   clients                 Client[]

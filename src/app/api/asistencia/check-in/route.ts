@@ -19,8 +19,17 @@ export async function POST() {
       return NextResponse.json({ error: 'Ya registraste tu entrada hoy', data: existing }, { status: 409 })
     }
 
-    // Detect tardanza: entrada después de las 09:15
-    const horaCut = new Date(hoy); horaCut.setHours(9, 15, 0, 0)
+    // Tardanza: entrada después de attendanceStartTime + tolerancia,
+    // configurables por organización desde RRHH (antes era fijo 09:15 para
+    // todo el mundo). "HH:MM" en texto simple — se parsea a mano acá.
+    const org = await prisma.organization.findUnique({
+      where: { id: payload.orgId },
+      select: { attendanceStartTime: true, attendanceToleranceMinutes: true },
+    })
+    const [startH, startM] = (org?.attendanceStartTime ?? '09:00').split(':').map(Number)
+    const toleranceMin = org?.attendanceToleranceMinutes ?? 15
+    const horaCut = new Date(hoy)
+    horaCut.setHours(startH || 9, (startM || 0) + toleranceMin, 0, 0)
     const tardanza = now > horaCut
 
     const record = existing

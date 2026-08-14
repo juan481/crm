@@ -8,13 +8,14 @@ import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
+import { AttendanceWidget } from '@/components/layout/attendance-widget'
 import type { AppNotification } from '@/app/api/notifications/route'
 import toast from 'react-hot-toast'
 
 interface EmpresaSearchResult { id: string; name: string; activity: string | null; city: string | null }
 
 interface AppHeaderProps {
-  user: { name: string; email: string; avatarUrl: string | null; role: string }
+  user: { id: string; name: string; email: string; avatarUrl: string | null; role: string }
   onMenuToggle: () => void
 }
 
@@ -209,6 +210,9 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 ml-auto">
+        {/* Fichaje — visible para cualquier rol, en cualquier pantalla */}
+        <AttendanceWidget userId={user.id} />
+
         {/* Ayuda / documentación */}
         <Link
           href="/ayuda"
