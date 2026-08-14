@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
-  Building2, UserCircle2, FileText, ClipboardList,
+  Building2, UserCircle2, FileText, ClipboardList, KeyRound,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -24,6 +24,11 @@ interface SessionOrg {
   isActive: boolean
 }
 
+interface ModulePermissionRow {
+  id: string
+  roles: Record<string, boolean>
+}
+
 interface NavItem {
   label: string
   href: string
@@ -32,32 +37,37 @@ interface NavItem {
   // Rubros (src/lib/verticals.ts) que ven este ítem. Sin declarar = visible
   // para todos — así ningún módulo existente le cambia nada a Abba.
   verticals?: string[]
+  // Id en src/lib/modules.ts MODULE_DEFINITIONS — habilita el filtro extra
+  // por ModulePermission (Configuración > Permisos). Sin declarar = no pasa
+  // por ese filtro (los settingsItems no lo llevan a propósito).
+  moduleId?: string
   exact?: boolean
   badgeKey?: keyof NotificationCounts
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard',      href: '/dashboard',        icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Mi Día',         href: '/mi-dia',           icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'] },
-  { label: 'Clientes',       href: '/clientes',         icon: <Users size={17} />,                        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Pipeline',       href: '/pipeline',         icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Tareas',         href: '/tareas',           icon: <CheckSquare size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], badgeKey: 'tasks' },
-  { label: 'Cotizador',      href: '/cotizador',        icon: <Calculator size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Cotizaciones',   href: '/cotizaciones',     icon: <FileText size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Tickets',        href: '/tickets',          icon: <LifeBuoy size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], badgeKey: 'tickets' },
-  { label: 'Eventos',        href: '/eventos',          icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Comunicaciones', href: '/comunicaciones',   icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Facturación',    href: '/facturas',         icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices' },
-  { label: 'Documentos',     href: '/documentos',       icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Empresas',       href: '/empresas',         icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'Contactos',      href: '/contactos',        icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'] },
-  { label: 'RRHH',           href: '/rrhh',             icon: <ClipboardList size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'HR'] },
-  { label: 'Mi Asistencia',  href: '/mi-asistencia',    icon: <ClipboardCheck size={17} />,               roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'] },
+  { label: 'Dashboard',      href: '/dashboard',        icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'dashboard' },
+  { label: 'Mi Día',         href: '/mi-dia',           icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'], moduleId: 'mi-dia' },
+  { label: 'Clientes',       href: '/clientes',         icon: <Users size={17} />,                        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'clientes' },
+  { label: 'Pipeline',       href: '/pipeline',         icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'pipeline' },
+  { label: 'Tareas',         href: '/tareas',           icon: <CheckSquare size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], badgeKey: 'tasks', moduleId: 'tareas' },
+  { label: 'Cotizador',      href: '/cotizador',        icon: <Calculator size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizador' },
+  { label: 'Cotizaciones',   href: '/cotizaciones',     icon: <FileText size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizaciones' },
+  { label: 'Tickets',        href: '/tickets',          icon: <LifeBuoy size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], badgeKey: 'tickets', moduleId: 'tickets' },
+  { label: 'Eventos',        href: '/eventos',          icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'eventos' },
+  { label: 'Comunicaciones', href: '/comunicaciones',   icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
+  { label: 'Facturación',    href: '/facturas',         icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
+  { label: 'Documentos',     href: '/documentos',       icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
+  { label: 'Empresas',       href: '/empresas',         icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'empresas' },
+  { label: 'Contactos',      href: '/contactos',        icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'contactos' },
+  { label: 'RRHH',           href: '/rrhh',             icon: <ClipboardList size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'HR'], moduleId: 'rrhh' },
+  { label: 'Mi Asistencia',  href: '/mi-asistencia',    icon: <ClipboardCheck size={17} />,               roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], moduleId: 'mi-asistencia' },
 ]
 
 const settingsItems: NavItem[] = [
   { label: 'Configuración', href: '/configuracion',           icon: <Settings size={16} />,  exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Usuarios',      href: '/configuracion/usuarios',  icon: <UserCog size={16} />,   exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Permisos',      href: '/configuracion/permisos',  icon: <KeyRound size={16} />,  exact: true,  roles: ['SUPER_ADMIN'] },
   { label: 'Servicios',     href: '/configuracion/servicios', icon: <Tag size={16} />,        exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Email SMTP',    href: '/configuracion/correo',    icon: <Mail size={16} />,      exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Plugins',       href: '/configuracion/plugins',   icon: <Puzzle size={16} />,    exact: true,  roles: ['SUPER_ADMIN'] },
@@ -101,6 +111,21 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     staleTime: 5 * 60 * 1000,
   })
 
+  // Configuración > Permisos — visibilidad de nav configurable por rol. Sólo
+  // puede RESTAR sobre lo que `roles`/`verticals` ya permiten (ver
+  // isModuleAllowed abajo), nunca reemplazarlos. Si todavía no resolvió o
+  // falló, isModuleAllowed cae a "permitido" — un hiccup de red nunca vacía
+  // el sidebar.
+  const { data: modulePerms } = useQuery<ModulePermissionRow[]>({
+    queryKey: ['module-permissions'],
+    queryFn: async () => {
+      const res = await fetch('/api/module-permissions')
+      const json = await res.json()
+      return json.data ?? []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href
     return pathname === item.href || pathname.startsWith(item.href + '/')
@@ -109,9 +134,17 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
   const matchesVertical = (item: NavItem) =>
     !item.verticals || (vertical !== null && item.verticals.includes(vertical))
 
+  const isModuleAllowed = (item: NavItem) => {
+    if (!item.moduleId) return true
+    const row = modulePerms?.find((m) => m.id === item.moduleId)
+    if (!row) return true
+    return row.roles[user.role] !== false
+  }
+
   const filteredNav = navItems
     .filter((item) => !item.roles || item.roles.includes(user.role))
     .filter(matchesVertical)
+    .filter(isModuleAllowed)
   const filteredSettings = settingsItems
     .filter((item) => !item.roles || item.roles.includes(user.role))
     .filter(matchesVertical)

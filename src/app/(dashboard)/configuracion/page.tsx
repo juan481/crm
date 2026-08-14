@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package } from 'lucide-react'
+import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { useAuthStore } from '@/store/auth-store'
@@ -25,6 +25,14 @@ const settingsSections = [
     description: 'Creá, editá, suspendé o eliminá usuarios. Asigná roles y forzá cambio de contraseña.',
     roles: ['SUPER_ADMIN', 'ADMIN'],
     color: '#3b82f6',
+  },
+  {
+    href: '/configuracion/permisos',
+    icon: <KeyRound size={24} />,
+    title: 'Permisos',
+    description: 'Elegí qué módulos ve cada rol (Técnico, Ventas, RRHH...) en el menú lateral.',
+    roles: ['SUPER_ADMIN'],
+    color: '#10b981',
   },
   {
     href: '/configuracion/plugins',

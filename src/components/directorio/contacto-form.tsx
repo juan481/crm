@@ -25,10 +25,10 @@ interface Props {
 }
 
 export function ContactoForm({ contacto, defaultEmpresaId, onSuccess }: Props) {
-  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [empresas, setEmpresas] = useState<Pick<Empresa, 'id' | 'name'>[]>([])
 
   useEffect(() => {
-    fetch('/api/empresas?limit=2000')
+    fetch('/api/empresas/options')
       .then(r => r.json())
       .then(j => setEmpresas(j.data ?? []))
       .catch(() => {})
@@ -90,10 +90,25 @@ export function ContactoForm({ contacto, defaultEmpresaId, onSuccess }: Props) {
         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>
           Cargo / Rol
         </label>
+        {/* Sugerencias vía datalist — sigue siendo texto libre por debajo
+            (DirectorioContacto.role es String?, sin cambio de schema), esto
+            sólo agrega autocompletado sin restringir valores ya cargados. */}
         <Input
           {...register('role')}
           placeholder="Ej: CEO, Dueño, Administrador técnico, Instalador..."
+          list="cargo-sugerencias"
         />
+        <datalist id="cargo-sugerencias">
+          <option value="Gerente" />
+          <option value="Dueño / Socio" />
+          <option value="Administrador técnico" />
+          <option value="Encargado de Compras" />
+          <option value="Administrativo" />
+          <option value="Técnico" />
+          <option value="Encargado de Mantenimiento" />
+          <option value="Instalador" />
+          <option value="Recepción" />
+        </datalist>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

@@ -6,7 +6,11 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Técnico ve+crea Eventos por default desde el panel de permisos (ver
+    // src/lib/modules.ts) — sin este OR el piso real seguía en SELLER y el
+    // default del panel no tenía ningún efecto.
+    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
     const page = Math.max(1, Number(searchParams.get('page') ?? 1))
@@ -37,7 +41,8 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER'))
+    // Ver mismo comentario en el GET de este archivo.
+    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { name, description, eventDate, location } = await req.json()

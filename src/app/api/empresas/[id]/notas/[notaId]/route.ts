@@ -17,8 +17,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     })
     if (!nota) return NextResponse.json({ error: 'Nota no encontrada' }, { status: 404 })
 
-    if (nota.userId !== payload.userId && !canAccess(payload.role, 'ADMIN')) {
-      return NextResponse.json({ error: 'Solo podés eliminar tus propias notas' }, { status: 403 })
+    // Notas de auditoría: una vez guardada, nadie puede borrarla salvo
+    // Super Admin — ni siquiera quien la creó, ni un Admin. Antes se permitía
+    // al autor o a cualquier Admin+; cambiado a pedido explícito del cliente
+    // ("Deudor", "No vender", etc. no deben poder desaparecer). Sin campo
+    // `locked` a propósito: es política pura, no hay opt-in por nota.
+    if (!canAccess(payload.role, 'SUPER_ADMIN')) {
+      return NextResponse.json({ error: 'Solo Super Admin puede eliminar notas' }, { status: 403 })
     }
 
     await db.empresaNota.delete({ where: { id: params.notaId } })

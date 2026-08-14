@@ -42,6 +42,10 @@ export default function DashboardPage() {
   })
 
   const { enabled: analyticsEnabled } = usePlugin('advanced-analytics')
+  // El backend directamente no manda estas keys para roles sin acceso
+  // (ver api/dashboard/metrics/route.ts) — su presencia es la señal, no un
+  // rol chequeado acá de nuevo.
+  const canSeeFinancials = data?.mrrByCurrency !== undefined
 
   if (error) {
     return (
@@ -74,54 +78,60 @@ export default function DashboardPage() {
               href="/clientes"
               index={0}
             />
-            <MetricCard
-              title="Ingresos del Mes"
-              value={formatMultiCurrency(data?.mrrByCurrency)}
-              icon={<DollarSign size={20} />}
-              trend={data?.mrrGrowthByCurrency?.[primaryCurrencyKey(data?.mrrByCurrency) ?? '']}
-              trendLabel="crecimiento mensual"
-              accentColor="#22c55e"
-              href="/facturas"
-              index={1}
-            />
-            <MetricCard
-              title="Pagos Pendientes"
-              value={data?.pendingPayment ?? 0}
-              icon={<Clock size={20} />}
-              subtitle="facturas con pago pendiente"
-              accentColor="#f59e0b"
-              href="/facturas"
-              index={2}
-            />
-            <MetricCard
-              title="Facturas Vencidas"
-              value={data?.overdueInvoices ?? 0}
-              icon={<AlertCircle size={20} />}
-              subtitle="requieren atención"
-              accentColor="#ef4444"
-              href="/facturas"
-              index={3}
-            />
+            {canSeeFinancials && (
+              <>
+                <MetricCard
+                  title="Ingresos del Mes"
+                  value={formatMultiCurrency(data?.mrrByCurrency)}
+                  icon={<DollarSign size={20} />}
+                  trend={data?.mrrGrowthByCurrency?.[primaryCurrencyKey(data?.mrrByCurrency) ?? '']}
+                  trendLabel="crecimiento mensual"
+                  accentColor="#22c55e"
+                  href="/facturas"
+                  index={1}
+                />
+                <MetricCard
+                  title="Pagos Pendientes"
+                  value={data?.pendingPayment ?? 0}
+                  icon={<Clock size={20} />}
+                  subtitle="facturas con pago pendiente"
+                  accentColor="#f59e0b"
+                  href="/facturas"
+                  index={2}
+                />
+                <MetricCard
+                  title="Facturas Vencidas"
+                  value={data?.overdueInvoices ?? 0}
+                  icon={<AlertCircle size={20} />}
+                  subtitle="requieren atención"
+                  accentColor="#ef4444"
+                  href="/facturas"
+                  index={3}
+                />
+              </>
+            )}
           </>
         )}
       </div>
 
-      {/* Charts */}
-      <ErrorBoundary>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {isLoading ? (
-            <>
-              <div className="lg:col-span-2 h-72 surface rounded-2xl animate-pulse" />
-              <div className="h-72 surface rounded-2xl animate-pulse" />
-            </>
-          ) : (
-            <>
-              <RevenueChart data={data?.revenueByMonth ?? []} />
-              <ClientsChart data={data?.invoicesByStatus ?? []} />
-            </>
-          )}
-        </div>
-      </ErrorBoundary>
+      {/* Charts — ambos son financieros (ingresos, estado de facturas) */}
+      {(isLoading || canSeeFinancials) && (
+        <ErrorBoundary>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {isLoading ? (
+              <>
+                <div className="lg:col-span-2 h-72 surface rounded-2xl animate-pulse" />
+                <div className="h-72 surface rounded-2xl animate-pulse" />
+              </>
+            ) : (
+              <>
+                <RevenueChart data={data?.revenueByMonth ?? []} />
+                <ClientsChart data={data?.invoicesByStatus ?? []} />
+              </>
+            )}
+          </div>
+        </ErrorBoundary>
+      )}
 
       {/* Quick stats */}
       {!isLoading && data && (
@@ -135,30 +145,34 @@ export default function DashboardPage() {
               <p className="text-sm text-[var(--color-text-muted)]">Nuevos este mes</p>
             </div>
           </div>
-          <div className="surface rounded-2xl p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0">
-              <DollarSign size={20} />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-[var(--color-text)]">
-                {formatMultiCurrency(scaleByCurrency(data.mrrByCurrency, 12))}
-              </p>
-              <p className="text-sm text-[var(--color-text-muted)]">Ingresos anuales est.</p>
-            </div>
-          </div>
-          <div className="surface rounded-2xl p-5 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
-              <TrendingUp size={20} />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-[var(--color-text)]">
-                {data.activeClients > 0
-                  ? formatMultiCurrency(scaleByCurrency(data.mrrByCurrency, 1 / data.activeClients))
-                  : '$0'}
-              </p>
-              <p className="text-sm text-[var(--color-text-muted)]">Ingreso por cliente</p>
-            </div>
-          </div>
+          {canSeeFinancials && data.mrrByCurrency && (
+            <>
+              <div className="surface rounded-2xl p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0">
+                  <DollarSign size={20} />
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-[var(--color-text)]">
+                    {formatMultiCurrency(scaleByCurrency(data.mrrByCurrency, 12))}
+                  </p>
+                  <p className="text-sm text-[var(--color-text-muted)]">Ingresos anuales est.</p>
+                </div>
+              </div>
+              <div className="surface rounded-2xl p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                  <TrendingUp size={20} />
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-[var(--color-text)]">
+                    {data.activeClients > 0
+                      ? formatMultiCurrency(scaleByCurrency(data.mrrByCurrency, 1 / data.activeClients))
+                      : '$0'}
+                  </p>
+                  <p className="text-sm text-[var(--color-text-muted)]">Ingreso por cliente</p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -252,8 +266,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Advanced Analytics (plugin gated) */}
-      {analyticsEnabled && data && data.topClientsByRevenue.length > 0 && (
+      {/* Advanced Analytics (plugin gated) — financiero, sólo con canSeeFinancials */}
+      {analyticsEnabled && canSeeFinancials && data?.topClientsByRevenue && data.topClientsByRevenue.length > 0 && (
         <div className="surface rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2 h-2 rounded-full bg-[var(--color-primary)]" />

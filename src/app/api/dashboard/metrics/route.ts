@@ -10,15 +10,7 @@ interface MonthRow {
 
 interface MetricsData {
   activeClients: number
-  pendingPayment: number
-  overdueInvoices: number
-  // Montos separados por moneda — nunca se deben sumar entre sí (una
-  // factura en USD y otra en ARS no son la misma unidad).
-  mrrByCurrency: Record<string, number>
-  mrrGrowthByCurrency: Record<string, number>
   newClientsThisMonth: number
-  revenueByMonth: { month: string; byCurrency: Record<string, number> }[]
-  invoicesByStatus: { status: string; count: number }[]
   pendingTasks: number
   openTickets: number
   activeDealsCount: number
@@ -26,13 +18,27 @@ interface MetricsData {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
-  topClientsByRevenue: { id: string; name: string; total: number; currency: string }[]
+  // Bloque financiero — undefined para roles que no superan ADMIN (ver
+  // canSeeFinancials en fetchMetrics). El frontend chequea
+  // `data.mrrByCurrency !== undefined` antes de renderizar esas tarjetas.
+  // "Restricciones sobre rentabilidad neta" para Ventas (pedido del
+  // cliente) se interpreta como esto: SELLER ve todo lo operativo, nada de
+  // plata agregada de la organización.
+  pendingPayment?: number
+  overdueInvoices?: number
+  // Montos separados por moneda — nunca se deben sumar entre sí (una
+  // factura en USD y otra en ARS no son la misma unidad).
+  mrrByCurrency?: Record<string, number>
+  mrrGrowthByCurrency?: Record<string, number>
+  revenueByMonth?: { month: string; byCurrency: Record<string, number> }[]
+  invoicesByStatus?: { status: string; count: number }[]
+  topClientsByRevenue?: { id: string; name: string; total: number; currency: string }[]
 }
 
 // Metrics are computed from Empresa (the live "Clientes" model, toggled via
 // isCliente) + Invoice — NOT the legacy Client model, which the active
 // Clientes/Empresas workflow never populates.
-async function fetchMetrics(orgId: string): Promise<MetricsData> {
+async function fetchMetrics(orgId: string, canSeeFinancials: boolean): Promise<MetricsData> {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
@@ -55,6 +61,10 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       where: { organizationId: orgId, isCliente: true, clienteDesde: { gte: startOfMonth } },
     }),
 
+    // Bloque financiero — ninguna de estas 4 queries corre si el rol no
+    // supera ADMIN (no sólo se oculta el resultado después, se ahorra la
+    // carga real en la base para el caso más común, SELLER).
+    !canSeeFinancials ? Promise.resolve([] as MonthRow[]) :
     // 6-month real revenue (sum of invoices actually paid that month),
     // grouped by currency — a USD invoice and an ARS invoice are not the
     // same unit and must never be summed together. Months/currencies with
@@ -74,18 +84,18 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       ORDER BY gs.n DESC
     `,
 
-    prisma.invoice.count({ where: { organizationId: orgId, status: 'PENDING' } }),
-    prisma.invoice.count({
+    !canSeeFinancials ? Promise.resolve(0) : prisma.invoice.count({ where: { organizationId: orgId, status: 'PENDING' } }),
+    !canSeeFinancials ? Promise.resolve(0) : prisma.invoice.count({
       where: { organizationId: orgId, OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: now } }] },
     }),
-    prisma.invoice.groupBy({
+    !canSeeFinancials ? Promise.resolve([]) : prisma.invoice.groupBy({
       by: ['status'],
       where: { organizationId: orgId },
       _count: { _all: true },
     }),
     // by empresaId AND currency — una Empresa con facturas en dos monedas
     // no puede sumarse en un único total.
-    prisma.invoice.groupBy({
+    !canSeeFinancials ? Promise.resolve([]) : prisma.invoice.groupBy({
       by: ['empresaId', 'currency'],
       where: { organizationId: orgId, status: 'PAID', empresaId: { not: null } },
       _sum: { amount: true },
@@ -158,15 +168,22 @@ async function fetchMetrics(orgId: string): Promise<MetricsData> {
       .find((g) => g.status === s)?._count._all ?? 0
 
   return {
-    activeClients, pendingPayment, overdueInvoices,
-    mrrByCurrency, mrrGrowthByCurrency, newClientsThisMonth,
-    revenueByMonth, invoicesByStatus,
+    activeClients, newClientsThisMonth,
     pendingTasks, openTickets,
     activeDealsCount: activeDeals.length,
     pipelineValue, dealsByStage,
     cotizacionesEnviadas: getCotizCount('ENVIADA'),
     cotizacionesAceptadas: getCotizCount('ACEPTADA'),
-    topClientsByRevenue,
+    // Sin spread condicional estas keys quedarían presentes con valores
+    // "vacíos" (0, []) para un rol sin acceso — eso seguiría siendo plata
+    // real filtrada en el JSON aunque la UI no la pinte. `undefined` es la
+    // señal que el frontend chequea (ver dashboard/page.tsx).
+    ...(canSeeFinancials ? {
+      pendingPayment, overdueInvoices,
+      mrrByCurrency, mrrGrowthByCurrency,
+      revenueByMonth, invoicesByStatus,
+      topClientsByRevenue,
+    } : {}),
   }
 }
 
@@ -177,7 +194,10 @@ export async function GET() {
     if (!canAccess(payload.role, 'SELLER'))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const data = await fetchMetrics(payload.orgId)
+    // "Restricciones sobre rentabilidad neta" para Ventas (pedido del
+    // cliente) — SELLER ve todo lo operativo, nada de plata agregada.
+    const canSeeFinancials = canAccess(payload.role, 'ADMIN')
+    const data = await fetchMetrics(payload.orgId, canSeeFinancials)
 
     return NextResponse.json(
       { data },

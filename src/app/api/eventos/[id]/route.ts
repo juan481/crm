@@ -8,7 +8,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Ver comentario en api/eventos/route.ts — Técnico ve Eventos por
+    // default. PATCH/DELETE de este archivo quedan en piso ADMIN, sin tocar.
+    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const event = await prisma.event.findFirst({
       where: { id: params.id, organizationId: payload.orgId },

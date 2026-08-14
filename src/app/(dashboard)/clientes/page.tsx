@@ -7,10 +7,12 @@ import { Search, Building2, Users, Globe, MapPin, UserCheck } from 'lucide-react
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/table'
+import { useAuthStore } from '@/store/auth-store'
 import type { Empresa } from '@/types'
 
 export default function ClientesPage() {
   const router = useRouter()
+  const { user } = useAuthStore()
   const [searchInput, setSearchInput] = useState('')
   const [search,      setSearch]      = useState('')
   const [page,        setPage]        = useState(1)
@@ -21,10 +23,13 @@ export default function ClientesPage() {
   }, [searchInput])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['empresas-clientes', search, page],
+    queryKey: ['empresas-clientes', search, page, user?.role],
     queryFn: async () => {
       const p = new URLSearchParams({ isCliente: 'true', page: String(page), limit: '20' })
       if (search.length >= 2) p.set('search', search)
+      // Un Vendedor sólo ve su propia cartera acá — ADMIN/SUPER_ADMIN
+      // siguen viendo todas (ver scope=cartera en api/empresas/route.ts).
+      if (user?.role === 'SELLER') p.set('scope', 'cartera')
       const res = await fetch(`/api/empresas?${p}`)
       if (!res.ok) throw new Error('Error al cargar')
       return res.json()
