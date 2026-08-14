@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
+import { AvatarStack } from '@/components/ui/avatar-stack'
 import { UserMultiSelect } from '@/components/ui/user-multi-select'
 import { formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -277,6 +278,15 @@ export default function TareaDetailPage() {
   const router   = useRouter()
   const qc       = useQueryClient()
   const { user } = useAuthStore()
+  // El backend (PATCH /api/tareas/[id]) ignora en silencio cualquier campo
+  // que no sea status/viewed cuando quien edita es TECHNICIAN — antes esta
+  // pantalla igual mostraba todos los campos como editables, así que un
+  // técnico podía cambiar título/prioridad/asignado, apretar Guardar, ver
+  // "Tarea actualizada" y que en realidad ESE cambio puntual no se hubiera
+  // aplicado (inconsistencia real entre lo que la UI deja hacer y lo que
+  // el servidor acepta). Mismo criterio que ya usaba tickets/[id]/page.tsx
+  // para su propio campo "Asignado a".
+  const isTech = user?.role === 'TECHNICIAN'
 
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -452,63 +462,116 @@ export default function TareaDetailPage() {
             style={{ color: form.status === 'HECHA' ? '#10b981' : 'var(--color-text-subtle)' }}>
             {form.status === 'HECHA' ? <CheckSquare size={22} /> : <Square size={22} />}
           </button>
-          <input
-            type="text"
-            value={form.title ?? ''}
-            onChange={e => upd('title', e.target.value)}
-            className={`flex-1 text-lg font-bold bg-transparent outline-none border-none resize-none ${form.status === 'HECHA' ? 'line-through opacity-60' : ''}`}
-            style={{ color: 'var(--color-text)' }}
-            placeholder="Título de la tarea"
-          />
+          {isTech ? (
+            <p className={`flex-1 text-lg font-bold ${form.status === 'HECHA' ? 'line-through opacity-60' : ''}`} style={{ color: 'var(--color-text)' }}>
+              {form.title || 'Título de la tarea'}
+            </p>
+          ) : (
+            <input
+              type="text"
+              value={form.title ?? ''}
+              onChange={e => upd('title', e.target.value)}
+              className={`flex-1 text-lg font-bold bg-transparent outline-none border-none resize-none ${form.status === 'HECHA' ? 'line-through opacity-60' : ''}`}
+              style={{ color: 'var(--color-text)' }}
+              placeholder="Título de la tarea"
+            />
+          )}
         </div>
 
         {/* Description */}
         <div>
           <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>Descripción</label>
-          <textarea
-            rows={4}
-            value={form.description ?? ''}
-            onChange={e => upd('description', e.target.value)}
-            placeholder="Detalles, contexto, pasos a seguir..."
-            className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-all"
-            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-          />
+          {isTech ? (
+            <p className="text-sm whitespace-pre-wrap" style={{ color: form.description ? 'var(--color-text-muted)' : 'var(--color-text-subtle)' }}>
+              {form.description || 'Sin descripción'}
+            </p>
+          ) : (
+            <textarea
+              rows={4}
+              value={form.description ?? ''}
+              onChange={e => upd('description', e.target.value)}
+              placeholder="Detalles, contexto, pasos a seguir..."
+              className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-all"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+            />
+          )}
         </div>
 
-        {/* Fields grid */}
+        {/* Fields grid — Estado es lo único que un TECHNICIAN puede tocar
+            acá (el backend acepta status/viewed de un colaborador o el
+            asignado; todo lo demás lo ignora en silencio si isTech). */}
         <div className="grid grid-cols-2 gap-3">
           <Select label="Estado" options={STATUS_OPTIONS} value={form.status ?? 'PENDIENTE'}
             onChange={e => upd('status', e.target.value)} />
-          <Select label="Prioridad" options={PRIORITY_OPTIONS} value={form.priority ?? 'MEDIA'}
-            onChange={e => upd('priority', e.target.value)} />
-          <Input label="Fecha límite" type="date" value={(form as any).dueDate ?? ''}
-            onChange={e => upd('dueDate', e.target.value)} />
-          <Select
-            label="Asignado a"
-            options={[{ value: '', label: 'Yo mismo' }, ...users.map(u => ({ value: u.id, label: u.name }))]}
-            value={form.assignedToId ?? ''}
-            onChange={e => {
-              const nextAssignee = e.target.value
-              setForm(f => ({ ...f, assignedToId: nextAssignee, collaboratorIds: (f.collaboratorIds ?? []).filter(id => id !== nextAssignee) }))
-              setDirty(true)
-            }}
-          />
+          {isTech ? (
+            <div>
+              <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Prioridad</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{PRIORITY_OPTIONS.find(o => o.value === form.priority)?.label ?? '—'}</p>
+            </div>
+          ) : (
+            <Select label="Prioridad" options={PRIORITY_OPTIONS} value={form.priority ?? 'MEDIA'}
+              onChange={e => upd('priority', e.target.value)} />
+          )}
+          {isTech ? (
+            <div>
+              <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Fecha límite</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{(form as any).dueDate ? formatDate((form as any).dueDate) : 'Sin fecha'}</p>
+            </div>
+          ) : (
+            <Input label="Fecha límite" type="date" value={(form as any).dueDate ?? ''}
+              onChange={e => upd('dueDate', e.target.value)} />
+          )}
+          {isTech ? (
+            <div>
+              <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Asignado a</p>
+              <p className="text-sm" style={{ color: 'var(--color-text)' }}>{task.assignedTo?.name ?? '—'}</p>
+            </div>
+          ) : (
+            <Select
+              label="Asignado a"
+              options={[{ value: '', label: 'Yo mismo' }, ...users.map(u => ({ value: u.id, label: u.name }))]}
+              value={form.assignedToId ?? ''}
+              onChange={e => {
+                const nextAssignee = e.target.value
+                setForm(f => ({ ...f, assignedToId: nextAssignee, collaboratorIds: (f.collaboratorIds ?? []).filter(id => id !== nextAssignee) }))
+                setDirty(true)
+              }}
+            />
+          )}
         </div>
 
-        <UserMultiSelect
-          label="Colaboradores (opcional)"
-          users={users}
-          selectedIds={form.collaboratorIds ?? []}
-          onChange={ids => { setForm(f => ({ ...f, collaboratorIds: ids })); setDirty(true) }}
-          excludeId={form.assignedToId || user?.id}
-        />
+        {isTech ? (
+          <div>
+            <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Colaboradores</p>
+            {(task.collaborators?.length ?? 0) > 0 ? (
+              <AvatarStack size="xs" people={(task.collaborators ?? []).map(c => c.user)} />
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--color-text-subtle)' }}>Nadie más</p>
+            )}
+          </div>
+        ) : (
+          <UserMultiSelect
+            label="Colaboradores (opcional)"
+            users={users}
+            selectedIds={form.collaboratorIds ?? []}
+            onChange={ids => { setForm(f => ({ ...f, collaboratorIds: ids })); setDirty(true) }}
+            excludeId={form.assignedToId || user?.id}
+          />
+        )}
 
-        <Select
-          label="Empresa (opcional)"
-          options={[{ value: '', label: 'Sin empresa' }, ...empresas.map(e => ({ value: e.id, label: e.name }))]}
-          value={(form as any).empresaId ?? ''}
-          onChange={e => upd('empresaId', e.target.value)}
-        />
+        {isTech ? (
+          <div>
+            <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Empresa</p>
+            <p className="text-sm" style={{ color: 'var(--color-text)' }}>{task.empresa?.name ?? 'Sin empresa'}</p>
+          </div>
+        ) : (
+          <Select
+            label="Empresa (opcional)"
+            options={[{ value: '', label: 'Sin empresa' }, ...empresas.map(e => ({ value: e.id, label: e.name }))]}
+            value={(form as any).empresaId ?? ''}
+            onChange={e => upd('empresaId', e.target.value)}
+          />
+        )}
       </div>
 
       {/* Meta info */}
