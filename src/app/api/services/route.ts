@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+// Mismo motivo que en /api/products (route.ts) — Service.currency es String
+// libre en el schema, sin enum/check en la DB. Intl.NumberFormat/
+// formatCurrency tira un RangeError síncrono ante cualquier código no
+// ISO-4217, y eso rompía cualquier pantalla que después mostrara el precio
+// del servicio (Cotizador, este mismo catálogo, cotizaciones guardadas). Se
+// había arreglado en Productos pero nunca se replicó acá.
+const VALID_CURRENCIES = new Set(['USD', 'ARS', 'EUR'])
+
 // Row returned by the raw query
 interface ServiceRow {
   id: string
@@ -72,6 +80,9 @@ export async function POST(req: NextRequest) {
     const { name, description, price, currency, billingCycle } = await req.json()
     if (!name || price === undefined) {
       return NextResponse.json({ error: 'Nombre y precio son requeridos' }, { status: 400 })
+    }
+    if (currency !== undefined && !VALID_CURRENCIES.has(currency)) {
+      return NextResponse.json({ error: `Moneda inválida: "${currency}". Usá USD, ARS o EUR.` }, { status: 400 })
     }
 
     const service = await prisma.service.create({

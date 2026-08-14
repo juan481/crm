@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { RESET_DATA_CONFIRM_WORD } from '@/lib/reset-data'
 
 // DELETE all business data for the org (SUPER_ADMIN only)
 // Preserves: organization settings, users, services, branding
@@ -13,9 +14,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}))
-    if (body.confirm !== 'RESETEAR') {
+    if (body.confirm !== RESET_DATA_CONFIRM_WORD) {
       return NextResponse.json(
-        { error: 'Confirmación requerida: enviá { "confirm": "RESETEAR" }' },
+        { error: `Confirmación requerida: enviá { "confirm": "${RESET_DATA_CONFIRM_WORD}" }` },
         { status: 400 },
       )
     }

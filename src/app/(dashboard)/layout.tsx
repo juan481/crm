@@ -36,6 +36,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // multi-org que ya completó onboarding una vez igual tiene que elegirlo
     // la primera vez que entra a una organización nueva sin rubro.
     if (payload.role === 'SUPER_ADMIN' && !activeOrg.vertical) redirect('/onboarding')
+    // forcePasswordChange se ESCRIBE en 3 lugares (alta de usuario nuevo con
+    // contraseña temporal, reset de contraseña por un ADMIN, alta del primer
+    // SUPER_ADMIN de una org desde /admin) pero antes no se leía en ningún
+    // lado — quedaba en true para siempre sin que nada lo hiciera cumplir.
+    // Dos casos reales sin este chequeo: (1) alguien nuevo apretaba "Saltar"
+    // en el paso de contraseña del onboarding y seguía con la temporal
+    // indefinidamente; (2) un usuario que YA había completado onboarding
+    // hace tiempo, al que un ADMIN le resetea la contraseña, nunca vuelve a
+    // pasar por /onboarding — entraba directo al dashboard con la
+    // contraseña que el ADMIN acaba de definir, sin ninguna oportunidad (ni
+    // obligación) de cambiarla ella misma.
+    if (dbUser.forcePasswordChange) redirect('/cambiar-contrasena')
 
     const user: User = {
       ...dbUser,

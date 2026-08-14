@@ -4,6 +4,9 @@ import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
 
+// Mismo motivo que en src/app/api/services/route.ts (POST) — ver ahí.
+const VALID_CURRENCIES = new Set(['USD', 'ARS', 'EUR'])
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
@@ -18,6 +21,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!existing) return NextResponse.json({ error: 'Servicio no encontrado' }, { status: 404 })
 
     const { name, description, price, currency, billingCycle } = await req.json()
+    if (currency !== undefined && !VALID_CURRENCIES.has(currency)) {
+      return NextResponse.json({ error: `Moneda inválida: "${currency}". Usá USD, ARS o EUR.` }, { status: 400 })
+    }
 
     const service = await prisma.service.update({
       where: { id: params.id },

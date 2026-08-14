@@ -41,9 +41,30 @@ export async function GET() {
 
     const plugins = await getCachedPlugins(payload.orgId)
 
+    // Sólo quien puede gestionar plugins (POST de acá abajo, SUPER_ADMIN) ve
+    // los campos marcados `type: 'password'` en configSchema. Sin esto,
+    // CUALQUIER usuario autenticado (un SELLER, por ejemplo — que ni
+    // siquiera tiene el link de Configuración/Plugins en el sidebar) recibía
+    // el `config` completo ya parseado apenas la app pedía este endpoint
+    // para decidir si mostrar un botón condicionado a un plugin (ej.
+    // WhatsAppSendButton vía usePlugin/usePlugins en fichas de
+    // contacto/empresa) — filtrando en texto plano el token de WhatsApp
+    // Business, el Client Secret de Google Calendar, etc. Cache-Control
+    // 'private' (no 'public'/default) porque la respuesta ahora varía según
+    // el rol de quien pide, no sólo según la organización.
+    const canManagePlugins = canAccess(payload.role, 'SUPER_ADMIN')
+    const data = canManagePlugins ? plugins : plugins.map((p) => {
+      if (!p.config || !p.configSchema) return p
+      const redacted = { ...p.config }
+      for (const [key, field] of Object.entries(p.configSchema)) {
+        if (field.type === 'password' && key in redacted) redacted[key] = null
+      }
+      return { ...p, config: redacted }
+    })
+
     return NextResponse.json(
-      { data: plugins },
-      { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' } }
+      { data },
+      { headers: { 'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=3600' } }
     )
   } catch (error) {
     console.error('[PLUGINS GET]', error)

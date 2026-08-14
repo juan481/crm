@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -12,6 +13,7 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
 
 type Provider = 'SMTP' | 'SES'
@@ -109,6 +111,20 @@ const AWS_STEPS = [
 ]
 
 export default function CorreoPage() {
+  const router = useRouter()
+  const { user } = useAuthStore()
+
+  // A diferencia de sus páginas hermanas (marca/page.tsx, plugins/page.tsx),
+  // esta no tenía ningún guard de rol client-side — el backend
+  // (GET/PATCH /api/settings/email) sí exige ADMIN+, así que no había fuga
+  // de datos ni de guardado real, pero cualquier usuario autenticado sin
+  // este link en el sidebar (SELLER, TECHNICIAN, HR) que navegara directo a
+  // /configuracion/correo veía el formulario completo de SMTP/SES, checklist
+  // de AWS incluido.
+  useEffect(() => {
+    if (user && user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') router.replace('/dashboard')
+  }, [user, router])
+
   const [provider,     setProvider]     = useState<Provider>('SMTP')
   const [saving,       setSaving]       = useState(false)
   const [testing,      setTesting]      = useState(false)

@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
-  Building2, UserCircle2, FileText, ClipboardList, KeyRound,
+  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -69,6 +69,10 @@ const settingsItems: NavItem[] = [
   { label: 'Usuarios',      href: '/configuracion/usuarios',  icon: <UserCog size={16} />,   exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Permisos',      href: '/configuracion/permisos',  icon: <KeyRound size={16} />,  exact: true,  roles: ['SUPER_ADMIN'] },
   { label: 'Servicios',     href: '/configuracion/servicios', icon: <Tag size={16} />,        exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
+  // Antes sólo se llegaba a este catálogo desde una card suelta en
+  // /configuracion — Servicios (su catálogo hermano, mismo lugar en el
+  // Cotizador) sí tenía su propio link acá.
+  { label: 'Productos',     href: '/configuracion/productos', icon: <Package size={16} />,   exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Email SMTP',    href: '/configuracion/correo',    icon: <Mail size={16} />,      exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Plugins',       href: '/configuracion/plugins',   icon: <Puzzle size={16} />,    exact: true,  roles: ['SUPER_ADMIN'] },
   { label: 'Marca',         href: '/configuracion/marca',     icon: <Shield size={16} />,    exact: true,  roles: ['SUPER_ADMIN'] },

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { useAuthStore } from '@/store/auth-store'
 import { useQueryClient } from '@tanstack/react-query'
+import { RESET_DATA_CONFIRM_WORD } from '@/lib/reset-data'
 import toast from 'react-hot-toast'
 
 const settingsSections = [
@@ -67,7 +68,7 @@ export default function ConfiguracionPage() {
       const res = await fetch('/api/settings/reset-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm: 'RESETEAR' }),
+        body: JSON.stringify({ confirm: RESET_DATA_CONFIRM_WORD }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
@@ -156,14 +157,14 @@ export default function ConfiguracionPage() {
           </div>
           <div>
             <p className="text-xs text-[var(--color-text-muted)] mb-2">
-              Escribí <span className="font-mono text-[var(--color-primary)]">LIMPIAR</span> para confirmar:
+              Escribí <span className="font-mono text-[var(--color-primary)]">{RESET_DATA_CONFIRM_WORD}</span> para confirmar:
             </p>
             <input
               type="text"
               value={confirmText}
               onChange={e => setConfirmText(e.target.value)}
               className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
-              placeholder="LIMPIAR"
+              placeholder={RESET_DATA_CONFIRM_WORD}
             />
           </div>
           <ModalFooter>
@@ -171,7 +172,7 @@ export default function ConfiguracionPage() {
             <Button
               variant="danger"
               loading={resetting}
-              disabled={confirmText !== 'LIMPIAR'}
+              disabled={confirmText !== RESET_DATA_CONFIRM_WORD}
               onClick={handleReset}
             >
               Confirmar limpieza
