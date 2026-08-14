@@ -11,10 +11,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    // Fetch ticket + client email (legacy fallback) for the client-notification email below
+    // Fetch ticket + client email (legacy fallback) for the client-notification email below.
+    // select acotado a lo que este handler usa — antes traía la fila completa
+    // (incluidos los mensajes del hilo vía include, si el modelo los trajera
+    // por default) sólo para leer estos 7 campos.
     const ticket = await prisma.ticket.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      include: {
+      select: {
+        id: true, status: true, assignedToId: true, title: true, number: true,
+        recipientEmail: true, recipientName: true,
         client: { select: { email: true, name: true } },
       },
     })

@@ -74,6 +74,16 @@ export default function TicketDetailPage() {
   const [creatingFollowUp, setCreatingFollowUp] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Sin refetchInterval a propósito — esta era la única pantalla de toda la
+  // app que hacía polling. Refetcheaba el ticket ENTERO (incluido el hilo de
+  // mensajes completo, sin paginar) cada 30s aunque nadie hubiera escrito
+  // nada, mientras la pestaña estuviera abierta — un costo que se repetía
+  // indefinidamente y compuesto con el resto de la investigación de
+  // performance (cada refetch vuelve a pagar la resolución de sesión +
+  // esta query). staleTime ya alcanza para refrescar solo al reabrir/
+  // refocus la pestaña, mismo criterio que el resto de la app; las acciones
+  // que sí cambian el ticket (enviar mensaje, cambiar estado) ya invalidan
+  // esta queryKey explícitamente.
   const { data, isLoading } = useQuery<TicketDetail>({
     queryKey: ['ticket', id],
     queryFn: async () => {
@@ -82,7 +92,6 @@ export default function TicketDetailPage() {
       return res.json().then(j => j.data)
     },
     staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000,
   })
 
   const { data: usersData } = useQuery({

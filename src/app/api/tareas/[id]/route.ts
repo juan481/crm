@@ -47,7 +47,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const db = prisma as any
     const scopeWhere: Record<string, unknown> = { id: params.id, organizationId: payload.orgId }
     if (payload.role === 'SELLER') scopeWhere.OR = [{ assignedToId: payload.userId }, { createdById: payload.userId }]
-    const existing = await db.task.findFirst({ where: scopeWhere })
+    // select acotado a lo que este handler realmente usa — antes traía la
+    // fila completa sólo para leer 2 campos.
+    const existing = await db.task.findFirst({ where: scopeWhere, select: { id: true, status: true, assignedToId: true } })
     if (!existing) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
 
     const body = await req.json()
@@ -64,26 +66,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const isReassigning = !isTech && assignedToId && assignedToId !== existing.assignedToId
 
     // Mismo chequeo que ya hace POST /api/tareas — faltaba acá en el PATCH.
-    if (!isTech && assignedToId && assignedToId !== existing.assignedToId) {
-      const assignee = await db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } })
-      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
-    }
-    if (!isTech && clientId) {
-      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
-      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
-    }
-    if (!isTech && empresaId) {
-      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
-      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
-    }
-    if (!isTech && dealId) {
-      const deal = await db.deal.findFirst({ where: { id: dealId, organizationId: payload.orgId }, select: { id: true } })
-      if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada en esta organización' }, { status: 400 })
-    }
-    if (!isTech && ticketId) {
-      const ticket = await db.ticket.findFirst({ where: { id: ticketId, organizationId: payload.orgId }, select: { id: true } })
-      if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado en esta organización' }, { status: 400 })
-    }
+    // Las 5 son independientes entre sí — van en paralelo (antes eran hasta
+    // 5 round-trips secuenciales en cada edición de tarea).
+    const needsAssigneeCheck = !isTech && assignedToId && assignedToId !== existing.assignedToId
+    const [assignee, client, empresa, deal, ticket] = await Promise.all([
+      needsAssigneeCheck  ? db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      (!isTech && clientId)  ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })  : null,
+      (!isTech && empresaId) ? db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      (!isTech && dealId)    ? db.deal.findFirst({ where: { id: dealId, organizationId: payload.orgId }, select: { id: true } })      : null,
+      (!isTech && ticketId)  ? db.ticket.findFirst({ where: { id: ticketId, organizationId: payload.orgId }, select: { id: true } })  : null,
+    ])
+    if (needsAssigneeCheck && !assignee)       return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    if (!isTech && clientId && !client)        return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    if (!isTech && empresaId && !empresa)      return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    if (!isTech && dealId && !deal)            return NextResponse.json({ error: 'Oportunidad no encontrada en esta organización' }, { status: 400 })
+    if (!isTech && ticketId && !ticket)        return NextResponse.json({ error: 'Ticket no encontrado en esta organización' }, { status: 400 })
 
     const task = await db.task.update({
       where: { id: params.id },

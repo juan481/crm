@@ -18,7 +18,7 @@ export async function GET(_: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const db = prisma as any
-    const task = await db.task.findFirst({ where: scopeForTask(payload, params.id, payload.orgId) })
+    const task = await db.task.findFirst({ where: scopeForTask(payload, params.id, payload.orgId), select: { id: true } })
     if (!task) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
 
     const subitems = await db.taskSubitem.findMany({
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const db = prisma as any
-    const task = await db.task.findFirst({ where: scopeForTask(payload, params.id, payload.orgId) })
+    const task = await db.task.findFirst({ where: scopeForTask(payload, params.id, payload.orgId), select: { id: true } })
     if (!task) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
 
     const { title } = await req.json()

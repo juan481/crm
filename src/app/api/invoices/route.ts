@@ -21,6 +21,11 @@ export async function GET(req: NextRequest) {
     // que ya usa /api/empresas.
     const limit     = Math.min(2000, Number(searchParams.get('limit') ?? 20))
     const skip      = (page - 1) * limit
+    // El export a Excel (handleExport en facturas/page.tsx) pide hasta 2000
+    // filas crudas y nunca toca `summary` — sin este flag, cada exportación
+    // igual pagaba las 3 queries de agregación de abajo para un resultado
+    // que se tiraba a la basura.
+    const includeSummary = searchParams.get('summary') !== 'false'
 
     const orgId = payload.orgId
     const now = new Date()
@@ -49,27 +54,32 @@ export async function GET(req: NextRequest) {
         // (generate-recurring/route.ts) are only ever linked via clientId,
         // never empresaId — the UI must fall back to it.
         include: {
-          empresa: { select: { id: true, name: true } },
+          // InvoicePreview también pinta address/city/province ("Facturar
+          // a") — sin estos 3 campos acá, esa sección quedaba en blanco en
+          // silencio para TODA factura vinculada a Empresa (bug real, no de
+          // performance, encontrado al auditar el contrato entre este
+          // select y invoice-preview.tsx).
+          empresa: { select: { id: true, name: true, address: true, city: true, province: true } },
           client:  { select: { id: true, name: true } },
         },
       }),
       prisma.invoice.count({ where }),
-      prisma.invoice.groupBy({
+      includeSummary ? prisma.invoice.groupBy({
         by: ['currency'],
         where: { ...baseWhere, status: { in: ['PENDING', 'OVERDUE'] } },
         _sum: { amount: true },
-      }),
-      prisma.invoice.groupBy({
+      }) : Promise.resolve([]),
+      includeSummary ? prisma.invoice.groupBy({
         by: ['currency'],
         where: { ...baseWhere, status: 'PAID', paidAt: { gte: startOfMonth } },
         _sum: { amount: true },
-      }),
-      prisma.invoice.count({
+      }) : Promise.resolve([]),
+      includeSummary ? prisma.invoice.count({
         where: {
           ...baseWhere,
           OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: now } }],
         },
-      }),
+      }) : Promise.resolve(0),
     ])
 
     const toByCurrency = (groups: { currency: string; _sum: { amount: number | null } }[]) =>
@@ -82,11 +92,13 @@ export async function GET(req: NextRequest) {
         page,
         limit,
         totalPages: Math.ceil(total / limit),
-        summary: {
-          pendingByCurrency: toByCurrency(pendingGroups),
-          paidByCurrency:    toByCurrency(paidGroups),
-          overdueCount,
-        },
+        ...(includeSummary && {
+          summary: {
+            pendingByCurrency: toByCurrency(pendingGroups),
+            paidByCurrency:    toByCurrency(paidGroups),
+            overdueCount,
+          },
+        }),
       },
       { headers: { 'Cache-Control': 'no-store' } }
     )

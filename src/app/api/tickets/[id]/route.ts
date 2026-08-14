@@ -57,9 +57,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
+    // select acotado a lo que este handler realmente usa — antes traía la
+    // fila completa (todas las columnas del ticket) sólo para leer 6 campos.
     const existing = await db.ticket.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      include: { client: { select: { email: true, name: true } } },
+      select: {
+        id: true, status: true, priority: true, assignedToId: true,
+        satisfactionToken: true, satisfactionRatedAt: true,
+        recipientEmail: true, recipientName: true,
+        client: { select: { email: true, name: true } },
+      },
     })
     if (!existing) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
 
@@ -105,19 +112,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // Sin esto, un assignedToId/empresaId/clientId de OTRA organización se
     // aceptaba igual — antes sólo se validaba que quien pide el cambio sea
-    // admin, no que el destino pertenezca a esta org.
-    if (isAdmin && assignedToId) {
-      const assignee = await db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } })
-      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
-    }
-    if (!isTech && empresaId) {
-      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
-      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
-    }
-    if (!isTech && clientId) {
-      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
-      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
-    }
+    // admin, no que el destino pertenezca a esta org. Las 3 validaciones son
+    // independientes entre sí, van en paralelo (antes eran hasta 3
+    // round-trips secuenciales en cada PATCH de ticket).
+    const [assignee, empresa, client] = await Promise.all([
+      (isAdmin && assignedToId) ? db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      (!isTech && empresaId)    ? db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      (!isTech && clientId)     ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } }) : null,
+    ])
+    if (isAdmin && assignedToId && !assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    if (!isTech && empresaId && !empresa)     return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    if (!isTech && clientId && !client)       return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
 
     const ticket = await db.ticket.update({
       where: { id: params.id },

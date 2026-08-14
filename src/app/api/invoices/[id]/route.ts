@@ -13,8 +13,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
+    // select acotado a lo que este handler usa (paidAt/status para decidir
+    // si hay que setear/limpiar paidAt) — antes traía la fila completa.
     const existing = await prisma.invoice.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
+      select: { paidAt: true, status: true },
     })
     if (!existing) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
@@ -66,13 +69,12 @@ export async function DELETE(_: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const toDelete = await prisma.invoice.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true },
-    })
-    if (!toDelete) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
-
-    await prisma.invoice.delete({ where: { id: params.id } })
+    // deleteMany filtrando por id+organizationId de una — antes era un
+    // findFirst de verificación de ownership seguido de un delete (2
+    // round-trips secuenciales) cuando 1 alcanza: el count devuelto YA nos
+    // dice si existía y era de esta organización.
+    const result = await prisma.invoice.deleteMany({ where: { id: params.id, organizationId: payload.orgId } })
+    if (result.count === 0) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
     return NextResponse.json({ message: 'Factura eliminada' })
   } catch (error) {
     console.error('[INVOICE DELETE]', error)

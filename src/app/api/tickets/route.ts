@@ -82,19 +82,18 @@ export async function POST(req: NextRequest) {
 
     // Sin esto, clientId/empresaId/assignedToId de OTRA organización se
     // aceptaban igual — el ticket quedaba vinculado a un registro ajeno,
-    // expuesto vía los include de las rutas de lectura.
-    if (clientId) {
-      const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
-      if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
-    }
-    if (empresaId) {
-      const empresa = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
-      if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
-    }
-    if (assignedToId) {
-      const assignee = await db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } })
-      if (!assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
-    }
+    // expuesto vía los include de las rutas de lectura. Las 3 validaciones
+    // son independientes entre sí (no depende una del resultado de otra),
+    // así que van en paralelo — antes eran 3 round-trips secuenciales,
+    // pagando el costo completo de cada uno uno atrás del otro.
+    const [client, empresa, assignee] = await Promise.all([
+      clientId    ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      empresaId   ? db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      assignedToId ? db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
+    ])
+    if (clientId && !client)         return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    if (empresaId && !empresa)       return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
+    if (assignedToId && !assignee)   return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
 
     const priorityValue = priority || 'MEDIA'
     const ticketData = {

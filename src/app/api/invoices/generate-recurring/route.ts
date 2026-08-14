@@ -69,25 +69,28 @@ export async function POST(req: NextRequest) {
       where: { id: { in: empresaIds }, organizationId: payload.orgId, isCliente: true },
     })
 
-    const invoices = await prisma.$transaction(
-      empresas.map((e) =>
-        prisma.invoice.create({
-          data: {
-            empresaId: e.id,
-            organizationId: payload.orgId,
-            amount: e.monthlyAmount ?? 0,
-            currency: e.billingCurrency || 'USD',
-            description: `Facturación recurrente — ${monthName}`,
-            dueDate,
-            status: 'PENDING' as const,
-          },
-        })
-      )
-    )
+    // createMany en vez de $transaction(array de creates) — este último NO
+    // paraleliza, ejecuta cada create como un INSERT secuencial (su propio
+    // round-trip cada uno) sobre la misma transacción. Con N empresas
+    // seleccionadas esto era N round-trips uno atrás de otro, en la acción
+    // que el negocio corre activamente todos los meses. El frontend
+    // (RecurringModal en facturas/page.tsx) sólo usa json.message, nunca
+    // json.data — no hace falta devolver las filas creadas.
+    const result = await prisma.invoice.createMany({
+      data: empresas.map((e) => ({
+        empresaId: e.id,
+        organizationId: payload.orgId,
+        amount: e.monthlyAmount ?? 0,
+        currency: e.billingCurrency || 'USD',
+        description: `Facturación recurrente — ${monthName}`,
+        dueDate,
+        status: 'PENDING' as const,
+      })),
+    })
 
     return NextResponse.json({
-      data: invoices,
-      message: `${invoices.length} factura${invoices.length > 1 ? 's' : ''} generada${invoices.length > 1 ? 's' : ''} correctamente`,
+      data: { count: result.count },
+      message: `${result.count} factura${result.count > 1 ? 's' : ''} generada${result.count > 1 ? 's' : ''} correctamente`,
     }, { status: 201 })
   } catch (error) {
     console.error('[RECURRING GENERATE]', error)

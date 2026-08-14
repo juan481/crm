@@ -455,8 +455,14 @@ model Invoice {
 
   @@index([organizationId])
   @@index([organizationId, status])
+  // Cubre el where real de "cobrado este mes" (status=PAID + paidAt>=inicio
+  // de mes) que emite GET /api/invoices — antes ninguna combinación de
+  // índices cubría el filtro por paidAt.
+  @@index([organizationId, status, paidAt])
   @@index([clientId])
   @@index([empresaId])
+  // Cubre el filtro por empresa que ya usa la UI de Facturación.
+  @@index([organizationId, empresaId])
   @@index([status])
   @@index([dueDate])
 }
@@ -775,6 +781,10 @@ model Task {
   subitems       TaskSubitem[]
 
   @@index([organizationId, status])
+  // Cubre el where real que emite GET /api/tareas para SELLER/TECHNICIAN/HR
+  // (organizationId + assignedToId juntos) — antes sólo había índices de
+  // una sola columna, ninguno cubriendo la combinación exacta.
+  @@index([organizationId, assignedToId])
   @@index([assignedToId])
   @@index([empresaId])
   @@index([dealId])

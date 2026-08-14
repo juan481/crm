@@ -71,51 +71,56 @@ async function resolveSession(): Promise<ResolvedSession | null> {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user) return null
 
+  // Un solo round-trip para usuario + organización de origen (antes eran 2
+  // consultas secuenciales acá, más una TERCERA en el camino de switch de
+  // organización — ver abajo). Esto corre en CADA request autenticado de
+  // TODA la app (cualquier ruta de API llama a getCurrentUser()), así que
+  // el ahorro se multiplica por cada fetch que dispare una pantalla, no
+  // sólo por cada navegación. Encontrado midiendo directo contra la base:
+  // hasta una consulta trivial por clave única tardaba ~1s por el
+  // mismatch de región Vercel↔Supabase ya diagnosticado — la forma real de
+  // no pagarlo dos veces es no hacer dos viajes cuando uno alcanza.
   const user = await prisma.user.findUnique({
     where: { supabaseId: session.user.id },
     select: {
       id: true, email: true, name: true, role: true, status: true,
       onboardingCompleted: true, forcePasswordChange: true, avatarUrl: true,
       organizationId: true, createdAt: true, updatedAt: true,
+      organization: { select: ORG_BRANDING_SELECT },
     },
   })
   if (!user || user.status !== 'ACTIVE') return null
+  const { organization: homeOrg, ...userRest } = user
 
-  let orgId = user.organizationId
-  let role = user.role as Role
-  let org: OrgBranding | null = null
-  let homeSuspended: boolean
+  let orgId = userRest.organizationId
+  let role = userRest.role as Role
+  let org: OrgBranding | null = homeOrg
+  // Ya lo tenemos del include de arriba — antes era una consulta aparte
+  // incluso en el camino de switch de organización.
+  const homeSuspended = homeOrg?.suspended ?? true
 
   const cookieStore = await cookies()
   const activeOrgId = cookieStore.get(ACTIVE_ORG_COOKIE)?.value
 
-  if (activeOrgId && activeOrgId !== user.organizationId) {
+  if (activeOrgId && activeOrgId !== userRest.organizationId) {
     const membership = await prisma.organizationMembership.findUnique({
-      where: { userId_organizationId: { userId: user.id, organizationId: activeOrgId } },
+      where: { userId_organizationId: { userId: userRest.id, organizationId: activeOrgId } },
       select: { role: true, organization: { select: ORG_BRANDING_SELECT } },
     })
     if (membership && !membership.organization.suspended) {
-      // Membership válida — la org activa es la del switch. La de origen se
-      // chequea aparte (liviano, sólo el booleano) para no perder la regla
-      // de "origen suspendida = fuera" que ya existía.
+      // Membership válida — la org activa es la del switch. homeSuspended
+      // ya se resolvió arriba con el include, se sigue respetando la regla
+      // de "origen suspendida = fuera" sin una consulta extra para eso.
       orgId = activeOrgId
       role = membership.role as Role
       org = membership.organization
-      const home = await prisma.organization.findUnique({
-        where: { id: user.organizationId }, select: { suspended: true },
-      })
-      homeSuspended = home?.suspended ?? true
-      return { user, orgId, role, homeSuspended, org }
+      return { user: userRest, orgId, role, homeSuspended, org }
     }
     // Cookie inválida/manipulada o membership a una org suspendida — cae a
     // home sin excepción, mismo criterio que siempre.
   }
 
-  // Camino común (sin switch, o cayendo a home): una sola consulta de
-  // organización cubre branding + suspended de la de origen a la vez.
-  org = await prisma.organization.findUnique({ where: { id: orgId }, select: ORG_BRANDING_SELECT })
-  homeSuspended = org?.suspended ?? true
-  return { user, orgId, role, homeSuspended, org }
+  return { user: userRest, orgId, role, homeSuspended, org }
 }
 
 // Returns the same AuthPayload shape as before — no changes needed in API routes

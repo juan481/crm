@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X, Printer, Download } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
@@ -49,15 +50,22 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export function InvoicePreview({ invoice, onClose }: InvoicePreviewProps) {
-  const [org, setOrg] = useState<OrgBilling | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetch('/api/settings/branding')
-      .then((r) => r.json())
-      .then(({ data }) => { if (data) setOrg(data) })
-      .catch(() => {})
-  }, [])
+  // react-query en vez de un fetch crudo en useEffect — antes cada apertura
+  // del modal repetía getCurrentUser() (2 queries) + Organization.findUnique
+  // (1 más) para un dato prácticamente estático durante la sesión (branding
+  // de la organización). staleTime largo porque esto no cambia salvo que
+  // alguien edite Configuración → Marca mientras la pestaña está abierta.
+  const { data: org } = useQuery<OrgBilling | null>({
+    queryKey: ['org-branding'],
+    queryFn: async () => {
+      const r = await fetch('/api/settings/branding')
+      const { data } = await r.json()
+      return data ?? null
+    },
+    staleTime: 5 * 60 * 1000,
+  })
 
   const handlePrint = () => {
     const content = printRef.current
