@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,7 +30,12 @@ export async function GET(req: NextRequest) {
 
     const orgId = payload.orgId
     const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    // argentinaDayStart, no getters "locales" — mismo patrón ya establecido
+    // en cron/invoice-automation. "Cobrado este mes" arrancaba/cortaba el
+    // mes en el momento equivocado en la ventana de ~3hs alrededor del
+    // cambio de mes (UTC vs Argentina).
+    const todayStart = argentinaDayStart(now)
+    const startOfMonth = new Date(Date.UTC(todayStart.getUTCFullYear(), todayStart.getUTCMonth(), 1))
 
     const baseWhere = { organizationId: orgId }
 
@@ -74,10 +80,14 @@ export async function GET(req: NextRequest) {
         where: { ...baseWhere, status: 'PAID', paidAt: { gte: startOfMonth } },
         _sum: { amount: true },
       }) : Promise.resolve([]),
+      // dueDate < todayStart (medianoche Argentina de hoy), no `now` crudo —
+      // una factura vencía en el contador hasta casi 24hs antes de que
+      // realmente terminara su día de vencimiento en Argentina (el reloj
+      // UTC del server cruza medianoche ~3hs antes que Argentina).
       includeSummary ? prisma.invoice.count({
         where: {
           ...baseWhere,
-          OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: now } }],
+          OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: todayStart } }],
         },
       }) : Promise.resolve(0),
     ])
@@ -131,6 +141,11 @@ export async function POST(req: NextRequest) {
     if (!empresa) return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
 
     const initialStatus = status || 'PENDING'
+    // dateOnlyArgentina, no `new Date(dueDate)` a secas — el date-picker
+    // manda "YYYY-MM-DD", y `new Date("2026-08-20")` se parsea como
+    // medianoche UTC: en un navegador con timezone Argentina eso se
+    // mostraba como "19 ago", un día antes de lo elegido.
+    const [dueY, dueM, dueD] = String(dueDate).split('-').map(Number)
     const invoice = await prisma.invoice.create({
       data: {
         empresaId,
@@ -138,7 +153,7 @@ export async function POST(req: NextRequest) {
         amount:  Number(amount),
         currency: currency || 'USD',
         description: description || null,
-        dueDate: new Date(dueDate),
+        dueDate: dateOnlyArgentina(dueY, dueM - 1, dueD),
         status: initialStatus,
         paidAt: initialStatus === 'PAID' ? new Date() : null,
       },

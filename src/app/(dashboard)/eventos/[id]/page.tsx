@@ -43,7 +43,15 @@ export default function EventoDetailPage() {
   const router = useRouter()
   const qc = useQueryClient()
   const { user } = useAuthStore()
-  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // Editar/Desactivar el evento en sí sigue siendo sólo ADMIN+
+  // (PATCH /api/eventos/[id], piso documentado ahí a propósito).
+  const canEditEvent = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // Gestionar inscritos (agregar/quitar) es SELLER+ y TECHNICIAN — mismo
+  // piso que POST/DELETE /api/eventos/[id]/inscritos. Antes esta pantalla
+  // usaba canManage (ADMIN-only) para esto también, así que un
+  // SELLER/TECHNICIAN que sí puede crear un evento no tenía forma de
+  // cargarle inscritos manualmente desde acá.
+  const canManageAttendees = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'SELLER' || user?.role === 'TECHNICIAN'
 
   const [showAddAttendee, setShowAddAttendee] = useState(false)
   const [attendeeForm, setAttendeeForm] = useState<AttendeeFormState>(EMPTY_ATTENDEE)
@@ -254,7 +262,7 @@ export default function EventoDetailPage() {
             </div>
           </div>
         </div>
-        {canManage && (
+        {canEditEvent && (
           <div className="flex gap-2 shrink-0">
             <Button
               variant="ghost"
@@ -324,7 +332,7 @@ export default function EventoDetailPage() {
             Inscritos
             <span className="text-sm font-normal text-[var(--color-text-muted)]">({attendees.length})</span>
           </h3>
-          {canManage && (
+          {canManageAttendees && (
             <Button size="sm" variant="secondary" leftIcon={<Plus size={14} />} onClick={() => setShowAddAttendee(true)}>
               Agregar
             </Button>
@@ -346,7 +354,7 @@ export default function EventoDetailPage() {
                   <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-subtle)]">País</th>
                   <th className="text-left py-2 pr-4 text-xs font-medium text-[var(--color-text-subtle)]">Origen</th>
                   <th className="text-left py-2 text-xs font-medium text-[var(--color-text-subtle)]">Fecha</th>
-                  {canManage && <th />}
+                  {canManageAttendees && <th />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
@@ -387,7 +395,7 @@ export default function EventoDetailPage() {
                       <td className="py-2.5 text-xs text-[var(--color-text-subtle)]">
                         {formatDate(a.createdAt)}
                       </td>
-                      {canManage && (
+                      {canManageAttendees && (
                         <td className="py-2.5 pl-2">
                           <button
                             onClick={() => setDeleteTarget(a)}

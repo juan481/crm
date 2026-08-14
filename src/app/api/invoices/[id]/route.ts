@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
+import { dateOnlyArgentina } from '@/lib/timezone'
 
 interface Params { params: { id: string } }
 
@@ -39,7 +40,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(amount !== undefined && { amount: Number(amount) }),
         ...(currency && { currency }),
         ...(description !== undefined && { description }),
-        ...(dueDate && { dueDate: new Date(dueDate) }),
+        // dateOnlyArgentina, no `new Date(dueDate)` — mismo fix que en el
+        // POST de creación (src/app/api/invoices/route.ts), mismo motivo.
+        ...(dueDate && (() => {
+          const [y, m, d] = String(dueDate).split('-').map(Number)
+          return { dueDate: dateOnlyArgentina(y, m - 1, d) }
+        })()),
       },
       include: {
         empresa: { select: { id: true, name: true } },

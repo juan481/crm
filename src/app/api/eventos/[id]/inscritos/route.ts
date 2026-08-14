@@ -8,7 +8,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // TECHNICIAN también, igual que GET/POST /api/eventos y GET
+    // /api/eventos/[id] — antes esta ruta se había quedado en SELLER+ nada
+    // más, así que un técnico que sí puede crear un evento se encontraba
+    // con un 403 al intentar cargarle un inscrito manual desde el mismo
+    // evento que acababa de crear.
+    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const event = await prisma.event.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
@@ -53,7 +59,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // TECHNICIAN también, igual que GET/POST /api/eventos y GET
+    // /api/eventos/[id] — antes esta ruta se había quedado en SELLER+ nada
+    // más, así que un técnico que sí puede crear un evento se encontraba
+    // con un 403 al intentar cargarle un inscrito manual desde el mismo
+    // evento que acababa de crear.
+    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
     const attendeeId = searchParams.get('attendeeId')

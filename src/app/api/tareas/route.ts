@@ -41,7 +41,20 @@ export async function GET(req: NextRequest) {
     // resuelve una sola vez cuál userId manda acá.
     const scopeUserId = ['SELLER', 'TECHNICIAN', 'HR'].includes(payload.role) ? payload.userId : assignedToId
     const andConditions: Record<string, unknown>[] = []
-    if (scopeUserId) andConditions.push(taskInvolvesUser(scopeUserId))
+    if (scopeUserId) {
+      // SELLER/HR también ven lo que ELLOS crearon aunque esté asignado a
+      // otra persona — mismo criterio que ya usa GET/PATCH
+      // /api/tareas/[id]. Antes la lista no incluía createdById y el
+      // detalle sí: una tarea creada por un SELLER para otra persona no
+      // aparecía en su propia lista de Tareas, pero si tenía el link (ej.
+      // desde una notificación vieja) sí podía abrirla y editarla.
+      const scope = taskInvolvesUser(scopeUserId)
+      andConditions.push(
+        ['SELLER', 'HR'].includes(payload.role)
+          ? { OR: [...scope.OR, { createdById: scopeUserId }] }
+          : scope
+      )
+    }
     if (search.length >= 2) {
       andConditions.push({
         OR: [

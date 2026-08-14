@@ -115,7 +115,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // When empresa is newly marked as cliente, link any matching unlinked contacts
     if (isCliente === true && !exists.isCliente) {
-      await relinkContactos(db, params.id, empresa.name, payload.orgId)
+      await relinkContactos(db, params.id, empresa.name, payload.orgId, empresa.website)
     }
 
     return NextResponse.json({

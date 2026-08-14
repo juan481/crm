@@ -28,7 +28,14 @@ export default function EventosPage() {
   const router = useRouter()
   const qc = useQueryClient()
   const { user } = useAuthStore()
-  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // Crear evento: mismo piso que el backend (POST /api/eventos) — SELLER+ y
+  // TECHNICIAN, no sólo ADMIN+. Antes esta pantalla nunca le mostraba el
+  // botón "Nuevo Evento" a un SELLER/TECHNICIAN aunque `src/lib/modules.ts`
+  // documenta explícitamente que ese rol "gana Eventos por default" a
+  // partir del panel de permisos configurable — quedaba sólo cosmético.
+  const canCreate = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'SELLER' || user?.role === 'TECHNICIAN'
+  // Borrar un evento entero sigue siendo sólo ADMIN+ (DELETE /api/eventos/[id]).
+  const canDelete = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<EventFormState>(EMPTY_FORM)
@@ -109,7 +116,7 @@ export default function EventosPage() {
             {events.length > 0 ? `${events.length} evento${events.length !== 1 ? 's' : ''}` : 'Sin eventos aún'}
           </p>
         </div>
-        {canManage && (
+        {canCreate && (
           <Button leftIcon={<Plus size={16} />} onClick={() => setShowForm(true)}>
             Nuevo Evento
           </Button>
@@ -134,7 +141,7 @@ export default function EventosPage() {
         <div className="surface rounded-2xl p-16 text-center">
           <CalendarDays className="mx-auto mb-3 text-[var(--color-text-subtle)]" size={40} />
           <p className="text-[var(--color-text-muted)]">No hay eventos creados aún</p>
-          {canManage && (
+          {canCreate && (
             <Button className="mt-4" leftIcon={<Plus size={14} />} onClick={() => setShowForm(true)}>
               Crear primer evento
             </Button>
@@ -190,7 +197,7 @@ export default function EventosPage() {
                   <Globe size={11} />
                   Webhook disponible
                 </div>
-                {canManage && (
+                {canDelete && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeleteTarget(event) }}
                     className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-red-400 hover:bg-red-500/10 transition-all"

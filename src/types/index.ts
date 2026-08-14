@@ -314,7 +314,8 @@ export interface DashboardMetrics {
   pendingTasks: number
   openTickets: number
   activeDealsCount: number
-  pipelineValue: number
+  // Nunca sumar entre monedas — mismo criterio que mrrByCurrency más abajo.
+  pipelineValueByCurrency: Record<string, number>
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
@@ -344,6 +345,10 @@ export interface EmailCampaign {
   createdAt: string
   updatedAt: string
   _count?: { recipients: number }
+  // Destinatarios con status='sent' realmente — a diferencia de
+  // _count.recipients (todos, cualquier status). Ver GET
+  // /api/communications/campaigns.
+  sentCount?: number
   // SES tracking aggregates (available after migration + SES config)
   totalDelivered?: number
   totalBounced?: number

@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Link any existing unlinked contacts that match this empresa
-    await relinkContactos(db, empresa.id, empresa.name, payload.orgId)
+    await relinkContactos(db, empresa.id, empresa.name, payload.orgId, empresa.website)
 
     return NextResponse.json({
       data: {

@@ -135,7 +135,11 @@ export default function ComunicacionesPage() {
   const campaigns = data ?? []
   const sent  = campaigns.filter((c) => c.status === 'SENT').length
   const draft = campaigns.filter((c) => c.status === 'DRAFT').length
-  const total = campaigns.reduce((acc, c) => acc + (c._count?.recipients ?? 0), 0)
+  // sentCount (status='sent' real), no _count.recipients — ese último es el
+  // total de destinatarios sin importar status, así que una campaña en
+  // DRAFT con 500 destinatarios cargados (pero nunca enviada) inflaba este
+  // número en 500 sin haber despachado un solo mail.
+  const total = campaigns.reduce((acc, c) => acc + (c.sentCount ?? 0), 0)
 
   return (
     <div className="space-y-6">

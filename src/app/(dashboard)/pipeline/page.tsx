@@ -306,7 +306,13 @@ export default function PipelinePage() {
         body: JSON.stringify({
           stage:       newStage,
           probability: prob,
-          ...(isClosing && { closedAt: new Date().toISOString() }),
+          // Al reabrir un deal ya cerrado (mover de GANADO/PERDIDO de
+          // vuelta a una etapa activa) hay que limpiar closedAt
+          // explícitamente — el backend lo soporta si se lo mandan, pero
+          // antes acá sólo se enviaba al CERRAR, nunca al reabrir. Un deal
+          // reabierto seguía mostrando "Cerrado [fecha vieja]" en el
+          // detalle aunque estuviera activo de nuevo.
+          closedAt: isClosing ? new Date().toISOString() : null,
         }),
       })
       if (!res.ok) { const j = await res.json(); toast.error(j.error); return }

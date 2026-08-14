@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { argentinaDayStart } from '@/lib/timezone'
 
 interface MonthRow {
   n: unknown
@@ -14,7 +15,10 @@ interface MetricsData {
   pendingTasks: number
   openTickets: number
   activeDealsCount: number
-  pipelineValue: number
+  // Agrupado por moneda, nunca sumado entre monedas — un deal en USD y otro
+  // en ARS no son la misma unidad (mismo criterio que ya usa Pipeline vía
+  // formatMultiCurrency).
+  pipelineValueByCurrency: Record<string, number>
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
@@ -38,9 +42,15 @@ interface MetricsData {
 // Metrics are computed from Empresa (the live "Clientes" model, toggled via
 // isCliente) + Invoice — NOT the legacy Client model, which the active
 // Clientes/Empresas workflow never populates.
-async function fetchMetrics(orgId: string, canSeeFinancials: boolean): Promise<MetricsData> {
+async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: string, role: string): Promise<MetricsData> {
   const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  // Y/M derivados del día calendario ARGENTINA, no de los getters "locales"
+  // de `now` (=UTC en Vercel) — mismo patrón ya establecido en
+  // cron/invoice-automation. En la ventana de ~3hs alrededor del cambio de
+  // mes, "nuevos clientes este mes" arrancaba/cortaba el mes en UTC, no en
+  // el día real Argentina.
+  const argToday = argentinaDayStart(now)
+  const startOfMonth = new Date(Date.UTC(argToday.getUTCFullYear(), argToday.getUTCMonth(), 1))
 
   const [
     activeClients,
@@ -85,8 +95,10 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean): Promise<M
     `,
 
     !canSeeFinancials ? Promise.resolve(0) : prisma.invoice.count({ where: { organizationId: orgId, status: 'PENDING' } }),
+    // dueDate < todayStart (medianoche Argentina), no `now` crudo — mismo
+    // fix que en /api/invoices (GET), mismo motivo.
     !canSeeFinancials ? Promise.resolve(0) : prisma.invoice.count({
-      where: { organizationId: orgId, OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: now } }] },
+      where: { organizationId: orgId, OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: argToday } }] },
     }),
     !canSeeFinancials ? Promise.resolve([]) : prisma.invoice.groupBy({
       by: ['status'],
@@ -105,9 +117,16 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean): Promise<M
 
     prisma.task.count({ where: { organizationId: orgId, status: { not: 'HECHA' } } }),
     prisma.ticket.count({ where: { organizationId: orgId, status: { in: ['ABIERTO', 'EN_PROCESO'] } } }),
+    // ownerId para SELLER — sin esto, un SELLER veía en su propio Dashboard
+    // los deals de TODA la organización (activeDealsCount, pipelineValue,
+    // dealsByStage), mientras que en Pipeline (con el mismo usuario) sólo
+    // ve los suyos. Mismo dato, alcance distinto según la pantalla.
     prisma.deal.findMany({
-      where: { organizationId: orgId, stage: { notIn: ['GANADO', 'PERDIDO'] } },
-      select: { amount: true, probability: true, stage: true },
+      where: {
+        organizationId: orgId, stage: { notIn: ['GANADO', 'PERDIDO'] },
+        ...(role === 'SELLER' && { ownerId: userId }),
+      },
+      select: { amount: true, probability: true, stage: true, currency: true },
     }),
     (prisma as any).cotizacion.groupBy({
       by: ['status'],
@@ -157,7 +176,11 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean): Promise<M
       currency: g.currency,
     }))
 
-  const pipelineValue = activeDeals.reduce((s, d) => s + d.amount * (d.probability / 100), 0)
+  // Agrupado por moneda — ver comentario en la query de activeDeals.
+  const pipelineValueByCurrency = activeDeals.reduce<Record<string, number>>((acc, d) => {
+    acc[d.currency] = (acc[d.currency] ?? 0) + d.amount * (d.probability / 100)
+    return acc
+  }, {})
   const dealsByStage  = activeDeals.reduce<Record<string, number>>((acc, d) => {
     acc[d.stage] = (acc[d.stage] ?? 0) + 1
     return acc
@@ -171,7 +194,7 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean): Promise<M
     activeClients, newClientsThisMonth,
     pendingTasks, openTickets,
     activeDealsCount: activeDeals.length,
-    pipelineValue, dealsByStage,
+    pipelineValueByCurrency, dealsByStage,
     cotizacionesEnviadas: getCotizCount('ENVIADA'),
     cotizacionesAceptadas: getCotizCount('ACEPTADA'),
     // Sin spread condicional estas keys quedarían presentes con valores
@@ -197,7 +220,7 @@ export async function GET() {
     // "Restricciones sobre rentabilidad neta" para Ventas (pedido del
     // cliente) — SELLER ve todo lo operativo, nada de plata agregada.
     const canSeeFinancials = canAccess(payload.role, 'ADMIN')
-    const data = await fetchMetrics(payload.orgId, canSeeFinancials)
+    const data = await fetchMetrics(payload.orgId, canSeeFinancials, payload.userId, payload.role)
 
     return NextResponse.json(
       { data },

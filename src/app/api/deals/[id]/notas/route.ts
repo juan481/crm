@@ -24,8 +24,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     const db = prisma as any
 
+    // ownerId para SELLER — sin esto, un SELLER que no puede ver el deal de
+    // otro vendedor vía GET /api/deals/[id] (404) igual podía leer/agregar
+    // notas de negociación en ese deal ajeno, si conocía el id. Mismo
+    // criterio que ya usa GET /api/deals/[id].
     const deal = await db.deal.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
+      where: {
+        id: params.id, organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
+      },
       select: { id: true },
     })
     if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada' }, { status: 404 })
@@ -56,8 +63,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const db = prisma as any
 
+    // ownerId para SELLER — sin esto, un SELLER que no puede ver el deal de
+    // otro vendedor vía GET /api/deals/[id] (404) igual podía leer/agregar
+    // notas de negociación en ese deal ajeno, si conocía el id. Mismo
+    // criterio que ya usa GET /api/deals/[id].
     const deal = await db.deal.findFirst({
-      where: { id: params.id, organizationId: payload.orgId },
+      where: {
+        id: params.id, organizationId: payload.orgId,
+        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
+      },
       select: { id: true },
     })
     if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada' }, { status: 404 })

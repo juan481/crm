@@ -56,15 +56,19 @@ export async function POST(req: NextRequest) {
         const email      = str(['Mail', 'mail', 'Email']).toLowerCase() || null
         const phone      = str(['Teléfono', 'Telefono', 'telefono'])    || null
 
+        const empresaId = findEmpresaMatch(email, companyRaw, empresas)
+
+        // Dedup SIEMPRE por nombre+empresa, nunca sólo por mail — mismo fix
+        // ya aplicado en /api/directorio/importar/route.ts. Varias personas
+        // de una misma repartición/empresa suelen compartir un mail
+        // genérico ("info@...", "administracion@..."); dedupear sólo por
+        // mail hacía que la 2ª y 3ª persona con ese mail se descartaran
+        // como "ya existe" y se perdieran del lote en silencio.
         const existing = await db.directorioContacto.findFirst({
-          where: email
-            ? { organizationId: orgId, email }
-            : { organizationId: orgId, firstName, lastName },
+          where: { organizationId: orgId, firstName, lastName, empresaId },
           select: { id: true },
         })
         if (existing) { dupes++; continue }
-
-        const empresaId = findEmpresaMatch(email, companyRaw, empresas)
 
         await db.directorioContacto.create({
           data: { organizationId: orgId, firstName, lastName, companyRaw, role, email, phone, empresaId },

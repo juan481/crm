@@ -427,6 +427,13 @@ export default function TareaDetailPage() {
   )
 
   const isOverdue = task.dueDate && task.status !== 'HECHA' && new Date(task.dueDate) < new Date()
+  // Mismo criterio que el backend (PATCH /api/tareas/[id]): reasignar y
+  // reescribir colaboradores son acciones de "dueño" — un SELLER que sólo
+  // es colaborador (ni asignado, ni creador) no puede tocar esto, aunque sí
+  // pueda editar el resto de la tarea. Sin esto, la UI dejaba interactuar
+  // con esos dos campos y el servidor los ignoraba en silencio.
+  const isOwnerOrCreator = task.assignedToId === user?.id || task.createdById === user?.id
+  const canReassign = !isTech && (user?.role !== 'SELLER' || isOwnerOrCreator)
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -521,7 +528,7 @@ export default function TareaDetailPage() {
             <Input label="Fecha límite" type="date" value={(form as any).dueDate ?? ''}
               onChange={e => upd('dueDate', e.target.value)} />
           )}
-          {isTech ? (
+          {!canReassign ? (
             <div>
               <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Asignado a</p>
               <p className="text-sm" style={{ color: 'var(--color-text)' }}>{task.assignedTo?.name ?? '—'}</p>
@@ -540,7 +547,7 @@ export default function TareaDetailPage() {
           )}
         </div>
 
-        {isTech ? (
+        {!canReassign ? (
           <div>
             <p className="text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Colaboradores</p>
             {(task.collaborators?.length ?? 0) > 0 ? (

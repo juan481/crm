@@ -21,7 +21,22 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json({ data: campaigns })
+    // Conteo de "realmente enviados" (status='sent') por campaña, aparte
+    // del `_count.recipients` de arriba (destinatarios TOTALES, cualquier
+    // status) — la tarjeta de stats de la lista sumaba ese total de todas
+    // las campañas sin filtrar, contando de más una campaña en DRAFT
+    // (nunca enviada) o filas pending/failed como si fueran "enviadas".
+    // Prisma no permite dos _count distintos sobre la misma relación en un
+    // solo select, así que va aparte y se mergea acá.
+    const sentGroups = await (prisma as any).campaignRecipient.groupBy({
+      by: ['campaignId'],
+      where: { campaignId: { in: campaigns.map(c => c.id) }, status: 'sent' },
+      _count: { _all: true },
+    })
+    const sentByCampaign = new Map(sentGroups.map((g: any) => [g.campaignId, g._count._all]))
+    const data = campaigns.map(c => ({ ...c, sentCount: sentByCampaign.get(c.id) ?? 0 }))
+
+    return NextResponse.json({ data })
   } catch (error) {
     console.error('[CAMPAIGNS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

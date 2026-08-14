@@ -13,6 +13,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Mismo chequeo que ya tiene el POST de acá abajo — sin esto, cualquier
+    // rol autenticado (sin acceso al Directorio en el sidebar) podía leer
+    // notas de auditoría privadas con sólo conocer el id del contacto.
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
 

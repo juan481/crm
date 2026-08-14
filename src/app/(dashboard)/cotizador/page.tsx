@@ -501,11 +501,18 @@ export default function CotizadorPage() {
       const json = await res.json()
       if (!res.ok) { setPipelineState('error'); return }
 
-      // Vincular estructuralmente la cotización al deal recién creado.
-      await fetch(`/api/cotizaciones/${quote.cotizacionId}`, {
+      // Vincular estructuralmente la cotización al deal recién creado. Antes
+      // no se chequeaba `.ok` acá — si este segundo pedido fallaba, el deal
+      // igual quedaba creado y la UI mostraba "Se agregó automáticamente"
+      // como si todo hubiera salido bien, pero Cotizacion.dealId quedaba
+      // null (deal huérfano, sin forma de reintentar sólo el vínculo).
+      const linkRes = await fetch(`/api/cotizaciones/${quote.cotizacionId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dealId: json.data.id }),
       })
+      if (!linkRes.ok) {
+        toast('Se creó la oportunidad en Pipeline, pero no se pudo vincular a esta cotización', { icon: '⚠️' })
+      }
 
       setAutoDealId(json.data.id); setPipelineState('added')
     } catch { setPipelineState('error') } finally { setPipelineBusy(false) }

@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // es nuevo y avisarle sólo a ese.
     const existing = await db.task.findFirst({
       where: scopeWhere,
-      select: { id: true, status: true, assignedToId: true, collaborators: { select: { userId: true } } },
+      select: { id: true, status: true, assignedToId: true, createdById: true, collaborators: { select: { userId: true } } },
     })
     if (!existing) return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
     const existingCollabIds: string[] = existing.collaborators.map((c: { userId: string }) => c.userId)
@@ -82,18 +82,29 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (isTech && existing.assignedToId !== payload.userId && !existingCollabIds.includes(payload.userId))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
+    // Reasignar (assignedToId) y reescribir la lista de colaboradores son
+    // acciones de "dueño", no de cualquiera que pueda tocar la tarea — sin
+    // esta distinción, un SELLER agregado sólo como COLABORADOR (nunca
+    // asignado, nunca creador) heredaba el mismo permiso amplio que ya
+    // tenía un SELLER dueño/creador (!isTech alcanzaba) y podía reasignarse
+    // la tarea a sí mismo o a cualquiera, y reescribir por completo quién
+    // más está en el loop. Encontrado en auditoría propia — bug introducido
+    // hoy junto con colaboradores, no existía antes (antes ser colaborador
+    // ni siquiera daba acceso de lectura/edición).
+    const isOwnerOrCreator = existing.assignedToId === payload.userId || existing.createdById === payload.userId
+    const canReassign = !isTech && (payload.role !== 'SELLER' || isOwnerOrCreator)
+
     const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds } = body
     const isCompleting    = status === 'HECHA' && existing.status !== 'HECHA'
     const shouldMarkViewed = viewed === true && payload.userId === existing.assignedToId && !existing.viewedAt
-    const isReassigning = !isTech && assignedToId && assignedToId !== existing.assignedToId
+    const isReassigning = canReassign && assignedToId && assignedToId !== existing.assignedToId
 
     // Colaboradores — reemplazo completo de la lista (semántica simple: lo
-    // que mandás es lo que queda), sólo si el body trae la clave. Mismo
-    // permiso que assignedToId (!isTech). El asignado efectivo (el nuevo si
-    // se está reasignando, si no el actual) nunca queda duplicado como
-    // colaborador.
-    const effectiveAssignedToId = (!isTech && assignedToId) ? assignedToId : existing.assignedToId
-    const newCollabIds: string[] | undefined = (!isTech && Array.isArray(collaboratorIds))
+    // que mandás es lo que queda), sólo si el body trae la clave, y sólo si
+    // canReassign. El asignado efectivo (el nuevo si se está reasignando,
+    // si no el actual) nunca queda duplicado como colaborador.
+    const effectiveAssignedToId = (canReassign && assignedToId) ? assignedToId : existing.assignedToId
+    const newCollabIds: string[] | undefined = (canReassign && Array.isArray(collaboratorIds))
       ? Array.from(new Set(collaboratorIds.filter((id: unknown) => typeof id === 'string' && id !== effectiveAssignedToId)))
       : undefined
     const addedCollabIds = newCollabIds ? newCollabIds.filter((id) => !existingCollabIds.includes(id)) : []
@@ -101,7 +112,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // Mismo chequeo que ya hace POST /api/tareas — faltaba acá en el PATCH.
     // Son independientes entre sí — van en paralelo (antes eran round-trips
     // secuenciales en cada edición de tarea).
-    const needsAssigneeCheck = !isTech && assignedToId && assignedToId !== existing.assignedToId
+    const needsAssigneeCheck = canReassign && assignedToId && assignedToId !== existing.assignedToId
     const [assignee, client, empresa, deal, ticket, validCollaborators] = await Promise.all([
       needsAssigneeCheck  ? db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
       (!isTech && clientId)  ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })  : null,
@@ -127,7 +138,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(status !== undefined                   && { status }),
         ...((!isTech && priority)                  && { priority }),
         ...((!isTech && dueDate !== undefined)     && { dueDate: dueDate ? new Date(dueDate) : null }),
-        ...((!isTech && assignedToId)              && { assignedToId }),
+        ...((canReassign && assignedToId)           && { assignedToId }),
         ...((!isTech && clientId !== undefined)    && { clientId:  clientId  || null }),
         ...((!isTech && empresaId !== undefined)   && { empresaId: empresaId || null }),
         ...((!isTech && dealId !== undefined)      && { dealId:   dealId   || null }),

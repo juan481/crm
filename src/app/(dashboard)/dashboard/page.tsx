@@ -185,7 +185,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xl font-bold text-[var(--color-text)]">{data.activeDealsCount}</p>
-              <p className="text-sm text-[var(--color-text-muted)]">Deals activos · {formatCurrency(data.pipelineValue)} esp.</p>
+              <p className="text-sm text-[var(--color-text-muted)]">Deals activos · {formatMultiCurrency(data.pipelineValueByCurrency)} esp.</p>
             </div>
           </Link>
           <Link href="/tareas" className="surface rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-border-strong)] transition-colors group">

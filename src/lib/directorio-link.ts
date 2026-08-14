@@ -59,7 +59,15 @@ export async function relinkContactos(
   db: Record<string, unknown>,
   empresaId: string,
   empresaName: string,
-  orgId: string
+  orgId: string,
+  // Sin esto, la rama de match por dominio de email de findEmpresaMatch
+  // (líneas 22-31 más arriba) nunca podía activarse acá — website quedaba
+  // hardcodeado en null, así que un contacto suelto con
+  // "persona@empresaxyz.com" nunca se re-vinculaba automáticamente al
+  // crear/editar "Empresa XYZ" con website "empresaxyz.com", sólo si el
+  // nombre coincidía textualmente. La misma función sí soporta dominio
+  // correctamente cuando se llama desde POST /api/contactos.
+  empresaWebsite: string | null = null
 ): Promise<number> {
   const unlinkeds = await (db as any).directorioContacto.findMany({
     where: { organizationId: orgId, empresaId: null },
@@ -67,7 +75,7 @@ export async function relinkContactos(
   })
 
   const toLink: string[] = unlinkeds
-    .filter((c: any) => findEmpresaMatch(c.email, c.companyRaw, [{ id: empresaId, name: empresaName, website: null }]) === empresaId)
+    .filter((c: any) => findEmpresaMatch(c.email, c.companyRaw, [{ id: empresaId, name: empresaName, website: empresaWebsite }]) === empresaId)
     .map((c: any) => c.id)
 
   if (toLink.length === 0) return 0

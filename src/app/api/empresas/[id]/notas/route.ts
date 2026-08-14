@@ -12,6 +12,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Mismo chequeo que ya tiene el POST de acá abajo (y que /api/deals/[id]/notas
+    // ya exige) — sin esto, cualquier rol autenticado (HR, TECHNICIAN, sin acceso
+    // al Directorio en el sidebar) podía leer notas de auditoría privadas
+    // ("Deudor", "No vender sin adelanto") con sólo conocer el id de la empresa.
+    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
 

@@ -39,7 +39,7 @@ interface CotizacionDetail {
   createdAt:      string
   notes:          string | null
   validityDays:   number
-  items:          Array<{ name: string; price: number; currency: string; billingCycle: string; quantity: number }>
+  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number }>
   empresa:        { id: string; name: string } | null
   user:           { id: string; name: string } | null
   orgName:        string
@@ -118,7 +118,11 @@ export default function CotizacionDetailPage() {
         if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 9, 'F') }
         const lineTotal = item.price * item.quantity
         const label     = item.quantity > 1 ? `${item.name}  ×${item.quantity}` : item.name
-        const period    = BILLING_LABELS[item.billingCycle] ?? 'mes'
+        // Un PRODUCTO no tiene ciclo de facturación — mostrarle "mes" (el
+        // default de BILLING_LABELS) es un dato de facturación incorrecto,
+        // no cosmético. Mismo fallback que ya usa correctamente
+        // api/cotizador/enviar-mail/route.ts para esta misma info.
+        const period    = item.type === 'PRODUCT' ? (item.unit || 'unidad') : (BILLING_LABELS[item.billingCycle] ?? 'mes')
         const price     = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.currency, minimumFractionDigits: 0 }).format(lineTotal)
 
         doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')

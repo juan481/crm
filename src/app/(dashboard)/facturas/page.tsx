@@ -15,6 +15,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
 import { InvoicePreview } from '@/components/invoices/invoice-preview'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { argentinaDayStart } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
 import { usePlugin } from '@/hooks/use-plugin'
 import { exportToExcel } from '@/lib/xlsx-export'
@@ -110,7 +111,11 @@ const STATUS_OPTIONS = [
 const STATUS_LABELS: Record<string, string> = { PENDING: 'Pendiente', PAID: 'Pagada', OVERDUE: 'Vencida', CANCELLED: 'Cancelada' }
 const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = { PENDING: 'warning', PAID: 'success', OVERDUE: 'danger', CANCELLED: 'neutral' }
 
-function isOverdue(row: InvoiceRow) { return row.status === 'OVERDUE' || (row.status === 'PENDING' && new Date(row.dueDate) < new Date()) }
+// dueDate < inicio del día Argentina de hoy, no `new Date()` crudo — mismo
+// criterio que ahora usa /api/invoices y /api/dashboard/metrics para su
+// propio overdueCount (una factura con vencimiento hoy dejaba de ser
+// "vencida" recién a partir de mañana, no a las 9am de hoy).
+function isOverdue(row: InvoiceRow) { return row.status === 'OVERDUE' || (row.status === 'PENDING' && new Date(row.dueDate) < argentinaDayStart()) }
 
 export default function FacturasPage() {
   const { user } = useAuthStore()
