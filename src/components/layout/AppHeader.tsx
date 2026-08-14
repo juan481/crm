@@ -147,17 +147,26 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
             </button>
           </div>
         ) : (
+          // Sólo el ícono en mobile (ahorra ~120px de ancho) — antes el pill
+          // de 160px con el texto "Buscar..." + el resto de los íconos del
+          // header (fichaje, ayuda, sugerencia, tema, notificaciones,
+          // avatar) no entraban juntos en una pantalla angosta (~390px) y
+          // la campana + el avatar quedaban cortados fuera de la pantalla,
+          // invisibles — el layout padre (overflow-hidden) se los tragaba
+          // en silencio en vez de mostrar un scroll horizontal que al menos
+          // avisara del problema.
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm border w-40 text-left hover:border-[var(--color-border-strong)] transition-colors"
+            className="flex items-center justify-center sm:justify-start gap-2 p-2 sm:px-3 sm:py-2 rounded-xl text-sm border w-9 sm:w-40 text-left hover:border-[var(--color-border-strong)] transition-colors"
             style={{
               color: 'var(--color-text-muted)',
               background: 'var(--color-surface-raised)',
               border: '1px solid var(--color-border)',
             }}
+            title="Buscar"
           >
-            <Search size={14} />
-            <span className="text-xs">Buscar...</span>
+            <Search size={14} className="shrink-0" />
+            <span className="text-xs hidden sm:inline">Buscar...</span>
           </button>
         )}
 

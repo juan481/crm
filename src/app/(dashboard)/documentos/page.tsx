@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FolderOpen, Folder, FileText, FileImage, File, Plus,
-  Upload, Trash2, ChevronRight, Home, Download, Tag, X, AlertTriangle, Pencil, History, RefreshCw,
+  Upload, Trash2, ChevronRight, Home, Download, Tag, X, AlertTriangle, Pencil, History, RefreshCw, Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,48 @@ import type { Folder as FolderType, Document } from '@/types'
 import toast from 'react-hot-toast'
 
 interface DocVersion { id: string; originalName: string; version: number; url: string; createdAt: string; uploadedBy: { name: string } | null }
+
+// Vista previa real del archivo — imágenes se muestran directo; PDF/Word se
+// renderizan con el visor público de Google Docs (gratis, sin infraestructura
+// propia). Requiere que la URL sea públicamente accesible sin sesión — el
+// bucket de Supabase Storage de este proyecto ya lo es (getPublicUrl, no
+// signed URL), así que funciona igual sin cambios ahí. Mismo patrón que ya
+// usamos en Documentos de RE/MAX (DocViewerFrame).
+function PreviewModal({ doc, onClose }: { doc: Document; onClose: () => void }) {
+  const isImage = doc.mimeType.startsWith('image/')
+  const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(doc.url)}&embedded=true`
+
+  return (
+    <Modal open onClose={onClose} title={doc.name} size="xl">
+      <div className="rounded-xl overflow-hidden" style={{ height: '72vh', background: 'var(--color-surface-raised)' }}>
+        {isImage ? (
+          <div className="w-full h-full flex items-center justify-center overflow-auto p-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={doc.url} alt={doc.name} className="max-w-full max-h-full object-contain rounded-lg" />
+          </div>
+        ) : (
+          <iframe
+            src={viewerUrl}
+            className="w-full h-full border-0"
+            title={`Vista previa de ${doc.name}`}
+            sandbox="allow-scripts allow-same-origin allow-popups"
+          />
+        )}
+      </div>
+      <div className="flex justify-end gap-2 mt-3">
+        <a
+          href={doc.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={doc.originalName}
+          className="inline-flex items-center gap-1.5 text-sm px-3 py-2 rounded-xl border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+        >
+          <Download size={13} /> Descargar
+        </a>
+      </div>
+    </Modal>
+  )
+}
 
 function VersionHistoryModal({ doc, onClose }: { doc: Document; onClose: () => void }) {
   const { data, isLoading } = useQuery<DocVersion[]>({
@@ -152,6 +194,7 @@ export default function DocumentosPage() {
   const [renameName, setRenameName] = useState('')
   const [renaming, setRenaming] = useState(false)
   const [versionsDoc, setVersionsDoc] = useState<Document | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null)
   const [tagsDoc, setTagsDoc] = useState<Document | null>(null)
   const [replacingDocId, setReplacingDocId] = useState<string | null>(null)
   const replaceInputRef = useRef<HTMLInputElement>(null)
@@ -357,36 +400,41 @@ export default function DocumentosPage() {
               : 'Repositorio de archivos'}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            leftIcon={<Plus size={15} />}
-            onClick={() => setShowNewFolder(true)}
-          >
-            Nueva Carpeta
-          </Button>
-          <Button
-            leftIcon={uploading ? undefined : <Upload size={15} />}
-            loading={uploading}
-            disabled={!!activeTag}
-            title={activeTag ? 'Limpiá el filtro de etiqueta antes de subir' : undefined}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Subir Archivo
-          </Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              leftIcon={<Plus size={15} />}
+              onClick={() => setShowNewFolder(true)}
+            >
+              Nueva Carpeta
+            </Button>
+            <Button
+              leftIcon={uploading ? undefined : <Upload size={15} />}
+              loading={uploading}
+              disabled={!!activeTag}
+              title={activeTag ? 'Limpiá el filtro de etiqueta antes de subir' : undefined}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Subir Archivo
+            </Button>
+          </div>
+          <p className="text-xs text-[var(--color-text-subtle)]">
+            JPG, PNG, PDF, Word, Excel o TXT — hasta 30MB por archivo
+          </p>
           <input
             ref={fileInputRef}
             type="file"
             multiple
             className="hidden"
-            accept=".jpg,.jpeg,.png,.pdf,.docx,.txt"
+            accept=".jpg,.jpeg,.png,.webp,.pdf,.docx,.xlsx,.txt"
             onChange={(e) => handleUpload(e.target.files)}
           />
           <input
             ref={replaceInputRef}
             type="file"
             className="hidden"
-            accept=".jpg,.jpeg,.png,.pdf,.docx,.txt"
+            accept=".jpg,.jpeg,.png,.webp,.pdf,.docx,.xlsx,.txt"
             onChange={(e) => handleReplace(e.target.files?.[0] ?? null)}
           />
         </div>
@@ -475,7 +523,7 @@ export default function DocumentosPage() {
               {activeTag ? `Ningún archivo con la etiqueta "${activeTag}"` : currentFolderId ? 'Carpeta vacía' : 'Sin archivos aún'}
             </p>
             <p className="text-xs text-[var(--color-text-subtle)] mt-1">
-              {activeTag ? 'Probá con otra etiqueta o limpiá el filtro' : 'Arrastrá archivos aquí o usá el botón "Subir Archivo"'}
+              {activeTag ? 'Probá con otra etiqueta o limpiá el filtro' : 'Arrastrá archivos aquí o usá el botón "Subir Archivo" (hasta 30MB)'}
             </p>
           </div>
         ) : (
@@ -538,11 +586,18 @@ export default function DocumentosPage() {
                         key={doc.id}
                         initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="group relative rounded-xl border border-[var(--color-border)] hover:border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3.5 transition-all"
+                        className="group relative rounded-xl border border-[var(--color-border)] hover:border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3.5 transition-all cursor-pointer"
+                        onClick={() => setPreviewDoc(doc)}
+                        title="Ver vista previa"
                       >
                         <div className="flex items-start gap-3">
-                          <div className="shrink-0 mt-0.5">
-                            {getMimeIcon(doc.mimeType)}
+                          <div className="shrink-0 mt-0.5 w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center bg-[var(--color-surface-raised)]">
+                            {doc.mimeType.startsWith('image/') ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={doc.url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              getMimeIcon(doc.mimeType)
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -551,7 +606,7 @@ export default function DocumentosPage() {
                               </p>
                               {doc.version > 1 && (
                                 <button
-                                  onClick={() => setVersionsDoc(doc)}
+                                  onClick={(e) => { e.stopPropagation(); setVersionsDoc(doc) }}
                                   className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[var(--color-surface-raised)] text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] transition-colors"
                                   title="Ver historial de versiones"
                                 >
@@ -580,14 +635,21 @@ export default function DocumentosPage() {
                         {/* Actions on hover */}
                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
                           <button
-                            onClick={() => setTagsDoc(doc)}
+                            onClick={(e) => { e.stopPropagation(); setPreviewDoc(doc) }}
+                            className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] transition-colors"
+                            title="Ver vista previa"
+                          >
+                            <Eye size={12} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setTagsDoc(doc) }}
                             className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
                             title="Editar etiquetas"
                           >
                             <Tag size={12} />
                           </button>
                           <button
-                            onClick={() => { setReplacingDocId(doc.id); replaceInputRef.current?.click() }}
+                            onClick={(e) => { e.stopPropagation(); setReplacingDocId(doc.id); replaceInputRef.current?.click() }}
                             className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
                             title="Subir nueva versión"
                           >
@@ -595,7 +657,7 @@ export default function DocumentosPage() {
                           </button>
                           {doc.version > 1 && (
                             <button
-                              onClick={() => setVersionsDoc(doc)}
+                              onClick={(e) => { e.stopPropagation(); setVersionsDoc(doc) }}
                               className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
                               title="Ver versiones anteriores"
                             >
@@ -613,7 +675,7 @@ export default function DocumentosPage() {
                             <Download size={12} />
                           </a>
                           <button
-                            onClick={() => setDeleteDoc(doc)}
+                            onClick={(e) => { e.stopPropagation(); setDeleteDoc(doc) }}
                             className="p-1.5 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-red-400 transition-colors"
                           >
                             <Trash2 size={12} />
@@ -686,6 +748,7 @@ export default function DocumentosPage() {
 
       {/* Version history */}
       {versionsDoc && <VersionHistoryModal doc={versionsDoc} onClose={() => setVersionsDoc(null)} />}
+      {previewDoc && <PreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
 
       {/* Tag editor */}
       {tagsDoc && (
