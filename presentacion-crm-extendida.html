@@ -372,6 +372,21 @@ function statCount(target, prefix, suffix, lbl){
 function callout(kind, iconName, text){
   return `<div class="callout ${kind}">${icon(iconName,17)}<div>${text}</div></div>`;
 }
+// Caso de uso "antes / después" — mismo <div class="card"> de siempre, con un
+// acento rojo (el problema real de hoy) y uno verde (cómo queda con el CRM),
+// para que el contraste se vea de un vistazo sin agregar CSS nuevo.
+function beforeAfter(before, after){
+  return `<div class="grid2" style="margin-bottom:18px;">
+    <div class="card" style="border-color:rgba(239,68,68,.25); background:rgba(239,68,68,.04);">
+      <div class="card-title" style="color:#dc2626;">${icon('alert',16)} Hoy</div>
+      <div class="card-body">${before}</div>
+    </div>
+    <div class="card" style="border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.05);">
+      <div class="card-title" style="color:#059669;">${icon('check',16)} Con el CRM</div>
+      <div class="card-body">${after}</div>
+    </div>
+  </div>`;
+}
 function mockBar(title, dots){
   dots = dots===false ? '' : `<span class="dotc" style="background:#ef4444"></span><span class="dotc" style="background:#f59e0b"></span><span class="dotc live-dot" style="background:#10b981"></span>`;
   return `<div class="mock-bar">${dots}<span class="mock-bar-title">${title}</span></div>`;
@@ -431,14 +446,15 @@ function COVER(){
 const SLIDES = [];
 SLIDES.push(COVER());
 
-SLIDES.push(SLIDE('agenda','Agenda','Qué vamos a ver hoy', 'Un recorrido completo: por qué un CRM, quién ve qué, cada módulo con el detalle real de cómo funciona, cómo se usa desde el celular, y qué sigue en el roadmap.', `
-  <div class="grid2">
+SLIDES.push(SLIDE('agenda','Agenda','Qué vamos a ver hoy', 'Un recorrido completo: por qué un CRM, quién ve qué, casos reales de antes/después, cada módulo con el detalle real de cómo funciona, cómo se usa desde el celular, y qué sigue en el roadmap.', `
+  <div class="grid3">
     <div class="card">${icon('clock',18)}<div class="card-title">1. Por qué un CRM</div><div class="card-body">Cuánto tiempo se pierde hoy sin uno, y cuánto se recupera.</div></div>
     <div class="card">${icon('users',18)}<div class="card-title">2. Roles y accesos</div><div class="card-body">Quién es cada usuario y qué ve exactamente — configurable por vos.</div></div>
-    <div class="card">${icon('layers',18)}<div class="card-title">3. Cada módulo, al detalle</div><div class="card-body">Empresas, Pipeline, Tareas, Cotizador, Tickets, Facturación, Documentos, Comunicaciones, RRHH, Eventos.</div></div>
-    <div class="card">${icon('smartphone',18)}<div class="card-title">4. Uso desde el celular</div><div class="card-body">Qué se puede instalar y usar en el campo, sin computadora.</div></div>
-    <div class="card">${icon('shield',18)}<div class="card-title">5. Seguridad y administración</div><div class="card-body">Aislamiento de datos, permisos, marca propia.</div></div>
-    <div class="card">${icon('robot',18)}<div class="card-title">6. Qué sigue (roadmap)</div><div class="card-body">Bot de WhatsApp con IA y catálogo B2B/B2C.</div></div>
+    <div class="card">${icon('trending',18)}<div class="card-title">3. Casos reales</div><div class="card-body">Antes y después, por rol — vendedor, RRHH, técnico y cotización.</div></div>
+    <div class="card">${icon('layers',18)}<div class="card-title">4. Cada módulo, al detalle</div><div class="card-body">Empresas, Pipeline, Tareas, Cotizador, Tickets, Facturación, Documentos, Comunicaciones, RRHH, Eventos.</div></div>
+    <div class="card">${icon('smartphone',18)}<div class="card-title">5. Uso desde el celular</div><div class="card-body">Qué se puede instalar y usar en el campo, sin computadora.</div></div>
+    <div class="card">${icon('shield',18)}<div class="card-title">6. Seguridad y administración</div><div class="card-body">Aislamiento de datos, permisos, marca propia.</div></div>
+    <div class="card">${icon('robot',18)}<div class="card-title">7. Qué sigue (roadmap)</div><div class="card-body">Bot de WhatsApp con IA y catálogo B2B/B2C.</div></div>
   </div>
 `));
 
@@ -533,8 +549,51 @@ SLIDES.push(SLIDE('administracion','Administración','El negocio, de un vistazo'
   </div>
 `));
 
-/* ============================= SECCIÓN 2 — MÓDULOS ============================= */
-SLIDES.push(DIVIDER('sec-modulos','SECCIÓN 2','Cada módulo, al detalle','No un resumen de una línea — cómo funciona realmente cada pantalla que tu equipo va a usar todos los días.'));
+/* ============================= SECCIÓN 2 — CASOS DE USO REALES ============================= */
+SLIDES.push(DIVIDER('sec-casos','SECCIÓN 2','Casos reales: antes y después','No es un capricho de sistemas — es tiempo y plata que hoy se pierde. Y funciona mejor cuanto más lo usa todo el equipo.'));
+
+SLIDES.push(SLIDE('casos-intro','Antes de ver los casos','Esto sólo funciona si se usa', 'Un CRM no es un programa que se prende solo — es una herramienta que devuelve exactamente lo que el equipo carga en ella. Por eso importan estas tres cosas.', `
+  <div class="grid3">
+    ${card('puzzle','Hecho a medida para ustedes','No es un software genérico bajado de internet. Los roles, el catálogo de servicios, el flujo de un ticket, los datos fiscales — todo está armado como ya trabaja tu equipo, no al revés.')}
+    ${card('users','Ganan todos, no sólo un área','No es una herramienta "para ventas" que al resto le suma trabajo. Cada área se saca de encima algo que hoy hace a mano o a los ponchazos — se ve en los casos siguientes.')}
+    ${card('trending','Cuanto más se usa, mejor funciona','El dashboard, los reportes y el historial de cada cliente son un espejo de lo que el equipo carga. Si algo queda "a mitad" en WhatsApp y a mitad en el sistema, ese espejo queda incompleto — la mejora es proporcional al uso real, día a día.')}
+  </div>
+`));
+
+SLIDES.push(SLIDE('caso-vendedor','Caso real — Vendedores','Ese cliente que "quedó en llamarlo" y nadie llamó', 'El seguimiento deja de depender de la memoria de una persona.', `
+  ${beforeAfter(
+    'El vendedor anota en la cabeza (o en un cuaderno) que tiene que retomar a un cliente en dos semanas. Se cruzan otras urgencias, pasa el mes, el cliente se enfría — y si ese vendedor se enferma, se va de vacaciones o deja la empresa, ese seguimiento se pierde con él.',
+    'La oportunidad queda en el Pipeline con su historial completo: qué se habló, qué cotización se mandó, en qué etapa está. El sistema no deja que se pierda de vista — y si mañana otra persona toma esa cartera, no arranca de cero: ya tiene todo el contexto ahí.'
+  )}
+  ${callout('fixed','check','<b>Gana el vendedor</b> — no vive con la ansiedad de "¿a quién le debo llamar hoy?". <b>Gana la empresa</b> — ninguna oportunidad se cae por olvido.')}
+`));
+
+SLIDES.push(SLIDE('caso-rrhh','Caso real — RRHH','La planilla de Excel que alguien tiene que actualizar a mano', null, `
+  ${beforeAfter(
+    'Cada persona avisa que llegó por WhatsApp, o firma una planilla en papel. A fin de mes, alguien de RRHH junta todo eso, pasa tardanzas y ausencias a un Excel a mano, y calcula el presentismo — y si un día se traspapela algo, esa información se pierde.',
+    'Cada persona ficha con un botón desde el celular o la computadora. El presentismo se calcula solo, todos los días, con el mismo criterio para todo el equipo. RRHH deja de perseguir gente por WhatsApp preguntando "¿viniste hoy?" — la respuesta ya está armada cuando la necesita.'
+  )}
+  ${callout('fixed','check','<b>Gana RRHH</b> — se saca de encima una tarea manual repetitiva todos los meses. <b>Gana cada empleado</b> — no tiene que acordarse de avisar ni de "demostrar" que vino.')}
+`));
+
+SLIDES.push(SLIDE('caso-tecnico','Caso real — Técnicos','"¿A qué cliente tengo que ir hoy?" — scrolleando WhatsApp', null, `
+  ${beforeAfter(
+    'La orden de trabajo llega por un chat, un audio, o se la dictan por teléfono. Si el técnico se olvida un detalle, tiene que volver a buscarlo entre las últimas 200 conversaciones del grupo del equipo — y si es un cliente con historial (visitas anteriores, qué se instaló), esa info no está en ningún lado.',
+    'El técnico entra a "Mi Día" y ve, en una sola pantalla, la tarea, la prioridad, y el historial completo de ese cliente: qué se hizo antes, qué se habló, qué tickets tuvo. No hay que buscar nada en ningún chat antes de salir.'
+  )}
+  ${callout('fixed','check','<b>Gana el técnico</b> — llega a cada visita ya informado, sin perder tiempo antes de salir. <b>Gana el cliente</b> — lo atiende alguien que ya conoce su historia, no alguien que arranca de cero.')}
+`));
+
+SLIDES.push(SLIDE('caso-cotizador','Caso real — Cotizador','El presupuesto que se arma en Word y se manda "cuando haya tiempo"', null, `
+  ${beforeAfter(
+    'Cada cotización se arma desde cero en un Word o Excel viejo, copiando y pegando de la anterior, a veces con precios desactualizados. El total se calcula a mano, y una vez mandada, nadie sabe con certeza si el cliente la vio, si sigue vigente, o si ya venció y hay que rehacerla de nuevo.',
+    'Se elige del catálogo, el sistema calcula el total solo (con el dólar del día si hace falta), y el PDF sale con la marca de la empresa, listo para mandar en menos de 2 minutos. Queda guardada con su estado — Enviada, Aceptada, Vencida — así nadie manda un presupuesto viejo por error.'
+  )}
+  ${callout('fixed','check','<b>Gana el vendedor</b> — cierra mientras el cliente todavía tiene ganas, no tres días después. <b>Gana la empresa</b> — nunca más un precio viejo mandado por error.')}
+`));
+
+/* ============================= SECCIÓN 3 — MÓDULOS ============================= */
+SLIDES.push(DIVIDER('sec-modulos','SECCIÓN 3','Cada módulo, al detalle','No un resumen de una línea — cómo funciona realmente cada pantalla que tu equipo va a usar todos los días.'));
 
 SLIDES.push(SLIDE('dashboard','Dashboard','Tu negocio de un vistazo', 'La primera pantalla al entrar. Se actualiza solo, sin que nadie tenga que armar un reporte a mano.', `
   <div class="grid2">
@@ -800,8 +859,8 @@ SLIDES.push(SLIDE('notas-auditoria','Nuevo: Notas de auditoría','Un "Deudor" o 
   ])}
 `));
 
-/* ============================= SECCIÓN 3 — MOBILE ============================= */
-SLIDES.push(DIVIDER('sec-mobile','SECCIÓN 3','Uso desde el celular','Para el equipo que no está sentado en un escritorio — técnicos en la calle, vendedores visitando clientes.'));
+/* ============================= SECCIÓN 4 — MOBILE ============================= */
+SLIDES.push(DIVIDER('sec-mobile','SECCIÓN 4','Uso desde el celular','Para el equipo que no está sentado en un escritorio — técnicos en la calle, vendedores visitando clientes.'));
 
 SLIDES.push(SLIDE('pwa','Se instala como una app', 'Sin pasar por ninguna tienda de aplicaciones', 'El CRM ahora se puede "instalar" en el celular — queda como un ícono más, se abre a pantalla completa, sin la barra del navegador.', `
   <div style="display:flex; gap:40px; align-items:center; flex-wrap:wrap;">
@@ -841,8 +900,8 @@ SLIDES.push(SLIDE('mobile-uso','Qué se puede hacer desde el celular', 'Todo lo 
   </div>
 `));
 
-/* ============================= SECCIÓN 4 — SEGURIDAD ============================= */
-SLIDES.push(DIVIDER('sec-seguridad','SECCIÓN 4','Seguridad y administración','La parte que no se ve todos los días, pero es la que sostiene todo lo demás.'));
+/* ============================= SECCIÓN 5 — SEGURIDAD ============================= */
+SLIDES.push(DIVIDER('sec-seguridad','SECCIÓN 5','Seguridad y administración','La parte que no se ve todos los días, pero es la que sostiene todo lo demás.'));
 
 SLIDES.push(SLIDE('multitenant','Aislamiento de datos','Cada organización, en su propio compartimento', 'Si el sistema alguna vez tiene más de una empresa usándolo, los datos de una nunca se mezclan ni son visibles para la otra — a nivel de base de datos, no sólo de pantalla.', `
   ${B([
@@ -880,8 +939,8 @@ SLIDES.push(SLIDE('marca','Marca propia','Tu logo, tus colores, tu nombre', null
   ])}
 `));
 
-/* ============================= SECCIÓN 5 — PRÓXIMAMENTE ============================= */
-SLIDES.push(DIVIDER('sec-proximo','SECCIÓN 5','Próximamente','Dos desarrollos que ya están en análisis, pensados para dar el siguiente paso.'));
+/* ============================= SECCIÓN 6 — PRÓXIMAMENTE ============================= */
+SLIDES.push(DIVIDER('sec-proximo','SECCIÓN 6','Próximamente','Dos desarrollos que ya están en análisis, pensados para dar el siguiente paso.'));
 
 SLIDES.push(SLIDE('bot-whatsapp','Próximamente: Bot de WhatsApp con IA', 'Filtro y derivación automática de mensajes', 'La idea: que el primer mensaje de WhatsApp de un cliente no dependa de que alguien esté mirando el teléfono en ese momento.', `
   <div class="grid2">
