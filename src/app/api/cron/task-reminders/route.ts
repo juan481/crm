@@ -43,6 +43,9 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, title: true, dueDate: true, organizationId: true,
         assignedTo: { select: { id: true, name: true, email: true } },
+        // Colaboradores adicionales (no obligatorio, ver TaskCollaborator)
+        // también reciben el recordatorio, no sólo el asignado principal.
+        collaborators: { select: { user: { select: { id: true, name: true, email: true } } } },
       },
     })
 
@@ -76,12 +79,21 @@ export async function GET(req: NextRequest) {
       // modelo CronRun. En dry run no se reclama nada, a propósito.
       if (!dryRun && !(await claimCronRun(JOB_NAME, orgId, today))) { orgsSkippedAlreadySent++; continue }
 
+      // Asignado principal + cada colaborador — una tarea con más de una
+      // persona le llega a todos, no sólo al asignado principal (dedupeado
+      // por si alguien quedó como colaborador Y asignado a la vez, aunque
+      // la API ya evita guardar esa combinación).
       const byUser = new Map<string, { name: string; email: string; tasks: typeof orgTasks }>()
       for (const t of orgTasks) {
-        if (!t.assignedTo?.email) continue
-        const key = t.assignedTo.id
-        if (!byUser.has(key)) byUser.set(key, { name: t.assignedTo.name, email: t.assignedTo.email, tasks: [] })
-        byUser.get(key)!.tasks.push(t)
+        const recipients = [t.assignedTo, ...t.collaborators.map((c: { user: typeof t.assignedTo }) => c.user)]
+          .filter((u): u is NonNullable<typeof u> => !!u?.email)
+        const seen = new Set<string>()
+        for (const u of recipients) {
+          if (seen.has(u.id)) continue
+          seen.add(u.id)
+          if (!byUser.has(u.id)) byUser.set(u.id, { name: u.name, email: u.email, tasks: [] })
+          byUser.get(u.id)!.tasks.push(t)
+        }
       }
 
       const orgName = org?.name || org?.crmName || 'CRM'

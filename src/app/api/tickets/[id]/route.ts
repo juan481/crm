@@ -3,14 +3,16 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { SLA_HOURS } from '@/lib/tickets'
+import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
 
 interface Params { params: { id: string } }
 
 const INCLUDE_DETAIL = {
   client:     { select: { id: true, name: true } },
   empresa:    { select: { id: true, name: true } },
-  assignedTo: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true, avatarUrl: true } },
   createdBy:  { select: { id: true, name: true } },
+  collaborators: { select: { user: { select: { id: true, name: true, avatarUrl: true } } } },
   messages: {
     orderBy: { createdAt: 'asc' as const },
     include: { user: { select: { id: true, name: true, avatarUrl: true } } },
@@ -20,8 +22,9 @@ const INCLUDE_DETAIL = {
 const INCLUDE_LIST = {
   client:     { select: { id: true, name: true } },
   empresa:    { select: { id: true, name: true } },
-  assignedTo: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true, avatarUrl: true } },
   createdBy:  { select: { id: true, name: true } },
+  collaborators: { select: { user: { select: { id: true, name: true, avatarUrl: true } } } },
   _count:     { select: { messages: true } },
 }
 
@@ -34,8 +37,10 @@ export async function GET(_: NextRequest, { params }: Params) {
     const db = prisma as any
     const ticket = await db.ticket.findFirst({ where: { id: params.id, organizationId: payload.orgId }, include: INCLUDE_DETAIL })
     if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
-    // A technician can only read tickets assigned to them, same as the list endpoint.
-    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId) {
+    // A technician can only read tickets assigned to them (o donde sea
+    // colaborador), same as the list endpoint.
+    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId
+      && !ticket.collaborators.some((c: { user: { id: string } }) => c.user.id === payload.userId)) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
     // satisfactionToken es el propio link público de calificación — nunca debe
@@ -59,6 +64,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const db = prisma as any
     // select acotado a lo que este handler realmente usa — antes traía la
     // fila completa (todas las columnas del ticket) sólo para leer 6 campos.
+    // collaborators siempre viene (barato, sólo userId) — hace falta para
+    // el chequeo de permisos de TECHNICIAN y para diffear colaboradores
+    // nuevos.
     const existing = await db.ticket.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
       select: {
@@ -66,9 +74,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         satisfactionToken: true, satisfactionRatedAt: true,
         recipientEmail: true, recipientName: true,
         client: { select: { email: true, name: true } },
+        collaborators: { select: { userId: true } },
       },
     })
     if (!existing) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
+    const existingCollabIds: string[] = existing.collaborators.map((c: { userId: string }) => c.userId)
 
     const body = await req.json()
     const { status } = body
@@ -76,7 +86,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const isAdmin = canAccess(payload.role, 'ADMIN')
 
     // TECHNICIAN solo puede cambiar el estado de tickets asignados a ellos
-    if (isTech && existing.assignedToId !== payload.userId)
+    // (o donde sea colaborador).
+    if (isTech && existing.assignedToId !== payload.userId && !existingCollabIds.includes(payload.userId))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const wasClosed  = existing.status === 'RESUELTO' || existing.status === 'CERRADO'
@@ -87,7 +98,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // desactualizado con el ticket ya reabierto).
     const isReopening = status !== undefined && status !== 'RESUELTO' && status !== 'CERRADO' && wasClosed
 
-    const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName } = body
+    const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName, collaboratorIds } = body
+
+    // Colaboradores — mismo nivel de permiso que reasignar (isAdmin), y
+    // mismo criterio que Tareas: reemplazo completo de la lista, nunca
+    // duplica al asignado principal efectivo.
+    const effectiveAssignedToId = (isAdmin && assignedToId !== undefined) ? (assignedToId || null) : existing.assignedToId
+    const newCollabIds: string[] | undefined = (isAdmin && Array.isArray(collaboratorIds))
+      ? Array.from(new Set(collaboratorIds.filter((id: unknown) => typeof id === 'string' && id !== effectiveAssignedToId)))
+      : undefined
+    const addedCollabIds = newCollabIds ? newCollabIds.filter((id) => !existingCollabIds.includes(id)) : []
 
     // El SLA se recalcula si cambia la prioridad mientras el ticket sigue
     // abierto. "Sigue abierto" tiene que mirar el status EFECTIVO tras este
@@ -112,17 +132,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // Sin esto, un assignedToId/empresaId/clientId de OTRA organización se
     // aceptaba igual — antes sólo se validaba que quien pide el cambio sea
-    // admin, no que el destino pertenezca a esta org. Las 3 validaciones son
-    // independientes entre sí, van en paralelo (antes eran hasta 3
-    // round-trips secuenciales en cada PATCH de ticket).
-    const [assignee, empresa, client] = await Promise.all([
+    // admin, no que el destino pertenezca a esta org. Las validaciones son
+    // independientes entre sí, van en paralelo (antes eran round-trips
+    // secuenciales en cada PATCH de ticket).
+    const [assignee, empresa, client, validCollaborators] = await Promise.all([
       (isAdmin && assignedToId) ? db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
       (!isTech && empresaId)    ? db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } }) : null,
       (!isTech && clientId)     ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      newCollabIds?.length      ? db.user.findMany({ where: { id: { in: newCollabIds }, organizationId: payload.orgId }, select: { id: true } }) : null,
     ])
     if (isAdmin && assignedToId && !assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
     if (!isTech && empresaId && !empresa)     return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
     if (!isTech && clientId && !client)       return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
+    if (newCollabIds?.length && (validCollaborators?.length ?? 0) !== newCollabIds.length) {
+      return NextResponse.json({ error: 'Alguno de los colaboradores no pertenece a esta organización' }, { status: 400 })
+    }
 
     const ticket = await db.ticket.update({
       where: { id: params.id },
@@ -141,9 +165,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(newSlaDueAt                        && { slaDueAt: newSlaDueAt }),
         ...(satisfactionToken                  && { satisfactionToken }),
         ...(resetSatisfaction                  && { satisfactionRating: null, satisfactionComment: null, satisfactionRatedAt: null }),
+        ...(newCollabIds !== undefined         && { collaborators: { deleteMany: {}, create: newCollabIds.map((userId) => ({ userId })) } }),
       },
       include: INCLUDE_LIST,
     })
+
+    for (const userId of addedCollabIds) {
+      if (userId === payload.userId) continue
+      notifyCollaboratorAdded({ userId, orgId: payload.orgId, kind: 'ticket', title: ticket.title, entityId: ticket.id })
+    }
 
     // Invitar al contacto a calificar la atención — link público de un solo
     // uso, mismo patrón que Evento.webhookSecret. No requiere portal ni login.

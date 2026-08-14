@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { notifyTaskAssignment } from '@/lib/task-notifications'
+import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
+import { taskInvolvesUser } from '@/lib/assignment-scope'
 
 export const dynamic = 'force-dynamic'
 
 const INCLUDE = {
-  assignedTo: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true, avatarUrl: true } },
   createdBy:  { select: { id: true, name: true } },
   client:     { select: { id: true, name: true } },
   empresa:    { select: { id: true, name: true } },
   deal:       { select: { id: true, title: true } },
   ticket:     { select: { id: true, number: true, title: true } },
+  collaborators: { select: { user: { select: { id: true, name: true, avatarUrl: true } } } },
 }
 
 export async function GET(req: NextRequest) {
@@ -29,16 +32,25 @@ export async function GET(req: NextRequest) {
     const skip  = (page - 1) * limit
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
-    if (status)       where.status       = status
-    if (assignedToId) where.assignedToId = assignedToId
-    if (empresaId)    where.empresaId    = empresaId
-    if (['SELLER', 'TECHNICIAN', 'HR'].includes(payload.role)) where.assignedToId = payload.userId
+    if (status)    where.status    = status
+    if (empresaId) where.empresaId = empresaId
+
+    // "¿de quién es esta tarea?" — ahora es asignado principal O
+    // colaborador (ver assignment-scope.ts). Un rol restringido (sólo ve lo
+    // suyo) no puede pedir el de otra persona vía el query param — se
+    // resuelve una sola vez cuál userId manda acá.
+    const scopeUserId = ['SELLER', 'TECHNICIAN', 'HR'].includes(payload.role) ? payload.userId : assignedToId
+    const andConditions: Record<string, unknown>[] = []
+    if (scopeUserId) andConditions.push(taskInvolvesUser(scopeUserId))
     if (search.length >= 2) {
-      where.OR = [
-        { title:       { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ]
+      andConditions.push({
+        OR: [
+          { title:       { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      })
     }
+    if (andConditions.length) where.AND = andConditions
 
     const db = prisma as any
     const [tasks, total] = await Promise.all([
@@ -58,11 +70,16 @@ export async function POST(req: NextRequest) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId } = await req.json()
+    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
     const db = prisma as any
     const finalAssignedToId = assignedToId || payload.userId
+    // Colaboradores adicionales — opcional (ver TaskCollaborator), nunca
+    // duplica al asignado principal aunque venga repetido en la lista.
+    const collabIds: string[] = Array.isArray(collaboratorIds)
+      ? Array.from(new Set(collaboratorIds.filter((id: unknown) => typeof id === 'string' && id !== finalAssignedToId)))
+      : []
 
     // Sin esto, cualquiera de estos ids podía ser de OTRA organización — el
     // FK de Prisma sólo exige que exista en algún lado, no que sea de esta
@@ -70,23 +87,27 @@ export async function POST(req: NextRequest) {
     // terminaba expuesto acá mismo (vía el include de abajo) o, en el caso
     // de assignedToId, se le mandaba el mail de "tarea asignada" a alguien
     // de otra empresa por completo.
-    // Las 5 validaciones son independientes entre sí — van en paralelo. Antes
-    // eran hasta 5 round-trips secuenciales en la creación de UNA tarea, cada
-    // uno pagando el costo completo de ida y vuelta a la base uno atrás del
+    // Las validaciones son independientes entre sí — van en paralelo. Antes
+    // eran round-trips secuenciales en la creación de UNA tarea, cada uno
+    // pagando el costo completo de ida y vuelta a la base uno atrás del
     // otro (ver investigación de performance: el costo real está en la
     // CANTIDAD de round-trips, no en la complejidad de cada query).
-    const [assignee, client, empresa, deal, ticket] = await Promise.all([
+    const [assignee, client, empresa, deal, ticket, validCollaborators] = await Promise.all([
       (finalAssignedToId !== payload.userId) ? db.user.findFirst({ where: { id: finalAssignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
       clientId  ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })  : null,
       empresaId ? db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } }) : null,
       dealId    ? db.deal.findFirst({ where: { id: dealId, organizationId: payload.orgId }, select: { id: true } })      : null,
       ticketId  ? db.ticket.findFirst({ where: { id: ticketId, organizationId: payload.orgId }, select: { id: true } })  : null,
+      collabIds.length ? db.user.findMany({ where: { id: { in: collabIds }, organizationId: payload.orgId }, select: { id: true } }) : null,
     ])
     if (finalAssignedToId !== payload.userId && !assignee) return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
     if (clientId && !client)   return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
     if (empresaId && !empresa) return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
     if (dealId && !deal)       return NextResponse.json({ error: 'Oportunidad no encontrada en esta organización' }, { status: 400 })
     if (ticketId && !ticket)   return NextResponse.json({ error: 'Ticket no encontrado en esta organización' }, { status: 400 })
+    if (collabIds.length && (validCollaborators?.length ?? 0) !== collabIds.length) {
+      return NextResponse.json({ error: 'Alguno de los colaboradores no pertenece a esta organización' }, { status: 400 })
+    }
 
     const task = await db.task.create({
       data: {
@@ -101,6 +122,7 @@ export async function POST(req: NextRequest) {
         dealId:         dealId    || null,
         ticketId:       ticketId  || null,
         organizationId: payload.orgId,
+        ...(collabIds.length && { collaborators: { create: collabIds.map((userId) => ({ userId })) } }),
       },
       include: INCLUDE,
     })
@@ -110,6 +132,10 @@ export async function POST(req: NextRequest) {
     // tarea ya se creó igual, no se revierte nada por esto.
     if (finalAssignedToId !== payload.userId) {
       notifyTaskAssignment(task, payload.orgId)
+    }
+    for (const userId of collabIds) {
+      if (userId === payload.userId) continue // uno mismo no se avisa a sí mismo
+      notifyCollaboratorAdded({ userId, orgId: payload.orgId, kind: 'tarea', title: task.title, entityId: task.id })
     }
 
     return NextResponse.json({ data: task }, { status: 201 })

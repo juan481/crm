@@ -311,8 +311,10 @@ model User {
   ownedEmpresas           Empresa[]                @relation("EmpresaOwner")
   assignedTasks           Task[]                   @relation("TaskAssignee")
   createdTasks            Task[]                   @relation("TaskCreator")
+  taskCollaborations      TaskCollaborator[]
   assignedTickets         Ticket[]                 @relation("TicketAssignee")
   createdTickets          Ticket[]                 @relation("TicketCreator")
+  ticketCollaborations    TicketCollaborator[]
   ticketMessages          TicketMessage[]          @relation("TicketMessageAuthor")
   taskComments            TaskComment[]
   empresaNotas            EmpresaNota[]
@@ -771,35 +773,42 @@ model DealNota {
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────
 model Task {
-  id             String        @id @default(cuid())
+  id             String             @id @default(cuid())
   title          String
   description    String?
-  status         TaskStatus    @default(PENDIENTE)
-  priority       Priority      @default(MEDIA)
+  status         TaskStatus         @default(PENDIENTE)
+  priority       Priority           @default(MEDIA)
   dueDate        DateTime?
   completedAt    DateTime?
   viewedAt       DateTime?
   assignedToId   String
-  assignedTo     User          @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedTo     User               @relation("TaskAssignee", fields: [assignedToId], references: [id])
   createdById    String
-  createdBy      User          @relation("TaskCreator", fields: [createdById], references: [id])
+  createdBy      User               @relation("TaskCreator", fields: [createdById], references: [id])
   clientId       String?
-  client         Client?       @relation(fields: [clientId], references: [id])
+  client         Client?            @relation(fields: [clientId], references: [id])
   empresaId      String?
-  empresa        Empresa?      @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa        Empresa?           @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Vínculo opcional a una oportunidad de Pipeline o a un Ticket — mismo
   // criterio que empresaId (nullable, onDelete: SetNull, no rompe nada si
   // se borra el Deal/Ticket de origen). Ver Fase 11 del plan.
   dealId         String?
-  deal           Deal?         @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  deal           Deal?              @relation(fields: [dealId], references: [id], onDelete: SetNull)
   ticketId       String?
-  ticket         Ticket?       @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  ticket         Ticket?            @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   comments       TaskComment[]
   subitems       TaskSubitem[]
+  // Colaboradores ADEMÁS del asignado principal (assignedToId) — no es
+  // obligatorio, la mayoría de las tareas van a seguir teniendo sólo el
+  // asignado de siempre. assignedToId sigue siendo la fuente de verdad
+  // para todo lo que ya existía (permisos, notificación de asignación,
+  // "Mi Día", el digest diario) — esto es puramente aditivo, ver
+  // TaskCollaborator.
+  collaborators  TaskCollaborator[]
 
   @@index([organizationId, status])
   // Cubre el where real que emite GET /api/tareas para SELLER/TECHNICIAN/HR
@@ -810,6 +819,25 @@ model Task {
   @@index([empresaId])
   @@index([dealId])
   @@index([ticketId])
+}
+
+// Colaborador adicional de una Tarea — join table explícita (no relación
+// implícita m2m) para que quede un id propio y quede simple borrar/listar
+// desde la app. assignedToId en Task sigue siendo el "dueño" principal;
+// esto es gente que además está en el loop, con los mismos permisos que
+// el asignado principal para ver/actualizar la tarea (ver GET/PATCH
+// /api/tareas). Un mismo usuario no puede estar dos veces en la misma
+// tarea (@@unique).
+model TaskCollaborator {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
 }
 
 model TaskSubitem {
@@ -840,26 +868,26 @@ model TaskComment {
 
 // ─── Support Tickets ───────────────────────────────────────────────────────
 model Ticket {
-  id                  String          @id @default(cuid())
+  id                  String               @id @default(cuid())
   number              Int
   title               String
   description         String
-  status              TicketStatus    @default(ABIERTO)
-  priority            Priority        @default(MEDIA)
-  category            TicketCategory  @default(SOPORTE)
+  status              TicketStatus         @default(ABIERTO)
+  priority            Priority             @default(MEDIA)
+  category            TicketCategory       @default(SOPORTE)
   clientId            String?
-  client              Client?         @relation(fields: [clientId], references: [id])
+  client              Client?              @relation(fields: [clientId], references: [id])
   empresaId           String?
-  empresa             Empresa?        @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa             Empresa?             @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Direct contact for client-facing notifications — independent of
   // Client/Empresa (which don't reliably carry a single contact email),
   // same pattern already used by Cotizacion.recipientEmail.
   recipientEmail      String?
   recipientName       String?
   assignedToId        String?
-  assignedTo          User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  assignedTo          User?                @relation("TicketAssignee", fields: [assignedToId], references: [id])
   createdById         String
-  createdBy           User            @relation("TicketCreator", fields: [createdById], references: [id])
+  createdBy           User                 @relation("TicketCreator", fields: [createdById], references: [id])
   resolvedAt          DateTime?
   // SLA — calculado al crear (o al recategorizar prioridad mientras sigue
   // abierto) según Priority; ver SLA_HOURS en la API de tickets.
@@ -874,11 +902,13 @@ model Ticket {
   satisfactionComment String?
   satisfactionRatedAt DateTime?
   organizationId      String
-  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages            TicketMessage[]
   tasks               Task[]
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  // Mismo criterio que Task.collaborators — ver TicketCollaborator.
+  collaborators       TicketCollaborator[]
 
   @@unique([number, organizationId])
   @@index([organizationId, status])
@@ -886,6 +916,19 @@ model Ticket {
   @@index([clientId])
   @@index([empresaId])
   @@index([satisfactionToken])
+}
+
+// Mismo patrón que TaskCollaborator — ver ese comentario.
+model TicketCollaborator {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([ticketId, userId])
+  @@index([userId])
 }
 
 model TicketMessage {

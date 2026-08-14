@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Avatar } from '@/components/ui/avatar'
+import { AvatarStack } from '@/components/ui/avatar-stack'
+import { UserMultiSelect } from '@/components/ui/user-multi-select'
 import { timeAgo } from '@/lib/utils'
 import type { Ticket, TaskPriority, TicketStatus, TicketCategory } from '@/types'
 import toast from 'react-hot-toast'
@@ -77,10 +78,13 @@ interface TicketFormState {
   empresaId: string
   recipientEmail: string
   recipientName: string
+  // Gente adicional en el ticket, además de a quien se le asigne después —
+  // no obligatorio (ver TicketCollaborator).
+  collaboratorIds: string[]
 }
 
 const EMPTY_FORM: TicketFormState = {
-  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '', recipientEmail: '', recipientName: '',
+  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '', recipientEmail: '', recipientName: '', collaboratorIds: [],
 }
 
 export default function TicketsPage() {
@@ -131,6 +135,17 @@ export default function TicketsPage() {
     { value: '', label: 'Sin empresa' },
     ...((empresasData?.data ?? []) as Array<{ id: string; name: string }>).map(e => ({ value: e.id, label: e.name })),
   ]
+
+  const { data: usersData } = useQuery({
+    queryKey: ['usuarios-internos'],
+    queryFn: async () => {
+      const res = await fetch('/api/usuarios')
+      if (!res.ok) return { data: [] }
+      return res.json()
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const users: Array<{ id: string; name: string; avatarUrl: string | null }> = usersData?.data ?? []
 
   const { data, isLoading } = useQuery<Ticket[]>({
     queryKey: ['tickets', statusFilter, categoryFilter, search],
@@ -345,9 +360,13 @@ export default function TicketsPage() {
 
                     <div className="flex items-center gap-2.5 shrink-0">
                       {ticket.assignedTo ? (
-                        <div title={`Asignado a ${ticket.assignedTo.name}`}>
-                          <Avatar name={ticket.assignedTo.name} size="sm" />
-                        </div>
+                        <AvatarStack
+                          size="sm"
+                          people={[
+                            { id: ticket.assignedTo.id, name: ticket.assignedTo.name, avatarUrl: ticket.assignedTo.avatarUrl },
+                            ...(ticket.collaborators ?? []).map(c => c.user),
+                          ]}
+                        />
                       ) : (
                         <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-subtle)' }} title="Sin asignar">
                           <User size={13} />
@@ -401,6 +420,12 @@ export default function TicketsPage() {
             options={empresaOptions}
             value={form.empresaId}
             onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
+          />
+          <UserMultiSelect
+            label="Colaboradores (opcional)"
+            users={users}
+            selectedIds={form.collaboratorIds}
+            onChange={ids => setForm(f => ({ ...f, collaboratorIds: ids }))}
           />
           <div className="grid grid-cols-2 gap-3">
             <Input

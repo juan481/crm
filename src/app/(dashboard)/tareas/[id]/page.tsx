@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
+import { UserMultiSelect } from '@/components/ui/user-multi-select'
 import { formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { usePlugin } from '@/hooks/use-plugin'
@@ -279,7 +280,7 @@ export default function TareaDetailPage() {
 
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [form, setForm]         = useState<Partial<Task & { dueDate: string }>>({})
+  const [form, setForm]         = useState<Partial<Task & { dueDate: string; collaboratorIds: string[] }>>({})
   const [dirty, setDirty]       = useState(false)
   const [syncingGcal, setSyncingGcal] = useState(false)
   const { enabled: gcalEnabled } = usePlugin('google-calendar')
@@ -302,7 +303,7 @@ export default function TareaDetailPage() {
     },
     staleTime: 5 * 60 * 1000,
   })
-  const users: Array<{ id: string; name: string }> = usersData?.data ?? []
+  const users: Array<{ id: string; name: string; avatarUrl: string | null }> = usersData?.data ?? []
 
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-tareas'],
@@ -326,6 +327,7 @@ export default function TareaDetailPage() {
         dueDate:      task.dueDate ? task.dueDate.split('T')[0] : '',
         assignedToId: task.assignedToId,
         empresaId:    task.empresaId ?? '',
+        collaboratorIds: (task.collaborators ?? []).map(c => c.user.id),
       })
     }
   }, [task, dirty])
@@ -358,6 +360,7 @@ export default function TareaDetailPage() {
           dueDate:      form.dueDate || null,
           assignedToId: form.assignedToId || user?.id,
           empresaId:    (form as any).empresaId || null,
+          collaboratorIds: form.collaboratorIds ?? [],
         }),
       })
       if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
@@ -484,9 +487,21 @@ export default function TareaDetailPage() {
             label="Asignado a"
             options={[{ value: '', label: 'Yo mismo' }, ...users.map(u => ({ value: u.id, label: u.name }))]}
             value={form.assignedToId ?? ''}
-            onChange={e => upd('assignedToId', e.target.value)}
+            onChange={e => {
+              const nextAssignee = e.target.value
+              setForm(f => ({ ...f, assignedToId: nextAssignee, collaboratorIds: (f.collaboratorIds ?? []).filter(id => id !== nextAssignee) }))
+              setDirty(true)
+            }}
           />
         </div>
+
+        <UserMultiSelect
+          label="Colaboradores (opcional)"
+          users={users}
+          selectedIds={form.collaboratorIds ?? []}
+          onChange={ids => { setForm(f => ({ ...f, collaboratorIds: ids })); setDirty(true) }}
+          excludeId={form.assignedToId || user?.id}
+        />
 
         <Select
           label="Empresa (opcional)"

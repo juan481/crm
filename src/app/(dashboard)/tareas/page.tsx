@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { Avatar } from '@/components/ui/avatar'
+import { AvatarStack } from '@/components/ui/avatar-stack'
+import { UserMultiSelect } from '@/components/ui/user-multi-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -47,10 +49,13 @@ interface TaskFormState {
   dueDate: string
   assignedToId: string
   empresaId: string
+  // Gente adicional además del asignado principal — no obligatorio (ver
+  // TaskCollaborator).
+  collaboratorIds: string[]
 }
 
 const EMPTY_FORM: TaskFormState = {
-  title: '', description: '', priority: 'MEDIA', dueDate: '', assignedToId: '', empresaId: '',
+  title: '', description: '', priority: 'MEDIA', dueDate: '', assignedToId: '', empresaId: '', collaboratorIds: [],
 }
 
 function isOverdue(task: Task): boolean {
@@ -84,7 +89,7 @@ export default function TareasPage() {
     },
     staleTime: 5 * 60 * 1000,
   })
-  const users: Array<{ id: string; name: string }> = usersData?.data ?? []
+  const users: Array<{ id: string; name: string; avatarUrl: string | null }> = usersData?.data ?? []
   const userOptions = [
     { value: '', label: 'Yo mismo' },
     ...users.map(u => ({ value: u.id, label: u.name })),
@@ -177,6 +182,7 @@ export default function TareasPage() {
           dueDate: form.dueDate || null,
           assignedToId: form.assignedToId || user?.id,
           empresaId: form.empresaId || null,
+          collaboratorIds: form.collaboratorIds,
         }),
       })
       const json = await res.json()
@@ -294,11 +300,6 @@ export default function TareasPage() {
                       <p className="text-xs text-[var(--color-text-subtle)] mt-0.5">{task.description}</p>
                     )}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
-                      {task.assignedTo && (
-                        <span className="text-[10px] text-[var(--color-text-subtle)] flex items-center gap-1">
-                          <User size={9} />{task.assignedTo.name}
-                        </span>
-                      )}
                       {task.dueDate && (
                         <span className={`text-[10px] flex items-center gap-1 ${overdue ? 'text-red-400' : 'text-[var(--color-text-subtle)]'}`}>
                           <Calendar size={9} />{formatDate(task.dueDate)}
@@ -311,6 +312,20 @@ export default function TareasPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Asignado principal + colaboradores (no obligatorio) —
+                      estilo Jira, sólo avatares con nombre en el tooltip. */}
+                  {task.assignedTo && (
+                    <div className="shrink-0" title={task.assignedTo.name}>
+                      <AvatarStack
+                        people={[
+                          { id: task.assignedTo.id, name: task.assignedTo.name, avatarUrl: task.assignedTo.avatarUrl },
+                          ...(task.collaborators ?? []).map(c => c.user),
+                        ]}
+                        size="xs"
+                      />
+                    </div>
+                  )}
 
                   {/* Read/active indicators (visible to task creator) */}
                   {task.createdById === user?.id && task.assignedToId !== user?.id && task.status !== 'HECHA' && (
@@ -382,9 +397,16 @@ export default function TareasPage() {
               label="Asignar a"
               options={userOptions}
               value={form.assignedToId}
-              onChange={e => setForm(f => ({ ...f, assignedToId: e.target.value }))}
+              onChange={e => setForm(f => ({ ...f, assignedToId: e.target.value, collaboratorIds: f.collaboratorIds.filter(id => id !== e.target.value) }))}
             />
-            <div className="flex flex-col gap-1.5" ref={empresaRef}>
+            <UserMultiSelect
+              label="Colaboradores"
+              users={users}
+              selectedIds={form.collaboratorIds}
+              onChange={ids => setForm(f => ({ ...f, collaboratorIds: ids }))}
+              excludeId={form.assignedToId || user?.id}
+            />
+            <div className="flex flex-col gap-1.5 col-span-2" ref={empresaRef}>
               <label className="text-sm font-medium text-[var(--color-text-muted)]">Empresa (opcional)</label>
               <div className="relative">
                 <div

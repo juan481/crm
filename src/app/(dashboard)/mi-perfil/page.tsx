@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Eye, EyeOff, Lock, User as UserIcon, Moon, Sun } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Eye, EyeOff, Lock, User as UserIcon, Moon, Sun, Camera } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
@@ -16,6 +16,30 @@ export default function MiPerfilPage() {
 
   const [name, setName] = useState(user?.name ?? '')
   const [savingName, setSavingName] = useState(false)
+
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // permite volver a elegir el mismo archivo después
+    if (!file || !user) return
+    if (file.size > 2 * 1024 * 1024) { toast.error('La imagen debe ser menor a 2MB'); return }
+    setUploadingAvatar(true)
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+      const res = await fetch('/api/auth/mi-perfil/avatar', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al subir la foto'); return }
+      setUser({ ...user, avatarUrl: json.data.avatarUrl })
+      toast.success('Foto de perfil actualizada')
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
 
   const [showPass, setShowPass] = useState(false)
   const [password, setPassword] = useState('')
@@ -76,13 +100,39 @@ export default function MiPerfilPage() {
       </div>
 
       <div className="surface rounded-2xl p-6 flex items-center gap-4">
-        <Avatar name={user.name} src={user.avatarUrl} size="lg" />
+        <button
+          type="button"
+          onClick={() => avatarInputRef.current?.click()}
+          disabled={uploadingAvatar}
+          className="relative shrink-0 rounded-full group disabled:opacity-70"
+          title="Cambiar foto de perfil"
+        >
+          <Avatar name={user.name} src={user.avatarUrl} size="lg" />
+          <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/0 group-hover:bg-black/40 transition-colors">
+            <Camera size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          {uploadingAvatar && (
+            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </button>
+        <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleAvatarChange} />
         <div className="min-w-0">
           <p className="font-semibold text-[var(--color-text)] truncate">{user.name}</p>
           <p className="text-sm text-[var(--color-text-muted)] truncate">{user.email}</p>
           <span className="inline-block mt-1.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)]">
             {getRoleLabel(user.role, vertical)}
           </span>
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={uploadingAvatar}
+            className="block mt-1.5 text-xs font-medium hover:underline disabled:opacity-60"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            {uploadingAvatar ? 'Subiendo...' : 'Cambiar foto'}
+          </button>
         </div>
       </div>
 

@@ -82,12 +82,22 @@ export default function MiDiaPage() {
   const { data: asistenciaHoy, refetch: refetchAsistencia } = useQuery({
     queryKey: ['asistencia-hoy', user?.id],
     queryFn:  async () => {
-      const r = await fetch(`/api/asistencia?mes=${mesCurrent}`)
+      // &userId= explícito — sin esto, para SUPER_ADMIN/ADMIN/HR (que
+      // pueden ver la asistencia de toda la org) esta consulta devolvía
+      // los registros de TODO el equipo y el .find() de abajo agarraba el
+      // primero que matcheara la fecha de hoy — el de OTRA persona. Mismo
+      // bug ya encontrado y arreglado en attendance-widget.tsx (el widget
+      // del header) — esta pantalla tiene su propia copia de la lógica de
+      // fichaje y no lo heredaba. Comparten queryKey con ese widget, así
+      // que sin este fix el resultado dependía de cuál de los dos ganaba
+      // la carrera por poblar la caché primero.
+      const r = await fetch(`/api/asistencia?mes=${mesCurrent}&userId=${user?.id}`)
       if (!r.ok) return null
       const records = ((await r.json()).data ?? []) as Array<{ fecha: string; horaEntrada: string | null; horaSalida: string | null; tardanza: boolean }>
       return records.find(r => r.fecha.slice(0, 10) === hoy) ?? null
     },
     staleTime: 30_000,
+    enabled: !!user?.id,
   })
 
   const handleCheckIn = async () => {

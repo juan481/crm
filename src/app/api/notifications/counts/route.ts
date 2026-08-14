@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { taskInvolvesUser, ticketInvolvesUser } from '@/lib/assignment-scope'
 
 export interface NotificationCounts {
   tasks: number
@@ -18,20 +19,20 @@ export async function GET() {
     const isAdmin = canAccess(role, 'ADMIN')
 
     const [tasks, tickets, invoices] = await Promise.all([
-      // Tasks assigned to me that are pending or in progress
+      // Tareas asignadas a mí O donde soy colaborador, pendientes o en curso.
       prisma.task.count({
         where: {
           organizationId: orgId,
-          assignedToId: userId,
           status: { in: ['PENDIENTE', 'EN_CURSO'] },
+          ...taskInvolvesUser(userId),
         },
       }),
-      // Open tickets — TECHNICIAN sees only their assigned ones
+      // Open tickets — TECHNICIAN sees only their assigned ones (o donde es colaborador)
       prisma.ticket.count({
         where: {
           organizationId: orgId,
           status: { in: ['ABIERTO', 'EN_PROCESO'] },
-          ...(role === 'TECHNICIAN' && { assignedToId: userId }),
+          ...(role === 'TECHNICIAN' && ticketInvolvesUser(userId)),
         },
       }),
       // Overdue invoices — only visible to ADMIN+

@@ -458,7 +458,7 @@ export interface Task {
   completedAt: string | null
   viewedAt: string | null
   assignedToId: string
-  assignedTo?: { id: string; name: string }
+  assignedTo?: { id: string; name: string; avatarUrl?: string | null }
   createdById: string
   createdBy?: { id: string; name: string }
   clientId: string | null
@@ -470,6 +470,8 @@ export interface Task {
   ticketId: string | null
   ticket?: { id: string; number: number; title: string } | null
   organizationId: string
+  // Colaboradores adicionales — no obligatorio, ver TaskCollaborator.
+  collaborators?: Array<{ user: { id: string; name: string; avatarUrl: string | null } }>
   createdAt: string
   updatedAt: string
 }
@@ -510,7 +512,7 @@ export interface Ticket {
   recipientEmail?: string | null
   recipientName?: string | null
   assignedToId: string | null
-  assignedTo?: { id: string; name: string } | null
+  assignedTo?: { id: string; name: string; avatarUrl?: string | null } | null
   createdById: string
   createdBy?: { id: string; name: string }
   resolvedAt: string | null
@@ -522,6 +524,8 @@ export interface Ticket {
   organizationId: string
   messages?: TicketMessage[]
   _count?: { messages: number }
+  // Colaboradores adicionales — no obligatorio, ver TicketCollaborator.
+  collaborators?: Array<{ user: { id: string; name: string; avatarUrl: string | null } }>
   createdAt: string
   updatedAt: string
 }

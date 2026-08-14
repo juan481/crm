@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
 import { Avatar } from '@/components/ui/avatar'
+import { AvatarStack } from '@/components/ui/avatar-stack'
+import { UserMultiSelect } from '@/components/ui/user-multi-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { timeAgo, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -103,7 +105,7 @@ export default function TicketDetailPage() {
     },
     staleTime: 5 * 60 * 1000,
   })
-  const users: Array<{ id: string; name: string }> = usersData?.data ?? []
+  const users: Array<{ id: string; name: string; avatarUrl: string | null }> = usersData?.data ?? []
 
   useEffect(() => {
     if (data?.messages?.length) {
@@ -158,7 +160,7 @@ export default function TicketDetailPage() {
     }
   }
 
-  const handleUpdate = async (field: Partial<{ status: string; priority: string; category: string; assignedToId: string | null; recipientEmail: string | null }>) => {
+  const handleUpdate = async (field: Partial<{ status: string; priority: string; category: string; assignedToId: string | null; recipientEmail: string | null; collaboratorIds: string[] }>) => {
     setUpdating(true)
     try {
       const res = await fetch(`/api/tickets/${id}`, {
@@ -425,6 +427,21 @@ export default function TicketDetailPage() {
                   />
                 ) : (
                   <p className="text-sm text-[var(--color-text)]">{data.assignedTo?.name ?? 'Sin asignar'}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-text-subtle)] mb-1">Colaboradores</p>
+                {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') ? (
+                  <UserMultiSelect
+                    users={users}
+                    selectedIds={(data.collaborators ?? []).map(c => c.user.id)}
+                    onChange={ids => handleUpdate({ collaboratorIds: ids })}
+                    excludeId={data.assignedToId}
+                  />
+                ) : (data.collaborators?.length ?? 0) > 0 ? (
+                  <AvatarStack size="xs" people={(data.collaborators ?? []).map(c => c.user)} />
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--color-text-subtle)' }}>Nadie más</p>
                 )}
               </div>
               <div>

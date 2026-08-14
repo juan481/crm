@@ -3,14 +3,17 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { SLA_HOURS } from '@/lib/tickets'
 import { fireWebhook } from '@/lib/webhooks'
+import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
+import { ticketInvolvesUser } from '@/lib/assignment-scope'
 
 export const dynamic = 'force-dynamic'
 
 const INCLUDE = {
   client:     { select: { id: true, name: true } },
   empresa:    { select: { id: true, name: true } },
-  assignedTo: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true, avatarUrl: true } },
   createdBy:  { select: { id: true, name: true } },
+  collaborators: { select: { user: { select: { id: true, name: true, avatarUrl: true } } } },
   _count:     { select: { messages: true } },
 }
 
@@ -34,22 +37,27 @@ export async function GET(req: NextRequest) {
     const assignedToId = searchParams.get('assignedToId')
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
-    if (payload.role === 'TECHNICIAN') {
-      where.assignedToId = payload.userId
-    } else if (assignedToId) {
-      where.assignedToId = assignedToId
-    }
     if (status)    where.status    = status
     if (priority)  where.priority  = priority
     if (category)  where.category  = category
     if (clientId)  where.clientId  = clientId
     if (empresaId) where.empresaId = empresaId
+
+    // "¿de quién es este ticket?" — asignado principal O colaborador (ver
+    // assignment-scope.ts). TECHNICIAN sólo ve lo suyo, sin importar qué
+    // pida por query param; el resto puede pedir explícitamente "lo de X".
+    const scopeUserId = payload.role === 'TECHNICIAN' ? payload.userId : assignedToId
+    const andConditions: Record<string, unknown>[] = []
+    if (scopeUserId) andConditions.push(ticketInvolvesUser(scopeUserId))
     if (search.length >= 2) {
-      where.OR = [
-        { title:       { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ]
+      andConditions.push({
+        OR: [
+          { title:       { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      })
     }
+    if (andConditions.length) where.AND = andConditions
 
     const db = prisma as any
     const [tickets, total] = await Promise.all([
@@ -74,26 +82,35 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { title, description, priority, category, clientId, empresaId, assignedToId, recipientEmail, recipientName } = await req.json()
+    const { title, description, priority, category, clientId, empresaId, assignedToId, recipientEmail, recipientName, collaboratorIds } = await req.json()
     if (!title?.trim())       return NextResponse.json({ error: 'El título es requerido' },       { status: 400 })
     if (!description?.trim()) return NextResponse.json({ error: 'La descripción es requerida' },  { status: 400 })
 
     const db = prisma as any
+    // Colaboradores adicionales — opcional (ver TicketCollaborator), nunca
+    // duplica al asignado principal aunque venga repetido en la lista.
+    const collabIds: string[] = Array.isArray(collaboratorIds)
+      ? Array.from(new Set(collaboratorIds.filter((id: unknown) => typeof id === 'string' && id !== assignedToId)))
+      : []
 
     // Sin esto, clientId/empresaId/assignedToId de OTRA organización se
     // aceptaban igual — el ticket quedaba vinculado a un registro ajeno,
-    // expuesto vía los include de las rutas de lectura. Las 3 validaciones
+    // expuesto vía los include de las rutas de lectura. Las validaciones
     // son independientes entre sí (no depende una del resultado de otra),
-    // así que van en paralelo — antes eran 3 round-trips secuenciales,
+    // así que van en paralelo — antes eran round-trips secuenciales,
     // pagando el costo completo de cada uno uno atrás del otro.
-    const [client, empresa, assignee] = await Promise.all([
+    const [client, empresa, assignee, validCollaborators] = await Promise.all([
       clientId    ? db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } }) : null,
       empresaId   ? db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } }) : null,
       assignedToId ? db.user.findFirst({ where: { id: assignedToId, organizationId: payload.orgId }, select: { id: true } }) : null,
+      collabIds.length ? db.user.findMany({ where: { id: { in: collabIds }, organizationId: payload.orgId }, select: { id: true } }) : null,
     ])
     if (clientId && !client)         return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
     if (empresaId && !empresa)       return NextResponse.json({ error: 'Empresa no encontrada en esta organización' }, { status: 400 })
     if (assignedToId && !assignee)   return NextResponse.json({ error: 'Usuario no encontrado en esta organización' }, { status: 400 })
+    if (collabIds.length && (validCollaborators?.length ?? 0) !== collabIds.length) {
+      return NextResponse.json({ error: 'Alguno de los colaboradores no pertenece a esta organización' }, { status: 400 })
+    }
 
     const priorityValue = priority || 'MEDIA'
     const ticketData = {
@@ -109,6 +126,7 @@ export async function POST(req: NextRequest) {
       createdById:    payload.userId,
       organizationId: payload.orgId,
       slaDueAt:       new Date(Date.now() + SLA_HOURS[priorityValue] * 60 * 60 * 1000),
+      ...(collabIds.length && { collaborators: { create: collabIds.map((userId) => ({ userId })) } }),
     }
 
     // Retry on race condition (P2002 unique constraint on number+orgId)
@@ -127,6 +145,11 @@ export async function POST(req: NextRequest) {
       } catch (err: any) {
         if (err.code !== 'P2002' || attempt === 4) throw err
       }
+    }
+
+    for (const userId of collabIds) {
+      if (userId === payload.userId) continue
+      notifyCollaboratorAdded({ userId, orgId: payload.orgId, kind: 'ticket', title: ticket.title, entityId: ticket.id })
     }
 
     fireWebhook(payload.orgId, 'ticket.created', {
