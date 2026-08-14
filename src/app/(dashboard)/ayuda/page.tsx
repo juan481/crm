@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Presentation } from 'lucide-react'
+import { Presentation, Sparkles } from 'lucide-react'
+import { useAuthStore } from '@/store/auth-store'
 
 type Tab = 'equipo' | 'admin'
 
@@ -169,6 +170,7 @@ const TOC_EQUIPO = [
   { id: 'e13', label: 'Documentos' },
   { id: 'e14', label: 'RRHH y asistencia' },
   { id: 'e15', label: 'Mi Perfil' },
+  { id: 'e16', label: 'Usar desde el celular' },
 ]
 
 const TOC_ADMIN = [
@@ -184,6 +186,17 @@ const TOC_ADMIN = [
 
 export default function AyudaPage() {
   const [tab, setTab] = useState<Tab>('equipo')
+  const { user } = useAuthStore()
+  // La pestaña de administración muestra cómo configurar/gestionar TODA la
+  // organización (usuarios, marca, seguridad, panel de permisos) — no es
+  // contenido para mostrarle a un Vendedor o Técnico. Antes esta página no
+  // miraba el rol del usuario en absoluto: cualquiera podía clickear el
+  // botón y leerla igual. Ahora el botón ni siquiera se renderiza para
+  // quien no es Admin/Super Admin, y el contenido en sí también valida el
+  // rol antes de mostrarse (por si el estado quedara en 'admin' de otra
+  // forma) — nunca se cae a mostrar ese contenido a un rol sin permiso.
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const showAdminTab = tab === 'admin' && isAdmin
 
   return (
     <div className="min-h-full">
@@ -198,16 +211,18 @@ export default function AyudaPage() {
         >
           Para el equipo
         </button>
-        <button
-          onClick={() => setTab('admin')}
-          className={`flex-1 max-w-[220px] text-center px-4 py-2.5 rounded-xl text-[13.5px] font-bold transition-all ${
-            tab === 'admin'
-              ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-500'
-              : 'text-text-subtle bg-surface border border-border'
-          }`}
-        >
-          Para Administradores
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setTab('admin')}
+            className={`flex-1 max-w-[220px] text-center px-4 py-2.5 rounded-xl text-[13.5px] font-bold transition-all ${
+              tab === 'admin'
+                ? 'text-white bg-gradient-to-br from-indigo-500 to-violet-500'
+                : 'text-text-subtle bg-surface border border-border'
+            }`}
+          >
+            Para Administradores
+          </button>
+        )}
       </div>
 
       <div className="max-w-[780px] mx-auto px-4 lg:px-6 pt-6 pb-24">
@@ -223,21 +238,32 @@ export default function AyudaPage() {
             <p className="text-[12px] font-bold tracking-[0.09em] uppercase text-text-subtle m-0 mb-1.5">JustCRM · by JustCreate</p>
             <h1 className="text-[28px] font-bold text-text m-0 tracking-tight text-balance">Documentación del sistema</h1>
           </div>
-          <Link
-            href="/ayuda/presentacion"
-            className="shrink-0 hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-          >
-            <Presentation size={15} />
-            Ver en presentación
-          </Link>
+          <div className="shrink-0 hidden sm:flex flex-col items-end gap-1.5">
+            <Link
+              href="/ayuda/presentacion"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+            >
+              <Presentation size={15} />
+              Ver en presentación
+            </Link>
+            <a
+              href="/presentacion-completa.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              <Sparkles size={12} />
+              Presentación completa (extendida)
+            </a>
+          </div>
         </header>
         <p className="max-w-[62ch] text-[16px] text-text-muted mb-6">
           Cómo funciona el CRM, explicado en simple — como parte del equipo que lo usa día a día, y como quien lo administra.
           Elegí arriba la pestaña que corresponda; cada una tiene su propio índice para ir directo a lo que necesitás.
         </p>
 
-        {tab === 'equipo' ? (
+        {!showAdminTab ? (
           <div>
             <Toc items={TOC_EQUIPO} />
 
@@ -342,6 +368,16 @@ export default function AyudaPage() {
                 Excel de una sola vez. Cada cliente tiene su propia ficha con línea de tiempo de actividad, y el tipo de servicio se
                 elige de una lista que se completa sola a medida que se van cargando distintos tipos entre todos los clientes.
               </P>
+              <H3>Datos fiscales</H3>
+              <P>
+                Cada ficha tiene CUIT, condición frente al IVA (Responsable Inscripto, Monotributo, Exento, etc.) y forma de pago
+                habitual — se cargan una vez y quedan a mano para cuando hace falta facturar o coordinar un cobro.
+              </P>
+              <H3>Vendedor asignado</H3>
+              <P>
+                Si tu equipo comercial tiene más de una persona, cada cliente se puede asignar a un vendedor puntual — esa persona
+                lo va a ver en su propia lista de Clientes sin mezclarse con la de sus compañeros.
+              </P>
             </Section>
 
             <Section id="e5" n={5} title="Pipeline" lede="Oportunidades comerciales, en formato tablero.">
@@ -396,22 +432,19 @@ export default function AyudaPage() {
                   ['Teléfono', 'No'],
                 ]}
               />
+              <Note tag="Notas de auditoría">
+                Una nota que se guarda en la ficha de una empresa, oportunidad o contacto (tipo &quot;Cliente moroso&quot; o &quot;No
+                vender sin adelanto&quot;) queda protegida apenas se crea — nadie puede borrarla después, ni siquiera quien la
+                escribió. Es a propósito: una vez que algo importante queda registrado, tiene que seguir ahí.
+              </Note>
             </Section>
 
             <Section id="e9" n={9} title="Comunicaciones" lede="Campañas de email a listas propias, con freno de seguridad incluido.">
               <P>
-                Se arma una campaña (asunto, cuerpo, con plantillas reutilizables) y se elige a quién va, de la base de contactos
-                de campaña de la organización. El envío es por tandas para no saturar nada, y cada destinatario queda marcado como
-                enviado, rebotado o dado de baja.
+                Se arma una campaña (asunto, cuerpo, con plantillas reutilizables) y se elige a quién va: clientes, empresas del
+                Directorio, sus contactos, o los tres combinados sin duplicados. El envío es por tandas para no saturar nada, y cada
+                destinatario queda marcado como enviado, abierto, rebotado o dado de baja.
               </P>
-              <div className="rounded-xl px-4 py-3.5 my-4 bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/25">
-                <span className="block text-[11px] font-bold tracking-[0.06em] uppercase text-amber-700 dark:text-amber-400 mb-1.5">Ojo, esto no es lo mismo que el Directorio</span>
-                <p className="text-[14px] text-text-muted m-0">
-                  Los contactos de Empresas/Directorio <b>no</b> se pueden usar como destinatarios de una campaña — son bases
-                  separadas hoy. Para escribirle a un contacto del Directorio, se usa el botón &quot;Enviar Email&quot; puntual desde
-                  la ficha de su Empresa (uno por uno, no una campaña masiva).
-                </p>
-              </div>
               <H3>Límite mensual</H3>
               <P>
                 Cada organización tiene un tope de emails de campaña por mes (no afecta cotizaciones ni mensajes puntuales a
@@ -465,8 +498,24 @@ export default function AyudaPage() {
               <P>Tema claro u oscuro (esta misma documentación respeta esa preferencia), datos de tu cuenta, y cambio de contraseña.</P>
             </Section>
 
+            <Section id="e16" n={16} title="Usar desde el celular" lede="Se instala como una app, sin pasar por ninguna tienda.">
+              <P>
+                El sistema se puede &quot;instalar&quot; en el celular como una app más — queda con su propio ícono y se abre a
+                pantalla completa, sin la barra del navegador. Pensado especialmente para <b>Técnico</b>, que entra directo a{' '}
+                <b>Mi Día</b> para fichar y ver sus tareas sin tener que buscar la página cada vez.
+              </P>
+              <FieldTable
+                head={['Dispositivo', 'Cómo se instala']}
+                rows={[
+                  ['Android / Chrome', 'Aparece la opción "Instalar app" sola, o desde el menú del navegador.'],
+                  ['iPhone / Safari', 'Botón Compartir → "Agregar a pantalla de inicio".'],
+                ]}
+              />
+            </Section>
+
             <footer className="mt-11 pt-4.5 border-t border-border text-[12.5px] text-text-subtle">
-              JustCRM — documentación de uso. Cambiá a &quot;Para Administradores&quot; arriba si necesitás configurar o gestionar el sistema.
+              JustCRM — documentación de uso.
+              {isAdmin && ' Cambiá a "Para Administradores" arriba si necesitás configurar o gestionar el sistema.'}
             </footer>
           </div>
         ) : (
@@ -489,6 +538,14 @@ export default function AyudaPage() {
                 cambiarle el rol a otra persona o tocar Marca y Plugins. El detalle función-por-función de cada rol está en la
                 sección 2 de &quot;Para el equipo&quot;.
               </P>
+              <H3>Panel de Permisos</H3>
+              <P>
+                Desde <b>Configuración → Permisos</b>, Super Admin puede ajustar qué módulos ve cada rol en el menú, módulo por
+                módulo — sin tocar código. Es <b>aditivo sobre lo anterior, nunca lo supera</b>: el panel sólo puede sacarle a un rol
+                algo del menú, nunca darle acceso a algo que el sistema ya le bloquea por su nivel (por ejemplo, nunca se le puede
+                dar Facturación a un Técnico desde ahí — ese piso es fijo). Super Admin tampoco es editable ahí, a propósito: siempre
+                tiene que quedar al menos una cuenta con acceso a todo.
+              </P>
             </Section>
 
             <Section id="a2" n={2} title="Gestión de usuarios" lede="Alta, baja y permisos de tu equipo.">
@@ -504,6 +561,11 @@ export default function AyudaPage() {
                 <>Ícono de bloqueo → confirmar.</>,
                 <>La persona no puede volver a entrar hasta que se la reactive de la misma forma.</>,
               ]} />
+              <Note tag="Para probar el sistema como Vendedor, Técnico o RRHH">
+                Creá un usuario de prueba con ese rol acá mismo (Paso A) — vos elegís el email y la contraseña en el momento, no hace
+                falta ningún correo de invitación. Después abrís una ventana aparte (o incógnito) y entrás con esas credenciales para
+                ver exactamente lo que ve esa persona. Se puede borrar cuando termines de probar.
+              </Note>
             </Section>
 
             <Section id="a3" n={3} title="Marca" lede="Cómo se ve tu empresa en lo que reciben tus clientes.">
