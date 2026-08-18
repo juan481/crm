@@ -225,6 +225,7 @@ model Organization {
   clients                 Client[]
   plugins                 PluginConfig[]
   modulePermissions       ModulePermission[]
+  whatsAppConversations   WhatsAppConversation[]
   emailCampaigns          EmailCampaign[]
   emailTemplates          EmailTemplate[]
   services                Service[]
@@ -557,6 +558,67 @@ model ModulePermission {
 
   @@unique([organizationId, moduleId, role])
   @@index([organizationId])
+}
+
+// ─── Bot de WhatsApp con IA ("NISSI" para Abba, genérico para cualquier org)
+// Plugin whatsapp-ai-bot (ver src/plugins/definitions.ts) — separado a
+// propósito del plugin whatsapp-integration (que sólo manda mensajes salientes
+// desde la ficha de contacto): son features independientes que una org puede
+// activar por separado, aunque en la práctica compartan el mismo número.
+enum WhatsAppConversationStatus {
+  ACTIVE // la IA sigue respondiendo
+  HANDED_OFF // se derivó a un humano (ticket o deal creado) — la IA no vuelve a responder sola
+  CLOSED // conversación inactiva, se retoma desde cero si el cliente vuelve a escribir
+}
+
+model WhatsAppConversation {
+  id             String                     @id @default(cuid())
+  organizationId String
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // phone_number_id de Meta que recibió el mensaje — el webhook es UNO SOLO
+  // compartido por todas las organizaciones (así lo pide la Cloud API), este
+  // campo es lo único que permite saber a qué organización pertenece cada
+  // mensaje entrante. Ver resolveOrgByPhoneNumberId en src/lib/whatsapp-bot.
+  phoneNumberId  String
+  // wa_id del cliente final (E.164 sin "+"), no un id nuestro.
+  customerPhone  String
+  customerName   String?
+  status         WhatsAppConversationStatus @default(ACTIVE)
+  // Todo lo que la IA fue completando durante la charla (nombre, mail,
+  // dirección, filtro de ventas/técnico respondido, etc.) — Json en vez de
+  // columnas fijas porque el cuestionario de Abba todavía tiene huecos sin
+  // cerrar (ver memoria abba-bot-whatsapp-ia-spec) y el set de datos va a
+  // seguir cambiando sin pedir una migración cada vez.
+  collectedData  Json?
+  // A quién se derivó ('VENTAS' | 'SOPORTE' | 'ADMINISTRACION'), sólo texto
+  // libre para mostrar en el CRM — no gobierna ninguna lógica por sí solo.
+  handedOffTo    String?
+  ticketId       String?
+  dealId         String?
+  lastMessageAt  DateTime                   @default(now())
+  createdAt      DateTime                   @default(now())
+  messages       WhatsAppMessage[]
+
+  @@unique([organizationId, customerPhone])
+  @@index([organizationId, status])
+  @@index([phoneNumberId])
+}
+
+model WhatsAppMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  // 'user' | 'assistant' — mismo vocabulario que la Messages API de
+  // Anthropic, se reconstruye el historial mandándolo tal cual.
+  role           String
+  content        String               @db.Text
+  // Id de Meta en mensajes entrantes — evita procesar el mismo webhook dos
+  // veces si Meta reintenta la entrega (pasa seguido). Null en los mensajes
+  // que genera la IA (salen de acá hacia Meta, no al revés).
+  waMessageId    String?              @unique
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 // ─── Communications ────────────────────────────────────────────────────────
