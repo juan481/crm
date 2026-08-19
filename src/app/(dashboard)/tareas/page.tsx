@@ -28,6 +28,12 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   URGENTE: 'danger',
 }
 
+// Mismo criterio que la lista de Tickets (ya rediseñada) — Title Case en
+// vez del enum crudo en mayúsculas ("URGENTE" se leía como un grito).
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  BAJA: 'Baja', MEDIA: 'Media', ALTA: 'Alta', URGENTE: 'Urgente',
+}
+
 const PRIORITY_OPTIONS = [
   { value: 'BAJA', label: 'Baja' },
   { value: 'MEDIA', label: 'Media' },
@@ -290,7 +296,7 @@ export default function TareasPage() {
                         variant={PRIORITY_COLORS[task.priority] as 'neutral' | 'info' | 'warning' | 'danger'}
                         size="sm"
                       >
-                        {task.priority}
+                        {PRIORITY_LABELS[task.priority]}
                       </Badge>
                       {overdue && (
                         <Badge variant="danger" size="sm" dot>Vencida</Badge>

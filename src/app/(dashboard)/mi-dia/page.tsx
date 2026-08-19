@@ -28,6 +28,12 @@ const PRIORITY_BADGE: Record<TaskPriority, 'neutral' | 'info' | 'warning' | 'dan
   BAJA: 'neutral', MEDIA: 'info', ALTA: 'warning', URGENTE: 'danger',
 }
 
+// Mismo criterio que la lista de Tickets/Tareas — Title Case en vez del
+// enum crudo en mayúsculas.
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  BAJA: 'Baja', MEDIA: 'Media', ALTA: 'Alta', URGENTE: 'Urgente',
+}
+
 const TICKET_STATUS_CONFIG = {
   ABIERTO:    { label: 'Abierto',     variant: 'danger'  as const, dot: true },
   EN_PROCESO: { label: 'En proceso',  variant: 'warning' as const, dot: true },
@@ -149,7 +155,7 @@ export default function MiDiaPage() {
   })
 
   // Open tickets assigned to me — two fetches for multi-status + server-side assignee filter
-  const { data: ticketsData, isLoading: loadingTickets } = useQuery<Ticket[]>({
+  const { data: ticketsData, isLoading: loadingTickets, isError: isErrorTickets } = useQuery<Ticket[]>({
     queryKey: ['my-tickets', user?.id],
     queryFn: async () => {
       const uid = user?.id ?? ''
@@ -346,7 +352,7 @@ export default function MiDiaPage() {
                         <span className={`text-sm font-medium ${task.status === 'HECHA' ? 'line-through text-[var(--color-text-subtle)]' : 'text-[var(--color-text)]'}`}>
                           {task.title}
                         </span>
-                        <Badge variant={PRIORITY_BADGE[task.priority]} size="sm">{task.priority}</Badge>
+                        <Badge variant={PRIORITY_BADGE[task.priority]} size="sm">{PRIORITY_LABELS[task.priority]}</Badge>
                         {overdue && <Badge variant="danger" size="sm" dot>Vencida</Badge>}
                       </div>
                       {task.description && (
@@ -389,6 +395,13 @@ export default function MiDiaPage() {
           </Button>
         </div>
 
+        {isErrorTickets && (
+          <div className="flex items-center gap-3 p-4 rounded-xl text-sm mb-2" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+            <AlertTriangle size={16} />
+            Error al cargar los datos. Intentá de nuevo.
+          </div>
+        )}
+
         {loadingTickets ? (
           <div className="space-y-2">
             {[1, 2].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -430,7 +443,7 @@ export default function MiDiaPage() {
                           <User size={9} />{ticket.client.name}
                         </span>
                       )}
-                      <span className="text-[10px] text-[var(--color-text-subtle)]">{ticket.category}</span>
+                      <span className="text-[10px] text-[var(--color-text-subtle)]">{CATEGORY_OPTIONS.find(o => o.value === ticket.category)?.label ?? ticket.category}</span>
                     </div>
                   </div>
                 </div>
