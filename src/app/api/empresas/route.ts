@@ -14,6 +14,12 @@ const SELECT = {
   // edición sepa mostrar el dueño actual; no se filtra por esto salvo que
   // venga ?scope=cartera (ver GET más abajo).
   ownerId: true,
+  // Bug real encontrado en auditoría: faltaban acá aunque ya se escriben
+  // en el POST de más abajo y se leen en GET /api/empresas/[id] (que usa
+  // su propio SELECT) — la respuesta de "crear empresa" nunca traía de
+  // vuelta el CUIT/condición de IVA/forma de pago recién cargados, aunque
+  // sí habían quedado guardados en la DB.
+  cuit: true, condicionIva: true, formaPagoHabitual: true,
   createdAt: true, updatedAt: true,
   _count: { select: { contactos: true } },
 }

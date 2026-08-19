@@ -42,17 +42,40 @@ function buildOriginLabel(ref: AdReferral): string {
   return ref.headline ? `Facebook/Instagram Ads - ${ref.headline}` : 'Anuncio de WhatsApp (Facebook/Instagram Ads)'
 }
 
+// Bug real encontrado en auditoría: nada en el código escribía nunca
+// `CLOSED`, así que un handoff (Ticket/Deal creado) dejaba ese número
+// taponado PARA SIEMPRE — cualquier mensaje futuro, sea en 5 minutos o en 3
+// meses, sea sobre lo mismo o algo totalmente distinto, sólo recibía el
+// mensaje enlatado de "ya derivamos" sin que la IA volviera a intervenir
+// nunca, contradiciendo la propia promesa de ese mensaje ("si es algo
+// nuevo, contámelo"). Se resuelve chequeando si el Ticket/Deal que motivó
+// el handoff ya se cerró del lado humano — si es así, se considera "el caso
+// terminó" y se reabre la charla de cero para lo que venga.
+async function isHandoffStillOpen(db: any, conversation: { ticketId: string | null; dealId: string | null }): Promise<boolean> {
+  if (conversation.ticketId) {
+    const ticket = await db.ticket.findUnique({ where: { id: conversation.ticketId }, select: { status: true } })
+    if (!ticket) return false // se borró — no hay nada que siga "abierto"
+    return ticket.status !== 'RESUELTO' && ticket.status !== 'CERRADO'
+  }
+  if (conversation.dealId) {
+    const deal = await db.deal.findUnique({ where: { id: conversation.dealId }, select: { stage: true } })
+    if (!deal) return false
+    return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO'
+  }
+  return false // handed off sin ticket ni deal asociado (no debería pasar) — no hay nada que bloquee
+}
+
 /** Punto de entrada del webhook para un mensaje de texto entrante — carga o
  *  crea la conversación, arma el historial, corre el loop de tool-calling
  *  contra Anthropic, y manda la respuesta final por WhatsApp. No relanza:
- *  si algo fallа a mitad de camino, el mensaje entrante ya quedó guardado
+ *  si algo falla a mitad de camino, el mensaje entrante ya quedó guardado
  *  (idempotencia por waMessageId) así que un reintento de Meta no duplica
  *  nada, aunque sí puede reprocesar sin respuesta si falló ANTES de
  *  guardarlo — ver el chequeo de duplicado más abajo. */
 export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promise<void> {
   const db = prisma as any
 
-  // Idempotencia: Meta reintenga la entrega del webhook si no contestamos
+  // Idempotencia: Meta reintenta la entrega del webhook si no contestamos
   // 200 a tiempo — si ya procesamos este waMessageId, no lo procesamos de
   // nuevo (evita mandar la respuesta duplicada o crear el ticket dos veces).
   const already = await db.whatsAppMessage.findUnique({ where: { waMessageId: msg.waMessageId }, select: { id: true } })
@@ -110,13 +133,22 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   })
   await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } })
 
-  // Ya se derivó a un humano — NISSI no vuelve a opinar sola en esta
-  // charla (evita pisar lo que un humano ya está resolviendo). Sólo avisa
-  // que ya hay alguien viendo el caso.
+  // Ya se derivó a un humano — NISSI no vuelve a opinar sola MIENTRAS ese
+  // caso siga abierto (evita pisar lo que un humano ya está resolviendo).
   if (conversation.status === 'HANDED_OFF') {
-    await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone,
-      'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
-    return
+    const stillOpen = await isHandoffStillOpen(db, conversation)
+    if (stillOpen) {
+      const sent = await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone,
+        'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
+      if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar el aviso de "ya derivado"', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
+      return
+    }
+    // El caso ya se cerró del lado humano — se reabre de cero, mismo
+    // criterio que una conversación CLOSED.
+    conversation = await db.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null },
+    })
   }
 
   const history = await db.whatsAppMessage.findMany({
@@ -143,7 +175,18 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     let response: Anthropic.Message
     try {
       response = await anthropic.messages.create({
-        model: MODEL, max_tokens: MAX_TOKENS, system, messages, tools: WHATSAPP_BOT_TOOLS,
+        // Una vez derivado, no se le vuelve a ofrecer ninguna herramienta —
+        // bug real encontrado en auditoría: antes el modelo seguía teniendo
+        // el toolset completo disponible en la vuelta "extra" que se le da
+        // para redactar el texto de confirmación, y podía terminar
+        // invocando OTRA herramienta de handoff (ej. create_support_ticket
+        // Y create_sales_lead en la misma respuesta, o de nuevo en la
+        // vuelta siguiente) — como ticketId/dealId son campos escalares que
+        // cada llamada pisa, el primer Ticket/Deal creado quedaba huérfano
+        // (existe, ya se le avisó al humano, pero la conversación sólo
+        // apunta al segundo).
+        model: MODEL, max_tokens: MAX_TOKENS, system, messages,
+        ...(handedOff ? {} : { tools: WHATSAPP_BOT_TOOLS }),
       })
     } catch (err) {
       console.error('[NISSI ENGINE] Anthropic error', err)
@@ -161,6 +204,13 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
 
     const toolResults: Anthropic.ToolResultBlockParam[] = []
     for (const block of toolUseBlocks) {
+      if (handedOff) {
+        // Ya se derivó con una herramienta anterior DENTRO de esta misma
+        // vuelta — no ejecutamos una segunda (mismo bug de arriba, pero la
+        // variante de "dos tool_use en la misma respuesta de Claude").
+        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Esta conversación ya se derivó a un humano — no hace falta crear otro registro.' })
+        continue
+      }
       try {
         const result = await runWhatsAppBotTool(block.name, block.input as Record<string, unknown>, {
           orgId: msg.orgId, conversationId: conversation.id, customerPhone: msg.customerPhone, botConfig: msg.botConfig,
@@ -176,8 +226,9 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
 
     if (handedOff && !finalText) {
       // El modelo puede cortar en tool_use sin texto final en la misma
-      // vuelta — le damos UNA vuelta más para que redacte la confirmación,
-      // pero si ya se derivó no hace falta seguir loopeando de más.
+      // vuelta — le damos UNA vuelta más para que redacte la confirmación
+      // (sin tools disponibles, ver arriba), pero si ya se derivó no hace
+      // falta seguir loopeando de más.
       continue
     }
     if (handedOff) break
@@ -190,5 +241,11 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   await db.whatsAppMessage.create({ data: { conversationId: conversation.id, role: 'assistant', content: finalText } })
-  await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone, finalText)
+  // Bug real encontrado en auditoría: este resultado se descartaba sin
+  // chequear `ok` — si Meta rechaza el envío (token vencido, ventana de
+  // 24hs de servicio al cliente cerrada, número bloqueado, rate limit),
+  // el cliente se quedaba sin la respuesta Y sin ningún rastro en logs de
+  // que eso había pasado.
+  const sent = await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone, finalText)
+  if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar la respuesta final', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
 }

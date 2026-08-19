@@ -50,6 +50,16 @@ export async function POST(req: NextRequest) {
       clienteDesde:    primary.clienteDesde || secondary.clienteDesde || null,
       monthlyAmount:   inheritBilling ? secondary.monthlyAmount : primary.monthlyAmount,
       billingCurrency: inheritBilling ? (secondary.billingCurrency || 'USD') : primary.billingCurrency,
+      // Bug real encontrado en auditoría: estos 4 campos (agregados en la
+      // Fase 6/4 del panel de permisos + ficha fiscal) nunca se sumaron acá
+      // — un merge borraba la secundaria sin haber copiado su CUIT/condición
+      // de IVA/forma de pago/vendedor asignado a la principal si la
+      // principal no los tenía, perdiéndolos sin aviso ni forma de
+      // recuperarlos.
+      cuit:              primary.cuit              || secondary.cuit              || null,
+      condicionIva:      primary.condicionIva      || secondary.condicionIva      || null,
+      formaPagoHabitual: primary.formaPagoHabitual || secondary.formaPagoHabitual || null,
+      ownerId:           primary.ownerId           || secondary.ownerId           || null,
     }
 
     // Todo lo que cuelga de la secundaria se reasigna a la principal ANTES

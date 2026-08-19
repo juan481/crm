@@ -2,6 +2,26 @@ import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
+// Bug real encontrado en auditoría: `buildEmailHtml` interpola `subject`/
+// `body` sin escapar HTML (helper preexistente, usado en varios lugares del
+// proyecto con texto tipeado por usuarios del CRM ya logueados). Acá el
+// `heading`/`bodyText` vienen en última instancia de lo que un CLIENTE le
+// pide a la IA por WhatsApp que anote (título/descripción del ticket o
+// resumen del lead) — un canal externo no autenticado. Sin escapar, un
+// cliente podría lograr que NISSI anote algo con markup (ej. un link o un
+// `<img onerror=...>`) que termine renderizado como HTML vivo en el mail
+// que abre el técnico/vendedor. Se escapa acá, en el borde donde este texto
+// entra a un email, en vez de tocar `buildEmailHtml` (que otros call sites
+// del proyecto podrían depender de su comportamiento actual).
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // Mismo patrón que notifyCollaboratorAdded (src/lib/collaborator-notifications.ts):
 // waitUntil en vez de fire-and-forget a secas, porque en serverless de
 // Vercel una promesa no esperada puede cortarse a mitad de camino apenas se
@@ -29,8 +49,8 @@ async function doNotifyHuman(opts: {
 
   const orgName = org?.name || org?.crmName || 'CRM'
   const html = buildEmailHtml(
-    opts.heading,
-    `Hola${opts.toName ? ' ' + opts.toName : ''},\n\n${opts.bodyText}`,
+    escapeHtml(opts.heading),
+    `Hola${opts.toName ? ' ' + opts.toName : ''},\n\n${escapeHtml(opts.bodyText)}`,
     orgName,
     org?.primaryColor || '#6366f1',
     org?.secondaryColor || '#8b5cf6',
@@ -44,6 +64,7 @@ async function doNotifyHuman(opts: {
   })
 }
 
+// waitUntil, no fire-and-forget — mismo motivo que notifyCollaboratorAdded.
 export function notifyHuman(opts: {
   orgId: string
   toEmail: string

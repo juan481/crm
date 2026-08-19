@@ -455,9 +455,19 @@ export default function TareaDetailPage() {
               Guardar
             </Button>
           )}
-          <Button size="sm" variant="danger" onClick={handleDelete} disabled={deleting} leftIcon={<Trash2 size={13} />}>
-            Eliminar
-          </Button>
+          {(user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') && (
+            // Bug real encontrado en auditoría: este botón se mostraba a
+            // cualquiera que pudiera ver la tarea (ej. un TECHNICIAN con la
+            // suya propia abierta desde Mi Día) aunque el backend
+            // (DELETE /api/tareas/[id]) exige ADMIN+ — la lista /tareas SÍ
+            // ocultaba el botón con este mismo chequeo (canDelete), pero el
+            // detalle no lo replicaba. Antes: click → confirm() nativo → recién
+            // ahí el 403, un dead-end de UX que sugiere una capacidad que no
+            // existe.
+            <Button size="sm" variant="danger" onClick={handleDelete} disabled={deleting} leftIcon={<Trash2 size={13} />}>
+              Eliminar
+            </Button>
+          )}
         </div>
       </div>
 

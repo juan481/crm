@@ -28,7 +28,16 @@ export async function sendWhatsAppBotMessage(
     })
     if (!res.ok) {
       const errJson = await res.json().catch(() => null) as { error?: { message?: string } } | null
-      return { ok: false, error: errJson?.error?.message || `WhatsApp devolvió un error (HTTP ${res.status})` }
+      const error = errJson?.error?.message || `WhatsApp devolvió un error (HTTP ${res.status})`
+      // Bug real encontrado en auditoría: esta rama no logueaba nada — sólo
+      // el catch de excepción de red de abajo lo hacía. Un error HTTP de la
+      // Cloud API (token vencido, ventana de 24hs de servicio al cliente
+      // cerrada, número bloqueado, rate limit) quedaba completamente sin
+      // rastro, aunque el caller ahora chequee `ok` (ver engine.ts) —
+      // loguear acá también para que cualquier caller futuro que no lo
+      // chequee no deje esto mudo.
+      console.error('[NISSI SEND] WhatsApp Cloud API respondió error', { status: res.status, error, phoneNumberId })
+      return { ok: false, error }
     }
     return { ok: true }
   } catch (err) {

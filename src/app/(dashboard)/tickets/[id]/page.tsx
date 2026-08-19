@@ -397,21 +397,29 @@ export default function TicketDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-[var(--color-text-subtle)] mb-1">Prioridad</p>
-                <Select
-                  options={PRIORITY_OPTIONS}
-                  value={data.priority}
-                  onChange={e => handleUpdate({ priority: e.target.value })}
-                  disabled={updating}
-                />
+                {user?.role !== 'TECHNICIAN' ? (
+                  <Select
+                    options={PRIORITY_OPTIONS}
+                    value={data.priority}
+                    onChange={e => handleUpdate({ priority: e.target.value })}
+                    disabled={updating}
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--color-text)]">{PRIORITY_OPTIONS.find(o => o.value === data.priority)?.label ?? data.priority}</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-[var(--color-text-subtle)] mb-1">Categoría</p>
-                <Select
-                  options={CATEGORY_OPTIONS}
-                  value={data.category}
-                  onChange={e => handleUpdate({ category: e.target.value })}
-                  disabled={updating}
-                />
+                {user?.role !== 'TECHNICIAN' ? (
+                  <Select
+                    options={CATEGORY_OPTIONS}
+                    value={data.category}
+                    onChange={e => handleUpdate({ category: e.target.value })}
+                    disabled={updating}
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--color-text)]">{CATEGORY_OPTIONS.find(o => o.value === data.category)?.label ?? data.category}</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-[var(--color-text-subtle)] mb-1">Asignado a</p>
