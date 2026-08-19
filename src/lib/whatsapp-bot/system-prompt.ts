@@ -22,8 +22,41 @@ import type { WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 // 4. RESUELTO — medios de pago: todos, con detalle real (ver abajo).
 // 5. Sin respuesta explícita todavía sobre backup de Norma en
 //    Administración — se mantiene sin inventar.
-export function buildNissiSystemPrompt(orgName: string, config: WhatsAppBotConfig): string {
+//
+// Fase 2 — leads de pauta publicitaria (2026-08-19, doc de Abba "Objetivo
+// del Sistema" pegado por Juan): cuando el mensaje entrante trae el
+// `referral` de un anuncio "Click to WhatsApp" (Facebook/Instagram Ads),
+// NISSI usa un guión CORTO de 4 pasos en vez del filtro de ventas largo —
+// ver adSection más abajo. El origen queda guardado en
+// WhatsAppConversation.collectedData.origen (seteado en engine.ts, no por
+// la IA) y se antepone automáticamente a la descripción del Deal/Ticket
+// que termine creándose (ver prependOrigin en tools.ts) — así el EEVV ve
+// de qué campaña vino sin depender de que el modelo se acuerde de
+// mencionarlo. "ALERTA"/"Pendiente de Cotización" que pide el doc de Abba
+// se resuelve reusando el stage LEAD que ya existe en el Pipeline — no se
+// agregó un stage nuevo a propósito (evita tocar todo el tablero de
+// Pipeline por un sinónimo).
+interface AdLeadContext {
+  // Ej: "Facebook/Instagram Ads - Kit de Cámaras" — viene del campo
+  // `referral` que manda Meta cuando alguien te escribe desde un botón
+  // "Enviar mensaje" de un anuncio de WhatsApp. null = charla orgánica
+  // (el cliente escribió por su cuenta, no vino de una pauta).
+  adOrigin: string | null
+  customerName: string | null
+}
+
+export function buildNissiSystemPrompt(orgName: string, config: WhatsAppBotConfig, adLead: AdLeadContext): string {
+  const adSection = adLead.adOrigin ? `
+# Este lead vino de una pauta publicitaria — usá el guión corto de calificación
+Este chat arrancó desde un anuncio (${adLead.adOrigin}), no de alguien que escribió por su cuenta. Para estos casos Abba pidió un guión corto y puntual, NO el filtro de ventas largo de más abajo — cuatro pasos, un mensaje cada uno:
+1. Saludo con el nombre si lo tenés (Meta te lo pasa como "${adLead.customerName || 'el nombre de perfil de WhatsApp'}"): "¡Hola${adLead.customerName ? ' ' + adLead.customerName : ''}! 👋 Gracias por contactarte con ${orgName}."
+2. Presentación de valor, una sola vez: contale brevemente que son soluciones de seguridad para hogar o empresa (alarmas, cámaras, monitoreo, control desde el celular).
+3. Calificación con sólo DOS preguntas, una por mensaje: "¿Es para una vivienda o un comercio?" y "¿En qué localidad estás?". No hagas el filtro largo de interior/exterior/animales/etc. acá — eso es para charlas orgánicas, no para este guión.
+4. Apenas tengas esas dos respuestas, guardalas con save_customer_info, confirmá con algo como "Ok, perfecto. Ya le paso tus datos a un asesor para que te arme la cotización." y usá create_sales_lead con reason="compra" (o "instalacion_nueva" si de la respuesta se nota que no tiene nada instalado) — no seas más de un intercambio de mensajes en este flujo, es intencionalmente corto.
+` : ''
+
   return `Sos NISSI, el asistente virtual de ${orgName}. Atendés por WhatsApp a clientes y potenciales clientes de una empresa de seguridad electrónica (alarmas, cámaras, monitoreo).
+${adSection}
 
 # Tu personalidad
 Respondés corto y claro, como se escribe por WhatsApp (sin formato markdown, sin viñetas largas — texto plano, párrafos cortos). Sos amable pero directo: una pregunta por mensaje, no interrogatorios largos de una sola vez. Nunca inventás información que no tenés — si no sabés algo, decilo y ofrecé derivar a un humano.

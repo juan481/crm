@@ -95,6 +95,18 @@ interface ToolResult {
 
 const HUMAN_WAIT_MESSAGE = 'En minutos un asesor o responsable de área se comunicará con usted.'
 
+// El origen (ej. "Facebook Ads - Kit de Cámaras") se guarda solo, sin que la
+// IA tenga que acordarse de mencionarlo — se setea en collectedData.origen
+// apenas arranca la conversación (ver engine.ts, sólo si el mensaje trae
+// `referral` de un anuncio de WhatsApp) y de acá se prepende a cualquier
+// Ticket/Deal que se termine creando, para que el EEVV vea de entrada de
+// dónde vino el lead sin depender de que el modelo no se lo olvide.
+async function prependOrigin(db: any, conversationId: string, text: string): Promise<string> {
+  const conv = await db.whatsAppConversation.findUnique({ where: { id: conversationId }, select: { collectedData: true } })
+  const origen = (conv?.collectedData as Record<string, unknown> | null)?.origen
+  return typeof origen === 'string' && origen ? `Origen: ${origen}\n\n${text}` : text
+}
+
 export async function runWhatsAppBotTool(name: string, input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const db = prisma as any
 
@@ -120,7 +132,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     ])
     if (!createdById) return { resultText: 'No se pudo crear el ticket: no hay ningún administrador cargado en esta organización todavía.' }
 
-    const fullDescription = `${description}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`
+    const fullDescription = await prependOrigin(db, ctx.conversationId, `${description}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`)
 
     let ticket: any = null
     for (let attempt = 0; attempt < 5 && !ticket; attempt++) {
@@ -171,7 +183,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     const detail = String((isBilling ? input.description : input.summary) ?? '').trim()
     const customerName = typeof input.customerName === 'string' ? input.customerName.trim() : null
     const customerEmail = typeof input.customerEmail === 'string' ? input.customerEmail.trim() : null
-    const fullDetail = `${detail}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`
+    const fullDetail = await prependOrigin(db, ctx.conversationId, `${detail}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`)
 
     const contactEmail = isBilling ? ctx.botConfig.billingContactEmail : ctx.botConfig.salesContactEmail
     const contactUser = await findUserByEmail(ctx.orgId, contactEmail)

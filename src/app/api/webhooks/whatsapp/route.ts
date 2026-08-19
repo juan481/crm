@@ -56,6 +56,10 @@ interface MetaMessage {
   id: string
   type: string
   text?: { body: string }
+  // Presente sólo cuando el mensaje viene de un botón "Enviar mensaje" de
+  // un anuncio de WhatsApp (Facebook/Instagram Ads, "Click to WhatsApp") —
+  // ver Fase 2 del embudo publicitario, memoria abba-bot-whatsapp-ia-spec.
+  referral?: { headline?: string; source_type?: string }
 }
 interface MetaChangeValue {
   metadata: { phone_number_id: string }
@@ -122,6 +126,7 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
           text: m.text.body,
           waMessageId: m.id,
           botConfig: resolved.config,
+          adReferral: m.referral ? { headline: m.referral.headline, sourceType: m.referral.source_type } : null,
         })
       }
     }

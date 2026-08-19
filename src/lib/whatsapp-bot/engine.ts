@@ -17,6 +17,15 @@ const MAX_TOKENS = 1024
 // un loop si el modelo se cuelga pidiendo la misma herramienta.
 const MAX_TOOL_ROUNDS = 6
 
+// Cuando el mensaje llega desde un anuncio "Click to WhatsApp" (Facebook/
+// Instagram Ads), Meta manda este objeto adentro del mensaje — es la forma
+// de saber, sin preguntarle nada al cliente, de qué publicación vino
+// (ver Fase 2 del embudo publicitario, memoria abba-bot-whatsapp-ia-spec).
+export interface AdReferral {
+  headline?: string
+  sourceType?: string
+}
+
 interface IncomingMessage {
   orgId: string
   orgName: string
@@ -26,6 +35,11 @@ interface IncomingMessage {
   text: string
   waMessageId: string
   botConfig: WhatsAppBotConfig
+  adReferral?: AdReferral | null
+}
+
+function buildOriginLabel(ref: AdReferral): string {
+  return ref.headline ? `Facebook/Instagram Ads - ${ref.headline}` : 'Anuncio de WhatsApp (Facebook/Instagram Ads)'
 }
 
 /** Punto de entrada del webhook para un mensaje de texto entrante — carga o
@@ -47,12 +61,14 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   let conversation = await db.whatsAppConversation.findUnique({
     where: { organizationId_customerPhone: { organizationId: msg.orgId, customerPhone: msg.customerPhone } },
   })
+  const originLabel = msg.adReferral ? buildOriginLabel(msg.adReferral) : null
   if (!conversation) {
     conversation = await db.whatsAppConversation.create({
       data: {
         organizationId: msg.orgId, phoneNumberId: msg.phoneNumberId,
         customerPhone: msg.customerPhone, customerName: msg.customerName,
         status: 'ACTIVE',
+        ...(originLabel && { collectedData: { origen: originLabel } }),
       },
     })
   } else if (conversation.status === 'CLOSED') {
@@ -60,7 +76,15 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     // (no tiene sentido arrastrar el contexto de una charla ya cerrada).
     conversation = await db.whatsAppConversation.update({
       where: { id: conversation.id },
-      data: { status: 'ACTIVE', collectedData: null, ticketId: null, dealId: null, handedOffTo: null },
+      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null },
+    })
+  } else if (originLabel && !(conversation.collectedData as Record<string, unknown> | null)?.origen) {
+    // Conversación activa que todavía no tenía origen guardado (ej. el
+    // cliente escribió una vez sin venir de un anuncio, y ahora sí) — lo
+    // sumamos sin pisar el resto de collectedData ya juntado.
+    conversation = await db.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: { collectedData: { ...(conversation.collectedData as Record<string, unknown> | null ?? {}), origen: originLabel } },
     })
   }
 
@@ -84,8 +108,12 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     select: { role: true, content: true },
   })
 
+  const adOrigin = (conversation.collectedData as Record<string, unknown> | null)?.origen
   const anthropic = new Anthropic({ apiKey: msg.botConfig.anthropicApiKey })
-  const system = buildNissiSystemPrompt(msg.orgName, msg.botConfig)
+  const system = buildNissiSystemPrompt(msg.orgName, msg.botConfig, {
+    adOrigin: typeof adOrigin === 'string' ? adOrigin : null,
+    customerName: msg.customerName,
+  })
   const messages: Anthropic.MessageParam[] = history.map((h: { role: string; content: string }) => ({
     role: h.role === 'assistant' ? 'assistant' : 'user',
     content: h.content,
