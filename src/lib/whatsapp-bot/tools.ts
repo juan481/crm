@@ -119,8 +119,13 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
   }
 
   if (name === 'create_support_ticket') {
-    const title = String(input.title ?? 'Consulta de soporte por WhatsApp').trim()
-    const description = String(input.description ?? '').trim()
+    // `??` no cubre el caso de que el modelo mande un string vacío (""),
+    // sólo null/undefined — a diferencia de POST /api/tickets (que rechaza
+    // título/descripción vacíos con 400), acá no hay quien devuelva ese
+    // error, así que se resuelve con un fallback en vez de crear un ticket
+    // en blanco.
+    const title = (String(input.title ?? '').trim() || 'Consulta de soporte por WhatsApp')
+    const description = (String(input.description ?? '').trim() || 'Sin detalle — revisar la conversación completa en el CRM.')
     const urgent = input.urgent === true
     const priority = urgent ? 'ALTA' : 'MEDIA'
     const customerName = typeof input.customerName === 'string' ? input.customerName.trim() : null
@@ -179,8 +184,8 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
 
   if (name === 'create_sales_lead' || name === 'create_billing_ticket') {
     const isBilling = name === 'create_billing_ticket'
-    const title = String(input.title ?? (isBilling ? 'Consulta de facturación por WhatsApp' : 'Lead de ventas por WhatsApp')).trim()
-    const detail = String((isBilling ? input.description : input.summary) ?? '').trim()
+    const title = (String(input.title ?? '').trim() || (isBilling ? 'Consulta de facturación por WhatsApp' : 'Lead de ventas por WhatsApp'))
+    const detail = (String((isBilling ? input.description : input.summary) ?? '').trim() || 'Sin detalle — revisar la conversación completa en el CRM.')
     const customerName = typeof input.customerName === 'string' ? input.customerName.trim() : null
     const customerEmail = typeof input.customerEmail === 'string' ? input.customerEmail.trim() : null
     const fullDetail = await prependOrigin(db, ctx.conversationId, `${detail}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`)

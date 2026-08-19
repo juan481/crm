@@ -63,14 +63,31 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   })
   const originLabel = msg.adReferral ? buildOriginLabel(msg.adReferral) : null
   if (!conversation) {
-    conversation = await db.whatsAppConversation.create({
-      data: {
-        organizationId: msg.orgId, phoneNumberId: msg.phoneNumberId,
-        customerPhone: msg.customerPhone, customerName: msg.customerName,
-        status: 'ACTIVE',
-        ...(originLabel && { collectedData: { origen: originLabel } }),
-      },
-    })
+    try {
+      conversation = await db.whatsAppConversation.create({
+        data: {
+          organizationId: msg.orgId, phoneNumberId: msg.phoneNumberId,
+          customerPhone: msg.customerPhone, customerName: msg.customerName,
+          status: 'ACTIVE',
+          ...(originLabel && { collectedData: { origen: originLabel } }),
+        },
+      })
+    } catch (err: any) {
+      // Dos mensajes del mismo cliente casi simultáneos pueden llegar como
+      // dos invocaciones del webhook en paralelo (Meta no los agrupa
+      // siempre en un solo POST) — la segunda choca contra el
+      // @@unique([organizationId, customerPhone]) porque la primera ya
+      // creó la fila microsegundos antes. Sin este catch, esa segunda
+      // ejecución explotaba silenciosamente (el error sólo se logueaba en
+      // el .catch del waitUntil del webhook) y ese mensaje del cliente se
+      // guardaba pero JAMÁS recibía respuesta. Se resuelve releyendo la
+      // fila que la otra ejecución ya creó, y siguiendo normal con esa.
+      if (err.code !== 'P2002') throw err
+      conversation = await db.whatsAppConversation.findUnique({
+        where: { organizationId_customerPhone: { organizationId: msg.orgId, customerPhone: msg.customerPhone } },
+      })
+      if (!conversation) throw err
+    }
   } else if (conversation.status === 'CLOSED') {
     // Charla vieja que se retoma — vuelve a ACTIVE, arranca de cero
     // (no tiene sentido arrastrar el contexto de una charla ya cerrada).

@@ -61,6 +61,28 @@ interface MetaMessage {
   // ver Fase 2 del embudo publicitario, memoria abba-bot-whatsapp-ia-spec.
   referral?: { headline?: string; source_type?: string }
 }
+
+// Todavía no sabemos "leer" fotos/audios/documentos (no hay vision/transcripción
+// acá) — pero el propio filtro técnico de Abba le pide al cliente mandar una
+// captura de pantalla ("pedile una captura si no ve cámaras"), así que ESTO VA A
+// PASAR seguido. Antes esto se ignoraba en silencio (el cliente mandaba la
+// captura pedida y no recibía nada de vuelta, parecía que el bot se había
+// colgado). Ahora se lo convierte en un mensaje de texto sintético y se lo
+// procesa igual que cualquier otro — así la IA se mantiene al tanto de que
+// algo llegó y puede reaccionar en contexto (ej. derivar a un técnico en vez
+// de insistir con la misma pregunta).
+function describeNonTextMessage(type: string): string {
+  const labels: Record<string, string> = {
+    image: 'una imagen o captura de pantalla',
+    audio: 'un audio de voz',
+    document: 'un documento/archivo',
+    video: 'un video',
+    sticker: 'un sticker',
+    location: 'su ubicación',
+    contacts: 'una tarjeta de contacto',
+  }
+  return `[El cliente envió ${labels[type] ?? 'un mensaje que no podés leer directamente (tipo: ' + type + ')'} — no podés verlo/escucharlo. Si estabas esperando justo eso (ej. le pediste una captura), agradecele y avisale que se lo vas a dejar a un humano para que lo revise; si no, pedile que te lo resuma en un mensaje de texto corto.]`
+}
 interface MetaChangeValue {
   metadata: { phone_number_id: string }
   contacts?: { profile?: { name?: string }; wa_id: string }[]
@@ -114,7 +136,8 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
       const orgName = org?.name || org?.crmName || 'nuestra empresa'
 
       for (const m of messages) {
-        if (m.type !== 'text' || !m.text?.body) continue // por ahora sólo texto — audio/imagen/documento quedan sin contestar
+        const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type)
+        if (!text) continue // texto vacío de verdad (raro, pero no hay nada que contestar)
         const contact = value.contacts?.find((c) => c.wa_id === m.from)
 
         await handleIncomingWhatsAppMessage({
@@ -123,7 +146,7 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
           phoneNumberId,
           customerPhone: m.from,
           customerName: contact?.profile?.name ?? null,
-          text: m.text.body,
+          text,
           waMessageId: m.id,
           botConfig: resolved.config,
           adReferral: m.referral ? { headline: m.referral.headline, sourceType: m.referral.source_type } : null,
