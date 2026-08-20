@@ -53,6 +53,22 @@ export function AppShell({ user, branding, children }: AppShellProps) {
     if (branding) loadBranding(branding)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Presencia real — una vez por sesión de navegador (se resetea al cerrar
+  // la pestaña/navegador, no en cada click interno). Existe para capturar a
+  // todo el equipo que YA estaba logueado de antes de que este feature
+  // existiera: sin esto, esas cuentas nunca iban a mostrar "última vez"
+  // hasta un logout/login manual — no tiene sentido pedirle eso a todo un
+  // equipo. type:'SEEN' (no es un login real) para no mezclarlo con
+  // ingresos/salidas explícitos en el historial detallado.
+  useEffect(() => {
+    if (sessionStorage.getItem('crm-presence-logged')) return
+    sessionStorage.setItem('crm-presence-logged', '1')
+    fetch('/api/auth/log-login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'SEEN' }),
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Protect restricted roles from accessing routes outside their allowed list
   useEffect(() => {
     const allowed  = ROLE_ALLOWED_PREFIXES[user.role]

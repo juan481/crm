@@ -17,7 +17,10 @@ import type { Asistencia } from '@/types'
 
 interface LoginEventRow {
   id: string
-  type: 'LOGIN' | 'LOGOUT'
+  // 'SEEN' = presencia detectada dentro de la app (AppShell), no un login
+  // explícito por el formulario — existe para capturar gente que ya
+  // estaba logueada de antes de que este feature existiera.
+  type: 'LOGIN' | 'LOGOUT' | 'SEEN'
   ipAddress: string | null
   createdAt: string
 }
@@ -332,8 +335,12 @@ export default function EmpleadoRrhhPage() {
               <div key={ev.id} className="flex items-center gap-2.5 text-sm py-1">
                 {ev.type === 'LOGIN'
                   ? <LogIn size={13} style={{ color: '#10b981' }} />
-                  : <LogOut size={13} style={{ color: 'var(--color-text-subtle)' }} />}
-                <span style={{ color: 'var(--color-text)' }}>{ev.type === 'LOGIN' ? 'Entró' : 'Salió'}</span>
+                  : ev.type === 'LOGOUT'
+                    ? <LogOut size={13} style={{ color: 'var(--color-text-subtle)' }} />
+                    : <ShieldCheck size={13} style={{ color: 'var(--color-primary)' }} />}
+                <span style={{ color: 'var(--color-text)' }}>
+                  {ev.type === 'LOGIN' ? 'Entró' : ev.type === 'LOGOUT' ? 'Salió' : 'Activo en el sistema'}
+                </span>
                 <span style={{ color: 'var(--color-text-subtle)' }}>
                   {new Date(ev.createdAt).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   {' · '}{timeAgo(ev.createdAt)}
