@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, CheckCircle, AlertCircle, Clock, AlertTriangle, Pencil, Calendar,
+  ArrowLeft, CheckCircle, AlertCircle, Clock, AlertTriangle, Pencil, Calendar, LogIn, LogOut, ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,15 @@ import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Avatar } from '@/components/ui/avatar'
 import { useThemeStore } from '@/store/theme-store'
 import { getRoleLabel } from '@/lib/role-labels'
+import { timeAgo } from '@/lib/utils'
 import type { Asistencia } from '@/types'
+
+interface LoginEventRow {
+  id: string
+  type: 'LOGIN' | 'LOGOUT'
+  ipAddress: string | null
+  createdAt: string
+}
 import toast from 'react-hot-toast'
 
 function formatHora(dt: string | null): string {
@@ -69,6 +77,22 @@ export default function EmpleadoRrhhPage() {
     },
     staleTime: 30_000,
   })
+
+  // Log real de accesos (login/logout) — independiente del fichaje, no se
+  // puede falsear porque se escribe server-side en el momento exacto del
+  // login/logout (ver /api/auth/log-login y /api/auth/logout). Pedido
+  // explícito: "el dueño quiere saber cuándo entra y sale cada usuario, por
+  // si le dicen 'no fiché'".
+  const { data: loginEventsData } = useQuery({
+    queryKey: ['login-events', userId],
+    queryFn:  async () => {
+      const r = await fetch(`/api/login-events?userId=${userId}&limit=30`)
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as LoginEventRow[]
+    },
+    staleTime: 30_000,
+  })
+  const loginEvents = loginEventsData ?? []
 
   const records  = (data ?? []).sort((a, b) => b.fecha.localeCompare(a.fecha))
   const empleado = records[0]?.user
@@ -289,6 +313,36 @@ export default function EmpleadoRrhhPage() {
           </table>
         </div>
       )}
+
+      {/* Accesos reales — log objetivo de login/logout, distinto del
+          fichaje (que el empleado puede simplemente no tocar). */}
+      <div className="rounded-2xl overflow-hidden p-4"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <h2 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+          <ShieldCheck size={15} /> Accesos reales al sistema
+        </h2>
+        <p className="text-xs mb-3" style={{ color: 'var(--color-text-subtle)' }}>
+          Cuándo entró y salió de verdad del CRM (no depende de que haya fichado).
+        </p>
+        {loginEvents.length === 0 ? (
+          <p className="text-sm py-2" style={{ color: 'var(--color-text-subtle)' }}>Todavía no hay accesos registrados.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-72 overflow-y-auto">
+            {loginEvents.map(ev => (
+              <div key={ev.id} className="flex items-center gap-2.5 text-sm py-1">
+                {ev.type === 'LOGIN'
+                  ? <LogIn size={13} style={{ color: '#10b981' }} />
+                  : <LogOut size={13} style={{ color: 'var(--color-text-subtle)' }} />}
+                <span style={{ color: 'var(--color-text)' }}>{ev.type === 'LOGIN' ? 'Entró' : 'Salió'}</span>
+                <span style={{ color: 'var(--color-text-subtle)' }}>
+                  {new Date(ev.createdAt).toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {' · '}{timeAgo(ev.createdAt)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Edit modal */}
       <Modal open={!!editRecord} onClose={() => setEditRecord(null)} title="Editar registro" size="sm">

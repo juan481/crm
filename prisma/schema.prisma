@@ -243,6 +243,7 @@ model Organization {
   directorioContactoNotas DirectorioContactoNota[]
   cotizaciones            Cotizacion[]
   asistencias             Asistencia[]
+  loginEvents             LoginEvent[]
   suppressions            EmailSuppression[]
   emailUsage              EmailUsageMonthly[]
   memberships             OrganizationMembership[]
@@ -323,6 +324,7 @@ model User {
   directorioContactoNotas DirectorioContactoNota[]
   cotizaciones            Cotizacion[]
   asistencias             Asistencia[]
+  loginEvents             LoginEvent[]
   memberships             OrganizationMembership[]
 
   @@index([organizationId])
@@ -1190,6 +1192,27 @@ model Asistencia {
   @@index([organizationId])
   @@index([userId])
   @@index([fecha])
+}
+
+// Log real de accesos al CRM — independiente del fichaje (Asistencia, que es
+// un botón que el empleado puede simplemente no tocar). Se escribe server-side
+// en el momento exacto de un login/logout exitoso (no client-side, para que
+// no se pueda falsear) — ver POST /api/auth/log-login y /api/auth/logout.
+// Pedido real: "el dueño quiere saber cuándo entra y sale cada usuario, por
+// si le dicen 'no fiché'" — esto es la respuesta objetiva a esa pregunta,
+// visible desde RRHH → ficha del empleado.
+model LoginEvent {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           String // 'LOGIN' | 'LOGOUT'
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, userId, createdAt])
 }
 
 // ─── Idempotencia de cron ──────────────────────────────────────────────────

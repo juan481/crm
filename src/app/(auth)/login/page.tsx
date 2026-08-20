@@ -80,6 +80,14 @@ function LoginForm() {
         return
       }
 
+      // Log de acceso real — server-side, no se puede falsear (a diferencia
+      // del fichaje). Pedido explícito: "el dueño quiere saber cuándo entra
+      // y sale cada usuario, por si le dicen 'no fiché'". Se espera (rápido,
+      // una sola llamada) ANTES del redirect para que no se cancele a mitad
+      // de camino por la navegación de página completa de acá abajo; si
+      // falla no bloquea el login en sí.
+      await fetch('/api/auth/log-login', { method: 'POST' }).catch(() => {})
+
       // Full page reload so the middleware and Server Components read the
       // new Supabase session cookie from scratch (router.push alone no alcanza en SSR)
       window.location.href = '/dashboard'
