@@ -15,6 +15,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { useThemeStore } from '@/store/theme-store'
 import { getRoleLabel } from '@/lib/role-labels'
 import { argentinaDayKey } from '@/lib/timezone'
+import { timeAgo } from '@/lib/utils'
 import type { Asistencia } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -54,16 +55,17 @@ function weekdaysElapsed(mes: string): number {
 }
 
 interface EmpleadoRow {
-  userId:    string
-  name:      string
-  role:      string
-  avatarUrl: string | null
-  presentes: number
-  ausentes:  number
-  tardanzas: number
-  sinFichar: number
-  pct:       number
-  records:   Asistencia[]
+  userId:     string
+  name:       string
+  role:       string
+  avatarUrl:  string | null
+  presentes:  number
+  ausentes:   number
+  tardanzas:  number
+  sinFichar:  number
+  pct:        number
+  records:    Asistencia[]
+  lastSeenAt: string | null
 }
 
 // Estado de HOY de un empleado, para el vistazo rápido de RRHH — separado
@@ -168,6 +170,22 @@ export default function RrhhPage() {
   const roster: Array<{ id: string; name: string; role: string; avatarUrl: string | null; status: string }> =
     (usersData?.data ?? []).filter((u: { status: string }) => u.status === 'ACTIVE')
 
+  // "Última vez" visible en el roster sin tener que entrar a cada ficha —
+  // pedido explícito de Juan. Un timestamp por persona (su acceso más
+  // reciente, sea login o logout); el historial completo sigue viviendo en
+  // la ficha individual (rrhh/[userId]).
+  const { data: lastSeenData } = useQuery({
+    queryKey: ['login-events-latest'],
+    queryFn:  async () => {
+      const r = await fetch('/api/login-events/latest')
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as Array<{ userId: string; lastSeenAt: string | null }>
+    },
+    staleTime: 30_000,
+  })
+  const lastSeenByUser: Record<string, string | null> = {}
+  for (const ls of lastSeenData ?? []) lastSeenByUser[ls.userId] = ls.lastSeenAt
+
   const records = data ?? []
   const totalWeekdays = weekdaysElapsed(mes)
 
@@ -175,13 +193,13 @@ export default function RrhhPage() {
   // then fold in whatever attendance records actually exist.
   const byUser: Record<string, EmpleadoRow> = {}
   for (const u of roster) {
-    byUser[u.id] = { userId: u.id, name: u.name, role: u.role, avatarUrl: u.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, sinFichar: 0, pct: 0, records: [] }
+    byUser[u.id] = { userId: u.id, name: u.name, role: u.role, avatarUrl: u.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, sinFichar: 0, pct: 0, records: [], lastSeenAt: lastSeenByUser[u.id] ?? null }
   }
   for (const r of records) {
     const uid  = r.userId
     const user = r.user
     if (!user) continue
-    if (!byUser[uid]) byUser[uid] = { userId: uid, name: user.name, role: user.role, avatarUrl: user.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, sinFichar: 0, pct: 0, records: [] }
+    if (!byUser[uid]) byUser[uid] = { userId: uid, name: user.name, role: user.role, avatarUrl: user.avatarUrl, presentes: 0, ausentes: 0, tardanzas: 0, sinFichar: 0, pct: 0, records: [], lastSeenAt: lastSeenByUser[uid] ?? null }
     byUser[uid].records.push(r)
     if (r.ausente)          byUser[uid].ausentes++
     else if (r.horaEntrada) byUser[uid].presentes++
@@ -377,7 +395,13 @@ export default function RrhhPage() {
                       )
                     })()}
                   </div>
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{getRoleLabel(e.role, vertical)}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    {getRoleLabel(e.role, vertical)}
+                    {' · '}
+                    {e.lastSeenAt
+                      ? <span title="Último acceso real al sistema (login/logout), no el fichaje">Última vez {timeAgo(e.lastSeenAt)}</span>
+                      : <span style={{ color: 'var(--color-text-subtle)' }}>Sin accesos registrados todavía</span>}
+                  </p>
                 </div>
                 <div className="flex items-center gap-6 shrink-0">
                   <div className="text-center hidden sm:block">
