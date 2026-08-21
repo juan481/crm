@@ -2,15 +2,23 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Clock, LogIn, LogOut, CheckCircle2 } from 'lucide-react'
+import { Clock, LogIn, LogOut, CheckCircle2, Plus, Home, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { argentinaDayKey } from '@/lib/timezone'
+import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 
 interface AsistenciaHoy {
   fecha: string
   horaEntrada: string | null
   horaSalida: string | null
   tardanza: boolean
+}
+interface TurnoHoy {
+  id: string
+  fecha: string
+  horaEntrada: string | null
+  horaSalida: string | null
+  esPrincipal: boolean
 }
 
 // Widget de fichaje visible en el header, para CUALQUIER rol en CUALQUIER
@@ -26,6 +34,7 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   const [hovering, setHovering] = useState(false)
   const [nudgeVisible, setNudgeVisible] = useState(false)
   const [autoNudgeFired, setAutoNudgeFired] = useState(false)
+  const [modalidad, setModalidad] = useState(MODALIDADES_FICHAJE[0])
   const ref = useRef<HTMLDivElement>(null)
 
   // argentinaDayKey, no toISOString (siempre UTC) — a la noche (hora
@@ -53,6 +62,23 @@ export function AttendanceWidget({ userId }: { userId: string }) {
     staleTime: 30_000,
   })
 
+  // Bloques (regular + extras) de hoy — necesario para saber si hay un
+  // bloque ABIERTO ahora mismo (sea el principal o un extra) y para poder
+  // ofrecer "+ Turno adicional" una vez que el principal ya cerró. Sin
+  // esto, `hoy` (el mirror en Asistencia) sólo sabe del bloque principal —
+  // sería imposible fichar/cerrar un segundo bloque desde acá.
+  const { data: turnosHoy, refetch: refetchTurnos } = useQuery({
+    queryKey: ['turnos-hoy', userId],
+    queryFn: async () => {
+      const r = await fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesCurrent}`)
+      if (!r.ok) return []
+      const turnos = ((await r.json()).data ?? []) as TurnoHoy[]
+      return turnos.filter(t => t.fecha.slice(0, 10) === hoyKey)
+    },
+    staleTime: 30_000,
+  })
+  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+
   useEffect(() => {
     const onClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', onClick)
@@ -77,19 +103,25 @@ export function AttendanceWidget({ userId }: { userId: string }) {
     // Invalida por prefijo — cubre este widget, Mi Día y Mi Asistencia
     // (cada uno con su propia queryKey) aunque estén montados en simultáneo.
     qc.invalidateQueries({ queryKey: ['asistencia-hoy'] })
+    qc.invalidateQueries({ queryKey: ['turnos-hoy'] })
     qc.invalidateQueries({ queryKey: ['mi-asistencia'] })
     qc.invalidateQueries({ queryKey: ['asistencia-rrhh'] })
+    qc.invalidateQueries({ queryKey: ['turnos-asistencia'] })
     refetch()
+    refetchTurnos()
   }
 
   const handleCheckIn = async () => {
     setBusy(true)
     try {
-      const res = await fetch('/api/asistencia/check-in', { method: 'POST' })
+      const res = await fetch('/api/asistencia/check-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modalidad }),
+      })
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshEverywhere(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error al fichar entrada'); return }
-      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : '✅ Entrada registrada')
+      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : json.esPrincipal ? '✅ Entrada registrada' : '✅ Turno adicional registrado')
       refreshEverywhere()
     } catch { toast.error('Error de conexión') }
     finally { setBusy(false) }
@@ -110,14 +142,18 @@ export function AttendanceWidget({ userId }: { userId: string }) {
 
   const formatHora = (dt: string | null) => dt ? new Date(dt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—'
 
-  const state: 'none' | 'in' | 'done' = !hoy?.horaEntrada ? 'none' : hoy.horaSalida ? 'done' : 'in'
+  // `openBlock` manda por sobre el mirror de Asistencia: si hay CUALQUIER
+  // bloque abierto (principal o extra), el botón tiene que ser "salida" —
+  // antes esto sólo miraba `hoy` (el principal), así que una vez que ese
+  // cerraba, no había forma de fichar/cerrar un segundo bloque desde acá.
+  const state: 'none' | 'in' | 'done' = openBlock ? 'in' : !hoy?.horaEntrada ? 'none' : 'done'
   const pillStyle =
     state === 'done' ? { background: 'rgba(16,185,129,0.12)', color: '#059669' } :
     state === 'in'   ? { background: 'rgba(99,102,241,0.12)', color: 'var(--color-primary)' } :
                         { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }
   const pillLabel =
     state === 'done' ? `Completo · ${formatHora(hoy?.horaEntrada ?? null)}-${formatHora(hoy?.horaSalida ?? null)}` :
-    state === 'in'   ? `En jornada · ${formatHora(hoy?.horaEntrada ?? null)}` :
+    state === 'in'   ? `En jornada · ${formatHora(openBlock?.horaEntrada ?? hoy?.horaEntrada ?? null)}` :
                         'Fichar'
 
   // Globito ("¿Ya fichaste hoy?") sólo tiene sentido si todavía no fichó —
@@ -166,28 +202,68 @@ export function AttendanceWidget({ userId }: { userId: string }) {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-64 rounded-2xl overflow-hidden z-50 p-4"
+          className="absolute right-0 top-full mt-1 w-72 rounded-2xl overflow-hidden z-50 p-4"
           style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' }}
         >
           <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Asistencia de hoy</p>
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
             {state === 'none' && 'Todavía no fichaste tu entrada.'}
-            {state === 'in' && `Entrada ${formatHora(hoy?.horaEntrada ?? null)}${hoy?.tardanza ? ' (con tardanza)' : ''} — jornada en curso.`}
+            {state === 'in' && `Entrada ${formatHora(openBlock?.horaEntrada ?? hoy?.horaEntrada ?? null)}${openBlock?.esPrincipal && hoy?.tardanza ? ' (con tardanza)' : ''} — jornada en curso${openBlock && !openBlock.esPrincipal ? ' (turno adicional)' : ''}.`}
             {state === 'done' && `Entrada ${formatHora(hoy?.horaEntrada ?? null)} · Salida ${formatHora(hoy?.horaSalida ?? null)}.`}
           </p>
-          {state !== 'done' && (
+
+          {state === 'none' && (
+            <>
+              <div className="flex gap-1.5 mb-2">
+                {MODALIDADES_FICHAJE.map(m => (
+                  <button key={m} onClick={() => setModalidad(m)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                    style={modalidad === m
+                      ? { background: 'var(--color-primary)', color: '#fff' }
+                      : { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                    {m === 'Presencial' ? <Home size={11} /> : <Briefcase size={11} />}{m}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleCheckIn}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-50 gradient-bg"
+              >
+                <LogIn size={14} />
+                {busy ? 'Guardando...' : 'Fichar entrada'}
+              </button>
+            </>
+          )}
+
+          {state === 'in' && (
             <button
-              onClick={state === 'none' ? handleCheckIn : handleCheckOut}
+              onClick={handleCheckOut}
               disabled={busy}
               className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-50 gradient-bg"
             >
-              {state === 'none' ? <LogIn size={14} /> : <LogOut size={14} />}
-              {busy ? 'Guardando...' : state === 'none' ? 'Fichar entrada' : 'Fichar salida'}
+              <LogOut size={14} />
+              {busy ? 'Guardando...' : 'Fichar salida'}
             </button>
           )}
+
           {state === 'done' && (
-            <div className="flex items-center gap-2 text-xs" style={{ color: '#059669' }}>
-              <CheckCircle2 size={14} /> Jornada completa
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs" style={{ color: '#059669' }}>
+                <CheckCircle2 size={14} /> Jornada completa
+              </div>
+              {/* Turno adicional/extra el mismo día — antes esto era
+                  imposible (el check-in tiraba 409 apenas había una entrada
+                  de hoy, sea cual sea el estado de su salida). El server ya
+                  sabe que esto es un extra (ver check-in/route.ts). */}
+              <button
+                onClick={handleCheckIn}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text)' }}
+              >
+                <Plus size={13} /> Turno adicional
+              </button>
             </div>
           )}
         </div>

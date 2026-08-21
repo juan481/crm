@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/store/auth-store'
 import { formatDate } from '@/lib/utils'
 import { argentinaDayKey } from '@/lib/timezone'
+import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 import type { Task, Ticket, TaskStatus, TaskPriority, TicketCategory } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -81,6 +82,7 @@ export default function MiDiaPage() {
   // Check-in widget state
   const [checkingIn,  setCheckingIn]  = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [modalidad,   setModalidad]   = useState(MODALIDADES_FICHAJE[0])
   // argentinaDayKey, no toISOString (siempre UTC) — ver src/lib/timezone.ts.
   const hoy = argentinaDayKey()
   const mesCurrent = hoy.slice(0, 7)
@@ -106,15 +108,38 @@ export default function MiDiaPage() {
     enabled: !!user?.id,
   })
 
+  // Bloques de hoy (regular + extras) — necesario para saber si hay un
+  // bloque ABIERTO ahora mismo, sea el principal o un adicional. Sin esto,
+  // una vez que el principal cerraba (asistenciaHoy.horaSalida ya seteado)
+  // no había forma de fichar/cerrar un segundo turno el mismo día — era
+  // justo el bug real reportado por Gabriel Guias.
+  const { data: turnosHoy, refetch: refetchTurnos } = useQuery({
+    queryKey: ['turnos-hoy', user?.id],
+    queryFn: async () => {
+      const r = await fetch(`/api/asistencia/turnos?userId=${user?.id}&mes=${mesCurrent}`)
+      if (!r.ok) return []
+      const turnos = ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
+      return turnos.filter(t => t.fecha.slice(0, 10) === hoy)
+    },
+    staleTime: 30_000,
+    enabled: !!user?.id,
+  })
+  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+
+  const refreshAsistencia = () => { refetchAsistencia(); refetchTurnos() }
+
   const handleCheckIn = async () => {
     setCheckingIn(true)
     try {
-      const res  = await fetch('/api/asistencia/check-in', { method: 'POST' })
+      const res  = await fetch('/api/asistencia/check-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modalidad }),
+      })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); refetchAsistencia(); return }
+      if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
-      toast.success(json.tardanza ? '⚠️ Entrada con tardanza' : '✅ Entrada registrada')
-      refetchAsistencia()
+      toast.success(json.tardanza ? '⚠️ Entrada con tardanza' : json.esPrincipal ? '✅ Entrada registrada' : '✅ Turno adicional registrado')
+      refreshAsistencia()
     } catch { toast.error('Error de conexión') }
     finally { setCheckingIn(false) }
   }
@@ -124,10 +149,10 @@ export default function MiDiaPage() {
     try {
       const res  = await fetch('/api/asistencia/check-out', { method: 'POST' })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); refetchAsistencia(); return }
+      if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(`Hasta luego! ${json.horasTrabajadas}`)
-      refetchAsistencia()
+      refreshAsistencia()
     } catch { toast.error('Error de conexión') }
     finally { setCheckingOut(false) }
   }
@@ -268,33 +293,48 @@ export default function MiDiaPage() {
       </div>
 
       {/* ── Check-in widget ──────────────────────────────────────────────── */}
-      <div className="surface rounded-2xl p-4 flex items-center gap-4"
-        style={{ border: asistenciaHoy?.horaSalida ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--color-border)' }}>
+      <div className="surface rounded-2xl p-4 flex items-center gap-4 flex-wrap"
+        style={{ border: asistenciaHoy?.horaSalida && !openBlock ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--color-border)' }}>
         <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: asistenciaHoy?.horaSalida ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.1)' }}>
-          {asistenciaHoy?.horaSalida
-            ? <CheckCircle size={20} style={{ color: '#10b981' }} />
-            : asistenciaHoy?.horaEntrada
-              ? <LogOut size={20} style={{ color: 'var(--color-primary)' }} />
+          style={{ background: openBlock ? 'rgba(99,102,241,0.1)' : asistenciaHoy?.horaSalida ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.1)' }}>
+          {openBlock
+            ? <LogOut size={20} style={{ color: 'var(--color-primary)' }} />
+            : asistenciaHoy?.horaSalida
+              ? <CheckCircle size={20} style={{ color: '#10b981' }} />
               : <LogIn size={20} style={{ color: 'var(--color-primary)' }} />
           }
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
-            {asistenciaHoy?.horaSalida ? '¡Jornada completa!' : asistenciaHoy?.horaEntrada ? 'En jornada' : 'Asistencia'}
+            {openBlock ? (openBlock.esPrincipal ? 'En jornada' : 'En turno adicional') : asistenciaHoy?.horaSalida ? '¡Jornada completa!' : 'Asistencia'}
           </p>
           <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            {asistenciaHoy?.horaEntrada
-              ? `Entrada: ${formatHora(asistenciaHoy.horaEntrada)}${asistenciaHoy.horaSalida ? ` · Salida: ${formatHora(asistenciaHoy.horaSalida)}` : ''}`
-              : 'No registraste entrada hoy'
+            {openBlock
+              ? `Entrada: ${formatHora(openBlock.horaEntrada)}`
+              : asistenciaHoy?.horaEntrada
+                ? `Entrada: ${formatHora(asistenciaHoy.horaEntrada)}${asistenciaHoy.horaSalida ? ` · Salida: ${formatHora(asistenciaHoy.horaSalida)}` : ''}`
+                : 'No registraste entrada hoy'
             }
             {asistenciaHoy?.tardanza && <span className="ml-2" style={{ color: '#f59e0b' }}>Tardanza</span>}
           </p>
         </div>
-        {!asistenciaHoy?.horaSalida && (
-          asistenciaHoy?.horaEntrada
-            ? <Button size="sm" variant="outline" leftIcon={<LogOut size={13} />} onClick={handleCheckOut} loading={checkingOut}>Salida</Button>
-            : <Button size="sm" leftIcon={<LogIn size={13} />} onClick={handleCheckIn} loading={checkingIn}>Entrada</Button>
+        {openBlock ? (
+          <Button size="sm" variant="outline" leftIcon={<LogOut size={13} />} onClick={handleCheckOut} loading={checkingOut}>Salida</Button>
+        ) : asistenciaHoy?.horaSalida ? (
+          <Button size="sm" variant="outline" leftIcon={<Plus size={13} />} onClick={handleCheckIn} loading={checkingIn}>Turno adicional</Button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--color-border-strong)' }}>
+              {MODALIDADES_FICHAJE.map(m => (
+                <button key={m} onClick={() => setModalidad(m)}
+                  className="px-2 py-1.5 text-[11px] font-medium transition-all"
+                  style={modalidad === m ? { background: 'var(--color-primary)', color: '#fff' } : { background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>
+                  {m === 'Presencial' ? 'Presencial' : 'Pasivo'}
+                </button>
+              ))}
+            </div>
+            <Button size="sm" leftIcon={<LogIn size={13} />} onClick={handleCheckIn} loading={checkingIn}>Entrada</Button>
+          </div>
         )}
       </div>
 

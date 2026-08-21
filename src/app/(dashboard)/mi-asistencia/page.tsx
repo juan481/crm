@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogIn, LogOut, Clock, CheckCircle, AlertCircle, Calendar, AlertTriangle } from 'lucide-react'
+import { LogIn, LogOut, Clock, CheckCircle, AlertCircle, Calendar, AlertTriangle, Plus, Home, Briefcase } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import type { Asistencia } from '@/types'
 import { argentinaDayKey } from '@/lib/timezone'
+import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 import toast from 'react-hot-toast'
 
 function formatHora(dt: string | null): string {
@@ -58,6 +59,7 @@ export default function MiAsistenciaPage() {
   const [now, setNow] = useState(new Date())
   const [checkingIn,  setCheckingIn]  = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [modalidad,   setModalidad]   = useState(MODALIDADES_FICHAJE[0])
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -86,19 +88,44 @@ export default function MiAsistenciaPage() {
   const hoyRecord = historial.find(r => r.fecha.slice(0, 10) === hoy)
 
   const hasEntrada = !!hoyRecord?.horaEntrada
-  const hasSalida  = !!hoyRecord?.horaSalida
   const esTardanza = hoyRecord?.tardanza
   const esAusente  = hoyRecord?.ausente
+
+  // Bloques de hoy — sin esto, una vez que el principal cerraba
+  // (hoyRecord.horaSalida ya seteado) no había forma de fichar/cerrar un
+  // segundo turno el mismo día. `openBlock` manda por sobre el mirror de
+  // Asistencia para decidir si hay que mostrar "Registrar Salida".
+  const { data: turnosHoy, refetch: refetchTurnos } = useQuery({
+    queryKey: ['turnos-hoy', user?.id],
+    queryFn: async () => {
+      const r = await fetch(`/api/asistencia/turnos?userId=${user?.id}&mes=${mesActual()}`)
+      if (!r.ok) return []
+      const turnos = ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
+      return turnos.filter(t => t.fecha.slice(0, 10) === hoy)
+    },
+    staleTime: 30_000,
+    enabled: !!user?.id,
+  })
+  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+  const hasSalida = hasEntrada && !openBlock
+
+  const refreshAsistencia = () => {
+    qc.invalidateQueries({ queryKey: ['mi-asistencia', mesActual(), user?.id] })
+    refetchTurnos()
+  }
 
   const handleCheckIn = async () => {
     setCheckingIn(true)
     try {
-      const res  = await fetch('/api/asistencia/check-in', { method: 'POST' })
+      const res  = await fetch('/api/asistencia/check-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modalidad }),
+      })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); qc.invalidateQueries({ queryKey: ['mi-asistencia'] }); return }
+      if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
-      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : '✅ ¡Buenos días! Entrada registrada')
-      qc.invalidateQueries({ queryKey: ['mi-asistencia', mesActual(), user?.id] })
+      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : json.esPrincipal ? '✅ ¡Buenos días! Entrada registrada' : '✅ Turno adicional registrado')
+      refreshAsistencia()
     } catch { toast.error('Error de conexión') }
     finally { setCheckingIn(false) }
   }
@@ -108,10 +135,10 @@ export default function MiAsistenciaPage() {
     try {
       const res  = await fetch('/api/asistencia/check-out', { method: 'POST' })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); qc.invalidateQueries({ queryKey: ['mi-asistencia'] }); return }
+      if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(`Hasta luego! Trabajaste ${json.horasTrabajadas}`)
-      qc.invalidateQueries({ queryKey: ['mi-asistencia', mesActual(), user?.id] })
+      refreshAsistencia()
     } catch { toast.error('Error de conexión') }
     finally { setCheckingOut(false) }
   }
@@ -150,6 +177,15 @@ export default function MiAsistenciaPage() {
             <motion.div key="noEntrada" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-4">
               <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No registraste entrada hoy</p>
+              <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border-strong)' }}>
+                {MODALIDADES_FICHAJE.map(m => (
+                  <button key={m} onClick={() => setModalidad(m)}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-all"
+                    style={modalidad === m ? { background: 'var(--color-primary)', color: '#fff' } : { background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}>
+                    {m === 'Presencial' ? <Home size={12} /> : <Briefcase size={12} />}{m}
+                  </button>
+                ))}
+              </div>
               <Button size="lg" leftIcon={<LogIn size={18} />} onClick={handleCheckIn} loading={checkingIn}
                 className="px-8">
                 Registrar Entrada
@@ -160,9 +196,14 @@ export default function MiAsistenciaPage() {
               className="flex flex-col items-center gap-4">
               <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
                 <span className="flex items-center gap-1.5">
-                  <LogIn size={13} /> Entrada: <strong style={{ color: 'var(--color-text)' }}>{formatHora(hoyRecord?.horaEntrada ?? null)}</strong>
+                  <LogIn size={13} /> Entrada: <strong style={{ color: 'var(--color-text)' }}>{formatHora(openBlock?.horaEntrada ?? hoyRecord?.horaEntrada ?? null)}</strong>
                 </span>
-                {esTardanza && (
+                {openBlock && !openBlock.esPrincipal && (
+                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)' }}>
+                    Turno adicional
+                  </span>
+                )}
+                {openBlock?.esPrincipal && esTardanza && (
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
                     Tardanza
                   </span>
@@ -192,6 +233,14 @@ export default function MiAsistenciaPage() {
                   Tardanza registrada
                 </span>
               )}
+              {/* Turno adicional/extra el mismo día — antes era imposible
+                  (el check-in tiraba 409 apenas había una entrada de hoy).
+                  El server ya sabe que esto es un extra. */}
+              <button onClick={handleCheckIn} disabled={checkingIn}
+                className="flex items-center gap-1.5 text-xs font-medium mt-1 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                <Plus size={12} /> {checkingIn ? 'Guardando...' : 'Registrar turno adicional'}
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
