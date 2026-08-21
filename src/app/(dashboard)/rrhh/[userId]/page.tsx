@@ -13,7 +13,8 @@ import { Avatar } from '@/components/ui/avatar'
 import { useThemeStore } from '@/store/theme-store'
 import { getRoleLabel } from '@/lib/role-labels'
 import { timeAgo } from '@/lib/utils'
-import { argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
+import { argentinaDayKey, argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
+import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import type { Asistencia } from '@/types'
 
 interface LoginEventRow {
@@ -112,8 +113,10 @@ export default function EmpleadoRrhhPage() {
     setEditRecord(r)
     // Default del checkbox "cruza medianoche": si el registro YA tiene
     // entrada y salida en días calendario distintos, arranca marcado.
+    // Bug real encontrado en auditoría: comparar con .toISOString() compara
+    // el día en UTC, no en Argentina — ver el mismo fix en rrhh/page.tsx.
     const cruzaMedianoche = !!(r.horaEntrada && r.horaSalida &&
-      new Date(r.horaEntrada).toISOString().slice(0, 10) !== new Date(r.horaSalida).toISOString().slice(0, 10))
+      argentinaDayKey(new Date(r.horaEntrada)) !== argentinaDayKey(new Date(r.horaSalida)))
     setEditForm({
       ausente:       r.ausente,
       tardanza:      r.tardanza,
@@ -156,7 +159,11 @@ export default function EmpleadoRrhhPage() {
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success('Registro actualizado')
       qc.invalidateQueries({ queryKey: ['asistencia-empleado', userId, mes] })
-      qc.invalidateQueries({ queryKey: ['asistencia-rrhh', mes] })
+      // Bug real encontrado en auditoría: faltaba invalidar el resto de
+      // pantallas de fichaje (widget del header, Mi Día, Mi Asistencia,
+      // panel de Turnos) si el registro editado era el de HOY de esa
+      // persona.
+      invalidateFichaje(qc)
       setEditRecord(null)
     } catch { toast.error('Error de conexión') }
     finally { setSaving(false) }

@@ -58,9 +58,16 @@ export async function POST(req: NextRequest) {
         where: { id: payload.orgId },
         select: { attendanceStartTime: true, attendanceToleranceMinutes: true },
       })
-      const [startH, startM] = (org?.attendanceStartTime ?? '09:00').split(':').map(Number)
+      const [rawH, rawM] = (org?.attendanceStartTime ?? '09:00').split(':').map(Number)
+      // Bug real encontrado en auditoría: `startH || 9` reemplazaba
+      // silenciosamente un horario configurado como "00:xx" (turno que
+      // arranca a medianoche — plausible para guardias) por las 9am,
+      // porque 0 es falsy en JS. Con `Number.isFinite`, 0 es un horario
+      // válido y sólo se usa el default si el valor es NaN de verdad.
+      const startH = Number.isFinite(rawH) ? rawH : 9
+      const startM = Number.isFinite(rawM) ? rawM : 0
       const toleranceMin = org?.attendanceToleranceMinutes ?? 15
-      const horaCut = argentinaTimeToInstant(hoy, startH || 9, (startM || 0) + toleranceMin)
+      const horaCut = argentinaTimeToInstant(hoy, startH, startM + toleranceMin)
       tardanza = now > horaCut
     }
 

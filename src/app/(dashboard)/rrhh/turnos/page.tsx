@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MODALIDADES_FICHAJE, ETIQUETAS_TURNO } from '@/lib/asistencia-turnos'
+import { invalidateFichaje } from '@/lib/asistencia-query-keys'
+import { argentinaDayKey } from '@/lib/timezone'
 import toast from 'react-hot-toast'
 
 interface Turno {
@@ -104,7 +106,11 @@ export default function TurnosAsistenciaPage() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ ...EMPTY_FORM, entradaFecha: new Date().toISOString().slice(0, 10) })
+    // Bug real encontrado en auditoría: new Date().toISOString() usa el día
+    // en UTC, no en Argentina — entre las 21:00 y 23:59 hora Argentina esto
+    // precargaba la fecha de MAÑANA en vez de la de hoy, justo el horario
+    // más probable para cargar un turno nocturno olvidado.
+    setForm({ ...EMPTY_FORM, entradaFecha: argentinaDayKey() })
     setModalOpen(true)
   }
   const openEdit = (t: Turno) => {
@@ -121,6 +127,14 @@ export default function TurnosAsistenciaPage() {
   const handleSave = async () => {
     if (!editing && !form.userId) { toast.error('Elegí un empleado'); return }
     if (!form.entradaFecha) { toast.error('La fecha de entrada es requerida'); return }
+    // Bugs reales encontrados en auditoría: sin esto, se podía "crear" un
+    // bloque con fecha de entrada pero sin hora (columna Entrada quedaba
+    // "—" sin ningún aviso), o cargar una fecha de salida sin su hora (se
+    // descartaba en silencio, el bloque quedaba abierto como si no se
+    // hubiera tocado ese campo).
+    if (!form.entradaHora) { toast.error('La hora de entrada es requerida'); return }
+    if (form.salidaFecha && !form.salidaHora) { toast.error('Falta la hora de salida'); return }
+    if (form.salidaHora && !form.salidaFecha) { toast.error('Falta la fecha de salida'); return }
     setSaving(true)
     try {
       const body = editing
@@ -142,8 +156,7 @@ export default function TurnosAsistenciaPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(editing ? 'Bloque actualizado' : 'Bloque creado')
-      qc.invalidateQueries({ queryKey: ['turnos-asistencia'] })
-      qc.invalidateQueries({ queryKey: ['asistencia-rrhh'] })
+      invalidateFichaje(qc)
       setModalOpen(false)
     } catch { toast.error('Error de conexión') } finally { setSaving(false) }
   }
@@ -154,8 +167,7 @@ export default function TurnosAsistenciaPage() {
     const json = await res.json().catch(() => ({}))
     if (!res.ok) { toast.error(json.error ?? 'Error'); return }
     toast.success('Bloque eliminado')
-    qc.invalidateQueries({ queryKey: ['turnos-asistencia'] })
-    qc.invalidateQueries({ queryKey: ['asistencia-rrhh'] })
+    invalidateFichaje(qc)
   }
 
   return (
@@ -278,7 +290,15 @@ export default function TurnosAsistenciaPage() {
               options={[{ value: '', label: 'Seleccionar...' }, ...usuarios.map(u => ({ value: u.id, label: u.name }))]} />
           )}
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Fecha de entrada" type="date" value={form.entradaFecha} onChange={e => setForm(f => ({ ...f, entradaFecha: e.target.value }))} />
+            {/* Bug real encontrado en auditoría: este campo se mostraba
+                editable en modo edición, pero el PATCH del backend no
+                soporta mover un bloque a otro día — el cambio se
+                guardaba en el form y se descartaba en silencio al
+                grabar, sin ningún aviso. Ahora queda deshabilitado y
+                explícito en vez de prometer algo que no hace. */}
+            <Input label="Fecha de entrada" type="date" value={form.entradaFecha} disabled={!!editing}
+              onChange={e => setForm(f => ({ ...f, entradaFecha: e.target.value }))}
+              hint={editing ? 'Para cambiar el día, eliminá este bloque y creá uno nuevo' : undefined} />
             <Input label="Hora de entrada" type="time" value={form.entradaHora} onChange={e => setForm(f => ({ ...f, entradaHora: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">

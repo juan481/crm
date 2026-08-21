@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
-import { mirrorAsistencia, MODALIDADES_FICHAJE, ETIQUETAS_TURNO } from '@/lib/asistencia-turnos'
+import { mirrorAsistencia, MODALIDADES_FICHAJE, ETIQUETAS_TURNO, isValidHoraStr, isValidDateKey } from '@/lib/asistencia-turnos'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,13 +56,26 @@ export async function POST(req: NextRequest) {
     const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
     if (!canManage) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const body = await req.json()
+    // Bug real encontrado en auditoría: sin `.catch()`, un body vacío o
+    // JSON malformado tiraba una excepción no controlada → 500 genérico.
+    const body = await req.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
     const { userId, entradaFecha, entradaHora, salidaFecha, salidaHora, observaciones } = body
     const modalidad = MODALIDADES_FICHAJE.includes(body.modalidad) ? body.modalidad : MODALIDADES_FICHAJE[0]
     const etiquetaInput = ETIQUETAS_TURNO.includes(body.etiqueta) ? body.etiqueta : null
 
     if (!userId) return NextResponse.json({ error: 'userId requerido' }, { status: 400 })
-    if (!entradaFecha) return NextResponse.json({ error: 'Fecha de entrada requerida' }, { status: 400 })
+    if (!entradaFecha || !isValidDateKey(entradaFecha)) return NextResponse.json({ error: 'Fecha de entrada inválida' }, { status: 400 })
+    // Bug real encontrado en auditoría: sin este chequeo, un horario tipo
+    // "25:99" pasaba de largo y argentinaTimeToInstant corría la fecha del
+    // bloque a otro día/hora sin avisar — rompe la garantía de que
+    // `fecha` siempre representa el día argentino de la entrada.
+    if (entradaHora && !isValidHoraStr(entradaHora)) return NextResponse.json({ error: 'Hora de entrada inválida (formato HH:MM)' }, { status: 400 })
+    if (salidaHora && !isValidHoraStr(salidaHora)) return NextResponse.json({ error: 'Hora de salida inválida (formato HH:MM)' }, { status: 400 })
+    if (salidaFecha && !isValidDateKey(salidaFecha)) return NextResponse.json({ error: 'Fecha de salida inválida' }, { status: 400 })
+    // Cargar una fecha de salida sin su hora (o viceversa) se descartaba
+    // en silencio antes — ahora se pide completar el par.
+    if (salidaFecha && !salidaHora) return NextResponse.json({ error: 'Falta la hora de salida' }, { status: 400 })
 
     // Mismo chequeo que el resto de la app: el usuario destino tiene que
     // pertenecer a esta organización (evita inyección cross-org).

@@ -6,6 +6,7 @@ import { Clock, LogIn, LogOut, CheckCircle2, Plus, Home, Briefcase } from 'lucid
 import toast from 'react-hot-toast'
 import { argentinaDayKey } from '@/lib/timezone'
 import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 
 interface AsistenciaHoy {
   fecha: string
@@ -100,13 +101,11 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   }, [hoy, autoNudgeFired])
 
   const refreshEverywhere = () => {
-    // Invalida por prefijo — cubre este widget, Mi Día y Mi Asistencia
-    // (cada uno con su propia queryKey) aunque estén montados en simultáneo.
-    qc.invalidateQueries({ queryKey: ['asistencia-hoy'] })
-    qc.invalidateQueries({ queryKey: ['turnos-hoy'] })
-    qc.invalidateQueries({ queryKey: ['mi-asistencia'] })
-    qc.invalidateQueries({ queryKey: ['asistencia-rrhh'] })
-    qc.invalidateQueries({ queryKey: ['turnos-asistencia'] })
+    // invalidateFichaje cubre las 5 queryKeys relacionadas (este widget,
+    // Mi Día, Mi Asistencia, RRHH y el panel de Turnos) — antes esto sólo
+    // invalidaba un subconjunto a mano, y alguna pantalla podía quedar
+    // desincronizada hasta que venciera su staleTime.
+    invalidateFichaje(qc)
     refetch()
     refetchTurnos()
   }
@@ -142,22 +141,33 @@ export function AttendanceWidget({ userId }: { userId: string }) {
 
   const formatHora = (dt: string | null) => dt ? new Date(dt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—'
 
+  // Bug real encontrado en auditoría: mientras las 2 queries (`hoy` y
+  // `turnosHoy`) todavía no resolvieron su primer fetch (recién logueado,
+  // hard-reload), `hoy` es `undefined` y `!hoy?.horaEntrada` da `true` —
+  // el estado caía siempre a "none" y mostraba "Fichar entrada" aunque la
+  // persona ya tuviera la jornada en curso o completa. Se corrige solo
+  // apenas llegan los datos, pero mientras tanto mostraba el CTA
+  // equivocado. Ahora hay un estado 'loading' explícito.
+  const stillLoading = hoy === undefined || turnosHoy === undefined
+
   // `openBlock` manda por sobre el mirror de Asistencia: si hay CUALQUIER
   // bloque abierto (principal o extra), el botón tiene que ser "salida" —
   // antes esto sólo miraba `hoy` (el principal), así que una vez que ese
   // cerraba, no había forma de fichar/cerrar un segundo bloque desde acá.
-  const state: 'none' | 'in' | 'done' = openBlock ? 'in' : !hoy?.horaEntrada ? 'none' : 'done'
+  const state: 'loading' | 'none' | 'in' | 'done' =
+    stillLoading ? 'loading' : openBlock ? 'in' : !hoy?.horaEntrada ? 'none' : 'done'
   const pillStyle =
     state === 'done' ? { background: 'rgba(16,185,129,0.12)', color: '#059669' } :
     state === 'in'   ? { background: 'rgba(99,102,241,0.12)', color: 'var(--color-primary)' } :
                         { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }
   const pillLabel =
+    state === 'loading' ? '···' :
     state === 'done' ? `Completo · ${formatHora(hoy?.horaEntrada ?? null)}-${formatHora(hoy?.horaSalida ?? null)}` :
     state === 'in'   ? `En jornada · ${formatHora(openBlock?.horaEntrada ?? hoy?.horaEntrada ?? null)}` :
                         'Fichar'
 
   // Globito ("¿Ya fichaste hoy?") sólo tiene sentido si todavía no fichó —
-  // una vez que fichó, no hay nada que recordarle.
+  // una vez que fichó, no hay nada que recordarle. Nunca mientras carga.
   const showBubble = state === 'none' && (nudgeVisible || hovering) && !open
 
   return (
@@ -207,6 +217,7 @@ export function AttendanceWidget({ userId }: { userId: string }) {
         >
           <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Asistencia de hoy</p>
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+            {state === 'loading' && 'Cargando...'}
             {state === 'none' && 'Todavía no fichaste tu entrada.'}
             {state === 'in' && `Entrada ${formatHora(openBlock?.horaEntrada ?? hoy?.horaEntrada ?? null)}${openBlock?.esPrincipal && hoy?.tardanza ? ' (con tardanza)' : ''} — jornada en curso${openBlock && !openBlock.esPrincipal ? ' (turno adicional)' : ''}.`}
             {state === 'done' && `Entrada ${formatHora(hoy?.horaEntrada ?? null)} · Salida ${formatHora(hoy?.horaSalida ?? null)}.`}

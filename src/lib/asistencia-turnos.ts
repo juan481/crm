@@ -68,16 +68,48 @@ export async function mirrorAsistencia(db: any, params: {
   if (existing) {
     await db.asistencia.update({ where: { id: existing.id }, data })
   } else {
-    await db.asistencia.create({
-      data: {
-        userId, organizationId, fecha,
-        horaEntrada: horaEntrada ?? null,
-        horaSalida: horaSalida ?? null,
-        tardanza: tardanza ?? false,
-        ausente: false,
-      },
-    })
+    try {
+      await db.asistencia.create({
+        data: {
+          userId, organizationId, fecha,
+          horaEntrada: horaEntrada ?? null,
+          horaSalida: horaSalida ?? null,
+          tardanza: tardanza ?? false,
+          ausente: false,
+        },
+      })
+    } catch (err: any) {
+      // Bug real encontrado en auditoría: dos check-ins casi simultáneos
+      // del mismo usuario (mismo día, sin bloque previo) pueden ambos ver
+      // `existing` en null acá arriba antes de que el otro termine su
+      // create — el segundo choca con @@unique([userId, fecha,
+      // organizationId]) de Asistencia (P2002). Antes esto subía sin
+      // atajar hasta el catch del endpoint y devolvía 500 DESPUÉS de que
+      // el TurnoAsistencia ya se había guardado con éxito — el usuario
+      // veía un error pero su fichaje había quedado registrado igual.
+      // Se resuelve releyendo la fila que la otra ejecución ya creó y
+      // aplicándole el mismo update, en vez de perder el resultado.
+      if (err.code !== 'P2002') throw err
+      const race = await db.asistencia.findFirst({ where: { userId, organizationId, fecha } })
+      if (!race) throw err
+      await db.asistencia.update({ where: { id: race.id }, data })
+    }
   }
+}
+
+// "HH:MM", 00-23 / 00-59 — mismo regex que ya usa /api/asistencia/config
+// para validar attendanceStartTime. Bug real encontrado en auditoría: los
+// endpoints de turnos no validaban esto, así que un horario tipo "25:99"
+// pasaba de largo y corría la fecha del bloque a otro día sin avisar.
+export function isValidHoraStr(s: unknown): s is string {
+  return typeof s === 'string' && /^([01]\d|2[0-3]):([0-5]\d)$/.test(s)
+}
+
+// "YYYY-MM-DD" con mes 01-12 y día 01-31 — rechaza en vez de dejar que
+// Date.UTC normalice en silencio un valor fuera de rango (ej. "2026-13-45"
+// se convertía en otra fecha real sin ningún error).
+export function isValidDateKey(s: unknown): s is string {
+  return typeof s === 'string' && /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(s)
 }
 
 /** Jornada de un bloque — SIEMPRE el día argentino de la entrada, nunca de

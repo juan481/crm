@@ -16,6 +16,7 @@ import { useThemeStore } from '@/store/theme-store'
 import { getRoleLabel } from '@/lib/role-labels'
 import { argentinaDayKey, argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
 import { timeAgo } from '@/lib/utils'
+import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import type { Asistencia } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -225,8 +226,16 @@ export default function RrhhPage() {
     // entrada y salida guardadas en días calendario distintos, arranca
     // marcado — así reabrir un registro que ya cruzaba medianoche no lo
     // "corrige" solo a un mismo día por accidente.
+    // Bug real encontrado en auditoría: comparar con .toISOString().slice(0,10)
+    // compara el día calendario en UTC, no en Argentina (UTC-3) — un turno
+    // de tarde-noche normal (14:00 a 22:00 Argentina) cruza medianoche EN
+    // UTC (22:00 Arg = 01:00 UTC del día siguiente) y este checkbox
+    // arrancaba marcado por error; al revés, un turno que sí cruza
+    // medianoche argentina real (23:30 a 00:30) puede caer el MISMO día en
+    // UTC y arrancar desmarcado — exactamente lo opuesto de lo que dice el
+    // comentario de arriba. argentinaDayKey compara el día correcto.
     const cruzaMedianoche = !!(r.horaEntrada && r.horaSalida &&
-      new Date(r.horaEntrada).toISOString().slice(0, 10) !== new Date(r.horaSalida).toISOString().slice(0, 10))
+      argentinaDayKey(new Date(r.horaEntrada)) !== argentinaDayKey(new Date(r.horaSalida)))
     setEditForm({
       ausente:       r.ausente,
       tardanza:      r.tardanza,
@@ -272,7 +281,10 @@ export default function RrhhPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success('Registro actualizado')
-      qc.invalidateQueries({ queryKey: ['asistencia-rrhh', mes] })
+      // Bug real encontrado en auditoría: sólo invalidaba la tabla propia
+      // de esta pantalla — si el registro editado era el de HOY de esa
+      // persona, su propio widget del header quedaba desactualizado.
+      invalidateFichaje(qc)
       setEditRecord(null)
     } catch { toast.error('Error de conexión') }
     finally { setSaving(false) }
@@ -289,7 +301,7 @@ export default function RrhhPage() {
       })
       if (!r.ok) { const j = await r.json(); toast.error(j.error ?? 'Error'); return }
       toast.success(`${absenteModal.name} marcado como ausente`)
-      qc.invalidateQueries({ queryKey: ['asistencia-rrhh', mes] })
+      invalidateFichaje(qc)
       setAbsenteModal(null)
     } catch { toast.error('Error de conexión') }
     finally { setMarkingAbs(false) }

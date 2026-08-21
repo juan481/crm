@@ -22,6 +22,7 @@ import { useAuthStore } from '@/store/auth-store'
 import { formatDate } from '@/lib/utils'
 import { argentinaDayKey } from '@/lib/timezone'
 import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import type { Task, Ticket, TaskStatus, TaskPriority, TicketCategory } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -126,7 +127,13 @@ export default function MiDiaPage() {
   })
   const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
 
-  const refreshAsistencia = () => { refetchAsistencia(); refetchTurnos() }
+  const refreshAsistencia = () => {
+    // Bug real encontrado en auditoría: esto sólo refrescaba las 2 queries
+    // propias de esta pantalla — Mi Asistencia y RRHH podían quedar
+    // mostrando el fichaje viejo hasta que venciera su staleTime.
+    invalidateFichaje(qc)
+    refetchAsistencia(); refetchTurnos()
+  }
 
   const handleCheckIn = async () => {
     setCheckingIn(true)
@@ -293,6 +300,16 @@ export default function MiDiaPage() {
       </div>
 
       {/* ── Check-in widget ──────────────────────────────────────────────── */}
+      {/* Bug real encontrado en auditoría: mientras `asistenciaHoy` y
+          `turnosHoy` todavía no resolvieron su primer fetch, ambos son
+          `undefined` y el cálculo de abajo caía siempre en la rama "no
+          fichó" — mostraba el CTA de "Entrada" aunque la persona ya
+          tuviera la jornada en curso o completa, hasta que llegaban los
+          datos. Ahora se espera a que las dos resuelvan antes de decidir
+          qué mostrar. */}
+      {asistenciaHoy === undefined || turnosHoy === undefined ? (
+        <div className="surface rounded-2xl p-4 h-[76px] animate-pulse" />
+      ) : (
       <div className="surface rounded-2xl p-4 flex items-center gap-4 flex-wrap"
         style={{ border: asistenciaHoy?.horaSalida && !openBlock ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--color-border)' }}>
         <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
@@ -337,6 +354,7 @@ export default function MiDiaPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* ── Mis Tareas ──────────────────────────────────────────────────── */}
       <section>

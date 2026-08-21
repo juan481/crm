@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth-store'
 import type { Asistencia } from '@/types'
 import { argentinaDayKey } from '@/lib/timezone'
 import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import toast from 'react-hot-toast'
 
 function formatHora(dt: string | null): string {
@@ -109,8 +110,21 @@ export default function MiAsistenciaPage() {
   const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
   const hasSalida = hasEntrada && !openBlock
 
+  // Bug real encontrado en auditoría: `hasEntrada` depende de
+  // `historialData` (query `mi-asistencia`) y `openBlock` depende de
+  // `turnosHoy` (query independiente) — si una resuelve antes que la
+  // otra, podía mostrarse un estado incoherente (ej. el flujo de
+  // "Registrar Entrada" con selector de modalidad mientras `openBlock` ya
+  // señalaba un turno abierto de verdad). Se espera a que las dos
+  // resuelvan antes de decidir qué tarjeta mostrar.
+  const stillLoadingAsistencia = historialData === undefined || turnosHoy === undefined
+
   const refreshAsistencia = () => {
-    qc.invalidateQueries({ queryKey: ['mi-asistencia', mesActual(), user?.id] })
+    // Bug real encontrado en auditoría: antes esto sólo invalidaba la
+    // query propia de esta pantalla — el pill del widget del header
+    // (montado permanentemente en el layout) quedaba desactualizado hasta
+    // que venciera su staleTime de 30s.
+    invalidateFichaje(qc)
     refetchTurnos()
   }
 
@@ -167,7 +181,12 @@ export default function MiAsistenciaPage() {
 
         {/* Estado hoy */}
         <AnimatePresence mode="wait">
-          {esAusente ? (
+          {stillLoadingAsistencia ? (
+            <motion.div key="cargando" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="h-10 flex items-center justify-center">
+              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Cargando...</span>
+            </motion.div>
+          ) : esAusente ? (
             <motion.div key="ausente" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-4 text-sm font-medium"
               style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
