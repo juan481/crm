@@ -13,6 +13,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { useThemeStore } from '@/store/theme-store'
 import { getRoleLabel } from '@/lib/role-labels'
 import { timeAgo } from '@/lib/utils'
+import { argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
 import type { Asistencia } from '@/types'
 
 interface LoginEventRow {
@@ -68,7 +69,7 @@ export default function EmpleadoRrhhPage() {
   const [mes, setMes] = useState(searchParams.get('mes') ?? mesActual())
 
   const [editRecord, setEditRecord] = useState<Asistencia | null>(null)
-  const [editForm,   setEditForm]   = useState({ ausente: false, tardanza: false, observaciones: '', horaEntrada: '', horaSalida: '' })
+  const [editForm,   setEditForm]   = useState({ ausente: false, tardanza: false, observaciones: '', horaEntrada: '', horaSalida: '', cruzaMedianoche: false })
   const [saving,     setSaving]     = useState(false)
 
   const { data, isLoading, isError } = useQuery({
@@ -109,12 +110,17 @@ export default function EmpleadoRrhhPage() {
 
   const openEdit = (r: Asistencia) => {
     setEditRecord(r)
+    // Default del checkbox "cruza medianoche": si el registro YA tiene
+    // entrada y salida en días calendario distintos, arranca marcado.
+    const cruzaMedianoche = !!(r.horaEntrada && r.horaSalida &&
+      new Date(r.horaEntrada).toISOString().slice(0, 10) !== new Date(r.horaSalida).toISOString().slice(0, 10))
     setEditForm({
       ausente:       r.ausente,
       tardanza:      r.tardanza,
       observaciones: r.observaciones ?? '',
       horaEntrada:   r.horaEntrada ? new Date(r.horaEntrada).toTimeString().slice(0, 5) : '',
       horaSalida:    r.horaSalida  ? new Date(r.horaSalida).toTimeString().slice(0, 5)  : '',
+      cruzaMedianoche,
     })
   }
 
@@ -123,11 +129,18 @@ export default function EmpleadoRrhhPage() {
     setSaving(true)
     try {
       const fecha = editRecord.fecha.slice(0, 10)
-      const toIso = (t: string) => {
+      // Bug real de timezone (2026-08-21): el constructor LOCAL de Date
+      // corría el horario en el server (Vercel = UTC) y forzaba el mismo
+      // día calendario para entrada y salida — imposible cargar a mano un
+      // turno que cruza medianoche. Ver el mismo fix en rrhh/page.tsx.
+      const toIso = (t: string, diasExtra = 0) => {
         if (!t) return null
         const [y, mo, d] = fecha.split('-').map(Number)
-        const [h, m]     = t.split(':').map(Number)
-        return new Date(y, mo - 1, d, h, m, 0).toISOString()
+        const dayStart = diasExtra > 0
+          ? argentinaDateKeyToDayStart(`${y}-${String(mo).padStart(2, '0')}-${String(d + diasExtra).padStart(2, '0')}`)
+          : argentinaDateKeyToDayStart(fecha)
+        const [h, m] = t.split(':').map(Number)
+        return argentinaTimeToInstant(dayStart, h, m).toISOString()
       }
       const res  = await fetch(`/api/asistencia/${editRecord.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -136,7 +149,7 @@ export default function EmpleadoRrhhPage() {
           tardanza:      editForm.tardanza,
           observaciones: editForm.observaciones || null,
           horaEntrada:   toIso(editForm.horaEntrada),
-          horaSalida:    toIso(editForm.horaSalida),
+          horaSalida:    toIso(editForm.horaSalida, editForm.cruzaMedianoche ? 1 : 0),
         }),
       })
       const json = await res.json()
@@ -364,6 +377,11 @@ export default function EmpleadoRrhhPage() {
               <Input label="Hora salida" type="time" value={editForm.horaSalida}
                 onChange={e => setEditForm(f => ({ ...f, horaSalida: e.target.value }))} />
             </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
+              <input type="checkbox" checked={editForm.cruzaMedianoche}
+                onChange={e => setEditForm(f => ({ ...f, cruzaMedianoche: e.target.checked }))} />
+              Cruza medianoche (salida al día siguiente)
+            </label>
             <div className="flex gap-4">
               {[{ key: 'ausente', label: 'Ausente' }, { key: 'tardanza', label: 'Tardanza' }].map(({ key, label }) => (
                 <label key={key} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
