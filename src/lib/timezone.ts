@@ -54,3 +54,15 @@ export function argentinaTimeToInstant(dayStart: Date, hours: number, minutes: n
 export function dateOnlyArgentina(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month, day, 12, 0, 0))
 }
+
+/** Medianoche (UTC) del día argentino para una clave "YYYY-MM-DD" ya
+ *  conocida (ej. un <input type="date">, o Asistencia.fecha ya serializada
+ *  a string) — mismo shape que argentinaDayStart, para no pasar por el
+ *  constructor local de Date al armar un instante manual (bug real: los
+ *  modales de edición de RRHH armaban `new Date(y, m-1, d, h, m)` con el
+ *  constructor LOCAL del navegador, que en el server correría 3hs — acá se
+ *  arma explícito para usar junto con argentinaTimeToInstant). */
+export function argentinaDateKeyToDayStart(dateKey: string): Date {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
+}

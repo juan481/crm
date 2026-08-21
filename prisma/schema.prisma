@@ -244,6 +244,7 @@ model Organization {
   cotizaciones            Cotizacion[]
   asistencias             Asistencia[]
   loginEvents             LoginEvent[]
+  turnosAsistencia        TurnoAsistencia[]
   suppressions            EmailSuppression[]
   emailUsage              EmailUsageMonthly[]
   memberships             OrganizationMembership[]
@@ -325,6 +326,7 @@ model User {
   cotizaciones            Cotizacion[]
   asistencias             Asistencia[]
   loginEvents             LoginEvent[]
+  turnosAsistencia        TurnoAsistencia[]
   memberships             OrganizationMembership[]
 
   @@index([organizationId])
@@ -1213,6 +1215,61 @@ model LoginEvent {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, userId, createdAt])
+}
+
+// Bug real reportado (2026-08-21, Gabriel Guias): "Asistencia" sólo admite
+// UN par entrada/salida por día calendario (@@unique([userId, fecha,
+// organizationId])) — Abba confirmó que HAY personas que hacen "extras" o
+// "adicionales" (más de una guardia el mismo día). En vez de rediseñar
+// Asistencia (usado en RRHH, Mi Asistencia, el widget del header, el cron
+// de digest, el % de presentismo — tocar todo eso es mucho más riesgo), se
+// suma este modelo aparte, puramente aditivo: cada turno extra es su
+// propia fila, sin unique por día (una persona puede hacer más de un
+// extra el mismo día). No participa del cálculo de tardanza/ausente/
+// presentismo — son horas de más, no el turno regular.
+// Fichaje multi-bloque (2026-08-21) — pedido real de Sergio/RRHH tras un bug
+// real: Asistencia sólo admite UNA entrada y UNA salida por día calendario
+// (@@unique([userId, fecha, organizationId])), lo que rompe turnos que
+// cruzan la medianoche y "extras"/adicionales el mismo día. Asistencia NO
+// se toca ni se deprecia — sigue siendo la fuente de ausente/tardanza/
+// presentismo/cron de avisos, alimentada por mirrorAsistencia() sólo desde
+// el bloque "principal" del día (ver src/lib/asistencia-turnos.ts). Este
+// modelo reemplaza un intento previo ("TurnoAdicional") que nunca llegó a
+// pushearse a ninguna DB real — completar/expandir esto no es una
+// migración de datos existentes.
+model TurnoAsistencia {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Jornada del bloque — SIEMPRE el día argentino de horaEntrada (nunca de
+  // horaSalida), vía argentinaDayStart. "Entrada martes 16:00, salida
+  // miércoles 00:00" pertenece a la jornada del martes, sin cortarse.
+  fecha          DateTime     @db.Date
+  horaEntrada    DateTime?
+  horaSalida     DateTime?
+  // Listas curadas en src/lib/asistencia-turnos.ts (string, no enum de
+  // Prisma) — mismo criterio ya usado en src/lib/fiscal.ts para
+  // condicionIva/formaPagoHabitual: Sergio filtra sobre un set chico y
+  // puede necesitar ajustarlo sin pedir una migración.
+  modalidad      String       @default("Presencial")
+  etiqueta       String       @default("Regular")
+  // true = el bloque "principal" del día — espeja hacia Asistencia
+  // (mantiene 100% el comportamiento actual de "un solo turno"). Se decide
+  // UNA vez al crear el bloque (el primero abierto ese día), nunca se
+  // recalcula después.
+  esPrincipal    Boolean      @default(true)
+  tardanza       Boolean      @default(false)
+  observaciones  String?
+  creadoPorId    String?
+  editadoPorId   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, userId, fecha])
+  @@index([userId, horaSalida])
+  @@index([organizationId, etiqueta])
 }
 
 // ─── Idempotencia de cron ──────────────────────────────────────────────────
