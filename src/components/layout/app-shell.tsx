@@ -51,6 +51,13 @@ export function AppShell({ user, branding, children }: AppShellProps) {
   useEffect(() => {
     setUser(user)
     if (branding) loadBranding(branding)
+    // Este mount sólo pasa una vez por carga COMPLETA de página (no en cada
+    // navegación interna del dashboard) — es el momento correcto para
+    // "resetear" el guard de auto-reload por ChunkLoadError (ver
+    // error-boundary.tsx): esta carga ya trajo el bundle actual, así que si
+    // más adelante otro deploy rompe un chunk, se puede volver a
+    // auto-recuperar en vez de quedar bloqueado desde una vieja recarga.
+    sessionStorage.removeItem('crm-chunk-reload-attempted')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Presencia real — una vez por sesión de navegador (se resetea al cerrar

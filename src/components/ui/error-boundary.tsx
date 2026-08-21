@@ -26,6 +26,30 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
     console.error('[ErrorBoundary]', error, info.componentStack)
+
+    // Bug real reportado en producción (2026-08-21): cada vez que se
+    // despliega una versión nueva del CRM, alguien que ya tenía una
+    // pestaña abierta puede intentar cargar un chunk de JS de la versión
+    // VIEJA que ya no existe más (Vercel reemplaza los assets de cada
+    // build) — un "ChunkLoadError" clásico de Next.js. Antes esto caía acá
+    // mostrando "Algo salió mal", y el botón "Reintentar" no servía de
+    // nada (sólo resetea el estado de React, no vuelve a pedir el chunk
+    // roto — por eso Sebastián lo vio fallar de nuevo después de tocar
+    // Reintentar). Se soluciona forzando un reload REAL de la página, una
+    // sola vez (el guard en sessionStorage evita un loop infinito si el
+    // error persiste por otra razón real — ahí sí se muestra la pantalla
+    // de error normal). AppShell limpia este guard en cada carga completa
+    // nueva (ver app-shell.tsx), así vuelve a poder auto-recuperarse en el
+    // próximo deploy.
+    const isChunkError = error.name === 'ChunkLoadError'
+      || /loading chunk|failed to fetch dynamically imported module|importing a module script failed/i.test(error.message)
+    if (isChunkError && typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      const guardKey = 'crm-chunk-reload-attempted'
+      if (!sessionStorage.getItem(guardKey)) {
+        sessionStorage.setItem(guardKey, '1')
+        window.location.reload()
+      }
+    }
   }
 
   render() {
