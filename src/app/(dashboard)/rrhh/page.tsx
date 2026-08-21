@@ -299,6 +299,11 @@ export default function RrhhPage() {
           <input type="month" value={mes} onChange={e => setMes(e.target.value)}
             className="px-3 py-2 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+          <button onClick={() => router.push('/rrhh/turnos')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm border transition-colors"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
+            <Clock size={14} /> Turnos y bloques
+          </button>
           <button onClick={openConfig}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm border transition-colors"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>

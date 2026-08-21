@@ -1,0 +1,313 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  ArrowLeft, Plus, Pencil, Trash2, Clock, Filter, Star, Briefcase, Home, Sun,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Select } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Modal, ModalFooter } from '@/components/ui/modal'
+import { Skeleton } from '@/components/ui/skeleton'
+import { MODALIDADES_FICHAJE, ETIQUETAS_TURNO } from '@/lib/asistencia-turnos'
+import toast from 'react-hot-toast'
+
+interface Turno {
+  id: string
+  userId: string
+  fecha: string
+  horaEntrada: string | null
+  horaSalida: string | null
+  modalidad: string
+  etiqueta: string
+  esPrincipal: boolean
+  observaciones: string | null
+  user: { id: string; name: string; role: string; avatarUrl: string | null }
+}
+
+interface UsuarioOpt { id: string; name: string; role: string; status: string }
+
+function mesActual() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function toDateInput(iso: string | null): string { return iso ? iso.slice(0, 10) : '' }
+function toTimeInput(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function horasDe(turno: Turno): string {
+  if (!turno.horaEntrada || !turno.horaSalida) return '—'
+  const ms = new Date(turno.horaSalida).getTime() - new Date(turno.horaEntrada).getTime()
+  return `${Math.floor(ms / 3_600_000)}h ${Math.floor((ms % 3_600_000) / 60_000)}m`
+}
+
+const ETIQUETA_STYLE: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
+  'Regular':                 { bg: 'rgba(99,102,241,0.1)',  color: 'var(--color-primary)', icon: <Briefcase size={11} /> },
+  'Extra/Adicional':         { bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b',               icon: <Star size={11} /> },
+  'Fin de Semana/Feriado':   { bg: 'rgba(16,185,129,0.1)',   color: '#10b981',               icon: <Sun size={11} /> },
+}
+
+const EMPTY_FORM = {
+  userId: '', entradaFecha: '', entradaHora: '', salidaFecha: '', salidaHora: '',
+  modalidad: MODALIDADES_FICHAJE[0], etiqueta: ETIQUETAS_TURNO[0], observaciones: '',
+}
+
+export default function TurnosAsistenciaPage() {
+  const router = useRouter()
+  const qc = useQueryClient()
+
+  const [mes, setMes] = useState(mesActual())
+  const [empleadoFiltro, setEmpleadoFiltro] = useState('')
+  const [etiquetaFiltro, setEtiquetaFiltro] = useState('')
+  const [modalidadFiltro, setModalidadFiltro] = useState('')
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<Turno | null>(null)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+
+  const { data: usuariosData } = useQuery({
+    queryKey: ['usuarios-internos'],
+    queryFn: async () => {
+      const r = await fetch('/api/usuarios')
+      if (!r.ok) return { data: [] }
+      return r.json()
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const usuarios: UsuarioOpt[] = (usuariosData?.data ?? []).filter((u: UsuarioOpt) => u.status === 'ACTIVE')
+
+  const { data: turnosData, isLoading, isError } = useQuery({
+    queryKey: ['turnos-asistencia', mes, empleadoFiltro, etiquetaFiltro, modalidadFiltro],
+    queryFn: async () => {
+      const params = new URLSearchParams({ mes })
+      if (empleadoFiltro) params.set('userId', empleadoFiltro)
+      if (etiquetaFiltro) params.set('etiqueta', etiquetaFiltro)
+      if (modalidadFiltro) params.set('modalidad', modalidadFiltro)
+      const r = await fetch(`/api/asistencia/turnos?${params}`)
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as Turno[]
+    },
+  })
+  const turnos = turnosData ?? []
+
+  const totalMs = turnos.reduce((s, t) => {
+    if (!t.horaEntrada || !t.horaSalida) return s
+    return s + (new Date(t.horaSalida).getTime() - new Date(t.horaEntrada).getTime())
+  }, 0)
+  const totalHorasLabel = `${Math.floor(totalMs / 3_600_000)}h ${Math.floor((totalMs % 3_600_000) / 60_000)}m`
+
+  const openCreate = () => {
+    setEditing(null)
+    setForm({ ...EMPTY_FORM, entradaFecha: new Date().toISOString().slice(0, 10) })
+    setModalOpen(true)
+  }
+  const openEdit = (t: Turno) => {
+    setEditing(t)
+    setForm({
+      userId: t.userId,
+      entradaFecha: toDateInput(t.fecha), entradaHora: toTimeInput(t.horaEntrada),
+      salidaFecha: t.horaSalida ? toDateInput(t.horaSalida) : '', salidaHora: toTimeInput(t.horaSalida),
+      modalidad: t.modalidad, etiqueta: t.etiqueta, observaciones: t.observaciones ?? '',
+    })
+    setModalOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (!editing && !form.userId) { toast.error('Elegí un empleado'); return }
+    if (!form.entradaFecha) { toast.error('La fecha de entrada es requerida'); return }
+    setSaving(true)
+    try {
+      const body = editing
+        ? {
+            entradaHora: form.entradaHora || null,
+            salidaFecha: form.salidaFecha || null, salidaHora: form.salidaHora || null,
+            modalidad: form.modalidad, etiqueta: form.etiqueta, observaciones: form.observaciones || null,
+          }
+        : {
+            userId: form.userId, entradaFecha: form.entradaFecha, entradaHora: form.entradaHora || null,
+            salidaFecha: form.salidaFecha || null, salidaHora: form.salidaHora || null,
+            modalidad: form.modalidad, etiqueta: form.etiqueta, observaciones: form.observaciones || null,
+          }
+      const res = await fetch(editing ? `/api/asistencia/turnos/${editing.id}` : '/api/asistencia/turnos', {
+        method: editing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success(editing ? 'Bloque actualizado' : 'Bloque creado')
+      qc.invalidateQueries({ queryKey: ['turnos-asistencia'] })
+      qc.invalidateQueries({ queryKey: ['asistencia-rrhh'] })
+      setModalOpen(false)
+    } catch { toast.error('Error de conexión') } finally { setSaving(false) }
+  }
+
+  const handleDelete = async (t: Turno) => {
+    if (!confirm(`¿Eliminar este bloque de ${t.user.name}?`)) return
+    const res = await fetch(`/api/asistencia/turnos/${t.id}`, { method: 'DELETE' })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+    toast.success('Bloque eliminado')
+    qc.invalidateQueries({ queryKey: ['turnos-asistencia'] })
+    qc.invalidateQueries({ queryKey: ['asistencia-rrhh'] })
+  }
+
+  return (
+    <div className="space-y-6 max-w-5xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 flex-wrap justify-between">
+        <button onClick={() => router.push('/rrhh')}
+          className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity"
+          style={{ color: 'var(--color-text-muted)' }}>
+          <ArrowLeft size={15} /> RRHH
+        </button>
+        <div className="flex items-center gap-2 flex-1 justify-end">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center"><Clock size={16} className="text-white" /></div>
+            <div>
+              <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Turnos y bloques</h1>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Fichajes reales, regulares y extras</p>
+            </div>
+          </div>
+        </div>
+        <Button onClick={openCreate} leftIcon={<Plus size={14} />}>Nuevo bloque</Button>
+      </div>
+
+      {/* Filtros */}
+      <div className="rounded-2xl p-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="flex items-center gap-2 mb-3" style={{ color: 'var(--color-text-muted)' }}>
+          <Filter size={13} /><span className="text-xs font-semibold uppercase tracking-widest">Filtros</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Mes</label>
+            <input type="month" value={mes} onChange={e => setMes(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }} />
+          </div>
+          <Select label="Empleado" value={empleadoFiltro} onChange={e => setEmpleadoFiltro(e.target.value)}
+            options={[{ value: '', label: 'Todos' }, ...usuarios.map(u => ({ value: u.id, label: u.name }))]} />
+          <Select label="Etiqueta" value={etiquetaFiltro} onChange={e => setEtiquetaFiltro(e.target.value)}
+            options={[{ value: '', label: 'Todas' }, ...ETIQUETAS_TURNO.map(e => ({ value: e, label: e }))]} />
+          <Select label="Modalidad" value={modalidadFiltro} onChange={e => setModalidadFiltro(e.target.value)}
+            options={[{ value: '', label: 'Todas' }, ...MODALIDADES_FICHAJE.map(m => ({ value: m, label: m }))]} />
+        </div>
+      </div>
+
+      {/* Total */}
+      {!isLoading && turnos.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl" style={{ background: 'var(--color-primary-light)' }}>
+          <Clock size={16} style={{ color: 'var(--color-primary)' }} />
+          <p className="text-sm" style={{ color: 'var(--color-text)' }}>
+            <span className="font-bold">{totalHorasLabel}</span> totales en {turnos.length} bloque{turnos.length !== 1 ? 's' : ''} (según filtro actual)
+          </p>
+        </div>
+      )}
+
+      {/* Tabla */}
+      {isLoading ? (
+        <div className="space-y-2">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+      ) : isError ? (
+        <p className="text-sm text-center py-8" style={{ color: 'var(--color-text-muted)' }}>Error al cargar los datos. Intentá de nuevo.</p>
+      ) : turnos.length === 0 ? (
+        <div className="rounded-2xl p-8 text-center" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <Clock size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Sin bloques para este filtro.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl overflow-hidden overflow-x-auto" style={{ border: '1px solid var(--color-border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: 'var(--color-surface-raised)', borderBottom: '1px solid var(--color-border)' }}>
+                {['Empleado', 'Fecha', 'Modalidad', 'Etiqueta', 'Entrada', 'Salida', 'Horas', ''].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {turnos.map(t => {
+                const est = ETIQUETA_STYLE[t.etiqueta] ?? ETIQUETA_STYLE['Regular']
+                return (
+                  <tr key={t.id} className="hover:bg-[var(--color-surface-raised)] transition-colors" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td className="px-4 py-3 font-medium whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                      {t.user.name}{t.esPrincipal && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-surface-overlay)', color: 'var(--color-text-subtle)' }}>Principal</span>}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
+                      {new Date(t.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
+                      <span className="flex items-center gap-1">{t.modalidad === 'Presencial' ? <Home size={11} /> : <Briefcase size={11} />}{t.modalidad}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => openEdit(t)} className="text-xs px-2 py-1 rounded-full flex items-center gap-1 whitespace-nowrap" style={{ background: est.bg, color: est.color }}>
+                        {est.icon}{t.etiqueta}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>{toTimeInput(t.horaEntrada) || '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>{toTimeInput(t.horaSalida) || '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap font-medium" style={{ color: 'var(--color-text)' }}>{horasDe(t)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(t)} className="p-1.5 rounded-lg hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)] transition-colors" style={{ color: 'var(--color-text-muted)' }}>
+                          <Pencil size={13} />
+                        </button>
+                        <button onClick={() => handleDelete(t)} className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-colors" style={{ color: 'var(--color-text-muted)' }}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal crear/editar */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Editar bloque' : 'Nuevo bloque'} size="md">
+        <div className="space-y-4">
+          {!editing && (
+            <Select label="Empleado" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}
+              options={[{ value: '', label: 'Seleccionar...' }, ...usuarios.map(u => ({ value: u.id, label: u.name }))]} />
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Fecha de entrada" type="date" value={form.entradaFecha} onChange={e => setForm(f => ({ ...f, entradaFecha: e.target.value }))} />
+            <Input label="Hora de entrada" type="time" value={form.entradaHora} onChange={e => setForm(f => ({ ...f, entradaHora: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Fecha de salida" type="date" value={form.salidaFecha} onChange={e => setForm(f => ({ ...f, salidaFecha: e.target.value }))}
+              hint="Vacío = deja el bloque abierto" />
+            <Input label="Hora de salida" type="time" value={form.salidaHora} onChange={e => setForm(f => ({ ...f, salidaHora: e.target.value }))} />
+          </div>
+          <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+            Si la salida es al día siguiente (turno que cruza medianoche), poné una fecha de salida distinta a la de entrada — no hace falta que sean el mismo día.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Select label="Modalidad" value={form.modalidad} onChange={e => setForm(f => ({ ...f, modalidad: e.target.value }))}
+              options={MODALIDADES_FICHAJE.map(m => ({ value: m, label: m }))} />
+            <Select label="Etiqueta" value={form.etiqueta} onChange={e => setForm(f => ({ ...f, etiqueta: e.target.value }))}
+              options={ETIQUETAS_TURNO.map(e => ({ value: e, label: e }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Observaciones</label>
+            <textarea rows={2} value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))}
+              placeholder="Notas adicionales..."
+              className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 transition-all"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+          </div>
+          <ModalFooter>
+            <Button variant="ghost" onClick={() => setModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} loading={saving}>{editing ? 'Guardar' : 'Crear bloque'}</Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+    </div>
+  )
+}
