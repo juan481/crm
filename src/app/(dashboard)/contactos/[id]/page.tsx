@@ -1,15 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Mail, Phone, MessageCircle, Building2, Pencil, Trash2, UserCircle2 } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, PhoneCall, MessageCircle, Building2, Pencil, Trash2, UserCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
 import { ContactoForm } from '@/components/directorio/contacto-form'
-import { ContactoNotas } from '@/components/directorio/contacto-notas'
+import { ContactoNotas, type ContactoNotasHandle } from '@/components/directorio/contacto-notas'
 import { WhatsAppSendButton } from '@/components/integrations/whatsapp-send-button'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto } from '@/types'
@@ -23,6 +23,7 @@ export default function ContactoDetailPage() {
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const notasRef = useRef<ContactoNotasHandle>(null)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
@@ -142,6 +143,23 @@ export default function ContactoDetailPage() {
                 <MessageCircle size={14} style={{ color: '#22c55e' }} /> {data.phone}
               </a>
               <WhatsAppSendButton phone={data.phone} name={`${data.firstName} ${data.lastName}`} />
+              <a
+                href={`tel:${data.phone.replace(/\s+/g, '')}`}
+                className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+                style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}
+                title="Llamar"
+              >
+                <Phone size={12} /> Llamar
+              </a>
+              <button
+                type="button"
+                onClick={() => notasRef.current?.focusCall()}
+                className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:opacity-80"
+                style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
+                title="Registrar llamada"
+              >
+                <PhoneCall size={12} /> Registrar llamada
+              </button>
             </div>
           )}
           {!data.email && !data.phone && (
@@ -151,7 +169,7 @@ export default function ContactoDetailPage() {
       </div>
 
       <div className="rounded-2xl p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-        <ContactoNotas contactoId={data.id} />
+        <ContactoNotas ref={notasRef} contactoId={data.id} />
       </div>
 
       <Modal open={editing} onClose={() => setEditing(false)} title="Editar contacto" size="md">

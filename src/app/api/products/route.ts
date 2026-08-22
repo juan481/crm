@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const { name, description, price, currency, unit } = await req.json()
+    const { name, description, price, currency, unit, trackStock } = await req.json()
     if (!name || price === undefined) {
       return NextResponse.json({ error: 'Nombre y precio son requeridos' }, { status: 400 })
     }
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
         price:       Number(price),
         currency:    currency || 'USD',
         unit:        unit || 'unidad',
+        trackStock:  !!trackStock,
         organizationId: payload.orgId,
       },
     })

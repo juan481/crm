@@ -4,7 +4,8 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2, MessageCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2, MessageCircle, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -132,6 +133,19 @@ export default function ComunicacionesPage() {
     enabled: canManage,
   })
 
+  // Sólo para el aviso de "no estamos recibiendo tracking" de abajo — no se
+  // pisa con la config real del formulario de /configuracion/correo, esa
+  // página vive aparte.
+  const { data: emailSettings } = useQuery({
+    queryKey: ['email-settings-provider'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/email')
+      if (!res.ok) return null
+      return (await res.json()).data as { smtpProvider?: string } | null
+    },
+    enabled: canManage,
+  })
+
   const campaigns = data ?? []
   const sent  = campaigns.filter((c) => c.status === 'SENT').length
   const draft = campaigns.filter((c) => c.status === 'DRAFT').length
@@ -140,6 +154,21 @@ export default function ComunicacionesPage() {
   // DRAFT con 500 destinatarios cargados (pero nunca enviada) inflaba este
   // número en 500 sin haber despachado un solo mail.
   const total = campaigns.reduce((acc, c) => acc + (c.sentCount ?? 0), 0)
+
+  // Si el proveedor es SES pero ninguna campaña enviada tiene un solo dato
+  // de tracking, lo más probable es que falte el Configuration Set (ver
+  // Configuración > Email SMTP > "Activar métricas de entrega") — no es un
+  // bug de esta pantalla, la UI de métricas de abajo ya está completa y
+  // lista para mostrar los números en cuanto AWS empiece a avisarlos.
+  const sesSentCampaigns = campaigns.filter((c) => c.status === 'SENT')
+  const showTrackingBanner =
+    canManage &&
+    emailSettings?.smtpProvider === 'SES' &&
+    sesSentCampaigns.length > 0 &&
+    sesSentCampaigns.every((c) =>
+      (c.totalDelivered ?? 0) === 0 && (c.totalOpened ?? 0) === 0 &&
+      (c.totalBounced ?? 0) === 0 && (c.totalSpam ?? 0) === 0
+    )
 
   return (
     <div className="space-y-6">
@@ -156,6 +185,22 @@ export default function ComunicacionesPage() {
           {canManage && <Button leftIcon={<Plus size={16} />} onClick={() => setComposerOpen(true)}>Nueva Campaña</Button>}
         </div>
       </div>
+
+      {/* SES sin tracking activado */}
+      {showTrackingBanner && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+          <Zap size={18} className="text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-300">No estamos recibiendo confirmaciones de entrega de Amazon SES</p>
+            <p className="text-xs text-amber-200/70 mt-0.5">
+              Tus campañas se mandan bien, pero no vemos si se entregaron, abrieron o rebotaron — falta activar el tracking del lado de AWS.
+            </p>
+          </div>
+          <Link href="/configuracion/correo" className="shrink-0 text-xs font-semibold text-amber-300 hover:underline whitespace-nowrap">
+            Activar ahora →
+          </Link>
+        </div>
+      )}
 
       {/* Usage */}
       {canManage && usage && (

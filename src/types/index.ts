@@ -245,6 +245,8 @@ export interface Product {
   price:          number
   currency:       string
   unit:           string
+  trackStock:     boolean
+  stock:          number
   organizationId: string
   createdAt:      string
 }

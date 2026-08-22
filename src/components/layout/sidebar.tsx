@@ -45,23 +45,55 @@ interface NavItem {
   badgeKey?: keyof NotificationCounts
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard',      href: '/dashboard',        icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'dashboard' },
-  { label: 'Mi Día',         href: '/mi-dia',           icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'], moduleId: 'mi-dia' },
-  { label: 'Clientes',       href: '/clientes',         icon: <Users size={17} />,                        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'clientes' },
-  { label: 'Pipeline',       href: '/pipeline',         icon: <TrendingUp size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'pipeline' },
-  { label: 'Tareas',         href: '/tareas',           icon: <CheckSquare size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], badgeKey: 'tasks', moduleId: 'tareas' },
-  { label: 'Cotizador',      href: '/cotizador',        icon: <Calculator size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizador' },
-  { label: 'Cotizaciones',   href: '/cotizaciones',     icon: <FileText size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizaciones' },
-  { label: 'Tickets',        href: '/tickets',          icon: <LifeBuoy size={17} />,                     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], badgeKey: 'tickets', moduleId: 'tickets' },
-  { label: 'Eventos',        href: '/eventos',          icon: <CalendarDays size={17} />,                 roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'eventos' },
-  { label: 'Comunicaciones', href: '/comunicaciones',   icon: <Mail size={17} />,                         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
-  { label: 'Facturación',    href: '/facturas',         icon: <CreditCard size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
-  { label: 'Documentos',     href: '/documentos',       icon: <FolderOpen size={17} />,                   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
-  { label: 'Empresas',       href: '/empresas',         icon: <Building2 size={17} />,                    roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'empresas' },
-  { label: 'Contactos',      href: '/contactos',        icon: <UserCircle2 size={17} />,                  roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'contactos' },
-  { label: 'RRHH',           href: '/rrhh',             icon: <ClipboardList size={17} />,                roles: ['SUPER_ADMIN', 'ADMIN', 'HR'], moduleId: 'rrhh' },
-  { label: 'Mi Asistencia',  href: '/mi-asistencia',    icon: <ClipboardCheck size={17} />,               roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], moduleId: 'mi-asistencia' },
+// Antes una sola lista plana de 16 ítems — separada en secciones sólo para
+// que el sidebar no sea un listado interminable; el contenido, el orden
+// dentro de cada grupo, y los filtros por rol/vertical/ModulePermission de
+// cada ítem son EXACTAMENTE los mismos que antes (ver isModuleAllowed/
+// matchesVertical más abajo, sin tocar). Mismo patrón visual que ya usaba
+// la sección "Configuración" (label uppercase + guarda de "si queda vacía
+// no renderiza nada"), generalizado acá a cada grupo.
+const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
+  {
+    label: null,
+    items: [
+      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'dashboard' },
+      { label: 'Mi Día',    href: '/mi-dia',    icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'], moduleId: 'mi-dia' },
+    ],
+  },
+  {
+    label: 'Ventas',
+    items: [
+      { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'clientes' },
+      { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'pipeline' },
+      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizador' },
+      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizaciones' },
+      { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'empresas' },
+      { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'contactos' },
+    ],
+  },
+  {
+    label: 'Operaciones',
+    items: [
+      { label: 'Tareas',  href: '/tareas',  icon: <CheckSquare size={17} />,   roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], badgeKey: 'tasks', moduleId: 'tareas' },
+      { label: 'Tickets', href: '/tickets', icon: <LifeBuoy size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], badgeKey: 'tickets', moduleId: 'tickets' },
+      { label: 'Eventos', href: '/eventos', icon: <CalendarDays size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'eventos' },
+    ],
+  },
+  {
+    label: 'Comunicación',
+    items: [
+      { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
+      { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
+      { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
+    ],
+  },
+  {
+    label: 'RRHH',
+    items: [
+      { label: 'RRHH',          href: '/rrhh',          icon: <ClipboardList size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'HR'], moduleId: 'rrhh' },
+      { label: 'Mi Asistencia', href: '/mi-asistencia', icon: <ClipboardCheck size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], moduleId: 'mi-asistencia' },
+    ],
+  },
 ]
 
 const settingsItems: NavItem[] = [
@@ -145,10 +177,13 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     return row.roles[user.role] !== false
   }
 
-  const filteredNav = navItems
+  const filterItems = (items: NavItem[]) => items
     .filter((item) => !item.roles || item.roles.includes(user.role))
     .filter(matchesVertical)
     .filter(isModuleAllowed)
+  const filteredSections = NAV_SECTIONS
+    .map((section) => ({ ...section, items: filterItems(section.items) }))
+    .filter((section) => section.items.length > 0)
   const filteredSettings = settingsItems
     .filter((item) => !item.roles || item.roles.includes(user.role))
     .filter(matchesVertical)
@@ -183,17 +218,27 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
       {orgs && orgs.length > 1 && <OrgSwitcher orgs={orgs} />}
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-        <div className="space-y-0.5">
-          {filteredNav.map((item) => (
-            <SidebarLink
-              key={item.href}
-              item={item}
-              active={isActive(item)}
-              onClose={onClose}
-              badge={item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0}
-            />
-          ))}
-        </div>
+        {filteredSections.map((section, idx) => (
+          <div key={section.label ?? `section-${idx}`} className={idx === 0 ? 'space-y-0.5' : 'pt-5 pb-1'}>
+            {section.label && (
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-widest mb-2"
+                style={{ color: 'rgba(148,163,184,0.6)' }}>
+                {section.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <SidebarLink
+                  key={item.href}
+                  item={item}
+                  active={isActive(item)}
+                  onClose={onClose}
+                  badge={item.badgeKey ? (counts?.[item.badgeKey] ?? 0) : 0}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
         {filteredSettings.length > 0 && (
           <div className="pt-5 pb-1">
             <p className="px-3 text-[10px] font-semibold uppercase tracking-widest mb-2"

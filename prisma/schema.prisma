@@ -230,6 +230,7 @@ model Organization {
   emailTemplates          EmailTemplate[]
   services                Service[]
   products                Product[]
+  stockMovimientos        StockMovimiento[]
   events                  Event[]
   folders                 Folder[]
   documents               Document[]
@@ -1126,18 +1127,48 @@ model DirectorioContactoNota {
 
 // ─── Catálogo de Productos (venta única) ──────────────────────────────────
 model Product {
-  id             String       @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String
   description    String?
-  price          Float        @default(0)
-  currency       String       @default("USD")
-  unit           String       @default("unidad")
+  price          Float             @default(0)
+  currency       String            @default("USD")
+  unit           String            @default("unidad")
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Stock — opt-in por producto (default false) para que ningún producto ya
+  // cargado hoy pase a mostrar "0 en stock" de la nada; sólo tiene sentido
+  // activarlo en equipamiento físico (cámaras, sensores, paneles), nunca en
+  // Service (abonos de facturación recurrente — modelo totalmente separado).
+  trackStock     Boolean           @default(false)
+  stock          Int               @default(0)
+  movimientos    StockMovimiento[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([organizationId])
+}
+
+// Ledger de ajustes manuales de stock — cada fila es un movimiento
+// (Entrada/Salida/Ajuste) con el stock resultante como snapshot de
+// auditoría, mismo criterio de "guardar el estado post-cambio" que ya usa
+// TurnoAsistencia. cantidad siempre positivo; el signo lo da `tipo`.
+model StockMovimiento {
+  id              String       @id @default(cuid())
+  productId       String
+  product         Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Lista curada en src/lib/stock.ts — 'Entrada' | 'Salida' | 'Ajuste'.
+  // String en vez de enum de Prisma, mismo patrón que ETIQUETAS_TURNO en
+  // src/lib/asistencia-turnos.ts y CONDICIONES_IVA en src/lib/fiscal.ts.
+  tipo            String
+  cantidad        Int
+  stockResultante Int
+  motivo          String?
+  creadoPorId     String?
+  createdAt       DateTime     @default(now())
+
+  @@index([organizationId, productId, createdAt])
 }
 
 // ─── Historial de Cotizaciones ────────────────────────────────────────────
@@ -1194,6 +1225,13 @@ model Asistencia {
   @@index([organizationId])
   @@index([userId])
   @@index([fecha])
+  // Compuestos: GET /api/asistencia y el cron attendance-digest siempre
+  // filtran por organización/usuario + rango de fecha juntos, nunca por
+  // fecha sola — los índices de una sola columna de arriba obligan a un
+  // bitmap AND en vez de un solo index scan. Mismo criterio que ya se usó
+  // para TurnoAsistencia (construida después, en la misma sesión).
+  @@index([organizationId, fecha])
+  @@index([userId, fecha])
 }
 
 // Log real de accesos al CRM — independiente del fichaje (Asistencia, que es
@@ -1264,6 +1302,13 @@ model TurnoAsistencia {
   observaciones  String?
   creadoPorId    String?
   editadoPorId   String?
+  // GPS opcional capturado por el navegador al fichar (Geolocation API) —
+  // nunca bloquea el fichaje si el usuario no da permiso o el navegador no
+  // lo soporta, por eso son nullable. Ver "Ver ubicación" en /rrhh/turnos.
+  latEntrada     Float?
+  lngEntrada     Float?
+  latSalida      Float?
+  lngSalida      Float?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const existing = await db.product.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
     if (!existing) return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
 
-    const { name, description, price, currency, unit } = await req.json()
+    const { name, description, price, currency, unit, trackStock } = await req.json()
     if (currency !== undefined && !VALID_CURRENCIES.has(currency)) {
       return NextResponse.json({ error: `Moneda inválida: "${currency}". Usá USD, ARS o EUR.` }, { status: 400 })
     }
@@ -31,6 +31,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(price       !== undefined && { price: Number(price) }),
         ...(currency    !== undefined && { currency }),
         ...(unit        !== undefined && { unit: unit || 'unidad' }),
+        ...(trackStock  !== undefined && { trackStock: !!trackStock }),
       },
     })
 

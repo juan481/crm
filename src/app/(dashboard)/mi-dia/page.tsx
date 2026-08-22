@@ -23,6 +23,7 @@ import { formatDate } from '@/lib/utils'
 import { argentinaDayKey } from '@/lib/timezone'
 import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
+import { getPositionSafe } from '@/lib/geolocation'
 import type { Task, Ticket, TaskStatus, TaskPriority, TicketCategory } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -138,9 +139,10 @@ export default function MiDiaPage() {
   const handleCheckIn = async () => {
     setCheckingIn(true)
     try {
+      const pos  = await getPositionSafe()
       const res  = await fetch('/api/asistencia/check-in', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modalidad }),
+        body: JSON.stringify({ modalidad, lat: pos?.lat, lng: pos?.lng }),
       })
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
@@ -154,7 +156,11 @@ export default function MiDiaPage() {
   const handleCheckOut = async () => {
     setCheckingOut(true)
     try {
-      const res  = await fetch('/api/asistencia/check-out', { method: 'POST' })
+      const pos  = await getPositionSafe()
+      const res  = await fetch('/api/asistencia/check-out', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: pos?.lat, lng: pos?.lng }),
+      })
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }

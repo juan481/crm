@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -29,6 +29,13 @@ interface EmpresaNotaItem {
 interface Props {
   empresaId:    string
   empresaNombre?: string
+}
+
+// Handle imperativo para el botón "Registrar llamada" (click-to-call) de la
+// ficha de empresa — mismo criterio que ContactoNotasHandle en
+// contacto-notas.tsx.
+export interface EmpresaNotasHandle {
+  focusCall: () => void
 }
 
 // ── Tipo metadata ──────────────────────────────────────────────────────────
@@ -76,7 +83,7 @@ function parseMeta(raw: string | null | undefined): { imageUrl?: string } | null
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function EmpresaNotas({ empresaId }: Props) {
+export const EmpresaNotas = forwardRef<EmpresaNotasHandle, Props>(function EmpresaNotas({ empresaId }, ref) {
   const qc       = useQueryClient()
   const { user } = useAuthStore()
 
@@ -128,6 +135,14 @@ export function EmpresaNotas({ empresaId }: Props) {
     setTipo(newTipo)
     setMinutes(TIPO_META[newTipo].defaultMinutes)
   }
+
+  useImperativeHandle(ref, () => ({
+    focusCall: () => {
+      handleTipoChange('LLAMADA')
+      contentRef.current?.focus()
+      contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+  }))
 
   // Image paste handler for contentEditable
   const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -426,4 +441,4 @@ export function EmpresaNotas({ empresaId }: Props) {
       )}
     </div>
   )
-}
+})

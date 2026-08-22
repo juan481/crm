@@ -97,14 +97,14 @@ const AWS_STEPS = [
   {
     id: 'configset',
     title: '(Opcional) Crear Configuration Set para tracking',
-    desc: 'Solo si querés tracking de entregas, rebotes y aperturas. SES → Configuration Sets → Crear uno → Event Destinations → asociar al SNS Topic (ver paso 6).',
+    desc: 'El botón "Activar métricas de entrega" más abajo hace este paso solo. Esto de acá es sólo si preferís armarlo vos mismo: SES → Configuration Sets → Crear uno → Event Destinations → asociar al SNS Topic (ver paso 6).',
     tag: 'Tracking',
     optional: true,
   },
   {
     id: 'sns',
     title: '(Opcional) Configurar SNS Webhook para eventos',
-    desc: 'SNS → Topics → Crear topic estándar → Suscripción tipo HTTPS. El sistema confirma la suscripción automáticamente. Después, en SES → el Configuration Set → Event Destinations → asociar este topic y activar eventos: Delivery, Bounce, Complaint, Open.',
+    desc: 'El botón "Activar métricas de entrega" más abajo hace este paso solo. Esto de acá es sólo si preferís armarlo vos mismo: SNS → Topics → Crear topic estándar → Suscripción tipo HTTPS. El sistema confirma la suscripción automáticamente. Después, en SES → el Configuration Set → Event Destinations → asociar este topic y activar eventos: Delivery, Bounce, Complaint, Open.',
     tag: 'Tracking',
     optional: true,
   },
@@ -136,6 +136,8 @@ export default function CorreoPage() {
   const [expanded,     setExpanded]     = useState<string | null>(null)
   const [checked,      setChecked]      = useState<Record<string, boolean>>({})
   const [webhookUrl,   setWebhookUrl]   = useState('/api/webhooks/ses')
+  const [autoConfiguring, setAutoConfiguring] = useState(false)
+  const [autoConfigResult, setAutoConfigResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   const smtpForm = useForm<SmtpData>({
     resolver: zodResolver(smtpSchema),
@@ -186,6 +188,33 @@ export default function CorreoPage() {
 
   const toggleExpand = (id: string) =>
     setExpanded(prev => prev === id ? null : id)
+
+  // Botón "Activar métricas de entrega" — hace en un clic lo que los pasos
+  // 5/6 del checklist (marcados "opcional") pedían armar a mano en la
+  // consola de AWS. Requiere que las credenciales SES ya estén guardadas
+  // (por eso llama a handleSave primero si hay cambios pendientes sin
+  // guardar sería confuso — se asume que el usuario ya guardó, igual que
+  // "Probar conexión" ya asumía esto mismo).
+  const handleAutoConfig = async () => {
+    setAutoConfiguring(true); setAutoConfigResult(null)
+    try {
+      const res  = await fetch('/api/settings/email/ses-autoconfig', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        setAutoConfigResult({ ok: false, message: json.error ?? 'Error al configurar' })
+        toast.error(json.error ?? 'Error al configurar')
+        return
+      }
+      setAutoConfigResult({ ok: true, message: json.message })
+      sesForm.setValue('sesConfigSet', json.configSet)
+      toast.success('¡Tracking de entregas activado!')
+    } catch {
+      setAutoConfigResult({ ok: false, message: 'Error de conexión' })
+      toast.error('Error de conexión')
+    } finally {
+      setAutoConfiguring(false)
+    }
+  }
 
   const handleTest = async () => {
     setTesting(true); setTestResult(null)
@@ -454,11 +483,38 @@ export default function CorreoPage() {
               />
 
               <Input
-                label="Configuration Set (opcional — para tracking)"
+                label="Configuration Set (se completa solo al activar el tracking abajo)"
                 placeholder="justcrm-tracking"
                 {...sesForm.register('sesConfigSet')}
               />
             </div>
+          </Card>
+
+          {/* One-click tracking setup */}
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Tracking de entregas, aperturas y rebotes</CardTitle>
+                <CardDescription>
+                  Sin esto, Amazon SES nunca le avisa al CRM si un mail se entregó, se abrió o rebotó —
+                  las campañas se mandan bien igual, pero las métricas de Comunicaciones se quedan siempre en 0.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <p className="text-xs text-[var(--color-text-muted)] mb-3">
+              Este botón crea (o repara) automáticamente, con las credenciales SES de arriba ya guardadas:
+              un topic de SNS, la suscripción de este CRM a ese topic, y un Configuration Set de SES conectado a todo eso.
+              Reemplaza tener que hacerlo a mano en la consola de AWS (pasos 5 y 6 del checklist).
+            </p>
+            <Button type="button" onClick={handleAutoConfig} loading={autoConfiguring} variant="secondary">
+              Activar métricas de entrega
+            </Button>
+            {autoConfigResult && (
+              <div className={`mt-3 flex items-start gap-2 p-3 rounded-xl text-sm ${autoConfigResult.ok ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                {autoConfigResult.ok ? <CheckCircle size={14} className="mt-0.5 shrink-0" /> : <XCircle size={14} className="mt-0.5 shrink-0" />}
+                <span>{autoConfigResult.message}</span>
+              </div>
+            )}
           </Card>
 
           {/* Webhook URL */}
@@ -467,7 +523,7 @@ export default function CorreoPage() {
               <div>
                 <CardTitle>URL del Webhook SNS</CardTitle>
                 <CardDescription>
-                  Usá esta URL cuando crees la suscripción en SNS (paso 6 del checklist)
+                  Se usa sola al activar el tracking arriba — sólo hace falta a mano si preferís armar la suscripción vos mismo en AWS.
                 </CardDescription>
               </div>
             </CardHeader>
@@ -477,15 +533,6 @@ export default function CorreoPage() {
                 className="shrink-0 p-1.5 rounded-lg hover:bg-[var(--color-surface-overlay)] text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] transition-all">
                 {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
               </button>
-            </div>
-            <div className="mt-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-              <p className="text-xs text-amber-300 font-medium mb-1">⚠ Antes de guardar</p>
-              <p className="text-xs text-amber-200/70">
-                Para activar el tracking de rebotes, aperturas y spam, ejecutá en la terminal del servidor:
-              </p>
-              <code className="block text-xs font-mono text-amber-300 bg-amber-900/30 rounded px-2 py-1 mt-1">
-                npx prisma migrate dev --name ses-tracking
-              </code>
             </div>
           </Card>
         </>

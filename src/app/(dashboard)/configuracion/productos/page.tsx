@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { Plus, ArrowLeft, Pencil, Trash2, Package, Upload, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { Plus, ArrowLeft, Pencil, Trash2, Package, Upload, CheckCircle, XCircle, AlertTriangle, Boxes, ArrowDownCircle, ArrowUpCircle, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -88,7 +88,18 @@ const CURRENCY_OPTIONS = [
 ]
 const VALID_CURRENCIES = new Set(CURRENCY_OPTIONS.map(o => o.value))
 
-const EMPTY_FORM = { name: '', description: '', price: '', currency: 'USD', unit: 'unidad' }
+const EMPTY_FORM = { name: '', description: '', price: '', currency: 'USD', unit: 'unidad', trackStock: false }
+
+const TIPO_MOVIMIENTO_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  Entrada: { label: 'Entrada', icon: <ArrowUpCircle size={13} />, color: '#10b981' },
+  Salida:  { label: 'Salida',  icon: <ArrowDownCircle size={13} />, color: '#ef4444' },
+  Ajuste:  { label: 'Ajuste',  icon: <SlidersHorizontal size={13} />, color: '#f59e0b' },
+}
+
+interface StockMovimiento {
+  id: string; tipo: string; cantidad: number; stockResultante: number
+  motivo: string | null; createdAt: string
+}
 
 export default function ProductosPage() {
   const router = useRouter()
@@ -106,6 +117,44 @@ export default function ProductosPage() {
   const [importing,    setImporting]    = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Stock — modal aparte, no reusa showModal/form de arriba (ese es el
+  // form de alta/edición del producto en sí).
+  const [stockProduct, setStockProduct] = useState<Product | null>(null)
+  const [stockTipo,    setStockTipo]    = useState<'Entrada' | 'Salida' | 'Ajuste'>('Entrada')
+  const [stockCantidad, setStockCantidad] = useState('')
+  const [stockMotivo,  setStockMotivo]  = useState('')
+  const [stockSaving,  setStockSaving]  = useState(false)
+
+  const { data: stockData, isLoading: stockLoading } = useQuery<{ data: { stock: number; trackStock: boolean; movimientos: StockMovimiento[] } }>({
+    queryKey: ['product-stock', stockProduct?.id],
+    queryFn: async () => (await fetch(`/api/products/${stockProduct!.id}/stock`)).json(),
+    enabled: !!stockProduct,
+  })
+
+  const openStock = (p: Product) => { setStockProduct(p); setStockTipo('Entrada'); setStockCantidad(''); setStockMotivo('') }
+  const closeStock = () => setStockProduct(null)
+
+  const handleStockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!stockProduct) return
+    const cantidadNum = Number(stockCantidad)
+    if (!stockCantidad || isNaN(cantidadNum) || cantidadNum <= 0) { toast.error('Ingresá una cantidad válida'); return }
+    setStockSaving(true)
+    try {
+      const res = await fetch(`/api/products/${stockProduct.id}/stock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: stockTipo, cantidad: cantidadNum, motivo: stockMotivo.trim() || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success('Stock actualizado')
+      setStockCantidad(''); setStockMotivo('')
+      qc.invalidateQueries({ queryKey: ['product-stock', stockProduct.id] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+    } catch { toast.error('Error de conexión') } finally { setStockSaving(false) }
+  }
+
   const { data, isLoading, isError } = useQuery<{ data: Product[] }>({
     queryKey: ['products'],
     queryFn:  async () => (await fetch('/api/products')).json(),
@@ -116,7 +165,7 @@ export default function ProductosPage() {
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowModal(true) }
   const openEdit   = (p: Product) => {
     setEditing(p)
-    setForm({ name: p.name, description: p.description ?? '', price: String(p.price), currency: p.currency, unit: p.unit })
+    setForm({ name: p.name, description: p.description ?? '', price: String(p.price), currency: p.currency, unit: p.unit, trackStock: p.trackStock })
     setShowModal(true)
   }
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY_FORM) }
@@ -173,6 +222,7 @@ export default function ProductosPage() {
         price:       Number(form.price),
         currency:    form.currency,
         unit:        form.unit.trim() || 'unidad',
+        trackStock:  form.trackStock,
       }
       const url    = editing ? `/api/products/${editing.id}` : '/api/products'
       const method = editing ? 'PATCH' : 'POST'
@@ -248,15 +298,16 @@ export default function ProductosPage() {
               <th className="px-4 py-3 text-left font-semibold hidden md:table-cell" style={{ color: 'var(--color-text-muted)' }}>Descripción</th>
               <th className="px-4 py-3 text-left font-semibold hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>Unidad</th>
               <th className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--color-text-muted)' }}>Precio</th>
+              <th className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--color-text-muted)' }}>Stock</th>
               {canManage && <th className="px-4 py-3 w-20" />}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center" style={{ color: 'var(--color-text-muted)' }}>Cargando...</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center" style={{ color: 'var(--color-text-muted)' }}>Cargando...</td></tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center">
+                <td colSpan={6} className="px-4 py-12 text-center">
                   <Package size={32} className="mx-auto mb-3" style={{ color: 'var(--color-text-subtle)' }} />
                   <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>No hay productos aún</p>
                   <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Agregá productos físicos como cámaras, kits de instalación, etc.</p>
@@ -284,6 +335,23 @@ export default function ProductosPage() {
                 </td>
                 <td className="px-4 py-3 text-right font-bold" style={{ color: 'var(--color-text)' }}>
                   {formatCurrency(p.price, p.currency)}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {p.trackStock ? (
+                    <button
+                      onClick={() => openStock(p)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full transition-opacity hover:opacity-80"
+                      style={{
+                        background: p.stock === 0 ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)',
+                        color: p.stock === 0 ? '#ef4444' : '#10b981',
+                      }}
+                      title="Ver/ajustar stock"
+                    >
+                      <Boxes size={12} /> {p.stock}
+                    </button>
+                  ) : (
+                    <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>—</span>
+                  )}
                 </td>
                 {canManage && (
                   <td className="px-4 py-3">
@@ -350,6 +418,15 @@ export default function ProductosPage() {
             value={form.unit}
             onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
           />
+          <label className="flex items-center gap-2.5 text-sm cursor-pointer select-none" style={{ color: 'var(--color-text)' }}>
+            <input
+              type="checkbox"
+              className="rounded"
+              checked={form.trackStock}
+              onChange={e => setForm(f => ({ ...f, trackStock: e.target.checked }))}
+            />
+            Controlar stock de este producto
+          </label>
           <ModalFooter>
             <Button type="button" variant="ghost" onClick={closeModal}>Cancelar</Button>
             <Button type="submit" loading={saving}>{editing ? 'Guardar' : 'Crear Producto'}</Button>
@@ -366,6 +443,80 @@ export default function ProductosPage() {
           <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancelar</Button>
           <Button variant="danger" onClick={handleDelete} loading={deleting}>Eliminar</Button>
         </ModalFooter>
+      </Modal>
+
+      {/* Stock: ajuste manual + historial */}
+      <Modal open={!!stockProduct} onClose={closeStock} title={`Stock — ${stockProduct?.name ?? ''}`} size="md">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'var(--color-surface-raised)' }}>
+            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Stock actual</span>
+            <span className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>
+              {stockData?.data.stock ?? stockProduct?.stock ?? 0} {stockProduct?.unit}
+            </span>
+          </div>
+
+          <form onSubmit={handleStockSubmit} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Select
+                label="Tipo de movimiento"
+                options={[
+                  { value: 'Entrada', label: 'Entrada (+)' },
+                  { value: 'Salida',  label: 'Salida (−)' },
+                  { value: 'Ajuste',  label: 'Ajuste (+)' },
+                ]}
+                value={stockTipo}
+                onChange={e => setStockTipo(e.target.value as typeof stockTipo)}
+              />
+              <Input
+                label="Cantidad"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="0"
+                value={stockCantidad}
+                onChange={e => setStockCantidad(e.target.value)}
+              />
+            </div>
+            <Input
+              label="Motivo (opcional)"
+              placeholder="Ej: compra a proveedor, instalación en cliente X..."
+              value={stockMotivo}
+              onChange={e => setStockMotivo(e.target.value)}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" size="sm" loading={stockSaving}>Registrar movimiento</Button>
+            </div>
+          </form>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-text-subtle)' }}>Historial</p>
+            {stockLoading ? (
+              <p className="text-sm py-4 text-center" style={{ color: 'var(--color-text-muted)' }}>Cargando...</p>
+            ) : !stockData?.data.movimientos.length ? (
+              <p className="text-sm py-4 text-center" style={{ color: 'var(--color-text-muted)' }}>Todavía no hay movimientos.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {stockData.data.movimientos.map(m => {
+                  const meta = TIPO_MOVIMIENTO_META[m.tipo] ?? TIPO_MOVIMIENTO_META.Ajuste
+                  return (
+                    <div key={m.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: 'var(--color-surface-raised)' }}>
+                      <span style={{ color: meta.color }}>{meta.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                          {meta.label} de {m.cantidad} — quedó en {m.stockResultante}
+                        </p>
+                        {m.motivo && <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{m.motivo}</p>}
+                      </div>
+                      <span className="text-xs shrink-0" style={{ color: 'var(--color-text-subtle)' }}>
+                        {new Date(m.createdAt).toLocaleDateString('es-AR')}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </Modal>
 
       {/* CSV Import preview */}

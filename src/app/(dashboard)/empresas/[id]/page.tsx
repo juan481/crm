@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
-  Briefcase, Plus, Mail, UserCircle2, UserCheck, UserX, MessageCircle,
+  Briefcase, Plus, Mail, UserCircle2, UserCheck, UserX, MessageCircle, Phone, PhoneCall,
   Send, X, CheckSquare, DollarSign,
 } from 'lucide-react'
 import { Select } from '@/components/ui/select'
@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { ContactoForm } from '@/components/directorio/contacto-form'
-import { EmpresaNotas } from '@/components/directorio/empresa-notas'
+import { EmpresaNotas, type EmpresaNotasHandle } from '@/components/directorio/empresa-notas'
 import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto, Empresa } from '@/types'
@@ -28,6 +28,7 @@ export default function EmpresaDetailPage() {
   const qc       = useQueryClient()
   const { user } = useAuthStore()
 
+  const notasRef = useRef<EmpresaNotasHandle>(null)
   const [editOpen,          setEditOpen]          = useState(false)
   const [addContactoOpen,   setAddContactoOpen]   = useState(false)
   const [editingContacto,   setEditingContacto]   = useState<DirectorioContacto | null>(null)
@@ -344,7 +345,18 @@ export default function EmpresaDetailPage() {
       )}
 
       {/* Activity / Notas section */}
-      <EmpresaNotas empresaId={id} empresaNombre={empresa.name} />
+      <div className="flex justify-end -mb-2">
+        <button
+          type="button"
+          onClick={() => notasRef.current?.focusCall()}
+          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:opacity-80"
+          style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
+          title="Registrar llamada"
+        >
+          <PhoneCall size={12} /> Registrar llamada
+        </button>
+      </div>
+      <EmpresaNotas ref={notasRef} empresaId={id} empresaNombre={empresa.name} />
 
       {/* Cotizaciones / historial */}
       <EmpresaCotizaciones empresaId={id} />
@@ -455,12 +467,20 @@ export default function EmpresaDetailPage() {
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
                         {c.phone ? (
-                          <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
-                            target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 hover:underline"
-                            style={{ color: '#22c55e' }}>
-                            <MessageCircle size={12} /> {c.phone}
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 hover:underline"
+                              style={{ color: '#22c55e' }}>
+                              <MessageCircle size={12} /> {c.phone}
+                            </a>
+                            <a href={`tel:${c.phone.replace(/\s+/g, '')}`}
+                              className="p-1 rounded transition-colors hover:bg-[var(--color-surface-raised)]"
+                              style={{ color: 'var(--color-text-muted)' }}
+                              title="Llamar">
+                              <Phone size={12} />
+                            </a>
+                          </div>
                         ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                       </td>
                       {canManage && (

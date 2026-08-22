@@ -18,6 +18,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}))
     const modalidad = MODALIDADES_FICHAJE.includes(body?.modalidad) ? body.modalidad : MODALIDADES_FICHAJE[0]
+    // GPS opcional del navegador — nunca obligatorio ni bloqueante (ver
+    // attendance-widget.tsx: si el usuario no dio permiso o el navegador no
+    // soporta Geolocation, se ficha igual sin lat/lng).
+    const lat = Number.isFinite(body?.lat) && Math.abs(body.lat) <= 90 ? body.lat : null
+    const lng = Number.isFinite(body?.lng) && Math.abs(body.lng) <= 180 ? body.lng : null
 
     // Bug real reportado (Gabriel Guias, 2026-08-21): antes se buscaba "la
     // fila de HOY" — si alguien no cerraba la salida de ayer, cruzar la
@@ -81,6 +86,8 @@ export async function POST(req: NextRequest) {
         etiqueta,
         esPrincipal,
         tardanza,
+        latEntrada: lat,
+        lngEntrada: lng,
       },
     })
 

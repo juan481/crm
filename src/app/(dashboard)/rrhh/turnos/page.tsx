@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, Plus, Pencil, Trash2, Clock, Filter, Star, Briefcase, Home, Sun,
+  ArrowLeft, Plus, Pencil, Trash2, Clock, Filter, Star, Briefcase, Home, Sun, MapPin,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -26,6 +26,10 @@ interface Turno {
   etiqueta: string
   esPrincipal: boolean
   observaciones: string | null
+  latEntrada: number | null
+  lngEntrada: number | null
+  latSalida: number | null
+  lngSalida: number | null
   user: { id: string; name: string; role: string; avatarUrl: string | null }
 }
 
@@ -261,8 +265,28 @@ export default function TurnosAsistenciaPage() {
                         {est.icon}{t.etiqueta}
                       </button>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>{toTimeInput(t.horaEntrada) || '—'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>{toTimeInput(t.horaSalida) || '—'}</td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
+                      <span className="flex items-center gap-1">
+                        {toTimeInput(t.horaEntrada) || '—'}
+                        {t.latEntrada != null && t.lngEntrada != null && (
+                          <a href={`https://www.google.com/maps?q=${t.latEntrada},${t.lngEntrada}`} target="_blank" rel="noopener noreferrer"
+                            title="Ver ubicación de entrada" className="hover:text-[var(--color-primary)] transition-colors">
+                            <MapPin size={11} />
+                          </a>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
+                      <span className="flex items-center gap-1">
+                        {toTimeInput(t.horaSalida) || '—'}
+                        {t.latSalida != null && t.lngSalida != null && (
+                          <a href={`https://www.google.com/maps?q=${t.latSalida},${t.lngSalida}`} target="_blank" rel="noopener noreferrer"
+                            title="Ver ubicación de salida" className="hover:text-[var(--color-primary)] transition-colors">
+                            <MapPin size={11} />
+                          </a>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap font-medium" style={{ color: 'var(--color-text)' }}>{horasDe(t)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">

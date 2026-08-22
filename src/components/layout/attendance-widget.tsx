@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { argentinaDayKey } from '@/lib/timezone'
 import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
+import { getPositionSafe } from '@/lib/geolocation'
 
 interface AsistenciaHoy {
   fecha: string
@@ -113,9 +114,10 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   const handleCheckIn = async () => {
     setBusy(true)
     try {
+      const pos = await getPositionSafe()
       const res = await fetch('/api/asistencia/check-in', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modalidad }),
+        body: JSON.stringify({ modalidad, lat: pos?.lat, lng: pos?.lng }),
       })
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshEverywhere(); return }
@@ -129,7 +131,11 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   const handleCheckOut = async () => {
     setBusy(true)
     try {
-      const res = await fetch('/api/asistencia/check-out', { method: 'POST' })
+      const pos = await getPositionSafe()
+      const res = await fetch('/api/asistencia/check-out', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: pos?.lat, lng: pos?.lng }),
+      })
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshEverywhere(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error al fichar salida'); return }

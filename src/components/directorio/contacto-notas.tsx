@@ -3,7 +3,7 @@
 // Copia adaptada de empresa-notas.tsx para DirectorioContacto — mismo
 // criterio que deal-notas.tsx (Fase 8 del plan): duplicado a propósito.
 
-import { useState, useRef } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -31,6 +31,13 @@ interface ContactoNotaItem {
 
 interface Props {
   contactoId: string
+}
+
+// Handle imperativo para el botón "Registrar llamada" de la ficha del
+// contacto (click-to-call) — pre-selecciona el tipo LLAMADA y pone el foco
+// en el composer ya existente, sin duplicar formulario ni modelo nuevo.
+export interface ContactoNotasHandle {
+  focusCall: () => void
 }
 
 const TIPO_META: Record<Tipo, { label: string; icon: React.ReactNode; color: string; bg: string; placeholder: string; defaultMinutes: number }> = {
@@ -74,7 +81,7 @@ function parseMeta(raw: string | null | undefined): { imageUrl?: string } | null
   try { return JSON.parse(raw) } catch { return null }
 }
 
-export function ContactoNotas({ contactoId }: Props) {
+export const ContactoNotas = forwardRef<ContactoNotasHandle, Props>(function ContactoNotas({ contactoId }, ref) {
   const qc       = useQueryClient()
   const { user } = useAuthStore()
 
@@ -126,6 +133,14 @@ export function ContactoNotas({ contactoId }: Props) {
     setTipo(newTipo)
     setMinutes(TIPO_META[newTipo].defaultMinutes)
   }
+
+  useImperativeHandle(ref, () => ({
+    focusCall: () => {
+      handleTipoChange('LLAMADA')
+      contentRef.current?.focus()
+      contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+  }))
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
     const items = Array.from(e.clipboardData.items)
@@ -412,4 +427,4 @@ export function ContactoNotas({ contactoId }: Props) {
       )}
     </div>
   )
-}
+})

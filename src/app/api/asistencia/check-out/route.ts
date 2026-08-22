@@ -1,15 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { findOpenBlock, mirrorAsistencia } from '@/lib/asistencia-turnos'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const db  = prisma as any
-    const now = new Date()
+    const db   = prisma as any
+    const now  = new Date()
+    const body = await req.json().catch(() => ({}))
+    const lat  = Number.isFinite(body?.lat) && Math.abs(body.lat) <= 90 ? body.lat : null
+    const lng  = Number.isFinite(body?.lng) && Math.abs(body.lng) <= 180 ? body.lng : null
 
     // Mismo fix que check-in: se busca el bloque ABIERTO más reciente, no
     // "la fila de hoy" — así un bloque abierto ayer a las 16:00 se sigue
@@ -23,7 +26,7 @@ export async function POST() {
 
     const turno = await db.turnoAsistencia.update({
       where: { id: openBlock.id },
-      data: { horaSalida: now },
+      data: { horaSalida: now, latSalida: lat, lngSalida: lng },
     })
 
     if (openBlock.esPrincipal) {
