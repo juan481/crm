@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, Plus, Pencil, Trash2, Clock, Filter, Star, Briefcase, Home, Sun, MapPin,
+  ArrowLeft, Plus, Pencil, Trash2, Clock, Filter, Star, Briefcase, Home, Sun, MapPin, Map as MapIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -14,7 +15,17 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { MODALIDADES_FICHAJE, ETIQUETAS_TURNO } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { argentinaDayKey } from '@/lib/timezone'
+import type { MapPoint } from '@/components/rrhh/tecnicos-map'
 import toast from 'react-hot-toast'
+
+// Leaflet toca `window` directo — ssr:false + import dinámico, mismo
+// criterio que ya usa el resto del proyecto para librerías cliente-only
+// (ej. CampaignComposer en comunicaciones/page.tsx). Sólo se carga si Sergio
+// abre el mapa (ver toggle más abajo), no en cada visita a esta pantalla.
+const TecnicosMap = dynamic(
+  () => import('@/components/rrhh/tecnicos-map').then((m) => m.TecnicosMap),
+  { ssr: false, loading: () => <div className="h-[280px] flex items-center justify-center text-sm text-[var(--color-text-muted)]">Cargando mapa…</div> }
+)
 
 interface Turno {
   id: string
@@ -76,6 +87,7 @@ export default function TurnosAsistenciaPage() {
   const [editing, setEditing] = useState<Turno | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [showMap, setShowMap] = useState(false)
 
   const { data: usuariosData } = useQuery({
     queryKey: ['usuarios-internos'],
@@ -107,6 +119,22 @@ export default function TurnosAsistenciaPage() {
     return s + (new Date(t.horaSalida).getTime() - new Date(t.horaEntrada).getTime())
   }, 0)
   const totalHorasLabel = `${Math.floor(totalMs / 3_600_000)}h ${Math.floor((totalMs % 3_600_000) / 60_000)}m`
+
+  // Puntos del mapa — respeta el mismo filtro que ya aplica a la tabla
+  // (mes/empleado/etiqueta/modalidad), igual que "Total horas" de arriba.
+  // useMemo: turnos cambia de referencia en cada refetch aunque el
+  // contenido sea igual — sin esto, TecnicosMap recibía un array `points`
+  // nuevo en cada render y destruía/recreaba el mapa de Leaflet sin razón.
+  const mapPoints = useMemo<MapPoint[]>(() => turnos.flatMap((t) => {
+    const pts: MapPoint[] = []
+    if (t.latEntrada != null && t.lngEntrada != null) {
+      pts.push({ lat: t.latEntrada, lng: t.lngEntrada, kind: 'entrada', label: `${t.user.name} — Entrada ${toTimeInput(t.horaEntrada)}` })
+    }
+    if (t.latSalida != null && t.lngSalida != null) {
+      pts.push({ lat: t.latSalida, lng: t.lngSalida, kind: 'salida', label: `${t.user.name} — Salida ${toTimeInput(t.horaSalida)}` })
+    }
+    return pts
+  }), [turnos])
 
   const openCreate = () => {
     setEditing(null)
@@ -223,6 +251,47 @@ export default function TurnosAsistenciaPage() {
           <p className="text-sm" style={{ color: 'var(--color-text)' }}>
             <span className="font-bold">{totalHorasLabel}</span> totales en {turnos.length} bloque{turnos.length !== 1 ? 's' : ''} (según filtro actual)
           </p>
+        </div>
+      )}
+
+      {/* Mapa de fichajes — mismo filtro que la tabla de abajo. Colapsado por
+          defecto: no tiene sentido pagar la carga de Leaflet/OSM para
+          alguien que sólo quiere editar un bloque. */}
+      {!isLoading && turnos.length > 0 && (
+        <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <button
+            onClick={() => setShowMap((v) => !v)}
+            className="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium transition-colors hover:bg-[var(--color-surface-raised)]"
+            style={{ color: 'var(--color-text)' }}
+          >
+            <span className="flex items-center gap-2">
+              <MapIcon size={15} style={{ color: 'var(--color-text-muted)' }} />
+              Mapa de fichajes
+              {mapPoints.length > 0 && (
+                <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                  {mapPoints.length}
+                </span>
+              )}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>{showMap ? 'Ocultar' : 'Mostrar'}</span>
+          </button>
+          {showMap && (
+            mapPoints.length === 0 ? (
+              <p className="px-4 pb-5 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                Ninguno de los bloques de este filtro tiene ubicación registrada.
+              </p>
+            ) : (
+              <div className="px-4 pb-4">
+                <div className="flex items-center gap-4 mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#10b981' }} />Entrada</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#6366f1' }} />Salida</span>
+                </div>
+                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+                  <TecnicosMap points={mapPoints} />
+                </div>
+              </div>
+            )
+          )}
         </div>
       )}
 

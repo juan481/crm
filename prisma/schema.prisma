@@ -231,6 +231,7 @@ model Organization {
   services                Service[]
   products                Product[]
   stockMovimientos        StockMovimiento[]
+  quickActionUsage        QuickActionUsage[]
   events                  Event[]
   folders                 Folder[]
   documents               Document[]
@@ -328,6 +329,7 @@ model User {
   asistencias             Asistencia[]
   loginEvents             LoginEvent[]
   turnosAsistencia        TurnoAsistencia[]
+  quickActionUsage        QuickActionUsage[]
   memberships             OrganizationMembership[]
 
   @@index([organizationId])
@@ -1169,6 +1171,27 @@ model StockMovimiento {
   createdAt       DateTime     @default(now())
 
   @@index([organizationId, productId, createdAt])
+}
+
+// Uso real de la Barra Rápida móvil (src/components/layout/mobile-quick-bar.tsx)
+// — v1 era un set fijo por rol; esto es lo que permite que se ajuste sola a
+// lo que cada persona usa de verdad (src/lib/quick-actions.ts hace el
+// ranking). actionKey es una clave estable ('fichar','clientes','pipeline',
+// etc.), no la pantalla completa — varias pantallas pueden compartir
+// relevancia sin que cada una necesite su propia fila.
+model QuickActionUsage {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actionKey      String
+  count          Int          @default(1)
+  lastUsedAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, actionKey])
+  @@index([organizationId, userId])
 }
 
 // ─── Historial de Cotizaciones ────────────────────────────────────────────

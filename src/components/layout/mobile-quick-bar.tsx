@@ -2,9 +2,14 @@
 
 // Barra Rápida — 4 accesos directos + "Más", pensada para alguien que abre
 // el CRM desde el celular para hacer UNA cosa puntual (fichar, cotizar,
-// ver un cliente) y no quiere navegar un menú de 16 ítems para llegar. El
-// set de 4 es fijo por rol (v1, confirmado con Juan) — un ajuste
-// automático según el uso real de cada persona queda como mejora futura.
+// ver un cliente) y no quiere navegar un menú de 16 ítems para llegar.
+//
+// v2: las 4 acciones se ordenan por uso real de cada persona (ver
+// src/lib/quick-actions.ts + /api/quick-actions/top|track) — ya no es el
+// set fijo por rol de v1. Ese set curado sigue existiendo como
+// QUICK_ACTION_DEFAULTS: es lo que ve alguien sin historial todavía (día 1)
+// y lo que rellena los huecos si tiene menos de 4 acciones distintas
+// usadas — nunca desaparece del todo, sólo deja de ser lo único posible.
 //
 // Íconos bicolor (fondo de un tono + ícono del color sólido encima) en vez
 // de emoji — mismo criterio "profesional" que ya usan las tarjetas de
@@ -21,12 +26,14 @@ import toast from 'react-hot-toast'
 import {
   Clock, CalendarCheck, LifeBuoy, ClipboardCheck, Calculator, Users,
   TrendingUp, Search, ClipboardList, CalendarClock, CheckSquare,
-  LayoutDashboard, CreditCard, Mail, MoreHorizontal, Loader2, type LucideIcon,
+  LayoutDashboard, CreditCard, Mail, MoreHorizontal, Loader2,
+  FileText, Building2, UserCircle2, FolderOpen, type LucideIcon,
 } from 'lucide-react'
 import { argentinaDayKey } from '@/lib/timezone'
 import { getPositionSafe } from '@/lib/geolocation'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { useSearchStore } from '@/store/search-store'
+import { QUICK_ACTION_DEFAULTS } from '@/lib/quick-actions'
 import type { Role } from '@/types'
 
 interface TurnoHoy { id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }
@@ -39,41 +46,32 @@ type Action =
   | { icon: LucideIcon; label: string; kind: 'fichar' }
   | { icon: LucideIcon; label: string; kind: 'buscar' }
 
-// Sets curados a mano por rol — cada uno son las 4 pantallas/acciones que
-// esa persona toca más seguido en el uso real de Abba (confirmado con
-// Juan). Mismos íconos que ya usa src/components/layout/sidebar.tsx para
-// la misma pantalla, a propósito. SUPER_ADMIN comparte el de ADMIN.
-const QUICK_ACTIONS: Partial<Record<Role, Action[]>> = {
-  TECHNICIAN: [
-    { icon: Clock,          label: 'Fichar',     kind: 'fichar' },
-    { icon: CalendarCheck,  label: 'Mi Día',     kind: 'link', href: '/mi-dia' },
-    { icon: LifeBuoy,       label: 'Tickets',    kind: 'link', href: '/tickets' },
-    { icon: ClipboardCheck, label: 'Asistencia', kind: 'link', href: '/mi-asistencia' },
-  ],
-  SELLER: [
-    { icon: Calculator, label: 'Cotizar',  kind: 'link', href: '/cotizador' },
-    { icon: Users,      label: 'Clientes', kind: 'link', href: '/clientes' },
-    { icon: TrendingUp, label: 'Pipeline', kind: 'link', href: '/pipeline' },
-    { icon: Search,     label: 'Buscar',   kind: 'buscar' },
-  ],
-  HR: [
-    { icon: Clock,         label: 'Fichar', kind: 'fichar' },
-    { icon: ClipboardList, label: 'RRHH',   kind: 'link', href: '/rrhh', exact: true },
-    { icon: CalendarClock, label: 'Turnos', kind: 'link', href: '/rrhh/turnos' },
-    { icon: CheckSquare,   label: 'Tareas', kind: 'link', href: '/tareas' },
-  ],
-  ADMIN: [
-    { icon: LayoutDashboard, label: 'Dashboard', kind: 'link', href: '/dashboard' },
-    { icon: Users,           label: 'Clientes',  kind: 'link', href: '/clientes' },
-    { icon: CreditCard,      label: 'Facturas',  kind: 'link', href: '/facturas' },
-    { icon: Mail,            label: 'Campañas',  kind: 'link', href: '/comunicaciones' },
-  ],
-  SUPER_ADMIN: [
-    { icon: LayoutDashboard, label: 'Dashboard', kind: 'link', href: '/dashboard' },
-    { icon: Users,           label: 'Clientes',  kind: 'link', href: '/clientes' },
-    { icon: CreditCard,      label: 'Facturas',  kind: 'link', href: '/facturas' },
-    { icon: Mail,            label: 'Campañas',  kind: 'link', href: '/comunicaciones' },
-  ],
+// Definición completa de CADA acción posible, indexada por actionKey — las
+// mismas claves que usa src/lib/quick-actions.ts (pool + tracking). El
+// server (GET /api/quick-actions/top) decide CUÁLES 4 mostrar según uso
+// real de cada persona (v2) con fallback a QUICK_ACTION_DEFAULTS del mismo
+// rol mientras no hay suficiente historial — acá sólo se resuelve
+// actionKey → ícono/label/ruta para pintarlo. Mismos íconos que ya usa
+// src/components/layout/sidebar.tsx para la misma pantalla, a propósito.
+const ACTION_DEFS: Record<string, Action> = {
+  fichar:         { icon: Clock,          label: 'Fichar',     kind: 'fichar' },
+  buscar:         { icon: Search,         label: 'Buscar',     kind: 'buscar' },
+  'mi-dia':       { icon: CalendarCheck,  label: 'Mi Día',     kind: 'link', href: '/mi-dia' },
+  tickets:        { icon: LifeBuoy,       label: 'Tickets',    kind: 'link', href: '/tickets' },
+  'mi-asistencia':{ icon: ClipboardCheck, label: 'Asistencia', kind: 'link', href: '/mi-asistencia' },
+  tareas:         { icon: CheckSquare,    label: 'Tareas',     kind: 'link', href: '/tareas' },
+  cotizador:      { icon: Calculator,     label: 'Cotizar',    kind: 'link', href: '/cotizador' },
+  clientes:       { icon: Users,          label: 'Clientes',   kind: 'link', href: '/clientes' },
+  pipeline:       { icon: TrendingUp,     label: 'Pipeline',   kind: 'link', href: '/pipeline' },
+  cotizaciones:   { icon: FileText,       label: 'Cotiz.',     kind: 'link', href: '/cotizaciones' },
+  empresas:       { icon: Building2,      label: 'Empresas',   kind: 'link', href: '/empresas' },
+  contactos:      { icon: UserCircle2,    label: 'Contactos',  kind: 'link', href: '/contactos' },
+  comunicaciones: { icon: Mail,           label: 'Campañas',   kind: 'link', href: '/comunicaciones' },
+  documentos:     { icon: FolderOpen,     label: 'Documentos', kind: 'link', href: '/documentos' },
+  rrhh:           { icon: ClipboardList,  label: 'RRHH',       kind: 'link', href: '/rrhh', exact: true },
+  'rrhh-turnos':  { icon: CalendarClock,  label: 'Turnos',     kind: 'link', href: '/rrhh/turnos' },
+  dashboard:      { icon: LayoutDashboard,label: 'Dashboard',  kind: 'link', href: '/dashboard' },
+  facturas:       { icon: CreditCard,     label: 'Facturas',   kind: 'link', href: '/facturas' },
 }
 
 // Paleta bicolor del botón: fondo tenue + ícono sólido del mismo tono —
@@ -98,7 +96,22 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
   const [ficharBusy, setFicharBusy] = useState(false)
   const setSearchOpen = useSearchStore(s => s.setOpen)
 
-  const actions = QUICK_ACTIONS[role]
+  // v2: 4 acciones ordenadas por uso real (ver src/lib/quick-actions.ts +
+  // /api/quick-actions/top) en vez del set fijo por rol de v1. Mientras
+  // carga, o si el server no devuelve nada usable (recién migrado, sin
+  // historial todavía, o la llamada falló), cae al mismo set curado que
+  // ya existía — nunca un flash de barra vacía ni "sin acciones".
+  const { data: topKeys } = useQuery({
+    queryKey: ['quick-actions-top', userId],
+    queryFn: async () => {
+      const r = await fetch('/api/quick-actions/top')
+      if (!r.ok) return null
+      return ((await r.json()).data ?? []) as string[]
+    },
+    staleTime: 60_000,
+  })
+  const resolvedKeys = topKeys && topKeys.length > 0 ? topKeys : (QUICK_ACTION_DEFAULTS[role] ?? [])
+  const actions = resolvedKeys.map((key) => ACTION_DEFS[key]).filter((a): a is Action => !!a)
 
   const hoyKey = argentinaDayKey()
   const mesCurrent = hoyKey.slice(0, 7)
@@ -117,18 +130,30 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
       return turnos.filter(t => t.fecha.slice(0, 10) === hoyKey)
     },
     staleTime: 30_000,
-    enabled: !!actions?.some(a => a.kind === 'fichar'),
+    enabled: actions.some(a => a.kind === 'fichar'),
   })
   const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
 
-  // No hay set curado para este rol (no debería pasar con los 5 roles de
-  // hoy, pero si mañana se agrega uno nuevo sin actualizar esta lista, la
-  // barra simplemente no se renderiza en vez de romper con un array vacío).
-  if (!actions) return null
+  // No hay ninguna acción resuelta para este rol (no debería pasar — hasta
+  // sin historial, resolvedKeys cae a QUICK_ACTION_DEFAULTS — pero si
+  // mañana se agrega un rol nuevo sin sumarlo a ese mapa, la barra
+  // simplemente no se renderiza en vez de mostrarse vacía salvo "Más").
+  if (actions.length === 0) return null
+
+  // Fire-and-forget — mismo criterio que el tracking de rutas en
+  // app-shell.tsx, pero para las dos acciones que NO son una navegación
+  // (fichar/buscar no cambian el pathname, así que ese efecto nunca las ve).
+  const track = (actionKey: string) => {
+    fetch('/api/quick-actions/track', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actionKey }),
+    }).catch(() => {})
+  }
 
   const handleFichar = async () => {
     if (ficharBusy) return
     setFicharBusy(true)
+    track('fichar')
     try {
       const pos = await getPositionSafe()
       const endpoint = openBlock ? '/api/asistencia/check-out' : '/api/asistencia/check-in'
@@ -193,7 +218,7 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
           )
         }
         return (
-          <QuickBarButton key={a.label} as="button" onClick={() => setSearchOpen(true)}
+          <QuickBarButton key={a.label} as="button" onClick={() => { track('buscar'); setSearchOpen(true) }}
             icon={Icon} label={label} tone={tone} />
         )
       })}

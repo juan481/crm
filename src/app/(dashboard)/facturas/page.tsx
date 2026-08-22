@@ -281,7 +281,11 @@ export default function FacturasPage() {
             const clientName = row.empresa?.name ?? row.client?.name ?? 'Sin cliente'
             return <div className="flex items-center gap-3"><Avatar name={clientName} size="sm" /><p className="font-medium text-[var(--color-text)]">{clientName}</p></div>
           } },
-          { key: 'description', header: 'Descripción', render: (row) => <span className="text-[var(--color-text-muted)]">{row.description ?? 'Servicio'}</span> },
+          // hideOnMobileCard: en la tarjeta de mobile ya se ve Cliente +
+          // Monto + Vencimiento + Estado de entrada — la descripción
+          // ("Servicio" en la mayoría de los casos) es el dato menos
+          // importante de los 6 y sólo agrega ruido a la tarjeta.
+          { key: 'description', header: 'Descripción', hideOnMobileCard: true, render: (row) => <span className="text-[var(--color-text-muted)]">{row.description ?? 'Servicio'}</span> },
           { key: 'amount', header: 'Monto', align: 'right', render: (row) => <span className="font-semibold text-[var(--color-text)]">{formatCurrency(row.amount, row.currency)}</span> },
           { key: 'dueDate', header: 'Vencimiento', render: (row) => <span className={isOverdue(row) && row.status !== 'PAID' ? 'text-red-400 font-medium' : 'text-[var(--color-text-muted)]'}>{formatDate(row.dueDate)}</span> },
           { key: 'status', header: 'Estado', align: 'center', render: (row) => { const v = isOverdue(row) && row.status !== 'PAID' && row.status !== 'CANCELLED' ? 'danger' : STATUS_VARIANTS[row.status] ?? 'neutral'; const l = isOverdue(row) && row.status === 'PENDING' ? 'Vencida' : STATUS_LABELS[row.status] ?? row.status; return <Badge variant={v} dot size="sm">{l}</Badge> } },

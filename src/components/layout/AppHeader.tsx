@@ -14,6 +14,18 @@ import type { AppNotification } from '@/app/api/notifications/route'
 import toast from 'react-hot-toast'
 
 interface EmpresaSearchResult { id: string; name: string; activity: string | null; city: string | null }
+interface ContactoSearchResult {
+  id: string; firstName: string; lastName: string; role: string | null
+  empresa: { id: string; name: string } | null
+}
+// Antes esto sólo buscaba en Empresas — alguien podía existir en el
+// sistema como Contacto (persona dentro de una empresa) y el buscador
+// nunca lo encontraba por nombre. Se agrega Contactos al mismo buscador,
+// cada resultado marcado con su `kind` para poder rutear y mostrar el
+// subtítulo distinto según de dónde vino.
+type SearchResult =
+  | { kind: 'empresa'; id: string; label: string; sublabel: string | null }
+  | { kind: 'contacto'; id: string; label: string; sublabel: string | null }
 
 interface AppHeaderProps {
   user: { id: string; name: string; email: string; avatarUrl: string | null; role: string }
@@ -80,10 +92,24 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
     queryKey: ['search', searchQuery],
     queryFn: async () => {
       if (searchQuery.length < 2) return []
-      const res = await fetch(`/api/empresas?search=${encodeURIComponent(searchQuery)}&limit=6`)
-      if (!res.ok) return []
-      const json = await res.json()
-      return (json.data ?? []) as EmpresaSearchResult[]
+      const q = encodeURIComponent(searchQuery)
+      // Promise.all, no secuencial — y cada fetch se banca su propio fallo
+      // por separado (.catch de abajo): un HR/Técnico sin acceso a
+      // Contactos (canAccess mínimo SELLER en /api/contactos) recibe un 403
+      // ahí, pero eso no debe tirar abajo los resultados de Empresas que sí
+      // le corresponden.
+      const [empresas, contactos] = await Promise.all([
+        fetch(`/api/empresas?search=${q}&limit=5`).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+        fetch(`/api/contactos?search=${q}&limit=5`).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      ])
+      const empresaResults: SearchResult[] = ((empresas.data ?? []) as EmpresaSearchResult[]).map(e => ({
+        kind: 'empresa', id: e.id, label: e.name, sublabel: [e.activity, e.city].filter(Boolean).join(' · ') || null,
+      }))
+      const contactoResults: SearchResult[] = ((contactos.data ?? []) as ContactoSearchResult[]).map(c => ({
+        kind: 'contacto', id: c.id, label: `${c.firstName} ${c.lastName}`.trim(),
+        sublabel: [c.role, c.empresa?.name].filter(Boolean).join(' · ') || null,
+      }))
+      return [...empresaResults, ...contactoResults]
     },
     enabled: searchQuery.length >= 2,
     staleTime: 30 * 1000,
@@ -140,7 +166,7 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
             <input
               autoFocus
               type="text"
-              placeholder="Buscar clientes..."
+              placeholder="Buscar empresas o contactos..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 bg-transparent text-sm outline-none min-w-0"
@@ -190,29 +216,35 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
               </p>
             ) : (
               <ul>
-                {searchResults.map((client) => (
-                  <li key={client.id}>
+                {searchResults.map((result) => (
+                  <li key={`${result.kind}-${result.id}`}>
                     <button
                       onClick={() => {
-                        router.push(`/clientes/${client.id}`)
+                        router.push(result.kind === 'empresa' ? `/clientes/${result.id}` : `/contactos/${result.id}`)
                         setSearchOpen(false)
                         setSearchQuery('')
                       }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--color-surface-raised)]"
                     >
                       <div className="w-7 h-7 rounded-lg gradient-bg flex items-center justify-center text-white text-xs font-bold shrink-0">
-                        {client.name.charAt(0)}
+                        {result.label.charAt(0)}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                          {client.name}
+                          {result.label}
                         </p>
-                        {(client.activity || client.city) && (
+                        {result.sublabel && (
                           <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                            {[client.activity, client.city].filter(Boolean).join(' · ')}
+                            {result.sublabel}
                           </p>
                         )}
                       </div>
+                      <span
+                        className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                        style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-subtle)' }}
+                      >
+                        {result.kind === 'empresa' ? 'Empresa' : 'Contacto'}
+                      </span>
                     </button>
                   </li>
                 ))}

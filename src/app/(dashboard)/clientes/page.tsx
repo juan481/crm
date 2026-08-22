@@ -59,7 +59,9 @@ export default function ClientesPage() {
         />
       </div>
 
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+      {/* overflow-x-auto, no overflow-hidden — ver mismo comentario en
+          empresas/page.tsx. */}
+      <div className="rounded-2xl overflow-x-auto" style={{ border: '1px solid var(--color-border)' }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: 'var(--color-surface-raised)', borderBottom: '1px solid var(--color-border)' }}>

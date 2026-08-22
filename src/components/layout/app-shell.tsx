@@ -9,6 +9,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { MobileQuickBar } from '@/components/layout/mobile-quick-bar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
+import { actionKeyForPath } from '@/lib/quick-actions'
 import type { User } from '@/types'
 
 // Routes each restricted role may access. Everything else redirects to their default.
@@ -86,6 +87,19 @@ export function AppShell({ user, branding, children }: AppShellProps) {
       if (!ok) router.replace(fallback)
     }
   }, [pathname, user.role]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Uso real para la Barra Rápida (v2, ver src/lib/quick-actions.ts) — cada
+  // navegación a una pantalla candidata cuenta como "uso", sin importar si
+  // se llegó por el sidebar, un link interno o la URL a mano. Fire-and-
+  // forget a propósito: nunca debe demorar ni romper la navegación en sí.
+  useEffect(() => {
+    const key = actionKeyForPath(pathname)
+    if (!key) return
+    fetch('/api/quick-actions/track', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actionKey: key }),
+    }).catch(() => {})
+  }, [pathname])
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">

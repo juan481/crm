@@ -569,7 +569,12 @@ export default function EmpresasPage() {
       )}
 
       {/* Table */}
-      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+      {/* overflow-x-auto, no overflow-hidden: las columnas ya se ocultan
+          progresivamente en mobile (md/lg), pero un nombre de empresa
+          excepcionalmente largo en la columna que SIEMPRE queda visible
+          igual podía angostarse mal o recortarse en vez de poder scrollear —
+          mismo criterio ya aplicado en src/components/ui/table.tsx. */}
+      <div className="rounded-2xl overflow-x-auto" style={{ border: '1px solid var(--color-border)' }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: 'var(--color-surface-raised)', borderBottom: '1px solid var(--color-border)' }}>
