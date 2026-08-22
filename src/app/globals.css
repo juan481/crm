@@ -229,6 +229,23 @@ button, a, [role="button"] {
   animation: fadeIn 0.2s ease-out both;
 }
 
+/* ─── Barra Rápida — pop elástico al tocar un ícono ─────────────────────────
+   Mobile no tiene :hover real, así que el "efecto entre animaciones" pedido
+   se dispara con el propio toque: el ícono se pasa de largo (overshoot) y
+   asienta, en vez de sólo cambiar de color de golpe. Ver mobile-quick-bar.tsx. */
+@keyframes qbPop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.22); }
+  60%  { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.qb-pop {
+  animation: qbPop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .qb-pop { animation: none; }
+}
+
 /* ─── Form input base style ─────────────────────────────────────────────── */
 .form-input {
   width: 100%;

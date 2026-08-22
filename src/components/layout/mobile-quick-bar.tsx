@@ -1,74 +1,89 @@
 'use client'
 
-// Barra Rápida — 4 accesos directos con emoji + "Más", pensada para
-// alguien que abre el CRM desde el celular para hacer UNA cosa puntual
-// (fichar, cotizar, ver un cliente) y no quiere navegar un menú de 16
-// ítems para llegar. El set de 4 es fijo por rol (v1, confirmado con
-// Juan) — un ajuste automático según el uso real de cada persona queda
-// como mejora futura, no es parte de esta tanda.
+// Barra Rápida — 4 accesos directos + "Más", pensada para alguien que abre
+// el CRM desde el celular para hacer UNA cosa puntual (fichar, cotizar,
+// ver un cliente) y no quiere navegar un menú de 16 ítems para llegar. El
+// set de 4 es fijo por rol (v1, confirmado con Juan) — un ajuste
+// automático según el uso real de cada persona queda como mejora futura.
 //
-// "Más" reutiliza el mismo drawer del sidebar mobile que ya existe
-// (onMore = abrir ese mismo panel) — no es un menú nuevo, es la
-// "versión completa" de siempre a un toque de distancia.
+// Íconos bicolor (fondo de un tono + ícono del color sólido encima) en vez
+// de emoji — mismo criterio "profesional" que ya usan las tarjetas de
+// estadísticas del Dashboard, reusando los MISMOS íconos de Lucide que ya
+// representan cada pantalla en el sidebar (Fichar→Clock, Mi Día→
+// CalendarCheck, etc.) para que el ícono signifique lo mismo en los dos
+// lugares. "Más" reutiliza el mismo drawer del sidebar mobile de siempre.
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
+import {
+  Clock, CalendarCheck, LifeBuoy, ClipboardCheck, Calculator, Users,
+  TrendingUp, Search, ClipboardList, CalendarClock, CheckSquare,
+  LayoutDashboard, CreditCard, Mail, MoreHorizontal, Loader2, type LucideIcon,
+} from 'lucide-react'
 import { argentinaDayKey } from '@/lib/timezone'
 import { getPositionSafe } from '@/lib/geolocation'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { useSearchStore } from '@/store/search-store'
 import type { Role } from '@/types'
 
-interface AsistenciaHoy { fecha: string; horaEntrada: string | null; horaSalida: string | null; tardanza: boolean }
 interface TurnoHoy { id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }
 
 type Action =
   // exact: '/rrhh' y '/rrhh/turnos' son botones DISTINTOS acá (a diferencia
   // del sidebar, que sólo tiene el primero) — sin exact, estar en Turnos
   // prendía los dos tabs a la vez porque '/rrhh/turnos' arranca con '/rrhh'.
-  | { emoji: string; label: string; kind: 'link'; href: string; exact?: boolean }
-  | { emoji: string; label: string; kind: 'fichar' }
-  | { emoji: string; label: string; kind: 'buscar' }
-  | { emoji: string; label: string; kind: 'more' }
+  | { icon: LucideIcon; label: string; kind: 'link'; href: string; exact?: boolean }
+  | { icon: LucideIcon; label: string; kind: 'fichar' }
+  | { icon: LucideIcon; label: string; kind: 'buscar' }
 
 // Sets curados a mano por rol — cada uno son las 4 pantallas/acciones que
 // esa persona toca más seguido en el uso real de Abba (confirmado con
-// Juan). SUPER_ADMIN comparte el de ADMIN — a esta granularidad no hay
-// necesidad de diferenciarlos, igual que el resto del nav.
+// Juan). Mismos íconos que ya usa src/components/layout/sidebar.tsx para
+// la misma pantalla, a propósito. SUPER_ADMIN comparte el de ADMIN.
 const QUICK_ACTIONS: Partial<Record<Role, Action[]>> = {
   TECHNICIAN: [
-    { emoji: '🕐', label: 'Fichar', kind: 'fichar' },
-    { emoji: '📋', label: 'Mi Día', kind: 'link', href: '/mi-dia' },
-    { emoji: '🎫', label: 'Tickets', kind: 'link', href: '/tickets' },
-    { emoji: '📅', label: 'Asistencia', kind: 'link', href: '/mi-asistencia' },
+    { icon: Clock,          label: 'Fichar',     kind: 'fichar' },
+    { icon: CalendarCheck,  label: 'Mi Día',     kind: 'link', href: '/mi-dia' },
+    { icon: LifeBuoy,       label: 'Tickets',    kind: 'link', href: '/tickets' },
+    { icon: ClipboardCheck, label: 'Asistencia', kind: 'link', href: '/mi-asistencia' },
   ],
   SELLER: [
-    { emoji: '💰', label: 'Cotizar', kind: 'link', href: '/cotizador' },
-    { emoji: '🏢', label: 'Clientes', kind: 'link', href: '/clientes' },
-    { emoji: '📊', label: 'Pipeline', kind: 'link', href: '/pipeline' },
-    { emoji: '🔍', label: 'Buscar', kind: 'buscar' },
+    { icon: Calculator, label: 'Cotizar',  kind: 'link', href: '/cotizador' },
+    { icon: Users,      label: 'Clientes', kind: 'link', href: '/clientes' },
+    { icon: TrendingUp, label: 'Pipeline', kind: 'link', href: '/pipeline' },
+    { icon: Search,     label: 'Buscar',   kind: 'buscar' },
   ],
   HR: [
-    { emoji: '🕐', label: 'Fichar', kind: 'fichar' },
-    { emoji: '🧑‍🤝‍🧑', label: 'RRHH', kind: 'link', href: '/rrhh', exact: true },
-    { emoji: '📅', label: 'Turnos', kind: 'link', href: '/rrhh/turnos' },
-    { emoji: '✅', label: 'Tareas', kind: 'link', href: '/tareas' },
+    { icon: Clock,         label: 'Fichar', kind: 'fichar' },
+    { icon: ClipboardList, label: 'RRHH',   kind: 'link', href: '/rrhh', exact: true },
+    { icon: CalendarClock, label: 'Turnos', kind: 'link', href: '/rrhh/turnos' },
+    { icon: CheckSquare,   label: 'Tareas', kind: 'link', href: '/tareas' },
   ],
   ADMIN: [
-    { emoji: '📊', label: 'Dashboard', kind: 'link', href: '/dashboard' },
-    { emoji: '🏢', label: 'Clientes', kind: 'link', href: '/clientes' },
-    { emoji: '💵', label: 'Facturas', kind: 'link', href: '/facturas' },
-    { emoji: '📣', label: 'Campañas', kind: 'link', href: '/comunicaciones' },
+    { icon: LayoutDashboard, label: 'Dashboard', kind: 'link', href: '/dashboard' },
+    { icon: Users,           label: 'Clientes',  kind: 'link', href: '/clientes' },
+    { icon: CreditCard,      label: 'Facturas',  kind: 'link', href: '/facturas' },
+    { icon: Mail,            label: 'Campañas',  kind: 'link', href: '/comunicaciones' },
   ],
   SUPER_ADMIN: [
-    { emoji: '📊', label: 'Dashboard', kind: 'link', href: '/dashboard' },
-    { emoji: '🏢', label: 'Clientes', kind: 'link', href: '/clientes' },
-    { emoji: '💵', label: 'Facturas', kind: 'link', href: '/facturas' },
-    { emoji: '📣', label: 'Campañas', kind: 'link', href: '/comunicaciones' },
+    { icon: LayoutDashboard, label: 'Dashboard', kind: 'link', href: '/dashboard' },
+    { icon: Users,           label: 'Clientes',  kind: 'link', href: '/clientes' },
+    { icon: CreditCard,      label: 'Facturas',  kind: 'link', href: '/facturas' },
+    { icon: Mail,            label: 'Campañas',  kind: 'link', href: '/comunicaciones' },
   ],
+}
+
+// Paleta bicolor del botón: fondo tenue + ícono sólido del mismo tono —
+// mismo criterio que ya usan las tarjetas de estadísticas (bg 12-14% +
+// color sólido encima), nunca un color plano ni un emoji.
+type Tone = 'neutral' | 'primary' | 'good'
+const TONE_STYLE: Record<Tone, { bg: string; fg: string }> = {
+  neutral: { bg: 'var(--color-surface-raised)', fg: 'var(--color-text-muted)' },
+  primary: { bg: 'rgba(99,102,241,0.14)',       fg: 'var(--color-primary)' },
+  good:    { bg: 'rgba(16,185,129,0.14)',       fg: '#059669' },
 }
 
 interface Props {
@@ -88,19 +103,11 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
   const hoyKey = argentinaDayKey()
   const mesCurrent = hoyKey.slice(0, 7)
 
-  // Mismas queryKeys que attendance-widget.tsx — comparten caché, así que
-  // esto no dispara un fetch extra si el header ya las tiene cargadas.
-  const { data: hoy } = useQuery({
-    queryKey: ['asistencia-hoy', userId],
-    queryFn: async () => {
-      const r = await fetch(`/api/asistencia?mes=${mesCurrent}&userId=${userId}`)
-      if (!r.ok) return null
-      const records = ((await r.json()).data ?? []) as AsistenciaHoy[]
-      return records.find(rec => rec.fecha.slice(0, 10) === hoyKey) ?? null
-    },
-    staleTime: 30_000,
-    enabled: !!actions?.some(a => a.kind === 'fichar'),
-  })
+  // Misma queryKey que attendance-widget.tsx/mi-dia/mi-asistencia — comparte
+  // caché, así que esto no dispara un fetch extra si alguna ya la tiene
+  // cargada. Sólo hace falta turnos-hoy acá: el botón "Fichar" únicamente
+  // necesita saber si hay un bloque ABIERTO, no el detalle de horario/
+  // tardanza que sí usa el widget del header.
   const { data: turnosHoy } = useQuery({
     queryKey: ['turnos-hoy', userId],
     queryFn: async () => {
@@ -161,33 +168,88 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
     >
       {actions.map((a) => {
         const active = a.kind === 'link' && isActive(a.href, a.exact)
-        const content = (
-          <>
-            <span className="text-[19px] leading-none">
-              {a.kind === 'fichar' && ficharBusy ? '⏳' : a.emoji}
-            </span>
-            <span className="text-[9.5px] font-bold tracking-tight" style={{ color: active ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
-              {a.kind === 'fichar' ? (openBlock ? 'Salida' : 'Fichar') : a.label}
-            </span>
-          </>
-        )
-        const className = 'flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-all active:scale-90'
-        const style = { background: active ? 'rgba(99,102,241,0.1)' : 'transparent' }
+        const tone: Tone = a.kind === 'fichar' ? (openBlock ? 'good' : 'neutral') : active ? 'primary' : 'neutral'
+        const Icon = a.kind === 'fichar' && ficharBusy ? Loader2 : a.icon
+        const label = a.kind === 'fichar' ? (openBlock ? 'Salida' : 'Fichar') : a.label
+        const spinning = a.kind === 'fichar' && ficharBusy
 
         if (a.kind === 'link') {
-          return <Link key={a.label} href={a.href} className={className} style={style}>{content}</Link>
+          return (
+            <QuickBarButton key={a.label} as="link" href={a.href} icon={Icon} label={label} tone={tone} />
+          )
         }
         if (a.kind === 'fichar') {
-          return <button key={a.label} onClick={handleFichar} disabled={ficharBusy} className={className} style={style}>{content}</button>
+          return (
+            <QuickBarButton key={a.label} as="button" onClick={handleFichar} disabled={ficharBusy}
+              icon={Icon} label={label} tone={tone} spin={spinning} />
+          )
         }
-        // 'buscar' — abre el mismo buscador del header (useSearchStore),
-        // no duplica la búsqueda de empresas en un segundo lugar.
-        return <button key={a.label} onClick={() => setSearchOpen(true)} className={className} style={style}>{content}</button>
+        return (
+          <QuickBarButton key={a.label} as="button" onClick={() => setSearchOpen(true)}
+            icon={Icon} label={label} tone={tone} />
+        )
       })}
-      <button onClick={onMore} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-all active:scale-90">
-        <span className="text-[16px] leading-none" style={{ color: 'var(--color-text-muted)' }}>⋯</span>
-        <span className="text-[9.5px] font-bold tracking-tight" style={{ color: 'var(--color-text-muted)' }}>Más</span>
-      </button>
+      <QuickBarButton as="button" onClick={onMore} icon={MoreHorizontal} label="Más" tone="neutral" />
     </nav>
+  )
+}
+
+// Botón individual — aislado en su propio componente para que la animación
+// de "toque" (pop elástico del ícono, ya que en mobile no existe :hover)
+// tenga su propio estado y no re-renderice toda la barra en cada tap.
+function QuickBarButton(props: {
+  icon: LucideIcon
+  label: string
+  tone: Tone
+  spin?: boolean
+  disabled?: boolean
+} & (
+  | { as: 'link'; href: string }
+  | { as: 'button'; onClick: () => void }
+)) {
+  const { icon: Icon, label, tone, spin, disabled } = props
+  const [popping, setPopping] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { bg, fg } = TONE_STYLE[tone]
+
+  const pop = () => {
+    // Reinicia la animación aunque se toque muy seguido: si ya estaba
+    // "popping", sacar y volver a poner la clase en el mismo tick no
+    // reinicia el keyframe en CSS — por eso pasa por un frame en `false`.
+    setPopping(false)
+    requestAnimationFrame(() => setPopping(true))
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setPopping(false), 380)
+  }
+
+  const content = (
+    <>
+      <span
+        className={`flex items-center justify-center w-8 h-8 rounded-[10px] transition-colors duration-200 ${popping ? 'qb-pop' : ''}`}
+        style={{ background: bg, color: fg }}
+      >
+        <Icon size={17} strokeWidth={2.25} className={spin ? 'animate-spin' : ''} />
+      </span>
+      <span className="text-[9.5px] font-bold tracking-tight transition-colors duration-200" style={{ color: tone === 'neutral' ? 'var(--color-text-subtle)' : fg }}>
+        {label}
+      </span>
+    </>
+  )
+
+  // globals.css ya pone -webkit-tap-highlight-color: transparent en todo
+  // button/a/[role=button] del sistema — no hace falta repetirlo acá.
+  const className = 'flex-1 flex flex-col items-center justify-center gap-1 py-1.5 rounded-xl select-none'
+
+  if (props.as === 'link') {
+    return (
+      <Link href={props.href} onClick={pop} className={className}>
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button onClick={() => { pop(); props.onClick() }} disabled={disabled} className={className}>
+      {content}
+    </button>
   )
 }
