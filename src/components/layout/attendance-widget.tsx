@@ -205,13 +205,18 @@ export function AttendanceWidget({ userId }: { userId: string }) {
         <Clock size={16} />
       </button>
 
-      {/* Globito recordatorio — se posiciona con right-0 (no left) igual que
-          el popover de abajo, así nunca se sale de la pantalla por el lado
-          derecho en mobile; con max-w limitado tampoco se corta por el
-          izquierdo en una pantalla angosta. */}
+      {/* Bug real reportado (se veía cortado por el lado izquierdo en
+          mobile): `right-0` posicionaba esto relativo al propio ícono del
+          reloj (el wrapper "relative" de arriba, de ~36px de ancho), NO
+          relativo al borde derecho de la pantalla — y a la derecha de este
+          ícono en el header todavía quedan Ayuda, Sugerencia, Tema,
+          Notificaciones y el usuario. En una pantalla angosta eso empuja el
+          panel bien afuera del lado izquierdo. El header nunca scrollea
+          (vive fuera del <main> que sí lo hace, ver app-shell.tsx), así que
+          fixed respecto al viewport es seguro y no se desalinea. */}
       {showBubble && (
         <div
-          className="absolute right-0 top-full mt-2 z-50 px-3 py-2 rounded-xl text-xs font-medium text-white whitespace-nowrap max-w-[85vw]"
+          className="fixed right-4 top-16 z-50 px-3 py-2 rounded-xl text-xs font-medium text-white whitespace-nowrap max-w-[calc(100vw-2rem)]"
           style={{ background: '#1e293b', boxShadow: '0 10px 25px rgba(0,0,0,0.25)' }}
         >
           <div className="absolute -top-1 right-3 w-2 h-2 rotate-45" style={{ background: '#1e293b' }} />
@@ -221,7 +226,7 @@ export function AttendanceWidget({ userId }: { userId: string }) {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-72 rounded-2xl overflow-hidden z-50 p-4"
+          className="fixed right-4 top-16 w-72 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 p-4"
           style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', boxShadow: '0 20px 60px rgba(0,0,0,0.12)' }}
         >
           <p className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Asistencia de hoy</p>

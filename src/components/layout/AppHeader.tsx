@@ -243,8 +243,14 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
             <MessageSquarePlus size={16} />
           </button>
           {suggestOpen && (
+            // fixed, no absolute: este ícono no es el último de la fila (a
+            // la derecha todavía hay Tema, Notificaciones y Usuario) — con
+            // `right-0` relativo al propio ícono, un panel de 320px se
+            // corta por la izquierda en una pantalla angosta. El header no
+            // scrollea (vive fuera del <main>, ver app-shell.tsx), así que
+            // fixed respecto al viewport queda siempre bien alineado.
             <div
-              className="absolute right-0 top-full mt-1 w-80 rounded-2xl overflow-hidden z-50 p-4 space-y-3"
+              className="fixed right-4 top-16 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 p-4 space-y-3"
               style={{
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border-strong)',
@@ -307,8 +313,11 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
             )}
           </button>
           {notifOpen && (
+            // Mismo motivo que el panel de Sugerencia de arriba — todavía
+            // queda el Usuario a la derecha, así que right-0 relativo al
+            // propio ícono se corta por la izquierda en mobile.
             <div
-              className="absolute right-0 top-full mt-1 w-80 rounded-2xl overflow-hidden z-50"
+              className="fixed right-4 top-16 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50"
               style={{
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border-strong)',
@@ -374,8 +383,12 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
             </span>
           </button>
           {userOpen && (
+            // Este sí es el último ícono de la fila — right-0 relativo al
+            // propio trigger ya coincidía con el borde derecho real. Se
+            // pasa a fixed igual, por consistencia con los otros 3 paneles
+            // del header y para no depender de que siga siendo el último.
             <div
-              className="absolute right-0 top-full mt-1 w-52 rounded-2xl overflow-hidden z-50"
+              className="fixed right-4 top-16 w-52 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50"
               style={{
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border-strong)',

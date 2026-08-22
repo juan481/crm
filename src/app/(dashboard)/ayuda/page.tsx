@@ -226,22 +226,53 @@ export default function AyudaPage() {
       </div>
 
       <div className="max-w-[780px] mx-auto px-4 lg:px-6 pt-6 pb-24">
-        <header className="flex items-start gap-3.5 mb-2">
-          <div
-            className="shrink-0 w-9 h-9 mt-1"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              clipPath: 'polygon(50% 0%, 100% 22%, 100% 55%, 50% 100%, 0% 55%, 0% 22%)',
-            }}
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-bold tracking-[0.09em] uppercase text-text-subtle m-0 mb-1.5">JustCRM · by JustCreate</p>
-            <h1 className="text-[28px] font-bold text-text m-0 tracking-tight text-balance">Documentación del sistema</h1>
+        <header className="mb-2">
+          <div className="flex items-start gap-3.5">
+            <div
+              className="shrink-0 w-9 h-9 mt-1"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                clipPath: 'polygon(50% 0%, 100% 22%, 100% 55%, 50% 100%, 0% 55%, 0% 22%)',
+              }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-bold tracking-[0.09em] uppercase text-text-subtle m-0 mb-1.5">JustCRM · by JustCreate</p>
+              <h1 className="text-[28px] font-bold text-text m-0 tracking-tight text-balance">Documentación del sistema</h1>
+            </div>
+            {/* Bug real reportado: este bloque estaba SIEMPRE oculto en mobile
+                (`hidden sm:flex`, sin ningún equivalente para pantallas
+                chicas) — no era "se ve distinto en mobile", directamente no
+                existía forma de llegar a la presentación desde el celular.
+                Se mantiene oculto acá abajo de sm y se repite en una fila
+                propia debajo del header sólo para mobile (ver más abajo). */}
+            <div className="shrink-0 hidden sm:flex flex-col items-end gap-1.5">
+              <Link
+                href="/ayuda/presentacion"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+              >
+                <Presentation size={15} />
+                Ver en presentación
+              </Link>
+              <a
+                href="/presentacion-completa.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                <Sparkles size={12} />
+                Presentación completa (extendida)
+              </a>
+            </div>
           </div>
-          <div className="shrink-0 hidden sm:flex flex-col items-end gap-1.5">
+
+          {/* Misma pareja de links que arriba, sólo visible por debajo de sm
+              — apilados y ocupando el ancho, en vez de comprimidos al lado
+              del título como pasaba antes de agregar el "hidden sm:flex". */}
+          <div className="flex sm:hidden flex-col gap-2 mt-4">
             <Link
               href="/ayuda/presentacion"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13.5px] font-semibold text-white transition-all"
               style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
             >
               <Presentation size={15} />
@@ -251,7 +282,7 @@ export default function AyudaPage() {
               href="/presentacion-completa.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-border text-[13px] font-medium text-indigo-600 dark:text-indigo-400"
             >
               <Sparkles size={12} />
               Presentación completa (extendida)
