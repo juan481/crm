@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
 import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
+import { useSearchStore } from '@/store/search-store'
 import { AttendanceWidget } from '@/components/layout/attendance-widget'
 import type { AppNotification } from '@/app/api/notifications/route'
 import toast from 'react-hot-toast'
@@ -25,7 +26,10 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
   const { darkMode, toggleDarkMode } = useThemeStore()
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchOpen, setSearchOpen] = useState(false)
+  // Vive en un store (no useState local) para que el botón "Buscar" de la
+  // Barra Rápida móvil (mobile-quick-bar.tsx) pueda abrir este mismo
+  // buscador desde afuera, en vez de duplicar la búsqueda de empresas.
+  const { open: searchOpen, setOpen: setSearchOpen } = useSearchStore()
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [suggestOpen, setSuggestOpen] = useState(false)

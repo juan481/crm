@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth-store'
 import { useThemeStore } from '@/store/theme-store'
 import { Sidebar } from '@/components/layout/sidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
+import { MobileQuickBar } from '@/components/layout/mobile-quick-bar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import type { User } from '@/types'
 
@@ -129,13 +130,18 @@ export function AppShell({ user, branding, children }: AppShellProps) {
                 variants={pageVariants}
                 initial="hidden"
                 animate="visible"
-                className="p-4 lg:p-6 max-w-7xl mx-auto w-full"
+                // pb-20 (no sólo lg:p-6) — deja lugar para la Barra Rápida
+                // fija de abajo en mobile; en desktop (lg:hidden en la
+                // barra) no hace falta, así que se anula con lg:pb-6.
+                className="p-4 pb-20 lg:p-6 lg:pb-6 max-w-7xl mx-auto w-full"
               >
                 {children}
               </motion.div>
             </AnimatePresence>
           </ErrorBoundary>
         </main>
+
+        <MobileQuickBar userId={user.id} role={user.role} onMore={() => setSidebarOpen(true)} />
       </div>
     </div>
   )
