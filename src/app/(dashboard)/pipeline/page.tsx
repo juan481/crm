@@ -373,7 +373,7 @@ export default function PipelinePage() {
             {' '}· Arrastrá las tarjetas para moverlas entre etapas
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           <div className="text-right">
             <p className="text-xs text-[var(--color-text-muted)]">Valor esperado</p>
             <p className="text-lg font-bold text-[var(--color-text)]">{formatMultiCurrency(totalPipelineByCurrency)}</p>

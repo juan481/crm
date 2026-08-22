@@ -401,7 +401,7 @@ export default function DocumentosPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             <Button
               variant="secondary"
               leftIcon={<Plus size={15} />}

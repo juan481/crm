@@ -217,7 +217,11 @@ export default function FacturasPage() {
           <div><h1 className="text-2xl font-bold text-[var(--color-text)]">Facturación</h1><p className="text-sm text-[var(--color-text-muted)]">Gestión de facturas y cobros</p></div>
         </div>
         {canManage && (
-          <div className="flex items-center gap-2">
+          // flex-wrap: bug real reportado — Exportar + Generar del Mes +
+          // Nueva Factura juntos no entran en un celular angosto y el
+          // último botón quedaba cortado por el borde de la pantalla en
+          // vez de bajar de línea.
+          <div className="flex items-center gap-2 flex-wrap">
             {exportEnabled && (
               <Button variant="outline" leftIcon={<Download size={16} />} onClick={handleExport} disabled={exporting}>
                 {exporting ? 'Exportando...' : 'Exportar'}

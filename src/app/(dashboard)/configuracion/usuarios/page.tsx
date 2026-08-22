@@ -134,7 +134,7 @@ export default function UsuariosPage() {
             <p className="text-sm text-[var(--color-text-muted)]">{users.length} usuarios en el sistema</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           {isSuperAdmin && (
             <Link href="/configuracion/permisos" className="text-sm text-[var(--color-primary)] hover:underline whitespace-nowrap">
               Gestionar qué ve cada rol →
