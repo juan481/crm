@@ -140,10 +140,18 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
       if (!res.ok) { toast.error(json.error ?? 'Error al fichar'); return }
       if (openBlock) toast.success(`Hasta luego — trabajaste ${json.horasTrabajadas}`)
       else toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : '✅ Entrada registrada')
-      invalidateFichaje(qc)
     } catch {
       toast.error('Error de conexión')
     } finally {
+      // Se invalida SIEMPRE, no sólo en éxito — mismo motivo que el 409
+      // de attendance-widget.tsx llama a refreshEverywhere(): si `openBlock`
+      // (turnos-hoy en caché) estaba desactualizado — por ejemplo, se
+      // fichó desde otra pestaña/pantalla un segundo antes — el server
+      // responde 409/400 y sin refrescar acá el botón queda mostrando
+      // "Fichar"/"Salida" desactualizado, repitiendo el mismo error hasta
+      // que venza el staleTime de 30s solo. Invalidar siempre autocorrige
+      // el estado apenas se resuelve el request, haya salido bien o mal.
+      invalidateFichaje(qc)
       setFicharBusy(false)
     }
   }

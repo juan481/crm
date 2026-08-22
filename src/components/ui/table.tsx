@@ -53,8 +53,13 @@ export function Table<T extends { id: string }>({
 
   return (
     <div className={className}>
-      {/* ── Vista de escritorio: tabla clásica, sin cambios ── */}
-      <div className={cn('hidden md:block overflow-x-auto rounded-2xl surface')}>
+      {/* ── Vista de escritorio: tabla clásica, sin cambios ──
+          lg, no md: el resto de la app (sidebar, drawer mobile, Barra
+          Rápida) corta mobile/desktop en lg — con md acá, una tablet entre
+          768-1024px se quedaba con la barra de mobile Y la tabla de
+          escritorio a la vez, dos criterios de "qué es mobile" distintos
+          en la misma pantalla. */}
+      <div className={cn('hidden lg:block overflow-x-auto rounded-2xl surface')}>
         <table className="w-full">
           <thead>
             <tr className="border-b border-[var(--color-border)]">
@@ -123,8 +128,8 @@ export function Table<T extends { id: string }>({
         </table>
       </div>
 
-      {/* ── Vista de tarjetas: sólo mobile (debajo de md) ── */}
-      <div className="md:hidden rounded-2xl surface overflow-hidden">
+      {/* ── Vista de tarjetas: sólo mobile (debajo de lg, ver comentario arriba) ── */}
+      <div className="lg:hidden rounded-2xl surface overflow-hidden">
         {loading ? (
           <div className="divide-y divide-[var(--color-border)]">
             {Array.from({ length: 4 }).map((_, i) => (
