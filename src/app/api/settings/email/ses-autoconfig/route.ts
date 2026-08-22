@@ -74,7 +74,13 @@ export async function POST(req: NextRequest) {
     try {
       await ses.send(new CreateConfigurationSetCommand({ ConfigurationSet: { Name: configSetName } }))
     } catch (err: any) {
-      if (err?.name !== 'AlreadyExistsException') {
+      // El SDK tira ConfigurationSetAlreadyExistsException acá (NO el
+      // genérico "AlreadyExistsException" — son clases distintas, confirmado
+      // contra node_modules/@aws-sdk/client-ses/dist-types/models/errors.d.ts).
+      // Un chequeo exacto contra el nombre equivocado hacía que correr este
+      // botón dos veces (o que el Configuration Set ya existiera de un
+      // intento manual previo) devolviera 502 en vez de seguir de largo.
+      if (!isAlreadyExists(err)) {
         return NextResponse.json({ error: awsErrorMessage(err, 'crear el Configuration Set de SES') }, { status: 502 })
       }
     }
@@ -90,7 +96,9 @@ export async function POST(req: NextRequest) {
         },
       }))
     } catch (err: any) {
-      if (err?.name !== 'AlreadyExistsException') {
+      // Acá el SDK tira EventDestinationAlreadyExistsException — mismo caso
+      // que arriba, nombre distinto al genérico.
+      if (!isAlreadyExists(err)) {
         return NextResponse.json({ error: awsErrorMessage(err, 'conectar el Configuration Set con el topic de SNS') }, { status: 502 })
       }
     }
@@ -108,6 +116,13 @@ export async function POST(req: NextRequest) {
     console.error('[SES AUTOCONFIG]', error)
     return NextResponse.json({ error: 'Error interno al configurar el tracking' }, { status: 500 })
   }
+}
+
+// Cubre ConfigurationSetAlreadyExistsException, EventDestinationAlreadyExistsException,
+// y cualquier otra variante con el mismo sufijo — más robusto que comparar
+// contra un nombre exacto que además resultó ser el equivocado.
+function isAlreadyExists(err: any): boolean {
+  return typeof err?.name === 'string' && err.name.includes('AlreadyExists')
 }
 
 function awsErrorMessage(err: any, action: string): string {

@@ -162,7 +162,8 @@ export default function MiDiaPage() {
         body: JSON.stringify({ lat: pos?.lat, lng: pos?.lng }),
       })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
+      // check-out/route.ts nunca devuelve 409 (sólo 400) — ver mismo
+      // comentario en attendance-widget.tsx.
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(`Hasta luego! ${json.horasTrabajadas}`)
       refreshAsistencia()

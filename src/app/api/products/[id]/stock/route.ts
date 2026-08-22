@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { isValidTipoMovimiento, nextStock } from '@/lib/stock'
+import { isValidTipoMovimiento } from '@/lib/stock'
 
 interface Params { params: { id: string } }
 
@@ -48,21 +48,32 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const db = prisma as any
+    const delta = tipo === 'Entrada' ? cantidadNum : tipo === 'Salida' ? -cantidadNum : cantidadNum * (signo === -1 ? -1 : 1)
 
-    // $transaction: el nuevo stock y el movimiento que lo justifica se
-    // escriben juntos o no se escribe ninguno — mismo criterio de atomicidad
-    // que ya se usó para mirrorAsistencia (evita que dos ajustes simultáneos
-    // pisen el stock resultante del otro).
+    // UPDATE atómico condicionado (WHERE ... stock + delta >= 0), no
+    // "leer stock, calcular, después update" — con leer-y-escribir por
+    // separado, dos ajustes simultáneos sobre el mismo producto (bug real
+    // encontrado en revisión: dos admins ajustando el mismo producto a la
+    // vez) pueden leer el mismo stock viejo y el segundo UPDATE pisa el
+    // resultado del primero, perdiendo un movimiento en silencio. El UPDATE
+    // condicionado hace que Postgres serialice ambas escrituras por el lock
+    // de fila y sólo la que efectivamente corresponde pasa el WHERE.
     const result = await db.$transaction(async (tx: any) => {
-      const product = await tx.product.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
-      if (!product) return { error: 'Producto no encontrado', status: 404 }
-
-      const nuevoStock = nextStock(product.stock, tipo, cantidadNum, signo === -1 ? -1 : 1)
-      if (nuevoStock < 0) {
-        return { error: `No hay stock suficiente — quedarían ${nuevoStock} unidades. Stock actual: ${product.stock}.`, status: 400 }
+      const rows: { stock: number }[] = await tx.$queryRaw`
+        UPDATE "Product"
+        SET stock = stock + ${delta}
+        WHERE id = ${params.id} AND "organizationId" = ${payload.orgId} AND stock + ${delta} >= 0
+        RETURNING stock
+      `
+      if (rows.length === 0) {
+        // Discrimina "no existe/no es de esta org" de "se quedaría negativo"
+        // — el UPDATE de arriba no distingue por qué no afectó ninguna fila.
+        const existing = await tx.product.findFirst({ where: { id: params.id, organizationId: payload.orgId }, select: { stock: true } })
+        if (!existing) return { error: 'Producto no encontrado', status: 404 }
+        return { error: `No hay stock suficiente — quedarían ${existing.stock + delta} unidades. Stock actual: ${existing.stock}.`, status: 400 }
       }
 
-      const updated = await tx.product.update({ where: { id: params.id }, data: { stock: nuevoStock } })
+      const nuevoStock = rows[0].stock
       const movimiento = await tx.stockMovimiento.create({
         data: {
           productId: params.id,
@@ -72,7 +83,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           creadoPorId: payload.userId,
         },
       })
-      return { product: updated, movimiento }
+      return { product: { stock: nuevoStock }, movimiento }
     })
 
     if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })

@@ -137,7 +137,10 @@ export function AttendanceWidget({ userId }: { userId: string }) {
         body: JSON.stringify({ lat: pos?.lat, lng: pos?.lng }),
       })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); refreshEverywhere(); return }
+      // check-out/route.ts nunca devuelve 409 (sólo 400 "no hay entrada
+      // abierta") — el chequeo de 409 de acá era código muerto copiado del
+      // check-in real, que sí lo usa. !res.ok ya cubre el único caso de
+      // error que esta ruta puede devolver.
       if (!res.ok) { toast.error(json.error ?? 'Error al fichar salida'); return }
       toast.success(`Hasta luego — trabajaste ${json.horasTrabajadas}`)
       refreshEverywhere()

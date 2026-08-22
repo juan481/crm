@@ -10,6 +10,7 @@ import type { Asistencia } from '@/types'
 import { argentinaDayKey } from '@/lib/timezone'
 import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
+import { getPositionSafe } from '@/lib/geolocation'
 import toast from 'react-hot-toast'
 
 function formatHora(dt: string | null): string {
@@ -131,9 +132,10 @@ export default function MiAsistenciaPage() {
   const handleCheckIn = async () => {
     setCheckingIn(true)
     try {
+      const pos  = await getPositionSafe()
       const res  = await fetch('/api/asistencia/check-in', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modalidad }),
+        body: JSON.stringify({ modalidad, lat: pos?.lat, lng: pos?.lng }),
       })
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
@@ -147,9 +149,14 @@ export default function MiAsistenciaPage() {
   const handleCheckOut = async () => {
     setCheckingOut(true)
     try {
-      const res  = await fetch('/api/asistencia/check-out', { method: 'POST' })
+      const pos  = await getPositionSafe()
+      const res  = await fetch('/api/asistencia/check-out', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: pos?.lat, lng: pos?.lng }),
+      })
       const json = await res.json()
-      if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
+      // check-out/route.ts nunca devuelve 409 (sólo 400) — ver mismo
+      // comentario en attendance-widget.tsx/mi-dia/page.tsx.
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(`Hasta luego! Trabajaste ${json.horasTrabajadas}`)
       refreshAsistencia()

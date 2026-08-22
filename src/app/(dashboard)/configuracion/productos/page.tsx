@@ -123,6 +123,12 @@ export default function ProductosPage() {
   const [stockTipo,    setStockTipo]    = useState<'Entrada' | 'Salida' | 'Ajuste'>('Entrada')
   const [stockCantidad, setStockCantidad] = useState('')
   const [stockMotivo,  setStockMotivo]  = useState('')
+  // Sólo aplica cuando stockTipo === 'Ajuste' — Entrada y Salida ya tienen
+  // signo implícito. Bug real encontrado en revisión: el Select de tipo
+  // decía "Ajuste (+)" pero nunca mandaba un signo al server, así que un
+  // Ajuste sólo podía sumar — no había forma de corregir el stock hacia
+  // abajo salvo fingiendo una "Salida".
+  const [stockSigno,   setStockSigno]   = useState<1 | -1>(1)
   const [stockSaving,  setStockSaving]  = useState(false)
 
   const { data: stockData, isLoading: stockLoading } = useQuery<{ data: { stock: number; trackStock: boolean; movimientos: StockMovimiento[] } }>({
@@ -131,7 +137,7 @@ export default function ProductosPage() {
     enabled: !!stockProduct,
   })
 
-  const openStock = (p: Product) => { setStockProduct(p); setStockTipo('Entrada'); setStockCantidad(''); setStockMotivo('') }
+  const openStock = (p: Product) => { setStockProduct(p); setStockTipo('Entrada'); setStockCantidad(''); setStockMotivo(''); setStockSigno(1) }
   const closeStock = () => setStockProduct(null)
 
   const handleStockSubmit = async (e: React.FormEvent) => {
@@ -144,7 +150,10 @@ export default function ProductosPage() {
       const res = await fetch(`/api/products/${stockProduct.id}/stock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: stockTipo, cantidad: cantidadNum, motivo: stockMotivo.trim() || null }),
+        body: JSON.stringify({
+          tipo: stockTipo, cantidad: cantidadNum, motivo: stockMotivo.trim() || null,
+          ...(stockTipo === 'Ajuste' && { signo: stockSigno }),
+        }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
@@ -462,7 +471,7 @@ export default function ProductosPage() {
                 options={[
                   { value: 'Entrada', label: 'Entrada (+)' },
                   { value: 'Salida',  label: 'Salida (−)' },
-                  { value: 'Ajuste',  label: 'Ajuste (+)' },
+                  { value: 'Ajuste',  label: 'Ajuste' },
                 ]}
                 value={stockTipo}
                 onChange={e => setStockTipo(e.target.value as typeof stockTipo)}
@@ -477,6 +486,30 @@ export default function ProductosPage() {
                 onChange={e => setStockCantidad(e.target.value)}
               />
             </div>
+            {stockTipo === 'Ajuste' && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStockSigno(1)}
+                  className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
+                  style={stockSigno === 1
+                    ? { background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid #10b981' }
+                    : { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
+                >
+                  Sumar al stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStockSigno(-1)}
+                  className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
+                  style={stockSigno === -1
+                    ? { background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid #ef4444' }
+                    : { background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
+                >
+                  Restar del stock
+                </button>
+              </div>
+            )}
             <Input
               label="Motivo (opcional)"
               placeholder="Ej: compra a proveedor, instalación en cliente X..."
