@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/store/auth-store'
 import { formatDate } from '@/lib/utils'
 import { argentinaDayKey } from '@/lib/timezone'
-import { MODALIDADES_FICHAJE, findOpenBlockClient } from '@/lib/asistencia-turnos'
+import { MODALIDADES_FICHAJE, findOpenBlockClient, fetchTurnosParaFichaje } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { getPositionSafe } from '@/lib/geolocation'
 import type { Task, Ticket, TaskStatus, TaskPriority, TicketCategory } from '@/types'
@@ -126,13 +126,12 @@ export default function MiDiaPage() {
   // sin ninguna acción posible. Ver findOpenBlockClient en
   // asistencia-turnos.ts. queryKey sigue llamándose 'turnos-hoy' — la
   // comparten el resto de las pantallas de fichaje, no vale tocarla.
+  // fetchTurnosParaFichaje trae el mes actual + el anterior — cubre el
+  // caso límite de un bloque abierto que quedó del otro lado de un cambio
+  // de mes.
   const { data: turnosMes, refetch: refetchTurnos } = useQuery({
     queryKey: ['turnos-hoy', user?.id],
-    queryFn: async () => {
-      const r = await fetch(`/api/asistencia/turnos?userId=${user?.id}&mes=${mesCurrent}`)
-      if (!r.ok) return []
-      return ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
-    },
+    queryFn: () => user?.id ? fetchTurnosParaFichaje(user.id, mesCurrent) : Promise.resolve([]),
     staleTime: 30_000,
     enabled: !!user?.id,
   })

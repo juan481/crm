@@ -31,13 +31,11 @@ import {
 } from 'lucide-react'
 import { argentinaDayKey } from '@/lib/timezone'
 import { getPositionSafe } from '@/lib/geolocation'
-import { findOpenBlockClient } from '@/lib/asistencia-turnos'
+import { findOpenBlockClient, fetchTurnosParaFichaje } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { useSearchStore } from '@/store/search-store'
 import { QUICK_ACTION_DEFAULTS } from '@/lib/quick-actions'
 import type { Role } from '@/types'
-
-interface TurnoHoy { id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }
 
 type Action =
   // exact: '/rrhh' y '/rrhh/turnos' son botones DISTINTOS acá (a diferencia
@@ -122,14 +120,12 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
   // cargada. Sólo hace falta el mes acá: el botón "Fichar" únicamente
   // necesita saber si hay un bloque ABIERTO (de hoy o de un día anterior
   // — ver findOpenBlockClient), no el detalle de horario/tardanza que sí
-  // usa el widget del header.
+  // usa el widget del header. fetchTurnosParaFichaje trae el mes actual +
+  // el anterior — cubre el caso límite de un bloque abierto que quedó del
+  // otro lado de un cambio de mes.
   const { data: turnosMes } = useQuery({
     queryKey: ['turnos-hoy', userId],
-    queryFn: async () => {
-      const r = await fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesCurrent}`)
-      if (!r.ok) return []
-      return ((await r.json()).data ?? []) as TurnoHoy[]
-    },
+    queryFn: () => fetchTurnosParaFichaje(userId, mesCurrent),
     staleTime: 30_000,
     enabled: actions.some(a => a.kind === 'fichar'),
   })

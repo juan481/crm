@@ -66,6 +66,43 @@ export function findOpenBlockClient<T extends { horaEntrada: string | null; hora
   )
 }
 
+// "YYYY-MM" del mes anterior a `mes` — con acarreo de año en enero
+// (Date.UTC ya lo resuelve solo: mes=0 en el constructor da diciembre del
+// año anterior).
+export function mesAnterior(mes: string): string {
+  const [y, m] = mes.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 2, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+export interface TurnoBasico {
+  id: string
+  fecha: string
+  horaEntrada: string | null
+  horaSalida: string | null
+  esPrincipal: boolean
+}
+
+// Trae los turnos del mes actual + el anterior — usado por los 4 lugares
+// que fichan, junto con findOpenBlockClient de arriba. El mes anterior
+// cubre un caso límite del mismo bug: un bloque que quedó abierto y el
+// calendario ya cruzó a un mes nuevo (ej. se abrió el 31 y "hoy" ya es el
+// 2 del mes siguiente) — /api/asistencia/turnos filtra por `fecha` DENTRO
+// de un solo mes, así que pedir sólo el mes actual seguía sin ver ese
+// bloque. Cada fetch se banca su propio fallo por separado (si Vercel
+// tarda o hay un hiccup de red en uno de los dos, el otro igual se usa)
+// para no perder TODO el resultado por un problema puntual en el mes
+// anterior, que es el menos probable de necesitarse.
+export async function fetchTurnosParaFichaje(userId: string, mesActual: string): Promise<TurnoBasico[]> {
+  const [rActual, rAnterior] = await Promise.all([
+    fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesActual}`).catch(() => null),
+    fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesAnterior(mesActual)}`).catch(() => null),
+  ])
+  const dataActual   = rActual?.ok   ? ((await rActual.json()).data ?? [])   : []
+  const dataAnterior = rAnterior?.ok ? ((await rAnterior.json()).data ?? []) : []
+  return [...dataAnterior, ...dataActual]
+}
+
 // Espeja el bloque "principal" del día hacia Asistencia — la tabla vieja
 // NO se toca de otra forma, sigue siendo la fuente real de
 // ausente/tardanza/% de presentismo/cron de avisos. Se llama sólo cuando

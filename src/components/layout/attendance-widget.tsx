@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, LogIn, LogOut, CheckCircle2, Plus, Home, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { argentinaDayKey } from '@/lib/timezone'
-import { MODALIDADES_FICHAJE, findOpenBlockClient } from '@/lib/asistencia-turnos'
+import { MODALIDADES_FICHAJE, findOpenBlockClient, fetchTurnosParaFichaje } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { getPositionSafe } from '@/lib/geolocation'
 
@@ -14,13 +14,6 @@ interface AsistenciaHoy {
   horaEntrada: string | null
   horaSalida: string | null
   tardanza: boolean
-}
-interface TurnoHoy {
-  id: string
-  fecha: string
-  horaEntrada: string | null
-  horaSalida: string | null
-  esPrincipal: boolean
 }
 
 // Widget de fichaje visible en el header, para CUALQUIER rol en CUALQUIER
@@ -78,14 +71,13 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   // findOpenBlockClient en asistencia-turnos.ts para el detalle completo.
   // La queryKey sigue llamándose 'turnos-hoy' a propósito (no vale la pena
   // el riesgo de tocarla — invalidateFichaje() y el resto de las pantallas
-  // ya la comparten por ese nombre).
+  // ya la comparten por ese nombre). fetchTurnosParaFichaje trae el mes
+  // actual + el anterior — cubre el caso límite de un bloque abierto que
+  // quedó del otro lado de un cambio de mes (ver comentario en
+  // asistencia-turnos.ts).
   const { data: turnosMes, refetch: refetchTurnos } = useQuery({
     queryKey: ['turnos-hoy', userId],
-    queryFn: async () => {
-      const r = await fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesCurrent}`)
-      if (!r.ok) return []
-      return ((await r.json()).data ?? []) as TurnoHoy[]
-    },
+    queryFn: () => fetchTurnosParaFichaje(userId, mesCurrent),
     staleTime: 30_000,
   })
   const openBlock = findOpenBlockClient(turnosMes ?? [])
