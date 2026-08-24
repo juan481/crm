@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { argentinaDayKey } from '@/lib/timezone'
 import { getPositionSafe } from '@/lib/geolocation'
+import { findOpenBlockClient } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { useSearchStore } from '@/store/search-store'
 import { QUICK_ACTION_DEFAULTS } from '@/lib/quick-actions'
@@ -118,21 +119,21 @@ export function MobileQuickBar({ userId, role, onMore }: Props) {
 
   // Misma queryKey que attendance-widget.tsx/mi-dia/mi-asistencia — comparte
   // caché, así que esto no dispara un fetch extra si alguna ya la tiene
-  // cargada. Sólo hace falta turnos-hoy acá: el botón "Fichar" únicamente
-  // necesita saber si hay un bloque ABIERTO, no el detalle de horario/
-  // tardanza que sí usa el widget del header.
-  const { data: turnosHoy } = useQuery({
+  // cargada. Sólo hace falta el mes acá: el botón "Fichar" únicamente
+  // necesita saber si hay un bloque ABIERTO (de hoy o de un día anterior
+  // — ver findOpenBlockClient), no el detalle de horario/tardanza que sí
+  // usa el widget del header.
+  const { data: turnosMes } = useQuery({
     queryKey: ['turnos-hoy', userId],
     queryFn: async () => {
       const r = await fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesCurrent}`)
       if (!r.ok) return []
-      const turnos = ((await r.json()).data ?? []) as TurnoHoy[]
-      return turnos.filter(t => t.fecha.slice(0, 10) === hoyKey)
+      return ((await r.json()).data ?? []) as TurnoHoy[]
     },
     staleTime: 30_000,
     enabled: actions.some(a => a.kind === 'fichar'),
   })
-  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+  const openBlock = findOpenBlockClient(turnosMes ?? [])
 
   // No hay ninguna acción resuelta para este rol (no debería pasar — hasta
   // sin historial, resolvedKeys cae a QUICK_ACTION_DEFAULTS — pero si

@@ -38,6 +38,34 @@ export async function findOpenBlock(db: any, userId: string, organizationId: str
   })
 }
 
+// Mismo criterio que findOpenBlock de arriba, pero sobre un array ya
+// traído al cliente — usado por los 4 lugares que fichan (attendance-
+// widget.tsx, mi-dia, mi-asistencia, mobile-quick-bar.tsx).
+//
+// Bug real de producción (reportado 22/08 por un técnico, "fichar salida
+// no me lo permite, me da la opción de fichar entrada de nuevo"): las 4
+// pantallas filtraban los turnos a "sólo los de HOY" ANTES de buscar un
+// bloque abierto — así, un bloque abierto un día anterior (alguien que se
+// olvidó de fichar salida, o un cruce de medianoche que no cerró bien) se
+// volvía invisible del lado del cliente. La pantalla decía "no fichaste
+// entrada" y sólo ofrecía "Fichar entrada" de nuevo — pero el servidor
+// (que sí mira cualquier día, es lo que findOpenBlock hace a propósito)
+// rechazaba ese check-in con 409 "ya tenés una entrada sin cerrar". La
+// persona quedaba sin ninguna acción posible para fichar, ni entrada ni
+// salida. Acá se replica EXACTO el mismo criterio del servidor — el más
+// reciente sin horaSalida, sin importar el día — sobre el array de todo
+// el mes que las 4 pantallas ya venían pidiendo (antes tiraban el resto a
+// la basura con el filtro de "hoy").
+export function findOpenBlockClient<T extends { horaEntrada: string | null; horaSalida: string | null }>(
+  turnos: T[]
+): T | null {
+  const abiertos = turnos.filter((t) => !t.horaSalida && t.horaEntrada)
+  if (abiertos.length === 0) return null
+  return abiertos.reduce((latest, t) =>
+    new Date(t.horaEntrada!).getTime() > new Date(latest.horaEntrada!).getTime() ? t : latest
+  )
+}
+
 // Espeja el bloque "principal" del día hacia Asistencia — la tabla vieja
 // NO se toca de otra forma, sigue siendo la fuente real de
 // ausente/tardanza/% de presentismo/cron de avisos. Se llama sólo cuando

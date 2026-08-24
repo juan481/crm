@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock, LogIn, LogOut, CheckCircle2, Plus, Home, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { argentinaDayKey } from '@/lib/timezone'
-import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { MODALIDADES_FICHAJE, findOpenBlockClient } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { getPositionSafe } from '@/lib/geolocation'
 
@@ -64,22 +64,31 @@ export function AttendanceWidget({ userId }: { userId: string }) {
     staleTime: 30_000,
   })
 
-  // Bloques (regular + extras) de hoy — necesario para saber si hay un
-  // bloque ABIERTO ahora mismo (sea el principal o un extra) y para poder
-  // ofrecer "+ Turno adicional" una vez que el principal ya cerró. Sin
-  // esto, `hoy` (el mirror en Asistencia) sólo sabe del bloque principal —
-  // sería imposible fichar/cerrar un segundo bloque desde acá.
-  const { data: turnosHoy, refetch: refetchTurnos } = useQuery({
+  // Bloques del mes — necesario para saber si hay un bloque ABIERTO ahora
+  // mismo (sea el principal o un extra, de HOY o de un día anterior) y
+  // para poder ofrecer "+ Turno adicional" una vez que el principal ya
+  // cerró. Sin esto, `hoy` (el mirror en Asistencia) sólo sabe del bloque
+  // principal — sería imposible fichar/cerrar un segundo bloque desde acá.
+  //
+  // Bug real de producción: esto filtraba a "sólo los de HOY" antes de
+  // buscar el abierto — un bloque abierto un día anterior (alguien que se
+  // olvidó de fichar salida) se volvía invisible acá, la pantalla ofrecía
+  // "Fichar entrada" de nuevo, y el servidor lo rechazaba con 409 porque
+  // SÍ ve ese bloque — la persona quedaba sin ninguna acción posible. Ver
+  // findOpenBlockClient en asistencia-turnos.ts para el detalle completo.
+  // La queryKey sigue llamándose 'turnos-hoy' a propósito (no vale la pena
+  // el riesgo de tocarla — invalidateFichaje() y el resto de las pantallas
+  // ya la comparten por ese nombre).
+  const { data: turnosMes, refetch: refetchTurnos } = useQuery({
     queryKey: ['turnos-hoy', userId],
     queryFn: async () => {
       const r = await fetch(`/api/asistencia/turnos?userId=${userId}&mes=${mesCurrent}`)
       if (!r.ok) return []
-      const turnos = ((await r.json()).data ?? []) as TurnoHoy[]
-      return turnos.filter(t => t.fecha.slice(0, 10) === hoyKey)
+      return ((await r.json()).data ?? []) as TurnoHoy[]
     },
     staleTime: 30_000,
   })
-  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+  const openBlock = findOpenBlockClient(turnosMes ?? [])
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
@@ -151,13 +160,13 @@ export function AttendanceWidget({ userId }: { userId: string }) {
   const formatHora = (dt: string | null) => dt ? new Date(dt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—'
 
   // Bug real encontrado en auditoría: mientras las 2 queries (`hoy` y
-  // `turnosHoy`) todavía no resolvieron su primer fetch (recién logueado,
+  // `turnosMes`) todavía no resolvieron su primer fetch (recién logueado,
   // hard-reload), `hoy` es `undefined` y `!hoy?.horaEntrada` da `true` —
   // el estado caía siempre a "none" y mostraba "Fichar entrada" aunque la
   // persona ya tuviera la jornada en curso o completa. Se corrige solo
   // apenas llegan los datos, pero mientras tanto mostraba el CTA
   // equivocado. Ahora hay un estado 'loading' explícito.
-  const stillLoading = hoy === undefined || turnosHoy === undefined
+  const stillLoading = hoy === undefined || turnosMes === undefined
 
   // `openBlock` manda por sobre el mirror de Asistencia: si hay CUALQUIER
   // bloque abierto (principal o extra), el botón tiene que ser "salida" —

@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/store/auth-store'
 import { formatDate } from '@/lib/utils'
 import { argentinaDayKey } from '@/lib/timezone'
-import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { MODALIDADES_FICHAJE, findOpenBlockClient } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { getPositionSafe } from '@/lib/geolocation'
 import type { Task, Ticket, TaskStatus, TaskPriority, TicketCategory } from '@/types'
@@ -110,23 +110,33 @@ export default function MiDiaPage() {
     enabled: !!user?.id,
   })
 
-  // Bloques de hoy (regular + extras) — necesario para saber si hay un
-  // bloque ABIERTO ahora mismo, sea el principal o un adicional. Sin esto,
-  // una vez que el principal cerraba (asistenciaHoy.horaSalida ya seteado)
-  // no había forma de fichar/cerrar un segundo turno el mismo día — era
-  // justo el bug real reportado por Gabriel Guias.
-  const { data: turnosHoy, refetch: refetchTurnos } = useQuery({
+  // Bloques del mes (regular + extras) — necesario para saber si hay un
+  // bloque ABIERTO ahora mismo, sea el principal, un adicional, de hoy o
+  // de un día anterior. Sin esto, una vez que el principal cerraba
+  // (asistenciaHoy.horaSalida ya seteado) no había forma de fichar/cerrar
+  // un segundo turno el mismo día — era justo el bug reportado por
+  // Gabriel Guias.
+  //
+  // Bug real de producción (distinto al de arriba, encontrado después):
+  // esto filtraba a "sólo los de HOY" antes de buscar el abierto — un
+  // bloque abierto un día anterior (alguien que se olvidó de fichar
+  // salida) se volvía invisible acá, la pantalla ofrecía "Fichar entrada"
+  // de nuevo, y el servidor lo rechazaba con 409 porque SÍ ve ese bloque
+  // (findOpenBlock, sin filtro de día, a propósito). La persona quedaba
+  // sin ninguna acción posible. Ver findOpenBlockClient en
+  // asistencia-turnos.ts. queryKey sigue llamándose 'turnos-hoy' — la
+  // comparten el resto de las pantallas de fichaje, no vale tocarla.
+  const { data: turnosMes, refetch: refetchTurnos } = useQuery({
     queryKey: ['turnos-hoy', user?.id],
     queryFn: async () => {
       const r = await fetch(`/api/asistencia/turnos?userId=${user?.id}&mes=${mesCurrent}`)
       if (!r.ok) return []
-      const turnos = ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
-      return turnos.filter(t => t.fecha.slice(0, 10) === hoy)
+      return ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
     },
     staleTime: 30_000,
     enabled: !!user?.id,
   })
-  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+  const openBlock = findOpenBlockClient(turnosMes ?? [])
 
   const refreshAsistencia = () => {
     // Bug real encontrado en auditoría: esto sólo refrescaba las 2 queries
@@ -308,13 +318,13 @@ export default function MiDiaPage() {
 
       {/* ── Check-in widget ──────────────────────────────────────────────── */}
       {/* Bug real encontrado en auditoría: mientras `asistenciaHoy` y
-          `turnosHoy` todavía no resolvieron su primer fetch, ambos son
+          `turnosMes` todavía no resolvieron su primer fetch, ambos son
           `undefined` y el cálculo de abajo caía siempre en la rama "no
           fichó" — mostraba el CTA de "Entrada" aunque la persona ya
           tuviera la jornada en curso o completa, hasta que llegaban los
           datos. Ahora se espera a que las dos resuelvan antes de decidir
           qué mostrar. */}
-      {asistenciaHoy === undefined || turnosHoy === undefined ? (
+      {asistenciaHoy === undefined || turnosMes === undefined ? (
         <div className="surface rounded-2xl p-4 h-[76px] animate-pulse" />
       ) : (
       <div className="surface rounded-2xl p-4 flex items-center gap-4 flex-wrap"

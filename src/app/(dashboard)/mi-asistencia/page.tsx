@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import type { Asistencia } from '@/types'
 import { argentinaDayKey } from '@/lib/timezone'
-import { MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { MODALIDADES_FICHAJE, findOpenBlockClient } from '@/lib/asistencia-turnos'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
 import { getPositionSafe } from '@/lib/geolocation'
 import toast from 'react-hot-toast'
@@ -93,32 +93,42 @@ export default function MiAsistenciaPage() {
   const esTardanza = hoyRecord?.tardanza
   const esAusente  = hoyRecord?.ausente
 
-  // Bloques de hoy — sin esto, una vez que el principal cerraba
+  // Bloques del mes — sin esto, una vez que el principal cerraba
   // (hoyRecord.horaSalida ya seteado) no había forma de fichar/cerrar un
   // segundo turno el mismo día. `openBlock` manda por sobre el mirror de
   // Asistencia para decidir si hay que mostrar "Registrar Salida".
-  const { data: turnosHoy, refetch: refetchTurnos } = useQuery({
+  //
+  // Bug real de producción (reportado 22/08 — esta misma pantalla):
+  // filtraba a "sólo los de HOY" antes de buscar el abierto — un bloque
+  // abierto un día anterior (alguien que se olvidó de fichar salida) se
+  // volvía invisible acá, la pantalla decía "no fichaste entrada" y sólo
+  // ofrecía "Registrar Entrada" de nuevo — pero el servidor lo rechazaba
+  // con 409 "ya tenés una entrada sin cerrar" porque SÍ ve ese bloque
+  // (findOpenBlock, sin filtro de día, a propósito). La persona quedaba
+  // sin ninguna acción posible para fichar. Ver findOpenBlockClient en
+  // asistencia-turnos.ts. queryKey sigue llamándose 'turnos-hoy' — la
+  // comparten el resto de las pantallas de fichaje, no vale tocarla.
+  const { data: turnosMes, refetch: refetchTurnos } = useQuery({
     queryKey: ['turnos-hoy', user?.id],
     queryFn: async () => {
       const r = await fetch(`/api/asistencia/turnos?userId=${user?.id}&mes=${mesActual()}`)
       if (!r.ok) return []
-      const turnos = ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
-      return turnos.filter(t => t.fecha.slice(0, 10) === hoy)
+      return ((await r.json()).data ?? []) as Array<{ id: string; fecha: string; horaEntrada: string | null; horaSalida: string | null; esPrincipal: boolean }>
     },
     staleTime: 30_000,
     enabled: !!user?.id,
   })
-  const openBlock = (turnosHoy ?? []).find(t => !t.horaSalida) ?? null
+  const openBlock = findOpenBlockClient(turnosMes ?? [])
   const hasSalida = hasEntrada && !openBlock
 
   // Bug real encontrado en auditoría: `hasEntrada` depende de
   // `historialData` (query `mi-asistencia`) y `openBlock` depende de
-  // `turnosHoy` (query independiente) — si una resuelve antes que la
+  // `turnosMes` (query independiente) — si una resuelve antes que la
   // otra, podía mostrarse un estado incoherente (ej. el flujo de
   // "Registrar Entrada" con selector de modalidad mientras `openBlock` ya
   // señalaba un turno abierto de verdad). Se espera a que las dos
   // resuelvan antes de decidir qué tarjeta mostrar.
-  const stillLoadingAsistencia = historialData === undefined || turnosHoy === undefined
+  const stillLoadingAsistencia = historialData === undefined || turnosMes === undefined
 
   const refreshAsistencia = () => {
     // Bug real encontrado en auditoría: antes esto sólo invalidaba la
