@@ -2,13 +2,13 @@
 
 import { useQuery } from '@tanstack/react-query'
 import dynamic from 'next/dynamic'
-import { Users, DollarSign, AlertCircle, Clock, UserPlus, TrendingUp, CheckSquare, Headphones, FileText } from 'lucide-react'
+import { Users, DollarSign, AlertCircle, Clock, UserPlus, TrendingUp, CheckSquare, Headphones, FileText, MessageCircle, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { MetricCard } from '@/components/dashboard/metric-card'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Avatar } from '@/components/ui/avatar'
-import { formatCurrency, formatMultiCurrency, scaleByCurrency, primaryCurrencyKey } from '@/lib/utils'
+import { formatCurrency, formatMultiCurrency, scaleByCurrency, primaryCurrencyKey, formatDate } from '@/lib/utils'
 import { usePlugin } from '@/hooks/use-plugin'
 import type { DashboardMetrics } from '@/types'
 
@@ -230,6 +230,50 @@ export default function DashboardPage() {
               </div>
             )}
           </Link>
+        </div>
+      )}
+
+      {/* Leads Nuevos — terreno preparado para NISSI (WhatsApp) y futuras fuentes */}
+      {!isLoading && data && (
+        <div className="surface rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-blue-400" />
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">Leads Nuevos</h2>
+              <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                {data.newLeadsThisMonth} este mes
+              </span>
+            </div>
+            <Link href="/pipeline" className="text-xs text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] transition-colors">
+              Ver pipeline →
+            </Link>
+          </div>
+          {data.recentLeads.length === 0 ? (
+            <p className="text-sm text-[var(--color-text-muted)] py-2">Todavía no ingresó ningún lead.</p>
+          ) : (
+            <div className="space-y-1">
+              {data.recentLeads.map((lead) => (
+                <Link
+                  key={lead.id}
+                  href={`/pipeline?dealId=${lead.id}`}
+                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--color-surface-hover)] transition-colors group"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                    {lead.origen === 'WHATSAPP' ? <MessageCircle size={16} /> : <UserPlus size={16} />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[var(--color-text)] truncate">
+                      {lead.origen === 'WHATSAPP' ? 'Ingresó un nuevo cliente por WhatsApp' : lead.title}
+                    </p>
+                    <p className="text-xs text-[var(--color-text-subtle)] truncate">
+                      {lead.origen === 'WHATSAPP' ? lead.title : formatDate(lead.createdAt)}
+                    </p>
+                  </div>
+                  <ChevronRight size={16} className="text-[var(--color-text-subtle)] shrink-0 group-hover:text-[var(--color-primary)] transition-colors" />
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

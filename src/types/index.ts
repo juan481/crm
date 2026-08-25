@@ -321,6 +321,8 @@ export interface DashboardMetrics {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
+  newLeadsThisMonth: number
+  recentLeads: { id: string; title: string; origen: string | null; createdAt: string }[]
   // Bloque financiero — undefined para roles sin acceso (hoy: SELLER). El
   // backend (api/dashboard/metrics/route.ts) ni siquiera corre esas
   // queries ni las manda en el JSON para esos roles — no es sólo un
@@ -442,6 +444,7 @@ export interface Deal {
   expectedCloseDate: string | null
   closedAt: string | null
   notes: string | null
+  origen: string | null
   empresaId: string | null
   empresa?: { id: string; name: string; city?: string | null } | null
   clientId: string | null

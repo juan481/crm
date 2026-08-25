@@ -799,6 +799,11 @@ model Deal {
   expectedCloseDate DateTime?
   closedAt          DateTime?
   notes             String?
+  // Fuente estructurada del lead ('WHATSAPP' | 'MANUAL' | futuras — string
+  // libre, mismo criterio que Organization.vertical/Empresa.condicionIva: no
+  // amerita enum de Prisma porque sumar una fuente nueva no debe pedir
+  // migración. null = alta manual anterior a este campo.
+  origen            String?
   clientId          String?
   client            Client?      @relation(fields: [clientId], references: [id])
   empresaId         String?

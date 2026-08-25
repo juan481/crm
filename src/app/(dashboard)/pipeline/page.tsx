@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -208,7 +209,11 @@ export default function PipelinePage() {
   const [form,     setForm]     = useState<DealFormState>(EMPTY_FORM)
   const [saving,   setSaving]   = useState(false)
   const [movingId, setMovingId] = useState<string | null>(null)
-  const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
+  // Pre-selecciona el deal si se llega desde un link con ?dealId= (ej. la
+  // notificación de "nuevo lead" de la campana) — mismo patrón que
+  // cotizador/page.tsx usa para ?dealId=.
+  const searchParams = useSearchParams()
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(() => searchParams.get('dealId'))
 
   // Drag state
   const [dragOverStage, setDragOverStage] = useState<DealStage | null>(null)

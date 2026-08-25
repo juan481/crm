@@ -238,7 +238,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     if (!ownerId) return { resultText: 'No se pudo crear la oportunidad: no hay ningún administrador cargado en esta organización todavía.' }
 
     const deal = await db.deal.create({
-      data: { title, notes: fullDetail, stage: 'LEAD', ownerId, organizationId: ctx.orgId },
+      data: { title, notes: fullDetail, stage: 'LEAD', ownerId, organizationId: ctx.orgId, origen: 'WHATSAPP' },
     })
     await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: 'VENTAS', dealId: deal.id } })
 

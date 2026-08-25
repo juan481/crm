@@ -47,6 +47,31 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
     })
   }
 
+  // Leads nuevos — hoy sólo entran vía NISSI (WhatsApp), preparado para
+  // sumar más fuentes (Facebook Ads, formulario web, etc.) sin tocar este
+  // bloque, sólo el string libre Deal.origen.
+  const newLeads = await prisma.deal.findMany({
+    where: {
+      organizationId: orgId,
+      stage: 'LEAD',
+      createdAt: { gte: new Date(now.getTime() - 72 * 60 * 60 * 1000) },
+    },
+    select: { id: true, title: true, origen: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 8,
+  })
+
+  for (const deal of newLeads) {
+    notifications.push({
+      id: `lead-${deal.id}`,
+      type: 'new_lead',
+      title: deal.origen === 'WHATSAPP' ? 'Ingresó un nuevo cliente por WhatsApp' : 'Nuevo lead',
+      body: deal.title,
+      href: `/pipeline?dealId=${deal.id}`,
+      severity: 'info',
+    })
+  }
+
   return notifications.slice(0, 15)
 }
 
@@ -71,7 +96,12 @@ export async function GET() {
     // "abierta". Antes esto llegaba a TECHNICIAN/SELLER vía la campanita
     // del header sin ningún chequeo de rol.
     const canSeeFinancials = canAccess(payload.role, 'ADMIN')
-    const data = canSeeFinancials ? all : all.filter(n => n.type !== 'overdue_invoice')
+    const canSeeLeads = canAccess(payload.role, 'SELLER') // TECHNICIAN no tiene Pipeline en su whitelist de rutas
+    const data = all.filter(n => {
+      if (n.type === 'overdue_invoice') return canSeeFinancials
+      if (n.type === 'new_lead') return canSeeLeads
+      return true
+    })
 
     return NextResponse.json(
       { data },

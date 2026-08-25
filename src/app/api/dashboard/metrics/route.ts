@@ -22,6 +22,8 @@ interface MetricsData {
   dealsByStage: Record<string, number>
   cotizacionesEnviadas: number
   cotizacionesAceptadas: number
+  newLeadsThisMonth: number
+  recentLeads: { id: string; title: string; origen: string | null; createdAt: string }[]
   // Bloque financiero — undefined para roles que no superan ADMIN (ver
   // canSeeFinancials en fetchMetrics). El frontend chequea
   // `data.mrrByCurrency !== undefined` antes de renderizar esas tarjetas.
@@ -64,6 +66,8 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
     openTickets,
     activeDeals,
     cotizacionGroups,
+    newLeadsThisMonth,
+    recentLeadsRaw,
   ] = await Promise.all([
     prisma.empresa.count({ where: { organizationId: orgId, isCliente: true } }),
 
@@ -133,6 +137,24 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
       where: { organizationId: orgId },
       _count: { _all: true },
     }),
+
+    // Leads nuevos del mes — mismo scoping por ownerId que activeDeals para
+    // SELLER (ve los suyos, no los de toda la organización).
+    prisma.deal.count({
+      where: {
+        organizationId: orgId, stage: 'LEAD', createdAt: { gte: startOfMonth },
+        ...(role === 'SELLER' && { ownerId: userId }),
+      },
+    }),
+    prisma.deal.findMany({
+      where: {
+        organizationId: orgId, stage: 'LEAD',
+        ...(role === 'SELLER' && { ownerId: userId }),
+      },
+      select: { id: true, title: true, origen: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    }),
   ])
 
   const byCurrencyForMonth = (n: number) => {
@@ -197,6 +219,8 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
     pipelineValueByCurrency, dealsByStage,
     cotizacionesEnviadas: getCotizCount('ENVIADA'),
     cotizacionesAceptadas: getCotizCount('ACEPTADA'),
+    newLeadsThisMonth,
+    recentLeads: recentLeadsRaw.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() })),
     // Sin spread condicional estas keys quedarían presentes con valores
     // "vacíos" (0, []) para un rol sin acceso — eso seguiría siendo plata
     // real filtrada en el JSON aunque la UI no la pinte. `undefined` es la
