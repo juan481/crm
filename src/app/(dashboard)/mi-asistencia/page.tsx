@@ -118,7 +118,21 @@ export default function MiAsistenciaPage() {
     enabled: !!user?.id,
   })
   const openBlock = findOpenBlockClient(turnosMes ?? [])
-  const hasSalida = hasEntrada && !openBlock
+
+  // Bug real de producción (reportado por un técnico — Gabriel Guias,
+  // 24/08): esta pantalla decidía qué tarjeta mostrar mirando primero
+  // `hasEntrada`, que sólo mira el registro de HOY (`hoyRecord`). Cerrar un
+  // bloque abierto de un día ANTERIOR (el fix de más arriba) actualiza el
+  // mirror de ESE día, no el de hoy — así que apenas cerraba su bloque
+  // viejo, esta pantalla seguía sin ver ninguna entrada "de hoy" y volvía a
+  // mostrar "Registrar Entrada" como si nada hubiera pasado. La persona,
+  // viendo eso, tocaba "Registrar Entrada" de nuevo — creando un turno
+  // nuevo, real, de apenas unos minutos, marcado con tardanza, que nunca
+  // debió existir. Las otras 3 pantallas de fichaje (attendance-widget,
+  // mi-dia, mobile-quick-bar) ya miran `openBlock` ANTES que el estado de
+  // "hoy" — acá se ordena igual más abajo: `openBlock` decide antes que
+  // `hasEntrada` si hay que ofrecer Salida o Entrada, sin importar qué
+  // diga `hoyRecord`.
 
   // Bug real encontrado en auditoría: `hasEntrada` depende de
   // `historialData` (query `mi-asistencia`) y `openBlock` depende de
@@ -208,7 +222,7 @@ export default function MiAsistenciaPage() {
               style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
               <AlertCircle size={15} /> Marcado como ausente
             </motion.div>
-          ) : !hasEntrada ? (
+          ) : (!openBlock && !hasEntrada) ? (
             <motion.div key="noEntrada" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-4">
               <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No registraste entrada hoy</p>
@@ -226,7 +240,7 @@ export default function MiAsistenciaPage() {
                 Registrar Entrada
               </Button>
             </motion.div>
-          ) : !hasSalida ? (
+          ) : openBlock ? (
             <motion.div key="sinSalida" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center gap-4">
               <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--color-text-muted)' }}>
