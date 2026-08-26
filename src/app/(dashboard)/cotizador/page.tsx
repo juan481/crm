@@ -7,12 +7,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Minus, MessageCircle, ChevronRight, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
-  TrendingUp, CheckCircle, Search, Package, Wrench, Tag, Clock,
+  TrendingUp, CheckCircle, Search, Package, Wrench, Tag, Clock, Boxes,
+  ShoppingCart,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { formatCurrency } from '@/lib/utils'
+import { Pagination } from '@/components/ui/table'
+import { formatCurrency, cn } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
 import type { Service, Product } from '@/types'
 import toast from 'react-hot-toast'
@@ -84,8 +86,15 @@ export default function CotizadorPage() {
   const [validityDays, setValidityDays] = useState(30)
   const [validityTouched, setValidityTouched] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
-  const [showDropdown, setShowDropdown] = useState(false)
   const [priceMode, setPriceMode] = useState<PriceMode>('PUBLICO')
+  // Paso 1 rediseñado como grilla completa con foto, no un buscador
+  // chiquito con dropdown — categoría y página sólo aplican al catálogo
+  // del proveedor (paginado, potencialmente miles de SKUs); servicios y
+  // productos "simples" son listas cortas, se muestran completas y se
+  // filtran en memoria con itemSearch directo.
+  const [productCategoryId, setProductCategoryId] = useState<string | null>(null)
+  const [productPage, setProductPage] = useState(1)
+  const PRODUCT_GRID_LIMIT = 12
 
   // Debounce sólo para la búsqueda contra el catálogo (server-side, miles
   // de SKUs) — los servicios y productos "simples" siguen filtrándose en
@@ -97,6 +106,10 @@ export default function CotizadorPage() {
     return () => { if (itemSearchDebounceRef.current) clearTimeout(itemSearchDebounceRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemSearch])
+
+  // Cambió el filtro -> volver a la página 1 (si no, se puede quedar en una
+  // página que ya no existe para el nuevo resultado).
+  useEffect(() => { setProductPage(1) }, [debouncedItemSearch, productCategoryId])
 
   const searchParams = useSearchParams()
   // Presente cuando se llega desde "Generar cotización" en el detalle de una
@@ -155,18 +168,28 @@ export default function CotizadorPage() {
       return (await r.json()).data as Product[]
     },
   })
-  const { data: catalogSearchData } = useQuery({
-    queryKey: ['catalogo-search-cotizador', debouncedItemSearch],
+  const { data: catalogGridData, isLoading: loadingCatalogGrid } = useQuery({
+    queryKey: ['catalogo-grid-cotizador', debouncedItemSearch, productCategoryId, productPage],
     queryFn: async () => {
-      // withCount=0 — este dropdown nunca pagina, no hace falta el total
-      // (ver comentario en la ruta: evita un segundo round-trip al pooler
-      // remoto, la mitad de la demora real de esta búsqueda).
-      const r = await fetch(`/api/catalogo/products?q=${encodeURIComponent(debouncedItemSearch)}&limit=20&withCount=0`)
+      const p = new URLSearchParams({ page: String(productPage), limit: String(PRODUCT_GRID_LIMIT) })
+      if (debouncedItemSearch.length >= 2) p.set('q', debouncedItemSearch)
+      if (productCategoryId) p.set('categoryId', productCategoryId)
+      const r = await fetch(`/api/catalogo/products?${p}`)
+      if (!r.ok) return { data: [], total: 0, totalPages: 1 }
+      return r.json()
+    },
+    enabled: activeTab === 'PRODUCT',
+    staleTime: 30_000,
+  })
+  const { data: productCategoriesData } = useQuery({
+    queryKey: ['catalogo-categorias-cotizador'],
+    queryFn: async () => {
+      const r = await fetch('/api/catalogo/categories')
       if (!r.ok) return { data: [] }
       return r.json()
     },
-    enabled: activeTab === 'PRODUCT' && debouncedItemSearch.length >= 2,
-    staleTime: 30_000,
+    enabled: activeTab === 'PRODUCT',
+    staleTime: 5 * 60_000,
   })
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-cotizador'],
@@ -218,7 +241,10 @@ export default function CotizadorPage() {
   const arsRate  = rateData?.venta ?? null
   const services = servicesData ?? []
   const products = productsData ?? []
-  const catalogResults: Product[] = (activeTab === 'PRODUCT' && debouncedItemSearch.length >= 2) ? (catalogSearchData?.data ?? []) : []
+  const catalogGridItems: Product[] = catalogGridData?.data ?? []
+  const catalogGridTotal: number = catalogGridData?.total ?? 0
+  const catalogGridTotalPages: number = catalogGridData?.totalPages ?? 1
+  const productCategories: { id: string; name: string; productCount: number }[] = productCategoriesData?.data ?? []
   const empresas = Array.isArray(empresasData) ? empresasData : []
   const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
 
@@ -255,20 +281,14 @@ export default function CotizadorPage() {
   }
   const clearCart = () => setCart({})
 
-  // Current catalog filtered by tab + search. Servicios y productos
-  // "simples" se filtran en memoria (listas chicas, como siempre);
-  // catalogResults ya viene filtrado por el servidor (name/sku/brand/mpn),
-  // no se le vuelve a aplicar el filtro por nombre acá — filtrar de nuevo
-  // por nombre dejaría afuera un resultado que matcheó por SKU o marca.
-  const catalog: Array<{ type: ItemType; item: Service | Product }> =
-    activeTab === 'SERVICE'
-      ? services.map(s => ({ type: 'SERVICE' as const, item: s }))
-      : products.map(p => ({ type: 'PRODUCT' as const, item: p }))
-
-  const filteredCatalog: Array<{ type: ItemType; item: Service | Product }> = [
-    ...catalog.filter(({ item }) => !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())),
-    ...(activeTab === 'PRODUCT' ? catalogResults.map(p => ({ type: 'PRODUCT' as const, item: p })) : []),
-  ]
+  // Servicios y productos "simples" son listas cortas ya cargadas enteras
+  // — se filtran en memoria con itemSearch directo, sin debounce ni
+  // paginar. El catálogo del proveedor (grilla paginada) ya viene
+  // filtrado por el servidor (name/sku/brand/mpn + categoría), no se le
+  // vuelve a aplicar el filtro por nombre acá — filtrar de nuevo por
+  // nombre dejaría afuera un resultado que matcheó por SKU o marca.
+  const filteredServices: Service[] = services.filter(s => !itemSearch || s.name.toLowerCase().includes(itemSearch.toLowerCase()))
+  const filteredSimpleProducts: Product[] = products.filter(p => !itemSearch || p.name.toLowerCase().includes(itemSearch.toLowerCase()))
 
   // El banner grande de "sin nada cargado" sólo aplica a Servicios — el
   // catálogo de Productos puede tener miles de SKUs buscables aunque no
@@ -789,7 +809,7 @@ export default function CotizadorPage() {
             { type: 'SERVICE' as ItemType, label: 'Servicios', icon: <Wrench size={13} /> },
             { type: 'PRODUCT' as ItemType, label: 'Productos', icon: <Package size={13} /> },
           ]).map(tab => (
-            <button key={tab.type} onClick={() => { setActiveTab(tab.type); setItemSearch(''); setShowDropdown(false) }}
+            <button key={tab.type} onClick={() => { setActiveTab(tab.type); setItemSearch('') }}
               className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                 activeTab === tab.type ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
               }`}>
@@ -799,7 +819,9 @@ export default function CotizadorPage() {
         </div>
 
         {loadingCatalog ? (
-          <div className="h-11 rounded-xl animate-pulse" style={{ background: 'var(--color-surface)' }} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-40 rounded-2xl animate-pulse" style={{ background: 'var(--color-surface)' }} />)}
+          </div>
         ) : errorCatalog ? (
           <div className="rounded-2xl p-6 text-center flex flex-col items-center gap-2"
             style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -821,74 +843,180 @@ export default function CotizadorPage() {
             <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Configurá en Ajustes → Servicios</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {/* Search dropdown */}
-            <div className="relative">
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}>
-                <Search size={14} style={{ color: 'var(--color-text-subtle)' }} />
-                <input
-                  type="text"
-                  placeholder={`Buscar ${activeTab === 'SERVICE' ? 'servicio' : 'producto'}...`}
-                  value={itemSearch}
-                  onChange={e => { setItemSearch(e.target.value); setShowDropdown(true) }}
-                  onFocus={() => setShowDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-                  className="flex-1 text-sm bg-transparent outline-none"
-                  style={{ color: 'var(--color-text)' }}
-                />
-                {itemSearch && <button onClick={() => { setItemSearch(''); setShowDropdown(false) }} style={{ color: 'var(--color-text-subtle)' }}><X size={13} /></button>}
-              </div>
-
-              <AnimatePresence>
-                {showDropdown && (
-                  <motion.ul
-                    initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.1 }}
-                    className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden shadow-lg max-h-60 overflow-y-auto"
-                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
-                  >
-                    {filteredCatalog.length === 0 ? (
-                      <li className="px-4 py-3 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
-                        Sin resultados para "{itemSearch}"
-                      </li>
-                    ) : filteredCatalog.map(({ type, item }) => {
-                      const k = itemKey(type, item.id)
-                      const inCart = cart[k]?.quantity ?? 0
-                      const unitPrice = getUnitPrice(type, item, priceMode)
-                      const priceLabel = type === 'SERVICE'
-                        ? `${formatPrice(unitPrice, item.currency)}/${BILLING_LABELS[(item as Service).billingCycle] ?? 'mes'}`
-                        : `${formatPrice(unitPrice, item.currency)}/${(item as Product).unit}`
-                      // Badge SKU+marca — diferencia un producto de catálogo
-                      // (miles de SKUs del proveedor) de uno "simple".
-                      const sku = type === 'PRODUCT' ? (item as Product).sku : null
-                      const brand = type === 'PRODUCT' ? (item as Product).brand : null
-                      return (
-                        <li key={k}>
-                          <button className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[var(--color-surface-raised)] transition-colors"
-                            onMouseDown={() => { addItem(type, item); setItemSearch(''); setShowDropdown(false) }}>
-                            <span>
-                              <span className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
-                                {type === 'SERVICE' ? <Wrench size={11} style={{ color: 'var(--color-primary)' }} /> : <Package size={11} style={{ color: '#f59e0b' }} />}
-                                {item.name}
-                                {inCart > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full ml-1" style={{ background: 'var(--color-primary)', color: 'white' }}>{inCart}</span>}
-                              </span>
-                              {sku && (
-                                <span className="text-xs block mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>
-                                  {sku}{brand ? ` · ${brand}` : ''}
-                                </span>
-                              )}
-                              {!sku && (item as any).description && <span className="text-xs block mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>{(item as any).description}</span>}
-                            </span>
-                            <span className="text-sm font-bold shrink-0 ml-3" style={{ color: 'var(--color-primary)' }}>{priceLabel}</span>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </motion.ul>
-                )}
-              </AnimatePresence>
+          <div className="space-y-4">
+            {/* Buscador — filtra la grilla de abajo en vez de flotar un
+                dropdown chiquito: en Productos, con miles de SKUs del
+                proveedor, un listado completo con foto pide más lugar que
+                10 líneas de texto. */}
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}>
+              <Search size={14} style={{ color: 'var(--color-text-subtle)' }} />
+              <input
+                type="text"
+                placeholder={`Buscar ${activeTab === 'SERVICE' ? 'servicio' : 'producto, SKU o marca'}...`}
+                value={itemSearch}
+                onChange={e => setItemSearch(e.target.value)}
+                className="flex-1 text-sm bg-transparent outline-none"
+                style={{ color: 'var(--color-text)' }}
+              />
+              {itemSearch && <button onClick={() => setItemSearch('')} style={{ color: 'var(--color-text-subtle)' }}><X size={13} /></button>}
             </div>
+
+            {/* Categorías del catálogo — sólo Productos */}
+            {activeTab === 'PRODUCT' && productCategories.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setProductCategoryId(null)}
+                  className={cn(
+                    'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                    !productCategoryId ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)]'
+                  )}
+                >
+                  Todas
+                </button>
+                {productCategories.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setProductCategoryId(c.id)}
+                    className={cn(
+                      'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                      productCategoryId === c.id ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)]'
+                    )}
+                  >
+                    {c.name} <span className="opacity-60">({c.productCount})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Grilla de Servicios */}
+            {activeTab === 'SERVICE' && (
+              filteredServices.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: 'var(--color-text-muted)' }}>Sin resultados para "{itemSearch}"</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredServices.map(s => {
+                    const k = itemKey('SERVICE', s.id)
+                    const inCart = cart[k]?.quantity ?? 0
+                    const unitPrice = getUnitPrice('SERVICE', s, priceMode)
+                    return (
+                      <div key={k} className="surface rounded-2xl p-3 flex flex-col gap-2">
+                        <div className="w-full aspect-[4/3] rounded-xl bg-[var(--color-surface-raised)] flex items-center justify-center">
+                          <Wrench size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                        </div>
+                        <p className="text-xs font-medium leading-snug line-clamp-2 flex-1" style={{ color: 'var(--color-text)' }}>{s.name}</p>
+                        <p className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
+                          {formatPrice(unitPrice, s.currency)}<span className="text-xs font-normal" style={{ color: 'var(--color-text-subtle)' }}>/{BILLING_LABELS[s.billingCycle] ?? 'mes'}</span>
+                        </p>
+                        <button onClick={() => addItem('SERVICE', s)}
+                          className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold gradient-bg text-white">
+                          <Plus size={12} /> {inCart > 0 ? `Agregado ×${inCart}` : 'Agregar'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            )}
+
+            {/* Grilla de Productos: primero los cargados a mano (pocos, sin
+                paginar), después el catálogo del proveedor (paginado). */}
+            {activeTab === 'PRODUCT' && (
+              <>
+                {filteredSimpleProducts.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-text-subtle)' }}>Tus productos</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {filteredSimpleProducts.map(p => {
+                        const k = itemKey('PRODUCT', p.id)
+                        const inCart = cart[k]?.quantity ?? 0
+                        const unitPrice = getUnitPrice('PRODUCT', p, priceMode)
+                        return (
+                          <div key={k} className="surface rounded-2xl p-3 flex flex-col gap-2">
+                            <div className="w-full aspect-[4/3] rounded-xl bg-[var(--color-surface-raised)] flex items-center justify-center">
+                              <Package size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                            </div>
+                            <p className="text-xs font-medium leading-snug line-clamp-2 flex-1" style={{ color: 'var(--color-text)' }}>{p.name}</p>
+                            <p className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
+                              {formatPrice(unitPrice, p.currency)}<span className="text-xs font-normal" style={{ color: 'var(--color-text-subtle)' }}>/{p.unit}</span>
+                            </p>
+                            <button onClick={() => addItem('PRODUCT', p)}
+                              className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold gradient-bg text-white">
+                              <Plus size={12} /> {inCart > 0 ? `Agregado ×${inCart}` : 'Agregar'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  {filteredSimpleProducts.length > 0 && (
+                    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-text-subtle)' }}>Catálogo del proveedor</p>
+                  )}
+                  {loadingCatalogGrid ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-40 rounded-2xl animate-pulse" style={{ background: 'var(--color-surface)' }} />)}
+                    </div>
+                  ) : catalogGridItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <Boxes size={26} className="mb-2 opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                      <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                        No hay productos del catálogo que coincidan {itemSearch ? `con "${itemSearch}"` : 'con el filtro'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {catalogGridItems.map(p => {
+                          const k = itemKey('PRODUCT', p.id)
+                          const inCart = cart[k]?.quantity ?? 0
+                          const unitPrice = getUnitPrice('PRODUCT', p, priceMode)
+                          const hasGremio = p.precioGremio != null
+                          return (
+                            <div key={k} className="surface rounded-2xl overflow-hidden flex flex-col">
+                              <div className="w-full aspect-[4/3] bg-[var(--color-surface-raised)] flex items-center justify-center overflow-hidden">
+                                {p.imageUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" loading="lazy" />
+                                ) : (
+                                  <Boxes size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                                )}
+                              </div>
+                              <div className="p-3 flex flex-col gap-1.5 flex-1">
+                                <p className="text-xs font-medium leading-snug line-clamp-2" style={{ color: 'var(--color-text)' }}>{p.name}</p>
+                                <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>{p.sku}{p.brand ? ` · ${p.brand}` : ''}</p>
+                                <div className="mt-auto flex items-center gap-1.5">
+                                  <p className="text-sm font-bold" style={{ color: priceMode === 'GREMIO' && hasGremio ? '#10b981' : 'var(--color-primary)' }}>
+                                    {formatPrice(unitPrice, p.currency)}
+                                  </p>
+                                  {hasGremio && (
+                                    <span className={cn(
+                                      'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+                                      priceMode === 'GREMIO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-[var(--color-surface-raised)] text-[var(--color-text-subtle)]'
+                                    )}>
+                                      Gremio
+                                    </span>
+                                  )}
+                                </div>
+                                <button onClick={() => addItem('PRODUCT', p)}
+                                  className="mt-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold gradient-bg text-white">
+                                  <ShoppingCart size={12} /> {inCart > 0 ? `Agregado ×${inCart}` : 'Agregar'}
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {catalogGridTotalPages > 1 && (
+                        <Pagination page={productPage} totalPages={catalogGridTotalPages} total={catalogGridTotal} limit={PRODUCT_GRID_LIMIT} onPageChange={setProductPage} />
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Cart items */}
             <AnimatePresence>

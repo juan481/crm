@@ -53,7 +53,22 @@ export async function GET(req: NextRequest) {
     // decidir agregarlos, mismo criterio que ya usa POST /api/gremio/pedidos
     // como barrera autoritativa del lado del servidor.
     if (payload.role === 'GREMIO') where.price = { gt: 0 }
-    if (categoryId) where.categoryId = categoryId
+    if (categoryId) {
+      // Los productos cuelgan del nivel 2 (la hoja, ej. "CCTV > CAMARAS IP
+      // WIFI"), nunca del nivel 1 — filtrar por categoryId = id de la raíz
+      // directamente daba SIEMPRE 0 resultados (bug real, encontrado
+      // probando el filtro con un browser real: el badge decía "ALARMAS
+      // (315)" pero al hacer clic mostraba "sin resultados"). Si el id que
+      // llega es una raíz, se resuelve a [ella misma, ...sus hijos] —
+      // mismo criterio que ya usa el conteo de /api/catalogo/categories.
+      const asParent = await db.productCategory.findMany({
+        where: { parentId: categoryId },
+        select: { id: true },
+      })
+      where.categoryId = asParent.length > 0
+        ? { in: [categoryId, ...asParent.map((c: any) => c.id)] }
+        : categoryId
+    }
     if (brand) where.brand = brand
     if (q.length >= 2) {
       where.OR = [
