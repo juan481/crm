@@ -31,5 +31,11 @@ yarn-error.log*
 *.pem
 Thumbs.db
 
+# credenciales que a veces se descargan/pegan sueltas en la carpeta del
+# proyecto (ej. la clave JSON de una cuenta de servicio de Google) — nunca
+# deben terminar en el repo, las credenciales reales viven como env vars.
+*service-account*.json
+crm-just-create-*.json
+
 # vercel
 .vercel
