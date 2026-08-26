@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUserAny } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createWithSequence } from '@/lib/sequence'
 import { findUserByEmail } from '@/lib/users'
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 // src/lib/auth.ts.
 export async function GET() {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'GREMIO') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
@@ -37,7 +37,7 @@ interface RawItem { productId: string; quantity: number }
 
 export async function POST(req: NextRequest) {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'GREMIO') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
@@ -53,7 +53,14 @@ export async function POST(req: NextRequest) {
     // api/cotizador/send/route.ts recalculando total a partir de items).
     const productIds = Array.from(new Set(rawItems.map((i) => i.productId).filter(Boolean)))
     const products = await db.product.findMany({
-      where: { id: { in: productIds }, organizationId: payload.orgId, active: true },
+      // price > 0 — hay ~68 productos "placeholder" en el catálogo del
+      // proveedor sin cotizar todavía (costo=precioGremio=precioPublico=0,
+      // importados igual para que Abba los vea y los complete). Sin este
+      // filtro, un usuario Gremio podía agregarlos al carrito y confirmar
+      // un pedido real con ítems gratis — server-side es la barrera
+      // autoritativa (la UI de /gremio/catalogo también los bloquea, pero
+      // nunca hay que confiar sólo en eso).
+      where: { id: { in: productIds }, organizationId: payload.orgId, active: true, price: { gt: 0 } },
       select: { id: true, sku: true, name: true, price: true, precioGremio: true, currency: true },
     })
     const productById = new Map<string, any>(products.map((p: any) => [p.id, p]))
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     for (const raw of rawItems) {
       const product = productById.get(raw.productId)
-      if (!product) continue // producto inexistente/dado de baja desde que se agregó al carrito — se descarta en silencio
+      if (!product) continue // inexistente/dado de baja/sin precio cargado todavía — se descarta en silencio
       const quantity = Math.max(1, Math.floor(Number(raw.quantity)) || 1)
       // Fallback a price si el producto no tiene precioGremio propio (no
       // debería pasar para algo agregado desde /gremio/catalogo, que sólo
@@ -122,6 +129,7 @@ export async function POST(req: NextRequest) {
       ahorro,
       currency,
       notifyEmail: config?.notifyEmail,
+      notes: pedido.notes,
     })
 
     return NextResponse.json({ data: pedido }, { status: 201 })

@@ -109,7 +109,7 @@ export default function CatalogoAdminPage() {
       if (!res.ok) { toast.error(json.error ?? 'Error al sincronizar'); return }
       const result: CatalogSyncResult = json.data
       if (!result.ok) { toast.error(result.error ?? 'Error al sincronizar'); return }
-      toast.success(`Sincronizado: ${result.processed} productos actualizados`)
+      toast.success(`Sincronizado: ${result.processed} productos revisados, ${result.written ?? result.processed} con cambios reales`)
       if (result.skusNotSeenThisRun && result.skusNotSeenThisRun.length > 0) {
         toast(`${result.skusNotSeenThisRun.length} SKUs del catálogo no aparecieron en esta corrida del Sheet — revisalos si corresponde darlos de baja.`, { icon: '⚠️', duration: 6000 })
       }

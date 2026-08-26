@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUserAny } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+
+export const dynamic = 'force-dynamic'
 
 interface Params { params: { id: string } }
 
 export async function GET(_req: Request, { params }: Params) {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'GREMIO') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 

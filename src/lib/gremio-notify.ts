@@ -27,6 +27,7 @@ interface NotifyOrderOpts {
   ahorro: number
   currency: string
   notifyEmail?: string | null
+  notes?: string | null
 }
 
 // Mismo patrón que api/suggestions/route.ts: manda SIEMPRE por el SMTP
@@ -61,6 +62,7 @@ async function doNotifyGremioOrder(opts: NotifyOrderOpts): Promise<void> {
       Total Público (referencia): ${money(opts.totalPublico)}<br/>
       Ahorro para el cliente: <strong style="color:#10b981;">${money(opts.ahorro)}</strong>
     </p>
+    ${opts.notes ? `<p style="margin-top:10px;"><strong>Notas del cliente:</strong><br/>${escapeHtml(opts.notes).replace(/\n/g, '<br/>')}</p>` : ''}
   `
 
   await sendEmail({

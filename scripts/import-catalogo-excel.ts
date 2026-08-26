@@ -19,10 +19,17 @@ import { prisma } from '../src/lib/db'
 import { createAdminClient } from '../src/lib/supabase/admin'
 import { normalizeCatalogRow, type CatalogRawRow } from '../src/lib/catalogo-import'
 import { resolveCategoryId, type CategoryCache } from '../src/lib/catalogo-categories'
+import { mapWithConcurrency } from '../src/lib/concurrency'
 
 const DEFAULT_FILE = 'catalogo/ABBA - CRM_PROGRAMADOR - SOLO IMPORTACION.xlsx'
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'uploads'
 const UPLOAD_CONCURRENCY = 8
+// Upserts en paralelo contra el pooler de Supabase — 2296 productos uno por
+// uno (visto en la corrida real) tardó varios minutos por la latencia de
+// ~200-300ms/request ya documentada (mismatch de región Vercel↔Supabase,
+// ver src/lib/auth.ts). No aplica a la resolución de categorías (ver más
+// abajo, tiene que ser serial para no crear duplicados por carrera).
+const UPSERT_CONCURRENCY = 8
 
 function parseArgs(argv: string[]) {
   const positional = argv.filter((a) => !a.startsWith('--'))
@@ -40,20 +47,6 @@ function parseArgs(argv: string[]) {
     dryRun: flags.has('--dry-run'),
     skipImages: flags.has('--skip-images'),
   }
-}
-
-/** Ejecuta `fn` sobre `items` con a lo sumo `limit` llamadas en simultáneo. */
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let cursor = 0
-  async function worker() {
-    while (cursor < items.length) {
-      const i = cursor++
-      results[i] = await fn(items[i], i)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
 }
 
 /**
@@ -108,6 +101,16 @@ async function extractRowImages(zip: JSZip, fotoColIndex: number): Promise<Map<n
 
 async function main() {
   const { filePath, orgName, dryRun, skipImages } = parseArgs(process.argv.slice(2))
+
+  // --skip-images sin --dry-run deja imageUrl en null para TODA fila (no
+  // "no toca la foto", la borra) — pasó de verdad una vez corriendo un
+  // timing test contra producción sin pensarlo, pisando las 2288 fotos ya
+  // cargadas hasta el re-import siguiente. Combinación bloqueada acá para
+  // que no vuelva a pasar, ni corrida a mano ni por error de script.
+  if (skipImages && !dryRun) {
+    console.error('--skip-images sólo se puede usar junto con --dry-run (si no, borra imageUrl de cada producto). Para iterar rápido sobre el mapeo de datos sin fotos: --dry-run --skip-images.')
+    process.exit(1)
+  }
 
   const org = await prisma.organization.findFirst({ where: { name: orgName } })
   if (!org) {
@@ -168,13 +171,12 @@ async function main() {
     console.warn('⚠ No se encontró la columna "Foto" en el header — no se procesan imágenes.')
   }
 
-  // ── Categorías + productos ───────────────────────────────────────────
-  const categoryCache: CategoryCache = new Map()
-  let processed = 0
+  // ── Normalizar filas + métricas de reporte ───────────────────────────
   let skippedNoSku = 0
   let withoutPhoto = 0
   let zeroCost = 0
   const seenCategoryPaths = new Set<string>()
+  const normalizedRows: { normalized: NonNullable<ReturnType<typeof normalizeCatalogRow>>; imageUrl: string | null }[] = []
 
   for (let i = 0; i < rows.length; i++) {
     const normalized = normalizeCatalogRow(rows[i])
@@ -189,54 +191,73 @@ async function main() {
     if ((normalized.costo ?? 0) === 0) zeroCost++
     if (normalized.categoryPath.length > 0) seenCategoryPaths.add(normalized.categoryPath.join(' > '))
 
-    if (dryRun) { processed++; continue }
+    normalizedRows.push({ normalized, imageUrl })
+  }
 
-    const categoryId = normalized.categoryPath.length > 0
-      ? await resolveCategoryId(prisma, org.id, normalized.categoryPath, categoryCache)
-      : null
+  let processed = 0
+  if (!dryRun) {
+    // Categorías primero, en SERIE — resolveCategoryId no es segura ante
+    // llamadas concurrentes (dos filas resolviendo la MISMA categoría nueva
+    // a la vez podrían crearla duplicada, ver comentario en
+    // catalogo-categories.ts). Al resolver todas acá antes del paso
+    // paralelo, el cache queda completo y el paso de abajo sólo pega hits.
+    const categoryCache: CategoryCache = new Map()
+    const categoryIdByRowIndex: (string | null)[] = new Array(normalizedRows.length).fill(null)
+    for (let i = 0; i < normalizedRows.length; i++) {
+      const { categoryPath } = normalizedRows[i].normalized
+      categoryIdByRowIndex[i] = categoryPath.length > 0
+        ? await resolveCategoryId(prisma, org.id, categoryPath, categoryCache)
+        : null
+    }
 
-    await prisma.product.upsert({
-      where: { organizationId_sku: { organizationId: org.id, sku: normalized.sku } },
-      create: {
-        organizationId: org.id,
-        sku: normalized.sku,
-        name: normalized.name,
-        description: normalized.description,
-        brand: normalized.brand,
-        mpn: normalized.mpn,
-        categoryId,
-        imageUrl,
-        costo: normalized.costo,
-        ivaPct: normalized.ivaPct,
-        precioGremio: normalized.precioGremio,
-        price: normalized.price ?? 0,
-        supplier: normalized.supplier,
-        supplierAvailability: normalized.supplierAvailability,
-        active: true,
-        catalogSource: 'EXCEL_IMPORT',
-        lastSyncedAt: new Date(),
-      },
-      // trackStock/stock NUNCA se tocan acá — son inventario propio de Abba,
-      // ajenos al catálogo del proveedor.
-      update: {
-        name: normalized.name,
-        description: normalized.description,
-        brand: normalized.brand,
-        mpn: normalized.mpn,
-        categoryId,
-        imageUrl,
-        costo: normalized.costo,
-        ivaPct: normalized.ivaPct,
-        precioGremio: normalized.precioGremio,
-        price: normalized.price ?? 0,
-        supplier: normalized.supplier,
-        supplierAvailability: normalized.supplierAvailability,
-        catalogSource: 'EXCEL_IMPORT',
-        lastSyncedAt: new Date(),
-      },
+    // Upserts de producto en paralelo — la parte que de verdad domina el
+    // tiempo total (ver UPSERT_CONCURRENCY arriba).
+    await mapWithConcurrency(normalizedRows, UPSERT_CONCURRENCY, async ({ normalized, imageUrl }, i) => {
+      await prisma.product.upsert({
+        where: { organizationId_sku: { organizationId: org.id, sku: normalized.sku } },
+        create: {
+          organizationId: org.id,
+          sku: normalized.sku,
+          name: normalized.name,
+          description: normalized.description,
+          brand: normalized.brand,
+          mpn: normalized.mpn,
+          categoryId: categoryIdByRowIndex[i],
+          imageUrl,
+          costo: normalized.costo,
+          ivaPct: normalized.ivaPct,
+          precioGremio: normalized.precioGremio,
+          price: normalized.price ?? 0,
+          supplier: normalized.supplier,
+          supplierAvailability: normalized.supplierAvailability,
+          active: true,
+          catalogSource: 'EXCEL_IMPORT',
+          lastSyncedAt: new Date(),
+        },
+        // trackStock/stock NUNCA se tocan acá — son inventario propio de
+        // Abba, ajenos al catálogo del proveedor.
+        update: {
+          name: normalized.name,
+          description: normalized.description,
+          brand: normalized.brand,
+          mpn: normalized.mpn,
+          categoryId: categoryIdByRowIndex[i],
+          imageUrl,
+          costo: normalized.costo,
+          ivaPct: normalized.ivaPct,
+          precioGremio: normalized.precioGremio,
+          price: normalized.price ?? 0,
+          supplier: normalized.supplier,
+          supplierAvailability: normalized.supplierAvailability,
+          catalogSource: 'EXCEL_IMPORT',
+          lastSyncedAt: new Date(),
+        },
+      })
+      processed++
+      if (processed % 250 === 0) console.log(`  ... ${processed} productos procesados`)
     })
-    processed++
-    if (processed % 250 === 0) console.log(`  ... ${processed} productos procesados`)
+  } else {
+    processed = normalizedRows.length
   }
 
   console.log('\n── Reporte final ──────────────────────────────────────')

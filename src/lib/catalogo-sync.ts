@@ -2,6 +2,15 @@ import { google } from 'googleapis'
 import { prisma } from '@/lib/db'
 import { normalizeCatalogRow, type CatalogRawRow } from '@/lib/catalogo-import'
 import { resolveCategoryId, type CategoryCache } from '@/lib/catalogo-categories'
+import { mapWithConcurrency } from '@/lib/concurrency'
+
+// Upserts en paralelo — con ~2296 SKUs (tamaño real del catálogo de Abba)
+// un upsert por vez tardaba varios minutos contra el pooler remoto (~200-
+// 300ms/request, mismatch de región Vercel↔Supabase ya documentado en
+// src/lib/auth.ts), arriesgando el timeout de la función serverless del
+// cron (api/cron/catalogo-sync, cada 4hs). No aplica a la resolución de
+// categorías, que tiene que ser serial (ver más abajo).
+const UPSERT_CONCURRENCY = 8
 
 const DEFAULT_TAB = 'CRM_IMPORTAR'
 // Mismas columnas que la importación inicial desde Excel (ver
@@ -19,12 +28,34 @@ export interface CatalogSyncResult {
   error?: string
   rowsRead?: number
   processed?: number
+  /** De `processed`, cuántos realmente escribieron algo — el resto ya
+   * estaba idéntico al Sheet y se saltó sin tocar la base (ver
+   * hasRelevantChange más abajo). En una sync recurrente típica (cada 4hs,
+   * el proveedor cambia un puñado de filas) esto reduce ~2296 escrituras a
+   * unas pocas. */
+  written?: number
   skippedNoSku?: number
   categoriesSeen?: number
   /** SKUs del catálogo que no aparecieron en esta corrida — sólo se
    * reportan, nunca se desactivan solos (ver decisión de conflictos en el
    * plan: un ADMIN decide a mano si de verdad hay que dar de baja algo). */
   skusNotSeenThisRun?: string[]
+}
+
+const COMPARABLE_FIELDS = [
+  'name', 'description', 'brand', 'mpn', 'categoryId', 'costo', 'ivaPct', 'precioGremio', 'price', 'supplier', 'supplierAvailability',
+] as const
+
+// Compara sólo los campos que el Sheet realmente controla — deliberadamente
+// NO incluye imageUrl (la foto puede quedar igual mientras el Sheet no
+// traiga URL, sin que eso cuente como "sin cambios" si algo más sí cambió;
+// y si nada más cambió tampoco vale la pena reescribir sólo por eso) ni
+// catalogSource/lastSyncedAt/active (metadata de la sync en sí, no datos
+// del proveedor). `undefined` en `candidate[f]` (no debería pasar, todos
+// los campos de NormalizedCatalogRow están siempre presentes) se trata
+// como "sin cambio" para ese campo.
+export function hasRelevantChange(existing: Record<string, unknown>, candidate: Record<string, unknown>): boolean {
+  return COMPARABLE_FIELDS.some((f) => existing[f] !== candidate[f])
 }
 
 function getServiceAccountAuth() {
@@ -94,11 +125,10 @@ export async function syncCatalogFromGoogleSheet(
   }
 
   const dataRows = values.slice(1)
-  const categoryCache: CategoryCache = new Map()
-  let processed = 0
   let skippedNoSku = 0
   const seenSkus = new Set<string>()
   const seenCategoryPaths = new Set<string>()
+  const normalizedRows: NonNullable<ReturnType<typeof normalizeCatalogRow>>[] = []
 
   for (const row of dataRows) {
     const rawRow = {} as CatalogRawRow
@@ -111,55 +141,77 @@ export async function syncCatalogFromGoogleSheet(
 
     seenSkus.add(normalized.sku)
     if (normalized.categoryPath.length > 0) seenCategoryPaths.add(normalized.categoryPath.join(' > '))
+    normalizedRows.push(normalized)
+  }
 
-    const categoryId = normalized.categoryPath.length > 0
-      ? await resolveCategoryId(prisma, orgId, normalized.categoryPath, categoryCache)
+  // Categorías primero, en SERIE — resolveCategoryId no es segura ante
+  // llamadas concurrentes (dos filas resolviendo la MISMA categoría nueva a
+  // la vez podrían crearla duplicada). Con el cache ya completo, el paso
+  // paralelo de abajo sólo pega hits, sin más escrituras a ProductCategory.
+  const categoryCache: CategoryCache = new Map()
+  const categoryIdByRow: (string | null)[] = new Array(normalizedRows.length).fill(null)
+  for (let i = 0; i < normalizedRows.length; i++) {
+    const { categoryPath } = normalizedRows[i]
+    categoryIdByRow[i] = categoryPath.length > 0
+      ? await resolveCategoryId(prisma, orgId, categoryPath, categoryCache)
       : null
+  }
 
-    await prisma.product.upsert({
+  // Traído una sola vez para poder saltear (no reescribir) las filas que
+  // el Sheet trae idénticas a lo que ya está en la base — ver
+  // hasRelevantChange. Clave del rendimiento en una sync RECURRENTE: la
+  // primera corrida (o una migración EXCEL_IMPORT→GOOGLE_SHEETS) escribe
+  // igual que antes, pero cada corrida siguiente del cron sólo toca los
+  // SKUs que el proveedor realmente cambió.
+  const db = prisma as any
+  const existingProducts = await db.product.findMany({
+    where: { organizationId: orgId, sku: { in: normalizedRows.map((r) => r.sku) } },
+    select: { sku: true, catalogSource: true, ...Object.fromEntries(COMPARABLE_FIELDS.map((f) => [f, true])) },
+  })
+  const existingBySku = new Map<string, any>(existingProducts.map((p: any) => [p.sku as string, p]))
+
+  let processed = 0
+  let written = 0
+  await mapWithConcurrency(normalizedRows, UPSERT_CONCURRENCY, async (normalized, i) => {
+    const categoryId = categoryIdByRow[i]
+    const candidate: Record<string, unknown> = {
+      name: normalized.name, description: normalized.description, brand: normalized.brand, mpn: normalized.mpn,
+      categoryId, costo: normalized.costo, ivaPct: normalized.ivaPct, precioGremio: normalized.precioGremio,
+      price: normalized.price ?? 0, supplier: normalized.supplier, supplierAvailability: normalized.supplierAvailability,
+    }
+    const existing = existingBySku.get(normalized.sku)
+    // Ya existe, ya vino de Sheets antes (no una migración desde
+    // EXCEL_IMPORT) y ningún campo comparable cambió → nada que escribir.
+    if (existing && existing.catalogSource === 'GOOGLE_SHEETS' && !hasRelevantChange(existing as Record<string, unknown>, candidate)) {
+      processed++
+      return
+    }
+
+    await db.product.upsert({
       where: { organizationId_sku: { organizationId: orgId, sku: normalized.sku } },
       create: {
         organizationId: orgId,
         sku: normalized.sku,
-        name: normalized.name,
-        description: normalized.description,
-        brand: normalized.brand,
-        mpn: normalized.mpn,
-        categoryId,
+        ...candidate,
         imageUrl: normalized.imageUrl,
-        costo: normalized.costo,
-        ivaPct: normalized.ivaPct,
-        precioGremio: normalized.precioGremio,
-        price: normalized.price ?? 0,
-        supplier: normalized.supplier,
-        supplierAvailability: normalized.supplierAvailability,
         active: true,
         catalogSource: 'GOOGLE_SHEETS',
         lastSyncedAt: new Date(),
       },
       update: {
-        name: normalized.name,
-        description: normalized.description,
-        brand: normalized.brand,
-        mpn: normalized.mpn,
-        categoryId,
+        ...candidate,
         // La foto sólo se pisa si esta fila trae una URL real — el Sheet
         // sólo puede traer fotos por URL de texto (a diferencia del Excel,
         // que las tenía embebidas); si no hay URL en esta corrida, se
         // conserva la que ya hubiera.
         ...(normalized.imageUrl ? { imageUrl: normalized.imageUrl } : {}),
-        costo: normalized.costo,
-        ivaPct: normalized.ivaPct,
-        precioGremio: normalized.precioGremio,
-        price: normalized.price ?? 0,
-        supplier: normalized.supplier,
-        supplierAvailability: normalized.supplierAvailability,
         catalogSource: 'GOOGLE_SHEETS',
         lastSyncedAt: new Date(),
       },
     })
     processed++
-  }
+    written++
+  })
 
   const existingSkus = await prisma.product.findMany({
     where: { organizationId: orgId, sku: { not: null }, active: true },
@@ -174,6 +226,7 @@ export async function syncCatalogFromGoogleSheet(
     ok: true,
     rowsRead: dataRows.length,
     processed,
+    written,
     skippedNoSku,
     categoriesSeen: seenCategoryPaths.size,
     skusNotSeenThisRun,

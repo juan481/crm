@@ -3,6 +3,11 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { getPluginConfig, isPluginEnabled } from '@/lib/plugins'
 import { syncCatalogFromGoogleSheet } from '@/lib/catalogo-sync'
 
+export const dynamic = 'force-dynamic'
+// Ver mismo comentario en api/cron/catalogo-sync/route.ts — una primera
+// corrida completa (o un catálogo grande) puede tardar varios minutos.
+export const maxDuration = 300
+
 // Disparo manual del sync de catálogo ("Sincronizar ahora" en
 // /configuracion/catalogo) — mismo `syncCatalogFromGoogleSheet()` que usa
 // el cron (api/cron/catalogo-sync), sólo que para la organización del

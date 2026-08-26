@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser, canAccess } from '@/lib/auth'
+import { getCurrentUserAny, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+
+export const dynamic = 'force-dynamic'
 
 // Categorías de nivel 1 del catálogo (parentId null) — usadas como tabs de
 // filtro en /catalogo y en el portal Gremio. Mismo chequeo de rol que
 // GET /api/catalogo/products (SELLER+ o GREMIO explícito).
 export async function GET() {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
@@ -28,6 +30,11 @@ export async function GET() {
       where: {
         organizationId: payload.orgId,
         active: true,
+        // Mismo filtro que GET /api/catalogo/products para GREMIO — sin
+        // esto, el número en la pestaña de categoría no coincidía con la
+        // cantidad real de productos comprables al entrar (los ~68
+        // placeholder sin precio contaban acá pero no aparecían al listar).
+        ...(payload.role === 'GREMIO' ? { price: { gt: 0 } } : {}),
         categoryId: { in: roots.flatMap((r: any) => [r.id, ...r.children.map((c: any) => c.id)]) },
       },
       _count: { _all: true },

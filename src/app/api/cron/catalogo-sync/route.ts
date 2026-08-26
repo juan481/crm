@@ -5,6 +5,12 @@ import { getPluginConfig, isPluginEnabled } from '@/lib/plugins'
 import { syncCatalogFromGoogleSheet, type CatalogSyncResult } from '@/lib/catalogo-sync'
 
 export const dynamic = 'force-dynamic'
+// Pide el máximo que Vercel permita en el plan contratado (lo recorta solo
+// si el plan es más chico, no falla por pedirlo) — recorrer varias
+// organizaciones con miles de SKUs cada una puede tardar varios minutos
+// incluso con los upserts en paralelo (ver UPSERT_CONCURRENCY en
+// catalogo-sync.ts) y la latencia ya documentada Vercel↔Supabase.
+export const maxDuration = 300
 
 // Sync recurrente del catálogo (cada 4hs, ver vercel.json) para toda
 // organización con el plugin "catalogo-google-sheets" activo. No usa

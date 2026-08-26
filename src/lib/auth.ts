@@ -131,7 +131,34 @@ async function resolveSession(): Promise<ResolvedSession | null> {
 }
 
 // Returns the same AuthPayload shape as before — no changes needed in API routes
+//
+// GREMIO EXCLUIDO A PROPÓSITO (hallazgo de la revisión del Módulo 3): esta
+// función es el único chequeo de auth de ~109 rutas de API internas
+// existentes (empresas, deals, tickets, facturas, tareas...), NINGUNA de
+// las cuales valida el rol más allá de "está logueado". GREMIO es un
+// usuario autenticado real de Supabase — sin este `role === 'GREMIO' →
+// null` acá, una sesión Gremio podía pegarle directo a cualquiera de esas
+// 109 rutas (saltando la UI) y traerse datos de otros clientes de la
+// organización, algo que ninguna de ellas fue diseñada para bloquear.
+// getCurrentUserAny() (abajo) es la salida explícita para los pocos
+// endpoints que SÍ deben servir a GREMIO (api/catalogo/*, api/gremio/*).
 export async function getCurrentUser(): Promise<AuthPayload | null> {
+  try {
+    const resolved = await resolveSession()
+    if (!resolved || resolved.homeSuspended || resolved.role === 'GREMIO') return null
+    return { userId: resolved.user.id, orgId: resolved.orgId, role: resolved.role, email: resolved.user.email }
+  } catch {
+    return null
+  }
+}
+
+// Variante sin excluir GREMIO — usar SÓLO en endpoints explícitamente
+// pensados para servir tanto a staff interno como al portal Gremio
+// (api/catalogo/categories, api/catalogo/products, api/gremio/*). Esos
+// endpoints ya hacen su propio chequeo explícito de rol
+// (`role === 'GREMIO'` o `canAccess(role, 'SELLER')`) — nunca usar esta
+// función sin un chequeo de rol propio inmediatamente después.
+export async function getCurrentUserAny(): Promise<AuthPayload | null> {
   try {
     const resolved = await resolveSession()
     if (!resolved || resolved.homeSuspended) return null

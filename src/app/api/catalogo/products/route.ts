@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, canAccess } from '@/lib/auth'
+import { getCurrentUserAny, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 // (mismo criterio en cualquier endpoint que consuma el portal).
 export async function GET(req: NextRequest) {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
@@ -36,6 +36,15 @@ export async function GET(req: NextRequest) {
       sku: { not: null },
       active: true,
     }
+    // ~68 productos del catálogo del proveedor son "placeholder" sin
+    // cotizar todavía (costo=precioGremio=precioPublico=0) — se importan
+    // igual para que Abba los complete, pero el portal Gremio no debe
+    // ofrecerlos como comprables (un precio $0 real terminaría en un
+    // pedido gratis). El browsing interno (/catalogo, admin, Cotizador) sí
+    // los sigue mostrando — un vendedor los ve venir con precio 0 antes de
+    // decidir agregarlos, mismo criterio que ya usa POST /api/gremio/pedidos
+    // como barrera autoritativa del lado del servidor.
+    if (payload.role === 'GREMIO') where.price = { gt: 0 }
     if (categoryId) where.categoryId = categoryId
     if (brand) where.brand = brand
     if (q.length >= 2) {

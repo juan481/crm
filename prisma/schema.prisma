@@ -828,7 +828,16 @@ model Deal {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  @@index([organizationId, stage])
+  // Antes [organizationId, stage] a secas — las queries de leads nuevos
+  // (Módulo 4: api/notifications, api/dashboard/metrics) filtran por
+  // stage=LEAD Y ordenan/filtran por createdAt; sin la tercera columna,
+  // Postgres resuelve el filtro de fecha con un Filter aparte después del
+  // index scan en vez de que quede cubierto por el índice. Reemplaza (no
+  // suma) al índice de 2 columnas — un índice de 3 columnas sirve
+  // igual de bien cualquier consulta que sólo filtre por las primeras 2
+  // (regla de prefijo de B-tree), así que mantener ambos sólo duplicaría
+  // el costo de escritura en cada INSERT/UPDATE de Deal sin beneficio.
+  @@index([organizationId, stage, createdAt])
   @@index([ownerId])
 }
 
