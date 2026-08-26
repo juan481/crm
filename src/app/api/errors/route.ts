@@ -47,13 +47,19 @@ export async function POST(req: NextRequest) {
 
 // GET ?code=XXXX — para buscar un error puntual que alguien reportó por
 // código. GET sin ?code lista los últimos, para tener un pulso general.
-// SELLER+ (no hace falta ser ADMIN para ver esto, cualquiera del equipo
-// puede estar destrabando un reporte de un compañero).
+// ADMIN+ únicamente — a diferencia de los endpoints de catálogo, acá NO
+// corresponde el patrón "SELLER+ o GREMIO explícito": un stack trace puede
+// traer rutas internas, el email de otro miembro del equipo, etc. Copiar
+// ese patrón sin pensarlo (como se hizo al escribir esto la primera vez)
+// dejaba a cualquier vendedor, e incluso una cuenta Gremio (un revendedor
+// externo, ver auth.ts), leer los errores de TODA la organización con sólo
+// llamar a la API directo — el link del menú es sólo para ADMIN/SUPER_ADMIN,
+// pero el endpoint no lo exigía.
 export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
+    if (!canAccess(payload.role, 'ADMIN')) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

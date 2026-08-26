@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAny, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
@@ -9,13 +9,20 @@ export const dynamic = 'force-dynamic'
 // subcategoría) de /catalogo, el Cotizador y el portal Gremio. Mismo
 // chequeo de rol que GET /api/catalogo/products (SELLER+ o GREMIO
 // explícito).
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
+    // Mismo criterio que GET /api/catalogo/products — sin esto, el panel de
+    // administración (Configuración > Catálogo) mostraba conteos de
+    // categoría/marca calculados siempre sobre productos activos, aunque el
+    // admin estuviera filtrando por "Dados de baja" o "Todos" (bug real:
+    // el badge decía "ALARMAS (315)" filtrando por inactivos, un número que
+    // no tenía nada que ver con lo que en verdad se iba a mostrar).
+    const statusParam = payload.role !== 'GREMIO' ? (req.nextUrl.searchParams.get('status') ?? 'active') : 'active'
 
     const db = prisma as any
     const roots = await db.productCategory.findMany({
@@ -31,7 +38,7 @@ export async function GET() {
       by: ['categoryId'],
       where: {
         organizationId: payload.orgId,
-        active: true,
+        ...(statusParam === 'all' ? {} : { active: statusParam === 'inactive' ? false : true }),
         // Mismo filtro que GET /api/catalogo/products para GREMIO — sin
         // esto, el número en la pestaña de categoría no coincidía con la
         // cantidad real de productos comprables al entrar (los ~68

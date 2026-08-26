@@ -68,15 +68,18 @@ export function SupplierCatalogManager() {
   useEffect(() => { setPage(1) }, [categoryId, brand, status])
 
   const { data: categoriesData } = useQuery({
-    queryKey: ['catalogo-admin-categories'],
-    queryFn: async () => (await fetch('/api/catalogo/categories')).json(),
+    // `status` en la key — si no, el conteo de categoría se queda pegado al
+    // que estaba activo cuando se pidió la primera vez (bug real: filtrar
+    // por "Dados de baja" seguía mostrando los conteos de "Activos").
+    queryKey: ['catalogo-admin-categories', status],
+    queryFn: async () => (await fetch(`/api/catalogo/categories?status=${status}`)).json(),
     staleTime: 5 * 60_000,
   })
   const categories: ProductCategory[] = categoriesData?.data ?? []
 
   const { data: brandsData } = useQuery({
-    queryKey: ['catalogo-admin-brands'],
-    queryFn: async () => (await fetch('/api/catalogo/brands')).json(),
+    queryKey: ['catalogo-admin-brands', status],
+    queryFn: async () => (await fetch(`/api/catalogo/brands?status=${status}`)).json(),
     staleTime: 5 * 60_000,
   })
   const brands: ProductBrand[] = brandsData?.data ?? []
@@ -100,7 +103,14 @@ export function SupplierCatalogManager() {
   const totalPages: number = data?.totalPages ?? 1
   const lastSynced = products.find((p) => p.lastSyncedAt)?.lastSyncedAt ?? null
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['catalogo-admin-products'] })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['catalogo-admin-products'] })
+    // Dar de baja/reactivar o editar cambia cuántos productos activos tiene
+    // una categoría/marca — sin esto, el número en los <select> queda
+    // desactualizado hasta que venza el staleTime de 5 minutos.
+    qc.invalidateQueries({ queryKey: ['catalogo-admin-categories'] })
+    qc.invalidateQueries({ queryKey: ['catalogo-admin-brands'] })
+  }
 
   const openEdit = (p: Product) => {
     setEditing(p)
