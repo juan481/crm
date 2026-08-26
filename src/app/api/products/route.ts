@@ -12,14 +12,26 @@ import { prisma } from '@/lib/db'
 // server-side, para blindar también contra un POST directo.
 const VALID_CURRENCIES = new Set(['USD', 'ARS', 'EUR'])
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+    // scope=simple|catalog|all (default 'all', no rompe ningún caller
+    // existente que no mande el parámetro). Necesario desde que el catálogo
+    // del proveedor puede tener miles de SKUs — sin filtrar, cualquier
+    // pantalla que hoy trae "todos los productos" sin paginar (como el
+    // selector simple del cotizador) queda inundada. Ver
+    // GET /api/catalogo/products para el browsing paginado del catálogo.
+    const scope = req.nextUrl.searchParams.get('scope') ?? 'all'
+    const scopeWhere =
+      scope === 'simple' ? { sku: null } :
+      scope === 'catalog' ? { sku: { not: null } } :
+      {}
+
     const db = prisma as any
     const products = await db.product.findMany({
-      where:   { organizationId: payload.orgId },
+      where:   { organizationId: payload.orgId, ...scopeWhere },
       orderBy: { createdAt: 'desc' },
     })
 

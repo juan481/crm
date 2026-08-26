@@ -165,8 +165,11 @@ export default function ProductosPage() {
   }
 
   const { data, isLoading, isError } = useQuery<{ data: Product[] }>({
-    queryKey: ['products'],
-    queryFn:  async () => (await fetch('/api/products')).json(),
+    // scope=simple — el catálogo del proveedor (sku != null) se administra
+    // aparte en /configuracion/catalogo, esta pantalla es sólo para el
+    // puñado de productos/servicios cargados a mano.
+    queryKey: ['products', 'simple'],
+    queryFn:  async () => (await fetch('/api/products?scope=simple')).json(),
     staleTime: 30_000,
   })
   const products = data?.data ?? []

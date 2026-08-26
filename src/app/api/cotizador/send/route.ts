@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId } = body as {
+    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       dealId?: string | null
@@ -25,7 +25,13 @@ export async function POST(req: NextRequest) {
       discount?: number
       currency: string
       validityDays?: number
+      priceMode?: string
     }
+    // 'PUBLICO' | 'GREMIO' — qué lista de precios se aplicó (Módulo 2). Los
+    // QuoteItem.price ya vienen resueltos desde el cliente; esto sólo queda
+    // para trazabilidad/auditoría. Cualquier valor no reconocido cae a
+    // 'PUBLICO' (mismo default que el schema).
+    const priceModeFinal = priceMode === 'GREMIO' ? 'GREMIO' : 'PUBLICO'
 
     if (!items?.length)  return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
     if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
@@ -107,6 +113,7 @@ export async function POST(req: NextRequest) {
         notes:          notes || null,
         validityDays:   validityDaysFinal,
         status:         'GUARDADA',
+        priceMode:      priceModeFinal,
       },
       select: { id: true },
     })

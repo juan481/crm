@@ -249,6 +249,27 @@ export interface Product {
   stock:          number
   organizationId: string
   createdAt:      string
+  // ── Catálogo de productos (Módulo 1) — null en productos "simples" ──
+  sku?:                  string | null
+  brand?:                string | null
+  mpn?:                  string | null
+  categoryId?:           string | null
+  category?:             { id: string; name: string; parentId: string | null } | null
+  imageUrl?:             string | null
+  costo?:                number | null
+  ivaPct?:               number | null
+  precioGremio?:         number | null
+  supplier?:             string | null
+  supplierAvailability?: string | null
+  active?:               boolean
+  catalogSource?:        string | null
+  lastSyncedAt?:         string | null
+}
+
+export interface ProductCategory {
+  id: string
+  name: string
+  productCount: number
 }
 
 // ─── Quote ────────────────────────────────────────────────────────────────

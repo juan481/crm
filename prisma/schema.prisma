@@ -230,6 +230,7 @@ model Organization {
   emailTemplates          EmailTemplate[]
   services                Service[]
   products                Product[]
+  productCategories       ProductCategory[]
   stockMovimientos        StockMovimiento[]
   quickActionUsage        QuickActionUsage[]
   events                  Event[]
@@ -1134,12 +1135,39 @@ model DirectorioContactoNota {
 
 // ─── Catálogo de Productos (venta única) ──────────────────────────────────
 model Product {
-  id             String            @id @default(cuid())
-  name           String
-  description    String?
-  price          Float             @default(0)
-  currency       String            @default("USD")
-  unit           String            @default("unidad")
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  // Para productos de catálogo (sku != null), price = Precio Público del
+  // proveedor — se sigue usando como el precio "de siempre" para que todo
+  // código que lo lee a ciegas (PDF, reportes, stock) no necesite saber que
+  // existe dual-pricing. Sólo el cotizador y el portal Gremio miran
+  // precioGremio explícitamente.
+  price       Float   @default(0)
+  currency    String  @default("USD")
+  unit        String  @default("unidad")
+
+  // ── Catálogo de productos (Módulo 1) — 100% aditivo/nullable, null en
+  // todo producto "simple" cargado a mano antes de este módulo. Poblado por
+  // el importador de Excel (scripts/import-catalogo-excel.ts) y por el sync
+  // de Google Sheets (src/lib/catalogo-sync.ts). Nunca se recalculan
+  // Gremio/Público a partir de costo en código — la planilla/Sheet del
+  // proveedor es la fuente de verdad, aunque hoy se cumpla un markup fijo.
+  sku                  String?
+  brand                String? // Marca (freeform — 77 valores reales, no amerita enum)
+  mpn                  String? // Modelo / N° de parte del fabricante
+  categoryId           String?
+  category             ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  imageUrl             String? // URL pública en Supabase Storage (deduplicada por hash)
+  costo                Float? // Costo (USD) — uso interno/margen, nunca expuesto al portal Gremio
+  ivaPct               Float? // IVA (%) tal cual viene de la fuente
+  precioGremio         Float? // null = producto simple, sin dual-pricing
+  supplier             String? // Proveedor
+  supplierAvailability String? // Disponibilidad/Stock del proveedor (texto libre)
+  active               Boolean          @default(true) // soft-hide sin perder historial de cotizaciones/pedidos ya hechos con este producto
+  catalogSource        String? // 'EXCEL_IMPORT' | 'GOOGLE_SHEETS' | null (alta manual)
+  lastSyncedAt         DateTime?
+
   organizationId String
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // Stock — opt-in por producto (default false) para que ningún producto ya
@@ -1152,7 +1180,29 @@ model Product {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
+  // Postgres no colisiona múltiples NULL en un unique — los productos
+  // "simples" (sku null) conviven sin problema entre sí.
+  @@unique([organizationId, sku])
   @@index([organizationId])
+  @@index([organizationId, categoryId])
+}
+
+// Árbol de categorías del catálogo (ej. "CCTV > CAMARAS IP WIFI") — mismo
+// patrón de self-relation que Folder más abajo. 184 combinaciones reales en
+// el catálogo de Abba, demasiadas para una lista curada en código como
+// src/lib/verticals.ts (14 valores).
+model ProductCategory {
+  id             String            @id @default(cuid())
+  name           String
+  parentId       String?
+  parent         ProductCategory?  @relation("ProductCategoryTree", fields: [parentId], references: [id])
+  children       ProductCategory[] @relation("ProductCategoryTree")
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products       Product[]
+  createdAt      DateTime          @default(now())
+
+  @@index([organizationId, parentId])
 }
 
 // Ledger de ajustes manuales de stock — cada fila es un movimiento
@@ -1223,6 +1273,13 @@ model Cotizacion {
   notes          String?
   validityDays   Int              @default(30)
   status         CotizacionStatus @default(ENVIADA)
+  // 'PUBLICO' | 'GREMIO' — qué lista de precios se aplicó al cotizar
+  // (Módulo 2, catálogo Gremio/Público). Los QuoteItem.price dentro de
+  // `items` ya son el número resuelto; este campo queda para
+  // trazabilidad/auditoría y para mostrar el badge correspondiente en el
+  // PDF. Default 'PUBLICO' preserva el significado de toda cotización
+  // emitida antes de este campo.
+  priceMode      String           @default("PUBLICO")
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

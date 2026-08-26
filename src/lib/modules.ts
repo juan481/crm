@@ -25,6 +25,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'tareas',         label: 'Tareas',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
   { id: 'cotizador',      label: 'Cotizador',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'cotizaciones',   label: 'Cotizaciones',    defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
+  { id: 'catalogo',       label: 'Catálogo',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'tickets',        label: 'Tickets',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'],            minRole: 'TECHNICIAN' },
   // Técnico gana Eventos por default a partir de este sistema — requiere el
   // piso ampliado en src/app/api/eventos/route.ts y [id]/route.ts (GET) para

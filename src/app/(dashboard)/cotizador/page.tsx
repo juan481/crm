@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -36,8 +36,21 @@ interface CartItem {
   quantity: number
 }
 
+// 'PUBLICO' | 'GREMIO' — a qué lista de precios cotizar (Módulo 2, catálogo
+// Gremio/Público). Sólo afecta productos de catálogo con precioGremio
+// cargado; Service y productos "simples" (precioGremio null) siempre usan
+// item.price sin importar el modo — backward-compatible por construcción.
+type PriceMode = 'PUBLICO' | 'GREMIO'
+
 const itemKey  = (type: ItemType, id: string) => `${type}_${id}`
-const getPrice = (ci: CartItem) => ci.item.price
+function getUnitPrice(type: ItemType, item: Service | Product, mode: PriceMode): number {
+  if (type === 'PRODUCT' && mode === 'GREMIO') {
+    const precioGremio = (item as Product).precioGremio
+    if (precioGremio != null) return precioGremio
+  }
+  return item.price
+}
+const getPrice = (ci: CartItem, mode: PriceMode) => getUnitPrice(ci.type, ci.item, mode)
 const getCurrency = (ci: CartItem) => ci.item.currency
 
 interface SavedQuote {
@@ -58,6 +71,7 @@ interface SavedQuote {
   currency:       string
   notes:          string
   validityDays:   number
+  priceMode:      PriceMode
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -71,6 +85,18 @@ export default function CotizadorPage() {
   const [validityTouched, setValidityTouched] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [priceMode, setPriceMode] = useState<PriceMode>('PUBLICO')
+
+  // Debounce sólo para la búsqueda contra el catálogo (server-side, miles
+  // de SKUs) — los servicios y productos "simples" siguen filtrándose en
+  // memoria con itemSearch directo, sin debounce, como siempre.
+  const [debouncedItemSearch, setDebouncedItemSearch] = useState('')
+  const itemSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    itemSearchDebounceRef.current = setTimeout(() => setDebouncedItemSearch(itemSearch), 300)
+    return () => { if (itemSearchDebounceRef.current) clearTimeout(itemSearchDebounceRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemSearch])
 
   const searchParams = useSearchParams()
   // Presente cuando se llega desde "Generar cotización" en el detalle de una
@@ -117,13 +143,27 @@ export default function CotizadorPage() {
       return (await r.json()).data as Service[]
     },
   })
+  // scope=simple — productos cargados a mano (pocos). El catálogo del
+  // proveedor (potencialmente miles de SKUs) se busca aparte, server-side,
+  // ver catalogSearchData más abajo — cargarlo entero acá y filtrar en
+  // memoria (como antes) dejó de ser viable.
   const { data: productsData, isLoading: loadingProducts, isError: errorProducts } = useQuery({
-    queryKey: ['products'],
+    queryKey: ['products', 'simple'],
     queryFn:  async () => {
-      const r = await fetch('/api/products')
+      const r = await fetch('/api/products?scope=simple')
       if (!r.ok) throw new Error('Error al cargar productos')
       return (await r.json()).data as Product[]
     },
+  })
+  const { data: catalogSearchData } = useQuery({
+    queryKey: ['catalogo-search-cotizador', debouncedItemSearch],
+    queryFn: async () => {
+      const r = await fetch(`/api/catalogo/products?q=${encodeURIComponent(debouncedItemSearch)}&limit=20`)
+      if (!r.ok) return { data: [] }
+      return r.json()
+    },
+    enabled: activeTab === 'PRODUCT' && debouncedItemSearch.length >= 2,
+    staleTime: 30_000,
   })
   const { data: empresasData } = useQuery({
     queryKey: ['empresas-cotizador'],
@@ -175,11 +215,12 @@ export default function CotizadorPage() {
   const arsRate  = rateData?.venta ?? null
   const services = servicesData ?? []
   const products = productsData ?? []
+  const catalogResults: Product[] = (activeTab === 'PRODUCT' && debouncedItemSearch.length >= 2) ? (catalogSearchData?.data ?? []) : []
   const empresas = Array.isArray(empresasData) ? empresasData : []
   const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
 
   const cartItems  = Object.values(cart)
-  const subtotal   = cartItems.reduce((s, i) => s + getPrice(i) * i.quantity, 0)
+  const subtotal   = cartItems.reduce((s, i) => s + getPrice(i, priceMode) * i.quantity, 0)
   const discountAmt = subtotal * (discount / 100)
   const finalTotal = subtotal - discountAmt
   const currency   = cartItems[0] ? getCurrency(cartItems[0]) : 'USD'
@@ -211,15 +252,26 @@ export default function CotizadorPage() {
   }
   const clearCart = () => setCart({})
 
-  // Current catalog filtered by tab + search
+  // Current catalog filtered by tab + search. Servicios y productos
+  // "simples" se filtran en memoria (listas chicas, como siempre);
+  // catalogResults ya viene filtrado por el servidor (name/sku/brand/mpn),
+  // no se le vuelve a aplicar el filtro por nombre acá — filtrar de nuevo
+  // por nombre dejaría afuera un resultado que matcheó por SKU o marca.
   const catalog: Array<{ type: ItemType; item: Service | Product }> =
     activeTab === 'SERVICE'
       ? services.map(s => ({ type: 'SERVICE' as const, item: s }))
       : products.map(p => ({ type: 'PRODUCT' as const, item: p }))
 
-  const filteredCatalog = catalog.filter(({ item }) =>
-    !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
-  )
+  const filteredCatalog: Array<{ type: ItemType; item: Service | Product }> = [
+    ...catalog.filter(({ item }) => !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())),
+    ...(activeTab === 'PRODUCT' ? catalogResults.map(p => ({ type: 'PRODUCT' as const, item: p })) : []),
+  ]
+
+  // El banner grande de "sin nada cargado" sólo aplica a Servicios — el
+  // catálogo de Productos puede tener miles de SKUs buscables aunque no
+  // haya ningún producto "simple" cargado a mano, así que Productos
+  // siempre muestra el buscador en vez de un estado vacío bloqueante.
+  const showEmptyCatalogState = activeTab === 'SERVICE' && services.length === 0
 
   // ── Recipient ──────────────────────────────────────────────────────────────
   const recipientEmail = clientMode === 'existing'
@@ -253,7 +305,14 @@ export default function CotizadorPage() {
 
     let y = headerH + 12
     doc.setTextColor(148, 163, 184); doc.setFontSize(7.5)
-    doc.text(`Ref: ${quote.ref}`, mg, y); y += 10
+    const refLabel = `Ref: ${quote.ref}`
+    doc.text(refLabel, mg, y)
+    if (quote.priceMode === 'GREMIO') {
+      doc.setTextColor(16, 185, 129)
+      doc.text('· Precio Gremio', mg + doc.getTextWidth(refLabel) + 3, y)
+      doc.setTextColor(148, 163, 184)
+    }
+    y += 10
 
     doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(11)
     doc.text(`Estimado/a ${quote.recipientName}:`, mg, y); y += 7
@@ -275,7 +334,7 @@ export default function CotizadorPage() {
     quote.cartItems.forEach((ci, idx) => {
       const rowH     = 10
       if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
-      const lineTotal = getPrice(ci) * ci.quantity
+      const lineTotal = getPrice(ci, quote.priceMode) * ci.quantity
       const priceStr  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(lineTotal)
       const typeLabel = ci.type === 'SERVICE'
         ? (BILLING_LABELS[((ci.item as Service).billingCycle ?? 'MONTHLY')] ?? 'mes')
@@ -367,12 +426,15 @@ export default function CotizadorPage() {
 
     setSaving(true)
     try {
+      // price acá ya es el número RESUELTO (público o gremio, según
+      // priceMode) — el snapshot congelado de QuoteItem debe guardar lo que
+      // efectivamente se cotizó, no siempre item.price a secas.
       const items = cartItems.map(ci => ({
         type:         ci.type,
         serviceId:    ci.type === 'SERVICE' ? ci.item.id : undefined,
         productId:    ci.type === 'PRODUCT' ? ci.item.id : undefined,
         name:         ci.item.name,
-        price:        ci.item.price,
+        price:        getPrice(ci, priceMode),
         currency:     ci.item.currency,
         billingCycle: ci.type === 'SERVICE' ? (ci.item as Service).billingCycle : undefined,
         unit:         ci.type === 'PRODUCT' ? (ci.item as Product).unit : undefined,
@@ -386,7 +448,7 @@ export default function CotizadorPage() {
           items, empresaId: clientMode === 'existing' ? selectedEmpresaId || null : null,
           dealId,
           recipientEmail, recipientName: recipientName || 'Cliente',
-          notes, total: subtotal, discount, currency, validityDays,
+          notes, total: subtotal, discount, currency, validityDays, priceMode,
         }),
       })
       const json = await res.json()
@@ -413,6 +475,7 @@ export default function CotizadorPage() {
         currency,
         notes,
         validityDays: json.validityDays ?? validityDays,
+        priceMode,
       }
 
       const doc     = await buildPdf(quote)
@@ -452,12 +515,14 @@ export default function CotizadorPage() {
 
   const buildWhatsApp = (quote?: SavedQuote) => {
     const src = quote ?? { recipientName: recipientName || '', cartItems, subtotal, finalTotal, discount, currency, notes: notes || '', ref: '' }
+    const mode = quote?.priceMode ?? priceMode
     let t = `*Presupuesto de Servicios*`
     if ((src as any).ref) t += ` · ${(src as any).ref}`
+    if (mode === 'GREMIO') t += ` · Precio Gremio`
     t += `\n\n`
     if (src.recipientName) t += `Hola ${src.recipientName},\n\nTe comparto el detalle:\n\n`
     src.cartItems.forEach(ci => {
-      const lt = getPrice(ci) * ci.quantity
+      const lt = getPrice(ci, mode) * ci.quantity
       let l = `• ${ci.item.name}`
       if (ci.quantity > 1) l += ` ×${ci.quantity}`
       if (ci.type === 'SERVICE') {
@@ -659,6 +724,25 @@ export default function CotizadorPage() {
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Armá un presupuesto mixto en segundos</p>
           </div>
 
+          <div className="flex items-center gap-3 flex-wrap shrink-0">
+            {/* Toggle Público/Gremio — afecta sólo productos de catálogo con
+                precioGremio cargado; Servicios y productos simples cotizan
+                igual sin importar la posición. */}
+            <div className="flex rounded-xl overflow-hidden p-0.5"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+              {([
+                { mode: 'PUBLICO' as PriceMode, label: 'Público' },
+                { mode: 'GREMIO' as PriceMode, label: 'Gremio' },
+              ]).map(opt => (
+                <button key={opt.mode} onClick={() => setPriceMode(opt.mode)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    priceMode === opt.mode ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
           {/* Dólar widget */}
           <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl shrink-0"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -683,6 +767,7 @@ export default function CotizadorPage() {
                 {showArs ? 'ARS ✓' : 'Ver ARS'}
               </button>
             )}
+          </div>
           </div>
         </div>
       </div>
@@ -726,16 +811,11 @@ export default function CotizadorPage() {
               Reintentar
             </button>
           </div>
-        ) : catalog.length === 0 ? (
+        ) : showEmptyCatalogState ? (
           <div className="rounded-2xl p-6 text-center" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            {activeTab === 'SERVICE' ? <Wrench size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />
-              : <Package size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />}
-            <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
-              {activeTab === 'SERVICE' ? 'Sin servicios configurados' : 'Sin productos configurados'}
-            </p>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
-              {activeTab === 'SERVICE' ? 'Configurá en Ajustes → Servicios' : 'Configurá en Ajustes → Catálogo de Productos'}
-            </p>
+            <Wrench size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Sin servicios configurados</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Configurá en Ajustes → Servicios</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -772,9 +852,14 @@ export default function CotizadorPage() {
                     ) : filteredCatalog.map(({ type, item }) => {
                       const k = itemKey(type, item.id)
                       const inCart = cart[k]?.quantity ?? 0
+                      const unitPrice = getUnitPrice(type, item, priceMode)
                       const priceLabel = type === 'SERVICE'
-                        ? `${formatPrice(item.price, item.currency)}/${BILLING_LABELS[(item as Service).billingCycle] ?? 'mes'}`
-                        : `${formatPrice(item.price, item.currency)}/${(item as Product).unit}`
+                        ? `${formatPrice(unitPrice, item.currency)}/${BILLING_LABELS[(item as Service).billingCycle] ?? 'mes'}`
+                        : `${formatPrice(unitPrice, item.currency)}/${(item as Product).unit}`
+                      // Badge SKU+marca — diferencia un producto de catálogo
+                      // (miles de SKUs del proveedor) de uno "simple".
+                      const sku = type === 'PRODUCT' ? (item as Product).sku : null
+                      const brand = type === 'PRODUCT' ? (item as Product).brand : null
                       return (
                         <li key={k}>
                           <button className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-[var(--color-surface-raised)] transition-colors"
@@ -785,7 +870,12 @@ export default function CotizadorPage() {
                                 {item.name}
                                 {inCart > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full ml-1" style={{ background: 'var(--color-primary)', color: 'white' }}>{inCart}</span>}
                               </span>
-                              {(item as any).description && <span className="text-xs block mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>{(item as any).description}</span>}
+                              {sku && (
+                                <span className="text-xs block mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>
+                                  {sku}{brand ? ` · ${brand}` : ''}
+                                </span>
+                              )}
+                              {!sku && (item as any).description && <span className="text-xs block mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>{(item as any).description}</span>}
                             </span>
                             <span className="text-sm font-bold shrink-0 ml-3" style={{ color: 'var(--color-primary)' }}>{priceLabel}</span>
                           </button>
@@ -802,9 +892,10 @@ export default function CotizadorPage() {
               {cartItems.map(ci => {
                 const k = itemKey(ci.type, ci.item.id)
                 const isService = ci.type === 'SERVICE'
+                const lineTotal = getPrice(ci, priceMode) * ci.quantity
                 const priceLabel = isService
-                  ? `${formatPrice(ci.item.price * ci.quantity, ci.item.currency)}/${BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'}`
-                  : `${formatPrice(ci.item.price * ci.quantity, ci.item.currency)}/${(ci.item as Product).unit}`
+                  ? `${formatPrice(lineTotal, ci.item.currency)}/${BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'}`
+                  : `${formatPrice(lineTotal, ci.item.currency)}/${(ci.item as Product).unit}`
                 return (
                   <motion.div key={k}
                     initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}

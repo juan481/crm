@@ -19,7 +19,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const existing = await db.product.findFirst({ where: { id: params.id, organizationId: payload.orgId } })
     if (!existing) return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 })
 
-    const { name, description, price, currency, unit, trackStock } = await req.json()
+    const {
+      name, description, price, currency, unit, trackStock,
+      // Campos de catálogo (Módulo 1) — todos opcionales, el alta manual
+      // simple nunca los manda. Para "borrar" un producto de catálogo se
+      // prefiere active:false a DELETE, porque el sync de Sheets puede
+      // resucitar el SKU si reaparece en la fuente.
+      brand, mpn, categoryId, imageUrl, costo, ivaPct, precioGremio,
+      supplier, supplierAvailability, active,
+    } = await req.json()
     if (currency !== undefined && !VALID_CURRENCIES.has(currency)) {
       return NextResponse.json({ error: `Moneda inválida: "${currency}". Usá USD, ARS o EUR.` }, { status: 400 })
     }
@@ -32,6 +40,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(currency    !== undefined && { currency }),
         ...(unit        !== undefined && { unit: unit || 'unidad' }),
         ...(trackStock  !== undefined && { trackStock: !!trackStock }),
+        ...(brand                !== undefined && { brand: brand || null }),
+        ...(mpn                  !== undefined && { mpn: mpn || null }),
+        ...(categoryId           !== undefined && { categoryId: categoryId || null }),
+        ...(imageUrl              !== undefined && { imageUrl: imageUrl || null }),
+        ...(costo                !== undefined && { costo: costo === null ? null : Number(costo) }),
+        ...(ivaPct                !== undefined && { ivaPct: ivaPct === null ? null : Number(ivaPct) }),
+        ...(precioGremio          !== undefined && { precioGremio: precioGremio === null ? null : Number(precioGremio) }),
+        ...(supplier              !== undefined && { supplier: supplier || null }),
+        ...(supplierAvailability !== undefined && { supplierAvailability: supplierAvailability || null }),
+        ...(active                !== undefined && { active: !!active }),
       },
     })
 

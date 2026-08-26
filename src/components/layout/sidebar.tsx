@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, Tag, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
-  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package,
+  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -67,6 +67,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'pipeline' },
       { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizador' },
       { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizaciones' },
+      { label: 'Catálogo',     href: '/catalogo',     icon: <Boxes size={17} />,           roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'catalogo' },
       { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'empresas' },
       { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'contactos' },
     ],

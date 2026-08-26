@@ -111,6 +111,21 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
     },
     implemented: true,
   },
+  {
+    id: 'catalogo-google-sheets',
+    name: 'Catálogo · Sync con Google Sheets',
+    description: 'Sincroniza el catálogo de productos con un Google Sheet que actualiza tu proveedor (mismas columnas que la importación inicial desde Excel). Compartí el Sheet como "Lector" con el email de la cuenta de servicio configurada en el servidor (ver /configuracion/catalogo), y cargá acá el ID del Sheet y el nombre de la pestaña.',
+    icon: 'FileSpreadsheet',
+    category: 'integration',
+    version: '1.0.0',
+    author: 'CRM Core',
+    requiresConfig: true,
+    configSchema: {
+      sheetId: { type: 'string', label: 'ID del Google Sheet (de la URL, entre /d/ y /edit)', required: true },
+      sheetTabName: { type: 'string', label: 'Nombre de la pestaña (default: CRM_IMPORTAR)', required: false },
+    },
+    implemented: true,
+  },
 ]
 
 export function getPlugin(id: string): PluginDefinition | undefined {
