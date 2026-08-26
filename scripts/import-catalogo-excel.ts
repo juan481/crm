@@ -18,7 +18,7 @@ import JSZip from 'jszip'
 import { prisma } from '../src/lib/db'
 import { createAdminClient } from '../src/lib/supabase/admin'
 import { normalizeCatalogRow, type CatalogRawRow } from '../src/lib/catalogo-import'
-import { resolveCategoryId, type CategoryCache } from '../src/lib/catalogo-categories'
+import { resolveCategoryId, preloadCategoryCache, type CategoryCache } from '../src/lib/catalogo-categories'
 import { mapWithConcurrency } from '../src/lib/concurrency'
 
 const DEFAULT_FILE = 'catalogo/ABBA - CRM_PROGRAMADOR - SOLO IMPORTACION.xlsx'
@@ -196,12 +196,13 @@ async function main() {
 
   let processed = 0
   if (!dryRun) {
-    // Categorías primero, en SERIE — resolveCategoryId no es segura ante
-    // llamadas concurrentes (dos filas resolviendo la MISMA categoría nueva
-    // a la vez podrían crearla duplicada, ver comentario en
-    // catalogo-categories.ts). Al resolver todas acá antes del paso
-    // paralelo, el cache queda completo y el paso de abajo sólo pega hits.
+    // Categorías: se precarga el árbol completo en una sola consulta (ver
+    // preloadCategoryCache) y se resuelve en SERIE después — resolveCategoryId
+    // no es segura ante llamadas concurrentes cuando sí hace falta crear algo
+    // nuevo (dos filas creando la MISMA categoría nueva a la vez podrían
+    // duplicarla, ver comentario en catalogo-categories.ts).
     const categoryCache: CategoryCache = new Map()
+    await preloadCategoryCache(prisma, org.id, categoryCache)
     const categoryIdByRowIndex: (string | null)[] = new Array(normalizedRows.length).fill(null)
     for (let i = 0; i < normalizedRows.length; i++) {
       const { categoryPath } = normalizedRows[i].normalized

@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import { prisma } from '@/lib/db'
 import { normalizeCatalogRow, type CatalogRawRow } from '@/lib/catalogo-import'
-import { resolveCategoryId, type CategoryCache } from '@/lib/catalogo-categories'
+import { resolveCategoryId, preloadCategoryCache, type CategoryCache } from '@/lib/catalogo-categories'
 import { mapWithConcurrency } from '@/lib/concurrency'
 
 // Upserts en paralelo — con ~2296 SKUs (tamaño real del catálogo de Abba)
@@ -144,11 +144,15 @@ export async function syncCatalogFromGoogleSheet(
     normalizedRows.push(normalized)
   }
 
-  // Categorías primero, en SERIE — resolveCategoryId no es segura ante
-  // llamadas concurrentes (dos filas resolviendo la MISMA categoría nueva a
-  // la vez podrían crearla duplicada). Con el cache ya completo, el paso
-  // paralelo de abajo sólo pega hits, sin más escrituras a ProductCategory.
+  // Categorías: se precarga el árbol completo en UNA consulta (ver
+  // preloadCategoryCache) — con eso, resolveCategoryId sólo pega la base
+  // para una categoría genuinamente nueva que el proveedor haya agregado
+  // (el caso normal: ninguna). Igual se resuelve en serie después, no en
+  // paralelo — resolveCategoryId no es segura ante llamadas concurrentes
+  // cuando SÍ hace falta crear algo nuevo (dos filas creando la MISMA
+  // categoría nueva a la vez podrían duplicarla).
   const categoryCache: CategoryCache = new Map()
+  await preloadCategoryCache(prisma, orgId, categoryCache)
   const categoryIdByRow: (string | null)[] = new Array(normalizedRows.length).fill(null)
   for (let i = 0; i < normalizedRows.length; i++) {
     const { categoryPath } = normalizedRows[i]
