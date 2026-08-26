@@ -14,9 +14,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Pagination } from '@/components/ui/table'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
-import type { Service, Product } from '@/types'
+import { CatalogFilters } from '@/components/catalogo/catalog-filters'
+import { ProductCard } from '@/components/catalogo/product-card'
+import { ProductDetailModal } from '@/components/catalogo/product-detail-modal'
+import type { Service, Product, ProductCategory, ProductBrand } from '@/types'
 import toast from 'react-hot-toast'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -93,8 +96,10 @@ export default function CotizadorPage() {
   // productos "simples" son listas cortas, se muestran completas y se
   // filtran en memoria con itemSearch directo.
   const [productCategoryId, setProductCategoryId] = useState<string | null>(null)
+  const [productBrand, setProductBrand] = useState<string | null>(null)
   const [productPage, setProductPage] = useState(1)
-  const PRODUCT_GRID_LIMIT = 12
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+  const PRODUCT_GRID_LIMIT = 24
 
   // Debounce sólo para la búsqueda contra el catálogo (server-side, miles
   // de SKUs) — los servicios y productos "simples" siguen filtrándose en
@@ -109,7 +114,7 @@ export default function CotizadorPage() {
 
   // Cambió el filtro -> volver a la página 1 (si no, se puede quedar en una
   // página que ya no existe para el nuevo resultado).
-  useEffect(() => { setProductPage(1) }, [debouncedItemSearch, productCategoryId])
+  useEffect(() => { setProductPage(1) }, [debouncedItemSearch, productCategoryId, productBrand])
 
   const searchParams = useSearchParams()
   // Presente cuando se llega desde "Generar cotización" en el detalle de una
@@ -169,11 +174,12 @@ export default function CotizadorPage() {
     },
   })
   const { data: catalogGridData, isLoading: loadingCatalogGrid } = useQuery({
-    queryKey: ['catalogo-grid-cotizador', debouncedItemSearch, productCategoryId, productPage],
+    queryKey: ['catalogo-grid-cotizador', debouncedItemSearch, productCategoryId, productBrand, productPage],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(productPage), limit: String(PRODUCT_GRID_LIMIT) })
       if (debouncedItemSearch.length >= 2) p.set('q', debouncedItemSearch)
       if (productCategoryId) p.set('categoryId', productCategoryId)
+      if (productBrand) p.set('brand', productBrand)
       const r = await fetch(`/api/catalogo/products?${p}`)
       if (!r.ok) return { data: [], total: 0, totalPages: 1 }
       return r.json()
@@ -185,6 +191,16 @@ export default function CotizadorPage() {
     queryKey: ['catalogo-categorias-cotizador'],
     queryFn: async () => {
       const r = await fetch('/api/catalogo/categories')
+      if (!r.ok) return { data: [] }
+      return r.json()
+    },
+    enabled: activeTab === 'PRODUCT',
+    staleTime: 5 * 60_000,
+  })
+  const { data: productBrandsData } = useQuery({
+    queryKey: ['catalogo-marcas-cotizador'],
+    queryFn: async () => {
+      const r = await fetch('/api/catalogo/brands')
       if (!r.ok) return { data: [] }
       return r.json()
     },
@@ -244,7 +260,8 @@ export default function CotizadorPage() {
   const catalogGridItems: Product[] = catalogGridData?.data ?? []
   const catalogGridTotal: number = catalogGridData?.total ?? 0
   const catalogGridTotalPages: number = catalogGridData?.totalPages ?? 1
-  const productCategories: { id: string; name: string; productCount: number }[] = productCategoriesData?.data ?? []
+  const productCategories: ProductCategory[] = productCategoriesData?.data ?? []
+  const productBrands: ProductBrand[] = productBrandsData?.data ?? []
   const empresas = Array.isArray(empresasData) ? empresasData : []
   const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
 
@@ -862,31 +879,16 @@ export default function CotizadorPage() {
               {itemSearch && <button onClick={() => setItemSearch('')} style={{ color: 'var(--color-text-subtle)' }}><X size={13} /></button>}
             </div>
 
-            {/* Categorías del catálogo — sólo Productos */}
-            {activeTab === 'PRODUCT' && productCategories.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                <button
-                  onClick={() => setProductCategoryId(null)}
-                  className={cn(
-                    'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
-                    !productCategoryId ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)]'
-                  )}
-                >
-                  Todas
-                </button>
-                {productCategories.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => setProductCategoryId(c.id)}
-                    className={cn(
-                      'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
-                      productCategoryId === c.id ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)]'
-                    )}
-                  >
-                    {c.name} <span className="opacity-60">({c.productCount})</span>
-                  </button>
-                ))}
-              </div>
+            {/* Filtro de categoría/subcategoría + marca — sólo Productos */}
+            {activeTab === 'PRODUCT' && (productCategories.length > 0 || productBrands.length > 0) && (
+              <CatalogFilters
+                categories={productCategories}
+                brands={productBrands}
+                categoryId={productCategoryId}
+                onCategoryChange={setProductCategoryId}
+                brand={productBrand}
+                onBrandChange={setProductBrand}
+              />
             )}
 
             {/* Grilla de Servicios */}
@@ -968,44 +970,22 @@ export default function CotizadorPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                         {catalogGridItems.map(p => {
                           const k = itemKey('PRODUCT', p.id)
                           const inCart = cart[k]?.quantity ?? 0
-                          const unitPrice = getUnitPrice('PRODUCT', p, priceMode)
-                          const hasGremio = p.precioGremio != null
                           return (
-                            <div key={k} className="surface rounded-2xl overflow-hidden flex flex-col">
-                              <div className="w-full aspect-[4/3] bg-[var(--color-surface-raised)] flex items-center justify-center overflow-hidden">
-                                {p.imageUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-2" loading="lazy" />
-                                ) : (
-                                  <Boxes size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
-                                )}
-                              </div>
-                              <div className="p-3 flex flex-col gap-1.5 flex-1">
-                                <p className="text-xs font-medium leading-snug line-clamp-2" style={{ color: 'var(--color-text)' }}>{p.name}</p>
-                                <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>{p.sku}{p.brand ? ` · ${p.brand}` : ''}</p>
-                                <div className="mt-auto flex items-center gap-1.5">
-                                  <p className="text-sm font-bold" style={{ color: priceMode === 'GREMIO' && hasGremio ? '#10b981' : 'var(--color-primary)' }}>
-                                    {formatPrice(unitPrice, p.currency)}
-                                  </p>
-                                  {hasGremio && (
-                                    <span className={cn(
-                                      'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
-                                      priceMode === 'GREMIO' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-[var(--color-surface-raised)] text-[var(--color-text-subtle)]'
-                                    )}>
-                                      Gremio
-                                    </span>
-                                  )}
-                                </div>
-                                <button onClick={() => addItem('PRODUCT', p)}
+                            <ProductCard
+                              key={k}
+                              product={p}
+                              onClick={() => setDetailProduct(p)}
+                              actionSlot={
+                                <button onClick={(e) => { e.stopPropagation(); addItem('PRODUCT', p) }}
                                   className="mt-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold gradient-bg text-white">
                                   <ShoppingCart size={12} /> {inCart > 0 ? `Agregado ×${inCart}` : 'Agregar'}
                                 </button>
-                              </div>
-                            </div>
+                              }
+                            />
                           )
                         })}
                       </div>
@@ -1296,6 +1276,13 @@ export default function CotizadorPage() {
           Buscá un <span className="font-semibold mx-1" style={{ color: 'var(--color-primary)' }}>servicio o producto</span> para empezar
         </div>
       )}
+
+      <ProductDetailModal
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onAdd={(p) => { addItem('PRODUCT', p); setDetailProduct(null) }}
+        addLabel="Agregar al presupuesto"
+      />
     </div>
   )
 }

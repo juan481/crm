@@ -274,6 +274,12 @@ export interface ProductCategory {
   id: string
   name: string
   productCount: number
+  children?: { id: string; name: string; productCount: number }[]
+}
+
+export interface ProductBrand {
+  value: string
+  count: number
 }
 
 // ─── Quote ────────────────────────────────────────────────────────────────

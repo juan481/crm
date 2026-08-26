@@ -6,9 +6,11 @@ import { Search, Boxes, Plus, Minus, ShoppingCart } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/table'
 import { SkeletonCard } from '@/components/ui/skeleton'
-import { cn, formatCurrency } from '@/lib/utils'
+import { CatalogFilters } from '@/components/catalogo/catalog-filters'
+import { ProductDetailModal } from '@/components/catalogo/product-detail-modal'
+import { formatCurrency } from '@/lib/utils'
 import { useGremioCartStore } from '@/store/gremio-cart-store'
-import type { Product, ProductCategory } from '@/types'
+import type { Product, ProductCategory, ProductBrand } from '@/types'
 import toast from 'react-hot-toast'
 
 const LIMIT = 12
@@ -17,7 +19,9 @@ export default function GremioCatalogoPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryId, setCategoryId] = useState<string | null>(null)
+  const [brand, setBrand] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { items: cartItems, addItem, setQuantity } = useGremioCartStore()
 
@@ -25,6 +29,8 @@ export default function GremioCatalogoPage() {
     debounceRef.current = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [search])
+
+  useEffect(() => { setPage(1) }, [categoryId, brand])
 
   const { data: categoriesData } = useQuery({
     queryKey: ['gremio-categories'],
@@ -37,12 +43,24 @@ export default function GremioCatalogoPage() {
   })
   const categories: ProductCategory[] = categoriesData?.data ?? []
 
+  const { data: brandsData } = useQuery({
+    queryKey: ['gremio-brands'],
+    queryFn: async () => {
+      const res = await fetch('/api/catalogo/brands')
+      if (!res.ok) throw new Error('Error al cargar marcas')
+      return res.json()
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const brands: ProductBrand[] = brandsData?.data ?? []
+
   const { data, isLoading } = useQuery({
-    queryKey: ['gremio-catalogo-products', debouncedSearch, categoryId, page],
+    queryKey: ['gremio-catalogo-products', debouncedSearch, categoryId, brand, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) })
       if (debouncedSearch.length >= 2) p.set('q', debouncedSearch)
       if (categoryId) p.set('categoryId', categoryId)
+      if (brand) p.set('brand', brand)
       const res = await fetch(`/api/catalogo/products?${p}`)
       if (!res.ok) throw new Error('Error al cargar el catálogo')
       return res.json()
@@ -74,30 +92,16 @@ export default function GremioCatalogoPage() {
         <Input placeholder="Buscar producto o SKU..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      {categories.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4">
-          <button
-            onClick={() => { setCategoryId(null); setPage(1) }}
-            className={cn(
-              'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
-              !categoryId ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'
-            )}
-          >
-            Todas
-          </button>
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { setCategoryId(c.id); setPage(1) }}
-              className={cn(
-                'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
-                categoryId === c.id ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)]'
-              )}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
+      {(categories.length > 0 || brands.length > 0) && (
+        <CatalogFilters
+          categories={categories}
+          brands={brands}
+          categoryId={categoryId}
+          onCategoryChange={setCategoryId}
+          brand={brand}
+          onBrandChange={setBrand}
+          className="grid grid-cols-1 gap-2"
+        />
       )}
 
       {isLoading ? (
@@ -116,7 +120,11 @@ export default function GremioCatalogoPage() {
             const hasGremio = p.precioGremio != null
             const ahorroPct = hasGremio ? Math.round((1 - (p.precioGremio! / p.price)) * 100) : 0
             return (
-              <div key={p.id} className="surface rounded-2xl overflow-hidden flex flex-col">
+              <div
+                key={p.id}
+                onClick={() => setDetailProduct(p)}
+                className="surface rounded-2xl overflow-hidden flex flex-col border border-transparent transition-all active:scale-[0.98] hover:border-[var(--color-primary)] hover:shadow-md cursor-pointer"
+              >
                 <div className="aspect-square bg-[var(--color-surface-raised)] flex items-center justify-center overflow-hidden">
                   {p.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -142,17 +150,17 @@ export default function GremioCatalogoPage() {
                   </div>
                   {inCartQty > 0 ? (
                     <div className="flex items-center justify-between gap-1 mt-1">
-                      <button onClick={() => setQuantity(p.id, inCartQty - 1)} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                      <button onClick={(e) => { e.stopPropagation(); setQuantity(p.id, inCartQty - 1) }} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
                         <Minus size={12} />
                       </button>
                       <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{inCartQty}</span>
-                      <button onClick={() => addItem({ productId: p.id, sku: p.sku ?? null, name: p.name, precioGremio: p.precioGremio ?? p.price, precioPublico: p.price, currency: p.currency }, 1)} className="w-7 h-7 rounded-lg flex items-center justify-center gradient-bg text-white">
+                      <button onClick={(e) => { e.stopPropagation(); addItem({ productId: p.id, sku: p.sku ?? null, name: p.name, precioGremio: p.precioGremio ?? p.price, precioPublico: p.price, currency: p.currency }, 1) }} className="w-7 h-7 rounded-lg flex items-center justify-center gradient-bg text-white">
                         <Plus size={12} />
                       </button>
                     </div>
                   ) : (
                     <button
-                      onClick={() => handleAdd(p)}
+                      onClick={(e) => { e.stopPropagation(); handleAdd(p) }}
                       className="mt-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold gradient-bg text-white"
                     >
                       <ShoppingCart size={12} /> Agregar
@@ -168,6 +176,13 @@ export default function GremioCatalogoPage() {
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
       )}
+
+      <ProductDetailModal
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onAdd={(p) => { handleAdd(p); setDetailProduct(null) }}
+        addLabel="Agregar al pedido"
+      />
     </div>
   )
 }

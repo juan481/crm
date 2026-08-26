@@ -4,9 +4,11 @@ import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-// Categorías de nivel 1 del catálogo (parentId null) — usadas como tabs de
-// filtro en /catalogo y en el portal Gremio. Mismo chequeo de rol que
-// GET /api/catalogo/products (SELLER+ o GREMIO explícito).
+// Categorías de nivel 1 del catálogo (parentId null), con sus hijos de
+// nivel 2 anidados — usadas para el filtro en cascada (categoría →
+// subcategoría) de /catalogo, el Cotizador y el portal Gremio. Mismo
+// chequeo de rol que GET /api/catalogo/products (SELLER+ o GREMIO
+// explícito).
 export async function GET() {
   try {
     const payload = await getCurrentUserAny()
@@ -18,7 +20,7 @@ export async function GET() {
     const db = prisma as any
     const roots = await db.productCategory.findMany({
       where: { organizationId: payload.orgId, parentId: null },
-      select: { id: true, name: true, children: { select: { id: true } } },
+      select: { id: true, name: true, children: { select: { id: true, name: true }, orderBy: { name: 'asc' } } },
       orderBy: { name: 'asc' },
     })
 
@@ -42,9 +44,15 @@ export async function GET() {
     const countByCategoryId = new Map<string, number>(counts.map((c: any) => [c.categoryId as string, c._count._all]))
 
     const data = roots.map((r: any) => {
-      let total = countByCategoryId.get(r.id) ?? 0
-      for (const c of r.children) total += countByCategoryId.get(c.id) ?? 0
-      return { id: r.id, name: r.name, productCount: total }
+      const children = r.children.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        productCount: countByCategoryId.get(c.id) ?? 0,
+      }))
+      // El total de la raíz incluye lo tageado directamente en ella (poco
+      // común, pero posible) más lo de cada hijo.
+      const total = (countByCategoryId.get(r.id) ?? 0) + children.reduce((s: number, c: any) => s + c.productCount, 0)
+      return { id: r.id, name: r.name, productCount: total, children }
     })
 
     return NextResponse.json({ data })
