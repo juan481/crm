@@ -15,6 +15,12 @@ enum Role {
   SELLER
   HR
   TECHNICIAN
+  // Portal B2B (Módulo 3) — carril lateral, no forma parte de la jerarquía
+  // de canAccess()/AppShell interno. Nunca aparece en MODULE_DEFINITIONS ni
+  // en la matriz de /configuracion/permisos; su acceso se resuelve con
+  // guards explícitos (role === 'GREMIO') en (gremio)/layout.tsx y en las
+  // APIs que consume ese portal.
+  GREMIO
 }
 
 enum UserStatus {
@@ -245,6 +251,7 @@ model Organization {
   dealNotas               DealNota[]
   directorioContactoNotas DirectorioContactoNota[]
   cotizaciones            Cotizacion[]
+  pedidos                 Pedido[]
   asistencias             Asistencia[]
   loginEvents             LoginEvent[]
   turnosAsistencia        TurnoAsistencia[]
@@ -332,6 +339,8 @@ model User {
   turnosAsistencia        TurnoAsistencia[]
   quickActionUsage        QuickActionUsage[]
   memberships             OrganizationMembership[]
+  pedidosComoAutor        Pedido[]                 @relation("PedidoAutor")
+  pedidosAsignados        Pedido[]                 @relation("PedidoAsignado")
 
   @@index([organizationId])
 }
@@ -1177,6 +1186,7 @@ model Product {
   trackStock     Boolean           @default(false)
   stock          Int               @default(0)
   movimientos    StockMovimiento[]
+  pedidoItems    PedidoItem[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -1287,6 +1297,70 @@ model Cotizacion {
   @@index([empresaId])
   @@index([userId])
   @@index([dealId])
+}
+
+enum PedidoStatus {
+  PENDIENTE
+  CONFIRMADO
+  ENTREGADO
+  CANCELADO
+}
+
+// ─── Portal B2B "Usuario Gremio" (Módulo 3) — pedido mayorista ────────────
+// Un pedido lo hace un usuario con role GREMIO desde su propio portal
+// (fuera de (dashboard)/), nunca desde el CRM interno. `number` es
+// secuencial legible por organización (ver src/lib/sequence.ts,
+// createWithSequence) — se muestra como "Pedido 001".
+model Pedido {
+  id             String       @id @default(cuid())
+  number         Int
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("PedidoAutor", fields: [userId], references: [id])
+  // A quién se le asigna automáticamente (ej. Sebastian Pierini) — resuelto
+  // por email de configuración del plugin "gremio-portal", ver
+  // src/lib/users.ts findUserByEmail(). Null si no matchea ningún usuario
+  // cargado todavía — el pedido igual se crea (falla suave).
+  assignedToId   String?
+  assignedTo     User?        @relation("PedidoAsignado", fields: [assignedToId], references: [id], onDelete: SetNull)
+  items          PedidoItem[]
+  totalGremio    Float
+  totalPublico   Float
+  // Guardado (no recalculado a partir de los dos anteriores) — mismo
+  // criterio de snapshot estable que el resto del módulo: si a futuro
+  // cambia cómo se calcula el ahorro, los pedidos ya hechos no se alteran.
+  ahorro         Float
+  currency       String       @default("USD")
+  status         PedidoStatus @default(PENDIENTE)
+  notes          String?
+  // Auditoría del aviso a info@abbaseguridad.com.ar (o el email configurado)
+  // — null significa que no se pudo mandar o todavía no se intentó.
+  emailSentAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, number])
+  @@index([organizationId, userId])
+}
+
+// Snapshot congelado por línea — mismo criterio que QuoteItem (dentro de
+// Cotizacion.items): si el Product cambia de precio después, el pedido
+// histórico no se ve afectado. productId es sólo referencia, no fuente de
+// verdad para el precio ya cobrado/pactado.
+model PedidoItem {
+  id            String   @id @default(cuid())
+  pedidoId      String
+  pedido        Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sku           String?
+  name          String
+  precioGremio  Float
+  precioPublico Float
+  quantity      Int
+
+  @@index([pedidoId])
 }
 
 // ─── Módulo RRHH: Asistencia ──────────────────────────────────────────────

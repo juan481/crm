@@ -134,6 +134,7 @@ export const ROLE_LABELS: Record<string, string> = {
   SELLER:      'Vendedor',
   TECHNICIAN:  'Técnico',
   HR:          'RRHH',
+  GREMIO:      'Usuario Gremio',
 }
 
 // Country list — cubre LatAm (base histórica de Abba) + los países más

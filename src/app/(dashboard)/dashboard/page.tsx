@@ -256,7 +256,7 @@ export default function DashboardPage() {
                 <Link
                   key={lead.id}
                   href={`/pipeline?dealId=${lead.id}`}
-                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--color-surface-hover)] transition-colors group"
+                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-[var(--color-surface-raised)] transition-colors group"
                 >
                   <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
                     {lead.origen === 'WHATSAPP' ? <MessageCircle size={16} /> : <UserPlus size={16} />}

@@ -48,18 +48,7 @@ export async function pickAvailableTechnician(orgId: string): Promise<{ id: stri
   return withLoad[0].t
 }
 
-/** Mismo espíritu para derivar a Ventas/Administración: si Abba cargó un
- *  email de contacto puntual (Sebastián, Norma) en la config del plugin, se
- *  busca el User de esa organización con ese email para poder asignarle el
- *  Deal como owner o notificarlo por su nombre real; si no matchea ningún
- *  usuario cargado en el CRM (ej. todavía no tiene cuenta), se devuelve null
- *  y el caller cae al fallback (notificar sólo por email, sin asignar
- *  owner de un usuario que no existe). */
-export async function findUserByEmail(orgId: string, email: string | null): Promise<{ id: string; name: string; email: string } | null> {
-  if (!email) return null
-  const db = prisma as any
-  return db.user.findFirst({
-    where: { organizationId: orgId, email: email.toLowerCase(), status: { not: 'DELETED' } },
-    select: { id: true, name: true, email: true },
-  })
-}
+// Movida a src/lib/users.ts (genérica, la usa también el portal Gremio del
+// Módulo 3) — reexportada acá para no romper este import ya existente en
+// tools.ts.
+export { findUserByEmail } from '@/lib/users'

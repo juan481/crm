@@ -126,6 +126,21 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
     },
     implemented: true,
   },
+  {
+    id: 'gremio-portal',
+    name: 'Portal Gremio · Pedidos',
+    description: 'Configura a quién se asigna automáticamente cada pedido que hacen los usuarios Gremio, y a qué email se manda el aviso además del destinatario asignado.',
+    icon: 'ShoppingCart',
+    category: 'productivity',
+    version: '1.0.0',
+    author: 'CRM Core',
+    requiresConfig: true,
+    configSchema: {
+      assigneeEmail: { type: 'string', label: 'Email de quien recibe los pedidos (ej. Sebastian Pierini) — debe ser un usuario ya cargado en el CRM', required: false },
+      notifyEmail: { type: 'string', label: 'Email adicional que recibe copia (default: info@abbaseguridad.com.ar)', required: false },
+    },
+    implemented: true,
+  },
 ]
 
 export function getPlugin(id: string): PluginDefinition | undefined {

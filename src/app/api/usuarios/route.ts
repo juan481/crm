@@ -16,6 +16,10 @@ export async function GET() {
       where: {
         organizationId: payload.orgId,
         status: { not: 'DELETED' },
+        // GREMIO es un carril lateral (portal B2B, sin acceso al CRM
+        // interno) — nunca debe aparecer en pickers de asignación de
+        // Tareas/Tickets/RRHH que consumen este endpoint.
+        role: { not: 'GREMIO' },
       },
       select: {
         id:        true,

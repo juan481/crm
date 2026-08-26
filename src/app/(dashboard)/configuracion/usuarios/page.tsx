@@ -25,20 +25,24 @@ import toast from 'react-hot-toast'
 const createSchema = z.object({
   name: z.string().min(2),
   email: z.string().email('Email inválido'),
-  role: z.enum(['ADMIN', 'SELLER', 'TECHNICIAN', 'HR']),
+  role: z.enum(['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'GREMIO']),
   password: z.string().min(8, 'Mínimo 8 caracteres'),
 })
 type CreateData = z.infer<typeof createSchema>
 
 // Labels por rubro (src/lib/role-labels.ts) — "Vendedor / Comercial" queda
 // como default genérico porque combina el nombre de rol con una aclaración
-// que no depende del rubro; el resto sale de getRoleLabel().
+// que no depende del rubro; el resto sale de getRoleLabel(). GREMIO
+// (Módulo 3, portal B2B) se ofrece en cualquier rubro por ahora — mismo
+// criterio de simplicidad que HR/TECHNICIAN, que tampoco se gatean por
+// vertical.
 function getRoleOptions(vertical: string | null) {
   return [
     { value: 'SELLER',     label: vertical === 'marketing' ? getRoleLabel('SELLER', vertical) : 'Vendedor / Comercial' },
     { value: 'TECHNICIAN', label: getRoleLabel('TECHNICIAN', vertical) },
     { value: 'HR',         label: getRoleLabel('HR', vertical) },
     { value: 'ADMIN',      label: getRoleLabel('ADMIN', vertical) },
+    { value: 'GREMIO',     label: getRoleLabel('GREMIO', vertical) },
   ]
 }
 function getRoleOptionsSuper(vertical: string | null) {
@@ -62,7 +66,11 @@ export default function UsuariosPage() {
   // Misma jerarquía que canAccess() en el backend — evita mostrar botones
   // (cambiar contraseña, suspender, eliminar) que la API va a rechazar
   // igual porque el target tiene un rango mayor al del usuario actual.
-  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, SELLER: 2, HR: 1, TECHNICIAN: 0 }
+  // GREMIO: -1 — mismo criterio que src/lib/auth.ts/modules.ts. Sin esto,
+  // ROLE_LEVEL['GREMIO'] daba undefined → el `?? 99` de canManage() hacía
+  // que NINGÚN rol pudiera gestionar (editar/suspender/resetear password)
+  // una cuenta Gremio desde este panel.
+  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1 }
   const canManage = (targetRole: string) => (ROLE_LEVEL[me?.role ?? ''] ?? -1) >= (ROLE_LEVEL[targetRole] ?? 99)
 
   const { data, isLoading } = useQuery<User[]>({

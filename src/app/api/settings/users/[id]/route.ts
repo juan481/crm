@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const updateData: Record<string, unknown> = {}
     if (status) updateData.status = status
-    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN']
+    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN', 'GREMIO']
     if (role) {
       if (!VALID_ROLES.includes(role)) {
         return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })

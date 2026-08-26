@@ -1,5 +1,9 @@
 // ─── Enums ────────────────────────────────────────────────────────────────
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN' | 'HR'
+// GREMIO (Módulo 3, portal B2B) es un carril lateral — no participa de la
+// jerarquía interna de canAccess()/AppShell, ver comentario en el enum Role
+// del schema. Se agrega igual al union type para que TS lo reconozca en
+// altas/ediciones de usuario y en los guards explícitos del portal.
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN' | 'HR' | 'GREMIO'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED'
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'PROSPECT'
 export type ClientType = 'B2B' | 'B2C'

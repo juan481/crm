@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nombre, email y contraseña son requeridos' }, { status: 400 })
     }
 
-    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN']
+    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN', 'GREMIO']
     if (!VALID_ROLES.includes(role)) {
       return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
     }
@@ -75,6 +75,10 @@ export async function POST(req: NextRequest) {
         role:               role || 'SELLER',
         organizationId:     payload.orgId,
         forcePasswordChange: true,
+        // GREMIO se salta el tour de onboarding interno (menciona
+        // Dashboard/Clientes, ajeno a su portal) — igual pasa por
+        // /cambiar-contrasena por forcePasswordChange arriba.
+        onboardingCompleted: role === 'GREMIO',
       },
       select: { id: true, email: true, name: true, role: true, status: true, createdAt: true },
     })

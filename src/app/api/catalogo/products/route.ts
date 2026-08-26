@@ -18,9 +18,7 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // Cast: GREMIO se suma al union type Role recién en el Módulo 3 (rol +
-    // portal B2B) — este chequeo ya queda listo para ese momento.
-    if ((payload.role as string) !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
+    if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

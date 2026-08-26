@@ -31,6 +31,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
     const { payload, user: dbUser, org: activeOrg } = session!
 
+    // Portal B2B (Módulo 3) — GREMIO nunca monta este AppShell interno, ni
+    // por un instante. Va antes que cualquier otro chequeo de este layout
+    // (onboarding/forcePasswordChange se resuelven del lado de /gremio si
+    // hiciera falta) para evitar el flash client-side que hoy sufren
+    // HR/TECHNICIAN (ver ROLE_ALLOWED_PREFIXES en app-shell.tsx).
+    if (payload.role === 'GREMIO') redirect('/gremio')
+
     if (!dbUser.onboardingCompleted) redirect('/onboarding')
     // Selector de rubro: es por-organización, no por-usuario — un usuario
     // multi-org que ya completó onboarding una vez igual tiene que elegirlo

@@ -55,6 +55,11 @@ const ROLE_LEVEL: Record<Role, number> = {
   SELLER: 2,
   HR: 1,
   TECHNICIAN: 0,
+  // GREMIO no entra a ROLES (no debe aparecer como columna en la matriz de
+  // /configuracion/permisos, que gobierna sidebar del AppShell interno que
+  // GREMIO nunca ve) — sólo está acá para que TS no rompa. Mismo criterio
+  // que auth.ts.
+  GREMIO: -1,
 }
 
 export function roleAtLeast(role: Role, required: Role): boolean {

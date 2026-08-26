@@ -17,6 +17,13 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
     SELLER: 2,
     HR: 1,         // canAccess(role, 'HR')  → blocks only TECHNICIAN
     TECHNICIAN: 0, // canAccess(role, 'SELLER') → blocks HR and TECHNICIAN
+    // GREMIO no participa de esta jerarquía (portal B2B lateral, ver
+    // comentario en el enum Role del schema) — el -1 es sólo una red de
+    // seguridad fail-closed para que TS compile y para que un llamado
+    // legacy a canAccess('GREMIO', cualquierCosa) dé false. El control de
+    // acceso real del portal es el guard explícito role==='GREMIO' en
+    // (gremio)/layout.tsx y en las APIs que consume.
+    GREMIO: -1,
   }
   return hierarchy[userRole] >= hierarchy[requiredRole]
 }
