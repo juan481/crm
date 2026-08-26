@@ -906,7 +906,7 @@ export default function CotizadorPage() {
           <div className="rounded-2xl p-6 text-center" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
             <Wrench size={28} className="mx-auto mb-2" style={{ color: 'var(--color-text-subtle)' }} />
             <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Sin servicios configurados</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Configurá en Ajustes → Servicios</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>Configurá en Configuración → Catálogo</p>
           </div>
         ) : (
           <div className="space-y-4">

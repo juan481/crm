@@ -44,10 +44,10 @@ const settingsSections = [
     color: '#8b5cf6',
   },
   {
-    href: '/configuracion/productos',
+    href: '/configuracion/catalogo',
     icon: <Package size={24} />,
-    title: 'Catálogo de Productos',
-    description: 'Administrá los productos físicos (cámaras, kits, equipos) disponibles en el cotizador.',
+    title: 'Catálogo',
+    description: 'Administrá productos propios, el catálogo del proveedor (con sync y baja/alta) y los servicios.',
     roles: ['SUPER_ADMIN', 'ADMIN'],
     color: '#f59e0b',
   },

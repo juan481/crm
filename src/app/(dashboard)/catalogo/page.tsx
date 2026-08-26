@@ -191,7 +191,7 @@ export default function CatalogoPage() {
             </p>
             {!debouncedSearch && (
               <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
-                Se crean desde Configuración → Servicios
+                Se crean desde Configuración → Catálogo
               </p>
             )}
           </div>

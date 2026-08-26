@@ -61,6 +61,13 @@ export function CatalogFilters({
 
   return (
     <div className={className ?? 'grid grid-cols-1 sm:grid-cols-3 gap-3'}>
+      {/* Marca primero, categoría/subcategoría después — orden pedido
+          explícitamente por Juan tras ver el filtro en uso real. */}
+      <Select
+        options={brandOptions}
+        value={brand ?? ''}
+        onChange={(e) => onBrandChange(e.target.value || null)}
+      />
       <Select
         options={rootOptions}
         value={selectedRoot?.id ?? ''}
@@ -73,11 +80,6 @@ export function CatalogFilters({
           onChange={(e) => onCategoryChange(e.target.value || selectedRoot!.id)}
         />
       )}
-      <Select
-        options={brandOptions}
-        value={brand ?? ''}
-        onChange={(e) => onBrandChange(e.target.value || null)}
-      />
     </div>
   )
 }

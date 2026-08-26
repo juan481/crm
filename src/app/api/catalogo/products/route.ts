@@ -26,6 +26,12 @@ export async function GET(req: NextRequest) {
     const q          = searchParams.get('q')?.trim() ?? ''
     const categoryId = searchParams.get('categoryId')
     const brand      = searchParams.get('brand')
+    // 'active' (default, todo consumidor normal) | 'inactive' | 'all' — sólo
+    // tiene sentido para SELLER+ administrando el catálogo (dar de baja un
+    // SKU sin borrarlo, ver qué está desactivado). GREMIO nunca puede pedir
+    // otra cosa que no sea 'active': ver un producto dado de baja en el
+    // portal sería mostrar algo que un ADMIN decidió ocultar a propósito.
+    const statusParam = payload.role !== 'GREMIO' ? (searchParams.get('status') ?? 'active') : 'active'
     const page       = Math.max(1, Number(searchParams.get('page') ?? 1))
     const limit      = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 24)))
     const skip       = (page - 1) * limit
@@ -42,7 +48,7 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = {
       organizationId: payload.orgId,
       sku: { not: null },
-      active: true,
+      ...(statusParam === 'all' ? {} : { active: statusParam === 'inactive' ? false : true }),
     }
     // ~68 productos del catálogo del proveedor son "placeholder" sin
     // cotizar todavía (costo=precioGremio=precioPublico=0) — se importan
