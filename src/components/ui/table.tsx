@@ -1,5 +1,6 @@
 'use client'
 
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Column<T> {
@@ -184,31 +185,68 @@ interface PaginationProps {
   onPageChange: (page: number) => void
 }
 
+// Ventana de páginas a mostrar: siempre 1 y la última, la actual con un
+// vecino a cada lado, y "…" donde haya un salto — nunca más de ~7 botones
+// sin importar cuántas páginas haya en total. Antes se listaban TODAS
+// (Array.from({length: totalPages})): con catálogos de miles de productos
+// (2296 productos ÷ 24-36 por página = 64-96 páginas) eso generaba un
+// scroll lateral interminable de números — bug real, reportado por el
+// cliente en /catalogo.
+function getPageWindow(page: number, totalPages: number): (number | '…')[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+  const pages = new Set([1, totalPages, page, page - 1, page + 1])
+  const sorted = Array.from(pages).filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b)
+  const result: (number | '…')[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push('…')
+    result.push(sorted[i])
+  }
+  return result
+}
+
 export function Pagination({ page, totalPages, total, limit, onPageChange }: PaginationProps) {
   const start = (page - 1) * limit + 1
   const end = Math.min(page * limit, total)
 
   return (
-    <div className="flex items-center justify-between px-1 mt-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1 mt-4">
       <p className="text-sm text-[var(--color-text-muted)]">
         Mostrando <span className="font-medium text-[var(--color-text)]">{start}–{end}</span> de{' '}
         <span className="font-medium text-[var(--color-text)]">{total}</span> resultados
       </p>
-      <div className="flex gap-1">
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-          <button
-            key={p}
-            onClick={() => onPageChange(p)}
-            className={cn(
-              'w-8 h-8 rounded-lg text-sm font-medium transition-all duration-150',
-              p === page
-                ? 'gradient-bg text-white'
-                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]'
-            )}
-          >
-            {p}
-          </button>
-        ))}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)] disabled:opacity-30 disabled:pointer-events-none"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {getPageWindow(page, totalPages).map((p, i) =>
+          p === '…' ? (
+            <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-sm text-[var(--color-text-subtle)]">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className={cn(
+                'w-8 h-8 rounded-lg text-sm font-medium transition-all duration-150 shrink-0',
+                p === page
+                  ? 'gradient-bg text-white'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]'
+              )}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)] disabled:opacity-30 disabled:pointer-events-none"
+        >
+          <ChevronRight size={15} />
+        </button>
       </div>
     </div>
   )

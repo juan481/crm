@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Plus, Minus, MessageCircle, ChevronRight, Trash2, Zap, RefreshCw,
+  Plus, Minus, MessageCircle, ChevronRight, ChevronLeft, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
   TrendingUp, CheckCircle, Search, Package, Wrench, Tag, Clock, Boxes,
   ShoppingCart,
@@ -16,6 +16,7 @@ import { Select } from '@/components/ui/select'
 import { Pagination } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
+import { useThemeStore } from '@/store/theme-store'
 import { CatalogFilters } from '@/components/catalogo/catalog-filters'
 import { ProductCard } from '@/components/catalogo/product-card'
 import { ProductDetailModal } from '@/components/catalogo/product-detail-modal'
@@ -100,6 +101,14 @@ export default function CotizadorPage() {
   const [productPage, setProductPage] = useState(1)
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
   const PRODUCT_GRID_LIMIT = 24
+
+  // Wizard de 3 pantallas — antes todo (ítems, descuento, validez,
+  // destinatario, notas) vivía en una sola página larga y "Destinatario"
+  // terminaba muy abajo del scroll, después de una grilla de miles de SKUs.
+  // Cada paso ahora es su propia pantalla; sólo se avanza desde el botón de
+  // la barra inferior, nunca haciendo scroll.
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  const logoUrl = useThemeStore((s) => s.logoUrl)
 
   // Debounce sólo para la búsqueda contra el catálogo (server-side, miles
   // de SKUs) — los servicios y productos "simples" siguen filtrándose en
@@ -270,6 +279,14 @@ export default function CotizadorPage() {
   const discountAmt = subtotal * (discount / 100)
   const finalTotal = subtotal - discountAmt
   const currency   = cartItems[0] ? getCurrency(cartItems[0]) : 'USD'
+  // Público y Gremio en paralelo (no sólo el que está resuelto por
+  // priceMode) — para mostrar los dos valores lado a lado en el resumen del
+  // paso 3. Si ningún ítem del carrito tiene precioGremio (sólo servicios
+  // y/o productos simples), los dos números dan idénticos — en ese caso no
+  // tiene sentido mostrar la comparación, se muestra un único total.
+  const subtotalPublico = cartItems.reduce((s, i) => s + getPrice(i, 'PUBLICO') * i.quantity, 0)
+  const subtotalGremio  = cartItems.reduce((s, i) => s + getPrice(i, 'GREMIO')  * i.quantity, 0)
+  const hasGremioSavings = subtotalGremio < subtotalPublico
 
   const selectedEmpresa = empresas.find(e => e.id === selectedEmpresaId)
 
@@ -648,6 +665,7 @@ export default function CotizadorPage() {
     setCart({}); setManualEmail(''); setManualName(''); setNotes(''); setDiscount(0)
     setSelectedEmpresaId(''); setSelectedContactEmail(''); setSelectedContactName('')
     setManualContactInput(false); setPipelineState('idle'); setAutoDealId(null)
+    setCurrentStep(1)
   }
 
   // ── Preview ────────────────────────────────────────────────────────────────
@@ -812,8 +830,39 @@ export default function CotizadorPage() {
         </div>
       </div>
 
+      {/* ── Stepper ───────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-6">
+        {([
+          { n: 1 as const, label: 'Ítems' },
+          { n: 2 as const, label: 'Destinatario' },
+          { n: 3 as const, label: 'Confirmar' },
+        ]).map((s, i) => {
+          const reached = s.n === 1 || (s.n === 2 && cartItems.length > 0) || (s.n === 3 && cartItems.length > 0 && !!recipientEmail)
+          const active = currentStep === s.n
+          return (
+            <div key={s.n} className="flex items-center gap-2 flex-1 min-w-0">
+              <button
+                onClick={() => reached && setCurrentStep(s.n)}
+                disabled={!reached}
+                className="flex items-center gap-2 shrink-0 disabled:cursor-not-allowed"
+              >
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
+                  active ? 'gradient-bg text-white' : reached ? 'bg-[var(--color-primary-light)] text-[var(--color-primary)]' : ''
+                }`} style={!active && !reached ? { background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' } : undefined}>
+                  {reached && !active && s.n < currentStep ? <CheckCircle size={13} /> : s.n}
+                </span>
+                <span className={`text-xs font-semibold hidden sm:inline ${active ? '' : 'opacity-60'}`} style={{ color: active ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                  {s.label}
+                </span>
+              </button>
+              {i < 2 && <div className="h-px flex-1" style={{ background: 'var(--color-border)' }} />}
+            </div>
+          )
+        })}
+      </div>
+
       {/* ── STEP 1: Ítems ─────────────────────────────────────────────────── */}
-      <section className="mb-5">
+      <section className="mb-5" hidden={currentStep !== 1}>
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full gradient-bg flex items-center justify-center text-[10px] font-bold text-white shrink-0">1</span>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>Elegí los ítems</p>
@@ -903,8 +952,13 @@ export default function CotizadorPage() {
                     const unitPrice = getUnitPrice('SERVICE', s, priceMode)
                     return (
                       <div key={k} className="surface rounded-2xl p-3 flex flex-col gap-2">
-                        <div className="w-full aspect-[4/3] rounded-xl bg-[var(--color-surface-raised)] flex items-center justify-center">
-                          <Wrench size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                        <div className="w-full aspect-[4/3] rounded-xl bg-[var(--color-surface-raised)] flex items-center justify-center overflow-hidden p-4">
+                          {logoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={logoUrl} alt="" className="max-w-full max-h-full object-contain opacity-90" />
+                          ) : (
+                            <Wrench size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                          )}
                         </div>
                         <p className="text-xs font-medium leading-snug line-clamp-2 flex-1" style={{ color: 'var(--color-text)' }}>{s.name}</p>
                         <p className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
@@ -1049,9 +1103,8 @@ export default function CotizadorPage() {
         )}
       </section>
 
-      {/* ── Descuento ─────────────────────────────────────────────────────── */}
-      {cartItems.length > 0 && (
-        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+      {/* ── Descuento (pantalla 3, junto con el resumen) ─────────────────── */}
+      <section hidden={currentStep !== 3} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
               style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>%</span>
@@ -1084,12 +1137,10 @@ export default function CotizadorPage() {
               </motion.div>
             )}
           </div>
-        </motion.section>
-      )}
+      </section>
 
-      {/* ── Validez ───────────────────────────────────────────────────────── */}
-      {cartItems.length > 0 && (
-        <motion.section initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+      {/* ── Validez (pantalla 3) ──────────────────────────────────────────── */}
+      <section hidden={currentStep !== 3} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
               style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>
@@ -1112,11 +1163,69 @@ export default function CotizadorPage() {
               días — se verá como &quot;Válida por {validityDays} días&quot; en el presupuesto
             </span>
           </div>
-        </motion.section>
-      )}
+      </section>
+
+      {/* ── Resumen: ítems (marca · categoría) + Público vs Gremio de costado ── */}
+      <section hidden={currentStep !== 3} className="mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>
+            <FileText size={11} />
+          </span>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>Resumen</p>
+        </div>
+        <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <div className="grid sm:grid-cols-2">
+            {/* Ítems: marca y categoría como subtítulo, más legible que el
+                nombre completo (a veces con código de proveedor y largo) */}
+            <div className="p-4 space-y-2.5 sm:border-r" style={{ borderColor: 'var(--color-border)' }}>
+              {cartItems.map(ci => {
+                const k = itemKey(ci.type, ci.item.id)
+                const product = ci.type === 'PRODUCT' ? (ci.item as Product) : null
+                const subtitle = product ? [product.brand, product.category?.name].filter(Boolean).join(' · ') : null
+                return (
+                  <div key={k} className="flex items-start justify-between gap-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate" style={{ color: 'var(--color-text)' }}>{ci.item.name}{ci.quantity > 1 && ` ×${ci.quantity}`}</p>
+                      {subtitle && <p className="text-xs truncate" style={{ color: 'var(--color-text-subtle)' }}>{subtitle}</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Público vs Gremio de costado — sólo si realmente difieren */}
+            <div className="p-4 flex flex-col justify-center gap-3">
+              {hasGremioSavings ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={priceMode === 'PUBLICO' ? 'opacity-100' : 'opacity-50'}>
+                    <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Público</p>
+                    <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(subtotalPublico, currency)}</p>
+                  </div>
+                  <div className={priceMode === 'GREMIO' ? 'opacity-100' : 'opacity-50'}>
+                    <p className="text-[10px] uppercase tracking-wide text-emerald-500">Gremio</p>
+                    <p className="text-lg font-bold text-emerald-500">{formatCurrency(subtotalGremio, currency)}</p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Subtotal</p>
+                  <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(subtotal, currency)}</p>
+                </div>
+              )}
+              {discount > 0 && (
+                <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Descuento {discount}%: -{formatCurrency(discountAmt, currency)}</p>
+                  <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>Final: {formatCurrency(finalTotal, currency)}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── STEP 2: Destinatario ──────────────────────────────────────────── */}
-      <section className="mb-5">
+      <section className="mb-5" hidden={currentStep !== 2}>
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full gradient-bg flex items-center justify-center text-[10px] font-bold text-white shrink-0">2</span>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>Destinatario</p>
@@ -1187,7 +1296,7 @@ export default function CotizadorPage() {
       </section>
 
       {/* ── STEP 3: Notas ─────────────────────────────────────────────────── */}
-      <section className="mb-5">
+      <section className="mb-5" hidden={currentStep !== 3}>
         <div className="flex items-center gap-2 mb-3">
           <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
             style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>3</span>
@@ -1215,29 +1324,31 @@ export default function CotizadorPage() {
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
           >
             <div className="max-w-2xl mx-auto px-4 py-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{cartItems.length} ítem{cartItems.length !== 1 ? 's' : ''}</p>
-                  {cartItems.map(ci => {
-                    const k = itemKey(ci.type, ci.item.id)
-                    return (
-                      <span key={k} className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1"
-                        style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                        {ci.type === 'SERVICE' ? <Wrench size={9} /> : <Package size={9} />}
-                        {ci.item.name}{ci.quantity > 1 && ` ×${ci.quantity}`}
-                      </span>
-                    )
-                  })}
+              {currentStep === 1 && (
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{cartItems.length} ítem{cartItems.length !== 1 ? 's' : ''}</p>
+                    {cartItems.map(ci => {
+                      const k = itemKey(ci.type, ci.item.id)
+                      return (
+                        <span key={k} className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1"
+                          style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                          {ci.type === 'SERVICE' ? <Wrench size={9} /> : <Package size={9} />}
+                          {ci.item.name}{ci.quantity > 1 && ` ×${ci.quantity}`}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <button onClick={clearCart} className="p-1.5 rounded-lg hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    style={{ color: 'var(--color-text-subtle)' }} title="Vaciar">
+                    <Trash2 size={13} />
+                  </button>
                 </div>
-                <button onClick={clearCart} className="p-1.5 rounded-lg hover:text-red-400 hover:bg-red-500/10 transition-all"
-                  style={{ color: 'var(--color-text-subtle)' }} title="Vaciar">
-                  <Trash2 size={13} />
-                </button>
-              </div>
+              )}
 
               <div className="flex items-center gap-3">
                 <div className="shrink-0">
-                  {discount > 0 ? (
+                  {discount > 0 && currentStep === 3 ? (
                     <>
                       <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Total final</p>
                       <p className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
@@ -1253,15 +1364,34 @@ export default function CotizadorPage() {
                   )}
                 </div>
                 <div className="flex gap-2 flex-1">
-                  <Button className="flex-1" onClick={handleSave} loading={saving} leftIcon={<Send size={15} />}>
-                    Generar Presupuesto
-                  </Button>
-                  <a href={buildWhatsApp()} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all whitespace-nowrap"
-                    style={{ background: 'rgba(37,211,102,0.1)', color: '#25D366', border: '1px solid rgba(37,211,102,0.2)' }}>
-                    <MessageCircle size={15} />
-                    <span className="hidden sm:inline">WhatsApp</span>
-                  </a>
+                  {currentStep > 1 && (
+                    <Button variant="secondary" onClick={() => setCurrentStep(s => (s - 1) as 1 | 2)} leftIcon={<ChevronLeft size={15} />}>
+                      Atrás
+                    </Button>
+                  )}
+                  {currentStep === 1 && (
+                    <Button className="flex-1" onClick={() => setCurrentStep(2)} rightIcon={<ChevronRight size={15} />}>
+                      Siguiente: Destinatario
+                    </Button>
+                  )}
+                  {currentStep === 2 && (
+                    <Button className="flex-1" onClick={() => setCurrentStep(3)} disabled={!recipientEmail} rightIcon={<ChevronRight size={15} />}>
+                      Siguiente: Confirmar
+                    </Button>
+                  )}
+                  {currentStep === 3 && (
+                    <>
+                      <Button className="flex-1" onClick={handleSave} loading={saving} leftIcon={<Send size={15} />}>
+                        Generar Presupuesto
+                      </Button>
+                      <a href={buildWhatsApp()} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all whitespace-nowrap"
+                        style={{ background: 'rgba(37,211,102,0.1)', color: '#25D366', border: '1px solid rgba(37,211,102,0.2)' }}>
+                        <MessageCircle size={15} />
+                        <span className="hidden sm:inline">WhatsApp</span>
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
