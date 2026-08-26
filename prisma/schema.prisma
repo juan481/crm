@@ -1531,3 +1531,28 @@ model GoogleCalendarConnection {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
+
+// ─── Códigos de error ────────────────────────────────────────────────────
+// Cuando el ErrorBoundary (components/ui/error-boundary.tsx) atrapa un
+// error real (no el ChunkLoadError, que se auto-recupera solo con un
+// reload), genera un código corto y lo manda acá — la persona que lo ve en
+// pantalla lo puede pasar por WhatsApp sin tener que abrir la consola del
+// navegador, y de este lado se busca por código y aparece el error
+// completo (mensaje, stack, en qué URL, quién era). Sin relación a
+// Organization/User a propósito, mismo criterio "superficie mínima" que
+// PublicFormAttempt/CronRun — un error de sesión rota no debería fallar
+// también por no poder resolver el FK.
+model ErrorLog {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  organizationId String?
+  userEmail      String?
+  message        String
+  stack          String?  @db.Text
+  componentStack String?  @db.Text
+  url            String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}

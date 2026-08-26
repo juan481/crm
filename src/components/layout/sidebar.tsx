@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
-  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes,
+  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -107,6 +107,7 @@ const settingsItems: NavItem[] = [
   // llegaba por una card suelta en /configuracion. Todo unificado ahí.
   { label: 'Catálogo',      href: '/configuracion/catalogo',  icon: <Package size={16} />,   exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Email SMTP',    href: '/configuracion/correo',    icon: <Mail size={16} />,      exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { label: 'Errores',       href: '/configuracion/errores',   icon: <Bug size={16} />,       exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Plugins',       href: '/configuracion/plugins',   icon: <Puzzle size={16} />,    exact: true,  roles: ['SUPER_ADMIN'] },
   { label: 'Marca',         href: '/configuracion/marca',     icon: <Shield size={16} />,    exact: true,  roles: ['SUPER_ADMIN'] },
 ]
