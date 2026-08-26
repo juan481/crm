@@ -29,6 +29,14 @@ export async function GET(req: NextRequest) {
     const page       = Math.max(1, Number(searchParams.get('page') ?? 1))
     const limit      = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 24)))
     const skip       = (page - 1) * limit
+    // El selector inline del Cotizador (y cualquier otro consumidor que
+    // sólo necesite una lista corta, sin paginar) no usa `total`/
+    // `totalPages` para nada — pedirlo igual duplica el viaje de ida y
+    // vuelta al pooler remoto de Supabase (encontrado en auditoría: ~3.5s
+    // en vez de ~1.7s en esta búsqueda, con la latencia de red ya
+    // documentada en src/lib/auth.ts). `/catalogo`, el portal Gremio y el
+    // panel de admin SÍ paginan y siguen pidiendo el conteo por default.
+    const withCount = searchParams.get('withCount') !== '0'
 
     const db = prisma as any
     const where: Record<string, unknown> = {
@@ -62,10 +70,15 @@ export async function GET(req: NextRequest) {
         orderBy: { name: 'asc' },
         include: { category: { select: { id: true, name: true, parentId: true } } },
       }),
-      db.product.count({ where }),
+      // Sin count real cuando no hace falta paginar — total/totalPages
+      // quedan como una aproximación basada en lo que ya se trajo (el
+      // caller que pide withCount=0 nunca los usa para renderizar
+      // paginación, así que no hay riesgo de mostrar un número raro).
+      withCount ? db.product.count({ where }) : Promise.resolve(null),
     ])
 
-    return NextResponse.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) })
+    const totalCount = total ?? (skip + data.length)
+    return NextResponse.json({ data, total: totalCount, page, limit, totalPages: Math.ceil(totalCount / limit) })
   } catch (error) {
     console.error('[CATALOGO PRODUCTS GET]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

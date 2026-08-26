@@ -158,7 +158,10 @@ export default function CotizadorPage() {
   const { data: catalogSearchData } = useQuery({
     queryKey: ['catalogo-search-cotizador', debouncedItemSearch],
     queryFn: async () => {
-      const r = await fetch(`/api/catalogo/products?q=${encodeURIComponent(debouncedItemSearch)}&limit=20`)
+      // withCount=0 — este dropdown nunca pagina, no hace falta el total
+      // (ver comentario en la ruta: evita un segundo round-trip al pooler
+      // remoto, la mitad de la demora real de esta búsqueda).
+      const r = await fetch(`/api/catalogo/products?q=${encodeURIComponent(debouncedItemSearch)}&limit=20&withCount=0`)
       if (!r.ok) return { data: [] }
       return r.json()
     },

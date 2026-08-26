@@ -59,11 +59,22 @@ export default function MiAsistenciaPage() {
   const { user } = useAuthStore()
   const qc   = useQueryClient()
   const [now, setNow] = useState(new Date())
+  // El reloj en vivo (horaStr/fechaStr, abajo) NO puede mostrarse hasta
+  // después de montar en el cliente: `now` arranca en un `new Date()`
+  // distinto en el render de servidor vs. el primer render del cliente
+  // (aunque sea sólo por milisegundos, alcanza para que difiera el segundo
+  // mostrado) — React lo detecta como mismatch de hidratación (errores
+  // #418/#425 reales, encontrados en auditoría). `hoy` (para filtrar el
+  // fichaje de HOY, lógica real) sigue usando `now` tal cual, sin gatear
+  // por `mounted` — un texto que nunca se compara entre servidor/cliente
+  // no puede causar este error, y cambiar esa lógica no es necesario.
+  const [mounted, setMounted] = useState(false)
   const [checkingIn,  setCheckingIn]  = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
   const [modalidad,   setModalidad]   = useState(MODALIDADES_FICHAJE[0])
 
   useEffect(() => {
+    setMounted(true)
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
@@ -72,8 +83,8 @@ export default function MiAsistenciaPage() {
   // el día siguiente y esta pantalla dejaba de reconocer el fichaje de hoy
   // como propio. Ver src/lib/timezone.ts.
   const hoy      = argentinaDayKey(now)
-  const horaStr  = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  const fechaStr = now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const horaStr  = mounted ? now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'
+  const fechaStr = mounted ? now.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''
 
   const { data: historialData, isLoading, isError } = useQuery({
     queryKey: ['mi-asistencia', mesActual(), user?.id],

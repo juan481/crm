@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUserAny } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/db'
 
@@ -9,9 +9,11 @@ import { prisma } from '@/lib/db'
 // propósito (tiene sentido para un logo vectorial, no para una foto).
 const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'uploads'
 
+// getCurrentUserAny() — mismo motivo que api/auth/mi-perfil/route.ts:
+// sólo toca el propio registro del que llama, seguro para cualquier rol.
 export async function POST(req: NextRequest) {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

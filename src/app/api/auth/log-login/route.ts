@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUserAny } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -18,9 +18,17 @@ export const dynamic = 'force-dynamic'
 // Server-side siempre — así no se puede falsear desde el cliente (a
 // diferencia del fichaje, que es un botón que el empleado elige tocar o
 // no). Best-effort: si esto falla, no bloquea nada del lado del usuario.
+//
+// getCurrentUserAny() (no getCurrentUser()) a propósito — encontrado en
+// auditoría: sólo escribe el propio login del usuario que llama
+// (`userId: payload.userId`), nunca datos de otra cuenta, así que GREMIO
+// debe poder loguear el suyo igual que cualquier rol. Con getCurrentUser()
+// (que excluye GREMIO desde el fix de seguridad del Módulo 3) esto
+// devolvía 401 en silencio para el portal — el login en sí funcionaba
+// igual, pero esa cuenta nunca quedaba en el historial de accesos.
 export async function POST(req: NextRequest) {
   try {
-    const payload = await getCurrentUser()
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json().catch(() => ({}))
