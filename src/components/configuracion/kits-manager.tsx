@@ -61,6 +61,7 @@ export function KitsManager() {
   // Paste + búsqueda dentro del modal
   const [pasteText, setPasteText] = useState('')
   const [resolving, setResolving] = useState(false)
+  const [showPaste, setShowPaste] = useState(false)
   const [compSearch, setCompSearch] = useState('')
 
   const { data, isLoading, isError } = useQuery<{ data: Kit[] }>({
@@ -90,7 +91,7 @@ export function KitsManager() {
   }, [form.components, form.price])
 
   const openCreate = () => {
-    setEditing(null); setForm(EMPTY_FORM); setPasteText(''); setCompSearch(''); setShowModal(true)
+    setEditing(null); setForm(EMPTY_FORM); setPasteText(''); setShowPaste(false); setCompSearch(''); setShowModal(true)
   }
   const openEdit = (k: Kit) => {
     setEditing(k)
@@ -108,7 +109,7 @@ export function KitsManager() {
         quantity: c.quantity,
       })),
     })
-    setPasteText(''); setCompSearch(''); setShowModal(true)
+    setPasteText(''); setShowPaste(false); setCompSearch(''); setShowModal(true)
   }
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY_FORM) }
 
@@ -330,30 +331,12 @@ export function KitsManager() {
             />
           </div>
 
-          {/* Pegar códigos de la IA */}
-          <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px dashed var(--color-border)' }}>
-            <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-muted)' }}>
-              <ClipboardPaste size={13} /> Pegá acá los códigos que te devolvió la IA
-            </label>
-            <textarea
-              rows={3}
-              placeholder={'Un código por línea. Podés poner cantidades:\nDS-2CD1043G2-I x2\nDS-7104HQHI-K1\nKIT-INSTAL x1'}
-              value={pasteText}
-              onChange={(e) => setPasteText(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm resize-none outline-none font-mono"
-              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-            />
-            <Button type="button" size="sm" variant="outline" loading={resolving} onClick={handleResolvePaste} disabled={!pasteText.trim()}>
-              Buscar en el catálogo
-            </Button>
-          </div>
-
-          {/* Buscar y agregar a mano */}
+          {/* Agregar productos: buscador (forma principal) */}
           <div className="space-y-1.5">
             <Input
-              label="Agregar un componente a mano"
+              label="Agregá los productos que lleva el KIT *"
               leftIcon={<Search size={14} />}
-              placeholder="Buscar por nombre, SKU o marca..."
+              placeholder="Buscá por nombre, SKU o marca y hacé clic para sumarlo..."
               value={compSearch}
               onChange={(e) => setCompSearch(e.target.value)}
             />
@@ -416,6 +399,43 @@ export function KitsManager() {
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Atajo opcional: pegar una lista de códigos ya armada */}
+          {!showPaste ? (
+            <button
+              type="button"
+              onClick={() => setShowPaste(true)}
+              className="flex items-center gap-1.5 text-xs font-medium hover:underline"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              <ClipboardPaste size={13} /> ¿Ya tenés una lista de códigos? Pegala y la busco sola
+            </button>
+          ) : (
+            <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px dashed var(--color-border)' }}>
+              <label className="text-xs font-semibold flex items-center gap-1.5" style={{ color: 'var(--color-text-muted)' }}>
+                <ClipboardPaste size={13} /> Pegá la lista de códigos (opcional)
+              </label>
+              <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>
+                Un atajo para cuando ya tenés los códigos escritos en algún lado (un Excel, una charla con ChatGPT, un mail del proveedor). Se buscan en el catálogo y se agregan solos. Si no, usá el buscador de arriba.
+              </p>
+              <textarea
+                rows={3}
+                placeholder={'Un código por línea. Podés poner cantidades:\nDS-2CD1043G2-I x2\nDS-7104HQHI-K1\nKIT-INSTAL x1'}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm resize-none outline-none font-mono"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant="outline" loading={resolving} onClick={handleResolvePaste} disabled={!pasteText.trim()}>
+                  Buscar y agregar
+                </Button>
+                <button type="button" onClick={() => { setShowPaste(false); setPasteText('') }} className="text-xs hover:underline" style={{ color: 'var(--color-text-subtle)' }}>
+                  Cerrar
+                </button>
+              </div>
             </div>
           )}
 
