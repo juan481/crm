@@ -74,7 +74,6 @@ export function ConversacionesStats() {
   }
 
   const s = data.data
-  const maxDia = Math.max(1, ...s.porDia.map((d) => d.mensajes))
   const areas = Object.entries(s.derivacionesPorArea)
   const leads = Object.entries(s.leads)
   const maxArea = Math.max(1, ...areas.map(([, v]) => v))
@@ -110,7 +109,7 @@ export function ConversacionesStats() {
         <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-subtle)] mb-2">Últimos {s.days} días</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Tile label="Conversaciones nuevas" value={s.periodo.nuevas} />
-          <Tile label="Resolvió NISSI sola" value={`${s.periodo.pctNissi}%`} sub={`${s.periodo.resueltasPorNissi} de ${s.periodo.nuevas}`} tone="good" />
+          <Tile label="Sólo NISSI (sin humano)" value={`${s.periodo.pctNissi}%`} sub={`${s.periodo.resueltasPorNissi} de ${s.periodo.nuevas}`} tone="good" />
           <Tile label="Derivadas a un área" value={s.periodo.derivadas} icon={<ArrowRightLeft size={13} />} />
           <Tile label="Tomó un humano" value={s.periodo.tomadasPorHumano} icon={<User size={13} />} />
         </div>
@@ -132,7 +131,7 @@ export function ConversacionesStats() {
               <Tooltip
                 cursor={{ fill: 'var(--color-surface-raised)' }}
                 labelFormatter={(d: string) => d.split('-').reverse().join('/')}
-                formatter={(v: number, n: string) => [v, n === 'mensajes' ? 'Mensajes' : 'Conversaciones nuevas']}
+                formatter={(v: number) => [v, 'Mensajes']}
                 contentStyle={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', borderRadius: 12, fontFamily: 'Poppins', fontSize: 12, color: 'var(--color-text)' }}
               />
               <Bar dataKey="mensajes" radius={[3, 3, 0, 0]} maxBarSize={22}>
@@ -141,9 +140,6 @@ export function ConversacionesStats() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
-          {s.periodo.nuevas} conversaciones nuevas y {s.mensajes.total} mensajes en los últimos {s.days} días.
-        </p>
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-4">

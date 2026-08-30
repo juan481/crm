@@ -109,15 +109,19 @@ async function applyStatuses(db: any, statuses: MetaStatus[]): Promise<void> {
     if (!s.id) continue
     if (s.status === 'failed') {
       const err = s.errors?.[0]
+      // No pisar un 'delivered'/'read' con un 'failed' que llega fuera de
+      // orden (Meta no debería, pero por las dudas).
       await db.whatsAppMessage.updateMany({
-        where: { waMessageId: s.id },
+        where: { waMessageId: s.id, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: ['sent', 'pending'] } }] },
         data: { deliveryStatus: 'failed', deliveryError: err?.title || err?.message || 'Meta rechazó el mensaje' },
       })
       continue
     }
     const rank = STATUS_RANK[s.status]
     if (!rank) continue
-    const lower = Object.keys(STATUS_RANK).filter((k) => STATUS_RANK[k] < rank)
+    // 'pending' es el estado inicial de un saliente ANTES de que se confirme
+    // el envío — cualquier status de Meta lo supera.
+    const lower = ['pending', ...Object.keys(STATUS_RANK).filter((k) => STATUS_RANK[k] < rank)]
     await db.whatsAppMessage.updateMany({
       where: { waMessageId: s.id, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: lower } }] },
       data: { deliveryStatus: s.status },

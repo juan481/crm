@@ -57,9 +57,19 @@ en ninguna parte del CRM.
 ### Fase 2 — Inbox de WhatsApp en el CRM
 
 - **Página** `src/app/(dashboard)/conversaciones/page.tsx` (ítem "WhatsApp" en el
-  menú, sección Comunicación — sólo aparece si el plugin está activo). Layout
-  master-detail: lista de conversaciones + hilo completo + caja de respuesta.
-  Polling con TanStack Query (15 s la lista, 10 s el hilo).
+  menú, sección Comunicación — sólo aparece si el plugin está activo). Dos
+  vistas: **Bandeja** (master-detail: lista + hilo + caja de respuesta) y
+  **Estadísticas** (ver más abajo). Polling con TanStack Query (15 s la lista,
+  8 s el hilo).
+- **Mobile**: el hilo abre como pantalla completa (`fixed inset-0`), no queda
+  tapado por la barra rápida; safe-area arriba y abajo; envío optimista (el
+  mensaje aparece al instante con un reloj y después el tick); tap targets
+  grandes.
+- **Entrega de mensajes**: cada mensaje saliente guarda el id de Meta y su
+  estado (`WhatsAppMessage.deliveryStatus`: sent/delivered/read/failed). El
+  webhook procesa el array `statuses` de Meta. En el hilo se ven los ticks
+  (✓ / ✓✓ / ✓✓ azul / ⚠ si falló). El cliente recibe el doble check azul
+  cuando su mensaje se procesa (`markWhatsAppMessageRead`).
 - **Toma humana**: cuando un humano responde desde el inbox, la conversación
   queda "tomada" (`WhatsAppConversation.humanTakeoverAt`). Mientras está tomada,
   **NISSI no contesta ese hilo** — el gate está en `engine.ts` antes de invocar
@@ -98,6 +108,21 @@ en ninguna parte del CRM.
   ⚠️ **Es un BORRADOR** basado en las 2 conversaciones reales que pasó Juan.
   Abba tiene que confirmar marcas, líneas y disponibilidad reales.
 
+### Estadísticas del inbox
+
+Vista "Estadísticas" en `/conversaciones` (componente lazy — recharts no entra
+al bundle de la bandeja). `GET /api/conversaciones/stats?days=30`:
+- **Ahora mismo**: conversaciones totales, sin leer, las que maneja NISSI, con
+  un humano.
+- **Últimos N días** (7/30/90): conversaciones nuevas, % que resolvió NISSI
+  sola, derivadas a un área, tomadas por un humano.
+- **Mensajes**: del cliente / de NISSI / de humanos, promedio por conversación,
+  fallidos.
+- **Serie diaria** de 14 días (mini gráfico de barras).
+- **Derivaciones por área** (Ventas / Soporte / Administración) y
+  **oportunidades creadas por NISSI** por tipo (compra / instalación / gremio /
+  asesor).
+
 ### Además (cabos sueltos que se cerraron de paso)
 
 - NISSI ahora **linkea el `DirectorioContacto`** también en tickets de
@@ -114,8 +139,8 @@ en ninguna parte del CRM.
 
 | Modelo | Campos nuevos |
 |---|---|
-| `WhatsAppConversation` | `humanTakeoverAt`, `assignedUserId` (+ rel), `lastInboundAt`, `lastReadAt`, `contextResetAt`, índice `[organizationId, lastMessageAt]` |
-| `WhatsAppMessage` | `processedAt`, `senderUserId` (+ rel), índice `[senderUserId]` |
+| `WhatsAppConversation` | `humanTakeoverAt`, `assignedUserId` (+ rel), `lastInboundAt`, `lastReadAt`, `contextResetAt`, índices `[organizationId, lastMessageAt]` y `[organizationId, createdAt]` |
+| `WhatsAppMessage` | `processedAt`, `senderUserId` (+ rel), `deliveryStatus`, `deliveryError`, `organizationId` (denormalizado, para las stats), índices `[senderUserId]` y `[organizationId, createdAt]` |
 | `Ticket` | `contactoId` (+ rel a `DirectorioContacto`), índice |
 | `Deal` | `leadReason` |
 | `User` | back-relations `whatsAppConvsAssigned`, `whatsAppMessagesSent` |

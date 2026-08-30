@@ -32,10 +32,20 @@ Los cambios de schema son **todos aditivos + nullable** (columnas nuevas +
    ```
    (Sobreestima un poco la ventana si el último mensaje fue una respuesta de
    NISSI — aceptable.)
+5. **Backfill de `WhatsAppMessage.organizationId`** (Supabase → SQL Editor) —
+   está denormalizado para las estadísticas; sin backfill, los mensajes viejos
+   no cuentan en los totales:
+   ```sql
+   UPDATE "WhatsAppMessage" m
+   SET "organizationId" = c."organizationId"
+   FROM "WhatsAppConversation" c
+   WHERE c.id = m."conversationId" AND m."organizationId" IS NULL;
+   ```
 
 Campos nuevos: `WhatsAppConversation` (`humanTakeoverAt`, `assignedUserId`,
 `lastInboundAt`, `lastReadAt`, `contextResetAt`), `WhatsAppMessage`
-(`processedAt`, `senderUserId`), `Ticket.contactoId`, `Deal.leadReason`.
+(`processedAt`, `senderUserId`, `deliveryStatus`, `deliveryError`,
+`organizationId`), `Ticket.contactoId`, `Deal.leadReason`.
 
 ---
 

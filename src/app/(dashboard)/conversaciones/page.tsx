@@ -93,8 +93,9 @@ export default function ConversacionesPage() {
 
   const setView = (v: 'inbox' | 'stats') => {
     const p = new URLSearchParams(Array.from(searchParams.entries()))
+    p.delete('c')
     if (v === 'stats') p.set('v', 'stats')
-    else { p.delete('v'); p.delete('c') }
+    else p.delete('v')
     router.replace(`/conversaciones?${p}`)
   }
 
@@ -147,6 +148,10 @@ function Inbox() {
   const [optimistic, setOptimistic] = useState<Msg[]>([])
   const endRef = useRef<HTMLDivElement>(null)
   const markedRef = useRef<string>('')
+  const replyRef = useRef<HTMLTextAreaElement>(null)
+
+  // Reset del alto del textarea cuando se vacía (tras enviar).
+  useEffect(() => { if (!reply && replyRef.current) replyRef.current.style.height = 'auto' }, [reply])
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
@@ -175,8 +180,10 @@ function Inbox() {
       return r.json()
     },
     enabled: !!selectedId,
-    refetchInterval: 8000,
+    refetchInterval: 10000,
     refetchIntervalInBackground: false,
+    staleTime: 4000,
+    retry: 1,
   })
 
   const thread = threadQuery.data?.data
@@ -199,15 +206,16 @@ function Inbox() {
     if (markedRef.current === key) return
     markedRef.current = key
     fetch(`/api/conversaciones/${selectedId}/read`, { method: 'POST' })
-      .then(() => {
-        qc.invalidateQueries({ queryKey: ['notification-counts'] })
-        qc.invalidateQueries({ queryKey: ['conversaciones'] })
-      })
+      .then(() => qc.invalidateQueries({ queryKey: ['notification-counts'] }))
       .catch(() => {})
   }, [selectedId, qc, thread])
 
+  // Auto-scroll al fondo SÓLO si ya estabas cerca del fondo (no te tira para
+  // abajo si subiste a leer contexto viejo). `nearBottom` se actualiza en el
+  // onScroll del contenedor de mensajes.
+  const nearBottomRef = useRef(true)
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'auto' })
+    if (nearBottomRef.current) endRef.current?.scrollIntoView({ behavior: 'auto' })
   }, [messages.length, selectedId])
 
   const select = (id: string | null) => {
@@ -236,6 +244,7 @@ function Inbox() {
     const tempId = `temp-${Date.now()}`
     setReply('')
     setSending(true)
+    nearBottomRef.current = true // al mandar, siempre baja al fondo
     setOptimistic((o) => [...o, {
       id: tempId, role: 'assistant', content: text, createdAt: new Date().toISOString(),
       author: 'vos', fromHuman: true, deliveryStatus: 'pending',
@@ -248,13 +257,23 @@ function Inbox() {
       const json = await r.json().catch(() => ({}))
       if (!r.ok) {
         setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...m, deliveryStatus: 'failed' } : m)))
+        setReply(text) // no perder lo escrito ante un fallo transitorio
         toast.error(json.message || json.error || 'No se pudo enviar')
+        // La respuesta 502 con persisted=true ya guardó el mensaje como
+        // fallido — refrescamos para que quede respaldado por la DB.
+        if (json.persisted) threadQuery.refetch()
         return
       }
-      setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...(json.message as Msg) } : m)))
-      threadQuery.refetch(); listQuery.refetch()
+      const real = json.message as Msg | undefined
+      if (real?.id) {
+        setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...real } : m)))
+      } else {
+        setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...m, deliveryStatus: 'sent' } : m)))
+      }
+      threadQuery.refetch()
     } catch {
       setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...m, deliveryStatus: 'failed' } : m)))
+      setReply(text)
       toast.error('Error de conexión')
     } finally {
       setSending(false)
@@ -271,10 +290,10 @@ function Inbox() {
     <div className="lg:flex-1 lg:min-h-0 lg:grid lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] lg:gap-4">
       {/* ── Lista ─────────────────────────────────────────────── */}
       <div
-        className="flex flex-col rounded-2xl overflow-hidden border lg:h-full"
+        className="flex flex-col rounded-2xl lg:overflow-hidden border lg:h-full"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
-        <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <div className="p-3 border-b shrink-0 sticky top-0 z-10 lg:static rounded-t-2xl" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="relative mb-2">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)]" />
             <input
@@ -285,7 +304,7 @@ function Inbox() {
               style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
             />
           </div>
-          <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5">
+          <div className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
               <button
                 key={f.key}
@@ -363,9 +382,17 @@ function Inbox() {
             <Button variant="ghost" size="sm" onClick={() => select(null)}>Volver a la lista</Button>
           </div>
         ) : threadQuery.isLoading || !thread ? (
-          <div className="p-4 space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
-          </div>
+          <>
+            <div className="px-3 py-2.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--color-border)', paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}>
+              <button onClick={() => select(null)} className="lg:hidden p-1 -ml-1 text-[var(--color-text-muted)]">
+                <ArrowLeft size={18} />
+              </button>
+              <span className="text-sm text-[var(--color-text-muted)]">Cargando…</span>
+            </div>
+            <div className="flex-1 p-4 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
+            </div>
+          </>
         ) : (
           <>
             {/* Header */}
@@ -426,7 +453,13 @@ function Inbox() {
             )}
 
             {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 overscroll-contain">
+            <div
+              className="flex-1 overflow-y-auto p-3 space-y-2 overscroll-contain"
+              onScroll={(e) => {
+                const el = e.currentTarget
+                nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+              }}
+            >
               {messages.map((m) => {
                 const isCustomer = m.role === 'user'
                 const failed = m.deliveryStatus === 'failed'
@@ -470,14 +503,20 @@ function Inbox() {
               ) : (
                 <div className="flex items-end gap-2">
                   <textarea
+                    ref={replyRef}
                     value={reply}
-                    onChange={(e) => setReply(e.target.value)}
+                    onChange={(e) => {
+                      setReply(e.target.value)
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`
+                    }}
+                    onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'nearest' }), 250)}
                     onKeyDown={(e) => {
                       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send() }
                     }}
                     rows={1}
                     placeholder="Escribí una respuesta…"
-                    className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none resize-none max-h-32"
+                    className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none resize-none max-h-32 leading-snug"
                     style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
                   />
                   <Button onClick={send} loading={sending} disabled={!reply.trim()} leftIcon={<Send size={14} />} className="shrink-0">

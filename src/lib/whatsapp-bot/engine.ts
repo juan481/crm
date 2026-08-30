@@ -151,13 +151,14 @@ async function markUserMessagesProcessed(db: any, conversationId: string): Promi
  *  inbox y para saber si un envío falló). */
 async function persistAndSendOutbound(
   db: any,
+  orgId: string,
   conversationId: string,
   botConfig: WhatsAppBotConfig,
   customerPhone: string,
   text: string,
 ): Promise<void> {
   const row = await db.whatsAppMessage.create({
-    data: { conversationId, role: 'assistant', content: text },
+    data: { conversationId, organizationId: orgId, role: 'assistant', content: text },
     select: { id: true },
   })
   await db.whatsAppConversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
@@ -213,7 +214,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // mano. NO se tocan estados de la conversación (reabrir, mergear origen) —
   // eso es cosa de NISSI.
   if (!msg.botConfig) {
-    await db.whatsAppMessage.create({ data: { conversationId: conversation.id, role: 'user', content: msg.text, waMessageId: msg.waMessageId } })
+    await db.whatsAppMessage.create({ data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId } })
     await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: now, lastInboundAt: now } })
     console.warn('[NISSI ENGINE] plugin sin config completa — mensaje guardado, NISSI no responde', { orgId: msg.orgId, conversationId: conversation.id })
     return
@@ -235,7 +236,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   const inbound = await db.whatsAppMessage.create({
-    data: { conversationId: conversation.id, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
+    data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
     select: { id: true },
   })
   await db.whatsAppConversation.update({
@@ -282,7 +283,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     const stillOpen = await isHandoffStillOpen(db, conversation)
     if (stillOpen) {
       await markUserMessagesProcessed(db, conversation.id)
-      await persistAndSendOutbound(db, conversation.id, botConfig, msg.customerPhone,
+      await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone,
         'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
       return
     }
@@ -484,5 +485,5 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   await markUserMessagesProcessed(db, conversation.id)
-  await persistAndSendOutbound(db, conversation.id, botConfig, msg.customerPhone, finalText)
+  await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, finalText)
 }

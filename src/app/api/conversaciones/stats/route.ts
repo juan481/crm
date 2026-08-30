@@ -17,15 +17,18 @@ export async function GET(req: NextRequest) {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     const db = prisma as any
     const convWhere = { organizationId: orgId }
+    // organizationId está denormalizado en WhatsAppMessage (índice
+    // [organizationId, createdAt]) — se filtra directo, sin join a la
+    // conversación. `organizationId: null` = mensajes anteriores al backfill.
     const msgWhere = (extra: Record<string, unknown> = {}) => ({
-      conversation: { organizationId: orgId },
+      organizationId: orgId,
       createdAt: { gte: since },
       ...extra,
     })
 
     const [
       total, activasNissi, conHumano, derivadas, cerradas,
-      nuevas, derivadasPeriodo, tomadasPeriodo, resueltasNissiPeriodo,
+      nuevas, derivadasPeriodo, tomadasPeriodo, resueltasNissiPeriodo, conversacionesActivasPeriodo,
       msgEntrantes, msgNissi, msgHumanos, msgFallidos,
       handoffGroups, leadGroups, sinLeerRaw, porDia,
     ] = await Promise.all([
@@ -40,6 +43,9 @@ export async function GET(req: NextRequest) {
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since }, humanTakeoverAt: { not: null } } }),
       // Sigue manejándola NISSI: ni derivada ni tomada por un humano.
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since }, status: { not: 'HANDED_OFF' }, humanTakeoverAt: null } }),
+      // Conversaciones con actividad en el período (para el promedio de
+      // mensajes — no sólo las creadas en el período).
+      db.whatsAppConversation.count({ where: { ...convWhere, lastMessageAt: { gte: since } } }),
 
       db.whatsAppMessage.count({ where: msgWhere({ role: 'user' }) }),
       db.whatsAppMessage.count({ where: msgWhere({ role: 'assistant', senderUserId: null }) }),
@@ -83,9 +89,8 @@ export async function GET(req: NextRequest) {
         ) c ON c.day = d.day::date
         LEFT JOIN (
           SELECT ("createdAt" - INTERVAL '3 hours')::date AS day, COUNT(*) AS n
-          FROM "WhatsAppMessage" wm
-          WHERE wm."createdAt" >= now() - INTERVAL '15 days'
-            AND wm."conversationId" IN (SELECT id FROM "WhatsAppConversation" WHERE "organizationId" = ${orgId})
+          FROM "WhatsAppMessage"
+          WHERE "organizationId" = ${orgId} AND "createdAt" >= now() - INTERVAL '15 days'
           GROUP BY 1
         ) m ON m.day = d.day::date
         ORDER BY d.day ASC
@@ -117,7 +122,12 @@ export async function GET(req: NextRequest) {
           deHumanos: msgHumanos,
           fallidos: msgFallidos,
           total: totalMsg,
-          promedioPorConversacion: nuevas ? Math.round((totalMsg / nuevas) * 10) / 10 : 0,
+          // Sobre las conversaciones que tuvieron actividad en el período, no
+          // sólo las creadas en él (evita inflar el promedio con charlas
+          // viejas que siguen activas).
+          promedioPorConversacion: conversacionesActivasPeriodo
+            ? Math.round((totalMsg / conversacionesActivasPeriodo) * 10) / 10
+            : 0,
         },
         derivacionesPorArea: areaMap,
         leads: leadMap,

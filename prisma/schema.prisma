@@ -643,6 +643,7 @@ model WhatsAppConversation {
   @@unique([organizationId, customerPhone])
   @@index([organizationId, status])
   @@index([organizationId, lastMessageAt])
+  @@index([organizationId, createdAt])
   @@index([phoneNumberId])
 }
 
@@ -650,6 +651,12 @@ model WhatsAppMessage {
   id             String               @id @default(cuid())
   conversationId String
   conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  // Denormalizado de la conversación — las estadísticas del inbox agregan
+  // mensajes por organización y por fecha; sin esta columna cada consulta
+  // hace un semi-join a WhatsAppConversation (y en la DB compartida
+  // multi-tenant terminaba escaneando mensajes de todas las orgs). Se setea
+  // al crear el mensaje; nunca cambia (un mensaje no cambia de org).
+  organizationId String?
   // 'user' | 'assistant' — mismo vocabulario que la Messages API (histórico).
   // El historial que ve el modelo se reconstruye mapeando assistant -> 'model'.
   role           String
@@ -681,6 +688,7 @@ model WhatsAppMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderUserId])
+  @@index([organizationId, createdAt])
 }
 
 // ─── Communications ────────────────────────────────────────────────────────
