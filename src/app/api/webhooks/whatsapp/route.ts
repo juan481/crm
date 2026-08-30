@@ -104,15 +104,18 @@ interface MetaChangeValue {
 // (ej. un 'delivered' que llega después del 'read').
 const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, read: 3 }
 
-async function applyStatuses(db: any, statuses: MetaStatus[]): Promise<void> {
+async function applyStatuses(db: any, orgId: string, statuses: MetaStatus[]): Promise<void> {
   for (const s of statuses) {
     if (!s.id) continue
+    // Scopeado a la org que resolvimos por phone_number_id — un webhook
+    // falsificado (firma opcional si falta WHATSAPP_APP_SECRET) no puede
+    // tocar mensajes de otra organización.
     if (s.status === 'failed') {
       const err = s.errors?.[0]
       // No pisar un 'delivered'/'read' con un 'failed' que llega fuera de
       // orden (Meta no debería, pero por las dudas).
       await db.whatsAppMessage.updateMany({
-        where: { waMessageId: s.id, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: ['sent', 'pending'] } }] },
+        where: { waMessageId: s.id, organizationId: orgId, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: ['sent', 'pending'] } }] },
         data: { deliveryStatus: 'failed', deliveryError: err?.title || err?.message || 'Meta rechazó el mensaje' },
       })
       continue
@@ -123,7 +126,7 @@ async function applyStatuses(db: any, statuses: MetaStatus[]): Promise<void> {
     // el envío — cualquier status de Meta lo supera.
     const lower = ['pending', ...Object.keys(STATUS_RANK).filter((k) => STATUS_RANK[k] < rank)]
     await db.whatsAppMessage.updateMany({
-      where: { waMessageId: s.id, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: lower } }] },
+      where: { waMessageId: s.id, organizationId: orgId, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: lower } }] },
       data: { deliveryStatus: s.status },
     })
   }
@@ -161,15 +164,6 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
     for (const change of entry.changes ?? []) {
       const value = change.value
 
-      // Webhooks de status de entrega (entregado / leído / falló) de los
-      // mensajes que mandamos — actualizan los ticks del inbox.
-      if (value.statuses?.length) {
-        await applyStatuses(db, value.statuses).catch((e) => console.error('[WHATSAPP WEBHOOK] error aplicando statuses', e))
-      }
-
-      const messages = value.messages ?? []
-      if (!messages.length) continue // no hay mensaje entrante que contestar
-
       const phoneNumberId = value.metadata?.phone_number_id
       if (!phoneNumberId) continue
 
@@ -178,6 +172,16 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
         console.error('[WHATSAPP WEBHOOK] Ningún organización tiene configurado este phone_number_id:', phoneNumberId)
         continue
       }
+
+      // Webhooks de status de entrega (entregado / leído / falló) de los
+      // mensajes que mandamos — actualizan los ticks del inbox. Scopeado a
+      // la org resuelta por phone_number_id.
+      if (value.statuses?.length) {
+        await applyStatuses(db, resolved.orgId, value.statuses).catch((e) => console.error('[WHATSAPP WEBHOOK] error aplicando statuses', e))
+      }
+
+      const messages = value.messages ?? []
+      if (!messages.length) continue // no hay mensaje entrante que contestar
 
       const org = await db.organization.findUnique({ where: { id: resolved.orgId }, select: { name: true, crmName: true } })
       const orgName = org?.name || org?.crmName || 'nuestra empresa'
