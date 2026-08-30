@@ -308,8 +308,12 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     const responseParts: Part[] = []
     for (const call of calls) {
       const fnName = call.name ?? ''
+      const fnId = call.id
+      const fr = (response: Record<string, unknown>): Part => ({
+        functionResponse: { name: fnName, response, ...(fnId ? { id: fnId } : {}) },
+      })
       if (handedOff) {
-        responseParts.push({ functionResponse: { name: fnName, response: { result: 'Esta conversación ya se derivó a un humano — no hace falta crear otro registro.' } } })
+        responseParts.push(fr({ output: 'Esta conversación ya se derivó a un humano — no hace falta crear otro registro.' }))
         continue
       }
       try {
@@ -317,10 +321,10 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
           orgId: msg.orgId, conversationId: conversation.id, customerPhone: msg.customerPhone, botConfig: msg.botConfig,
         })
         if (result.handedOff) handedOff = result.handedOff
-        responseParts.push({ functionResponse: { name: fnName, response: { result: result.resultText } } })
+        responseParts.push(fr({ output: result.resultText }))
       } catch (err) {
         console.error('[NISSI ENGINE] tool error', fnName, err)
-        responseParts.push({ functionResponse: { name: fnName, response: { error: 'Error interno al ejecutar esta acción.' } } })
+        responseParts.push(fr({ error: 'Error interno al ejecutar esta acción.' }))
       }
     }
     contents.push({ role: 'user', parts: responseParts })
