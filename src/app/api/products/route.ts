@@ -33,6 +33,21 @@ export async function GET(req: NextRequest) {
     const products = await db.product.findMany({
       where:   { organizationId: payload.orgId, ...scopeWhere },
       orderBy: { createdAt: 'desc' },
+      // Sólo para la lista corta de productos propios (scope=simple): traer
+      // los componentes de los que son KIT, para que el Cotizador pueda
+      // mostrar "Incluye: …" sin un viaje extra. El catálogo del proveedor
+      // (sku != null) nunca tiene KITs.
+      ...(scope === 'simple' && {
+        include: {
+          kitComponents: {
+            select: {
+              id: true, quantity: true, componentId: true,
+              component: { select: { id: true, name: true, sku: true, price: true, currency: true, costo: true, stock: true, trackStock: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      }),
     })
 
     return NextResponse.json({ data: products })

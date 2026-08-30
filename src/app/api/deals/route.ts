@@ -5,9 +5,10 @@ import { prisma } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 const INCLUDE = {
-  empresa: { select: { id: true, name: true, city: true } },
-  client:  { select: { id: true, name: true, company: true } },
-  owner:   { select: { id: true, name: true } },
+  empresa:  { select: { id: true, name: true, city: true } },
+  client:   { select: { id: true, name: true, company: true } },
+  contacto: { select: { id: true, firstName: true, lastName: true, phone: true } },
+  owner:    { select: { id: true, name: true } },
 }
 
 export async function GET(req: NextRequest) {
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     if (!canAccess(payload.role, 'SELLER'))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, ownerId } = await req.json()
+    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, contactoId, ownerId } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
     // Validate ownerId belongs to this org; SELLER can only own their own deals
@@ -80,6 +81,12 @@ export async function POST(req: NextRequest) {
       const client = await db2.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
       if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
     }
+    // Mismo criterio que empresaId/clientId — un contactoId de otra org no
+    // debe quedar vinculado (el FK de Prisma sólo exige que exista).
+    if (contactoId) {
+      const contacto = await db2.directorioContacto.findFirst({ where: { id: contactoId, organizationId: payload.orgId }, select: { id: true } })
+      if (!contacto) return NextResponse.json({ error: 'Contacto no encontrado en esta organización' }, { status: 400 })
+    }
 
     const deal = await db2.deal.create({
       data: {
@@ -92,6 +99,7 @@ export async function POST(req: NextRequest) {
         notes:             notes               || null,
         empresaId:         empresaId           || null,
         clientId:          clientId            || null,
+        contactoId:        contactoId          || null,
         ownerId:           resolvedOwner,
         organizationId:    payload.orgId,
       },

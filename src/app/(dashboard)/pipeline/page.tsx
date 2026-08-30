@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, AlertTriangle, Calculator, CalendarClock, Clock } from 'lucide-react'
+import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, Contact, Phone, AlertTriangle, Calculator, CalendarClock, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -14,6 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatMultiCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { DealNotas } from '@/components/pipeline/deal-notas'
+import { ForecastPanel } from '@/components/pipeline/forecast-panel'
+import { ContactoPicker } from '@/components/pipeline/contacto-picker'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -50,12 +52,14 @@ interface DealFormState {
   currency:    string
   probability: string
   stage:       DealStage
-  notes:       string
-  empresaId:   string
+  notes:         string
+  empresaId:     string
+  contactoId:    string
+  contactoLabel: string
 }
 
 const EMPTY_FORM: DealFormState = {
-  title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '',
+  title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '', contactoId: '', contactoLabel: '',
 }
 
 function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => void }) {
@@ -117,6 +121,21 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               <span className="flex items-center gap-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
                 <Building2 size={11} />{data.empresa.name}
               </span>
+            )}
+            {data.contacto && (
+              <span className="flex items-center gap-1 font-medium">
+                <Contact size={11} />{data.contacto.firstName} {data.contacto.lastName}
+              </span>
+            )}
+            {data.contacto?.phone && (
+              <a
+                href={`https://wa.me/${data.contacto.phone.replace(/[^\d]/g, '')}`}
+                target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 hover:underline"
+                style={{ color: '#10b981' }}
+              >
+                <Phone size={11} />{data.contacto.phone}
+              </a>
             )}
             {data.owner && <span className="flex items-center gap-1"><User size={11} />{data.owner.name}</span>}
           </div>
@@ -282,6 +301,7 @@ export default function PipelinePage() {
           stage:       form.stage,
           notes:       form.notes.trim() || null,
           empresaId:   form.empresaId || null,
+          contactoId:  form.contactoId || null,
         }),
       })
       const json = await res.json()
@@ -396,6 +416,8 @@ export default function PipelinePage() {
         </div>
       )}
 
+      {!isLoading && !isError && deals.length > 0 && <ForecastPanel deals={deals} />}
+
       {/* Kanban board */}
       {isLoading ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -466,6 +488,13 @@ export default function PipelinePage() {
                               <p className="text-[10px] font-semibold flex items-center gap-1 mb-1"
                                 style={{ color: 'var(--color-primary)' }}>
                                 <Building2 size={9} />{deal.empresa.name}
+                              </p>
+                            )}
+
+                            {!deal.empresa && deal.contacto && (
+                              <p className="text-[10px] font-semibold flex items-center gap-1 mb-1"
+                                style={{ color: 'var(--color-primary)' }}>
+                                <Contact size={9} />{deal.contacto.firstName} {deal.contacto.lastName}
                               </p>
                             )}
 
@@ -563,10 +592,15 @@ export default function PipelinePage() {
               {...field('probability')} />
           </div>
           <Select
-            label="Empresa (opcional)"
+            label="Empresa (opcional — dejala vacía si es consumidor final)"
             options={empresaOptions}
             value={form.empresaId}
             onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
+          />
+          <ContactoPicker
+            value={form.contactoId}
+            valueLabel={form.contactoLabel}
+            onChange={(id, label) => setForm(f => ({ ...f, contactoId: id, contactoLabel: label }))}
           />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Notas</label>
