@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { usePlugins } from '@/hooks/use-plugin'
 import { useAuthStore } from '@/store/auth-store'
 import { Avatar } from '@/components/ui/avatar'
 import Image from 'next/image'
@@ -170,16 +171,12 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
 
   // Plugins activados de la org — para ítems con `requiresPlugin` (ej.
   // "WhatsApp" sólo aparece si el plugin whatsapp-ai-bot está activo).
-  const { data: enabledPlugins } = useQuery<Set<string>>({
-    queryKey: ['sidebar-plugins'],
-    queryFn: async () => {
-      const res = await fetch('/api/plugins')
-      if (!res.ok) return new Set<string>()
-      const json = await res.json()
-      return new Set<string>((json.data ?? []).filter((p: { enabled: boolean }) => p.enabled).map((p: { id: string }) => p.id))
-    },
-    staleTime: 5 * 60 * 1000,
-  })
+  // Reusa la misma query `['plugins']` que el resto de la app (usePlugin),
+  // así suele venir del cache. `pluginsResolved` distingue "todavía no cargó"
+  // de "cargó y no hay ninguno".
+  const pluginRows = usePlugins()
+  const pluginsResolved = pluginRows.length > 0
+  const enabledPlugins = new Set(pluginRows.filter((p) => p.enabled).map((p) => p.id))
 
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href
@@ -197,11 +194,10 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
   }
 
   // `requiresPlugin`: el ítem aparece sólo si el plugin está activo. Mientras
-  // no resolvió la query queda oculto (mejor que mostrar de más un feature
-  // que la org no tiene; la query tiene 5 min de cache así que resuelve
-  // rápido).
+  // la lista de plugins no resolvió, se deja pasar — mismo criterio fail-open
+  // que isModuleAllowed (un hiccup de red no debe hacer desaparecer un ítem).
   const hasPlugin = (item: NavItem) =>
-    !item.requiresPlugin || (!!enabledPlugins && enabledPlugins.has(item.requiresPlugin))
+    !item.requiresPlugin || !pluginsResolved || enabledPlugins.has(item.requiresPlugin)
 
   const filterItems = (items: NavItem[]) => items
     .filter((item) => !item.roles || item.roles.includes(user.role))

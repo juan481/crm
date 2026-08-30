@@ -24,7 +24,7 @@ import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 // solo cuando el prefijo systemInstruction+tools se repite — no requiere
 // código; se puede sumar caché explícito si usageMetadata.cachedContentTokenCount
 // muestra baja tasa de acierto).
-const MAX_OUTPUT_TOKENS = 800
+const MAX_OUTPUT_TOKENS = 1200
 // Tope de vueltas de tool-calling dentro de UN SOLO turno del cliente — un
 // turno realista necesita como mucho buscar_catalogo + save_customer_info +
 // una herramienta de handoff. Freno de seguridad contra un loop.
@@ -55,15 +55,23 @@ const SAFETY_SETTINGS: SafetySetting[] = [
   HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
 ].map((category) => ({ category, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }))
 
-const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION', 'MALFORMED_FUNCTION_CALL'])
+// Finish reasons que son un bloqueo real de contenido (avisar a un humano,
+// no reintentar). MALFORMED_FUNCTION_CALL NO va acá — el modelo se
+// autocorrige solo la vuelta siguiente (más probable con thinking apagado),
+// así que se trata como "corté sin respuesta" y cae al reintento sin tools.
+const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION'])
 
 // Texto de la respuesta sacado directamente de los parts (evita el
 // console.warn del getter res.text cuando hay parts de functionCall).
+// Salta los parts de "thought" (por si alguien apunta geminiModel a un
+// modelo con thinking prendido) y une con salto de línea.
 function extractText(cand: { content?: { parts?: Part[] } } | undefined): string {
   const parts = cand?.content?.parts ?? []
   return parts
+    .filter((p) => !(p as { thought?: boolean }).thought)
     .map((p) => (typeof p.text === 'string' ? p.text : ''))
-    .join('')
+    .filter(Boolean)
+    .join('\n')
     .trim()
 }
 
@@ -171,10 +179,28 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       })
       if (!conversation) throw err
     }
-  } else if (conversation.status === 'CLOSED') {
+  }
+
+  const now = new Date()
+
+  // Plugin sin credenciales completas (ej. falta la API key de Gemini) — se
+  // guarda el mensaje y aparece en el inbox para que un humano responda a
+  // mano. NO se tocan estados de la conversación (reabrir, mergear origen) —
+  // eso es cosa de NISSI.
+  if (!msg.botConfig) {
+    await db.whatsAppMessage.create({ data: { conversationId: conversation.id, role: 'user', content: msg.text, waMessageId: msg.waMessageId } })
+    await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: now, lastInboundAt: now } })
+    console.warn('[NISSI ENGINE] plugin sin config completa — mensaje guardado, NISSI no responde', { orgId: msg.orgId, conversationId: conversation.id })
+    return
+  }
+  const botConfig = msg.botConfig
+
+  if (conversation.status === 'CLOSED') {
     conversation = await db.whatsAppConversation.update({
       where: { id: conversation.id },
-      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null, humanTakeoverAt: null, assignedUserId: null },
+      // -5s de colchón por si el reloj de la DB va atrás del server — el
+      // mensaje entrante (que se crea justo después) tiene que quedar dentro.
+      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null, humanTakeoverAt: null, assignedUserId: null, contextResetAt: new Date(now.getTime() - 5000) },
     })
   } else if (originLabel && !(conversation.collectedData as Record<string, unknown> | null)?.origen) {
     conversation = await db.whatsAppConversation.update({
@@ -187,20 +213,10 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     data: { conversationId: conversation.id, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
     select: { id: true },
   })
-  const now = new Date()
   await db.whatsAppConversation.update({
     where: { id: conversation.id },
     data: { lastMessageAt: now, lastInboundAt: now },
   })
-
-  // Plugin sin credenciales completas (ej. falta la API key de Gemini) — el
-  // mensaje ya quedó guardado y va a aparecer en el inbox; un humano puede
-  // responder desde ahí. NISSI no lo procesa.
-  if (!msg.botConfig) {
-    console.warn('[NISSI ENGINE] plugin sin config completa — mensaje guardado, NISSI no responde', { orgId: msg.orgId, conversationId: conversation.id })
-    return
-  }
-  const botConfig = msg.botConfig
 
   // ── Debounce ──────────────────────────────────────────────────────────
   await new Promise((r) => setTimeout(r, DEBOUNCE_MS))
@@ -246,14 +262,26 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar el aviso de "ya derivado"', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
       return
     }
+    // El contexto se reinicia desde el primer mensaje de ESTE turno (los que
+    // todavía no se procesaron) — no desde "ahora", porque el mensaje
+    // entrante ya se guardó antes del debounce y quedaría fuera del historial.
+    const firstOfTurn = await db.whatsAppMessage.findFirst({
+      where: { conversationId: conversation.id, role: 'user', processedAt: null },
+      orderBy: { createdAt: 'asc' }, select: { createdAt: true },
+    })
     conversation = await db.whatsAppConversation.update({
       where: { id: conversation.id },
-      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null },
+      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null, contextResetAt: firstOfTurn?.createdAt ?? new Date() },
     })
   }
 
+  // Sólo desde el último reinicio de contexto (si la conversación se reabrió
+  // de cero) — no arrastra el transcript viejo al modelo.
   const history = await db.whatsAppMessage.findMany({
-    where: { conversationId: conversation.id },
+    where: {
+      conversationId: conversation.id,
+      ...(conversation.contextResetAt ? { createdAt: { gte: conversation.contextResetAt } } : {}),
+    },
     orderBy: { createdAt: 'asc' },
     select: { role: true, content: true },
   })
@@ -269,6 +297,10 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
 
   let finalText = ''
   let handedOff: { to: string } | null = null
+  // Se setea si NISSI no pudo generar una respuesta de verdad (error de la
+  // API, bloqueo de contenido, o se quedó sin texto útil). Al final se manda
+  // UN aviso a un humano (evita mails duplicados por cada vuelta).
+  let couldNotAnswer: string | null = null
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     let res: Awaited<ReturnType<typeof ai.models.generateContent>>
@@ -297,6 +329,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     } catch (err) {
       console.error('[NISSI ENGINE] Gemini error', err, { orgId: msg.orgId, conversationId: conversation.id })
       finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
+      couldNotAnswer = 'error de la API de Gemini'
       break
     }
 
@@ -308,15 +341,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
         orgId: msg.orgId, conversationId: conversation.id,
       })
       finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
-      // Que no se pierda: avisar a Ventas si hay email configurado.
-      if (botConfig.salesContactEmail) {
-        notifyHuman({
-          orgId: msg.orgId, toEmail: botConfig.salesContactEmail, toName: null,
-          subject: 'NISSI no pudo responder un WhatsApp (filtro de seguridad)',
-          heading: 'Revisá esta conversación de WhatsApp',
-          bodyText: `NISSI no pudo generar una respuesta para el número ${msg.customerPhone} (el modelo bloqueó la respuesta). Entrá a Conversaciones en el CRM y respondé vos.`,
-        })
-      }
+      couldNotAnswer = 'el modelo bloqueó la respuesta (filtro de contenido)'
       break
     }
 
@@ -328,9 +353,9 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     if (text && calls.length === 0) finalText = text
 
     if (calls.length === 0) {
-      // Truncado por tokens sin texto útil → avisar a un humano.
       if (!text && finish === 'MAX_TOKENS') {
         console.error('[NISSI ENGINE] respuesta truncada por MAX_TOKENS sin texto', { orgId: msg.orgId, conversationId: conversation.id })
+        couldNotAnswer = 'la respuesta se cortó por límite de tokens'
       }
       break
     }
@@ -390,9 +415,27 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   if (!finalText.trim()) {
-    finalText = handedOff
-      ? handoffConfirmationText(handedOff.to)
-      : 'Contame un poco más para poder ayudarte.'
+    if (handedOff) {
+      finalText = handoffConfirmationText(handedOff.to)
+    } else {
+      finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
+      couldNotAnswer = couldNotAnswer ?? 'no generó una respuesta después de todas las vueltas'
+    }
+  }
+
+  // No pudo responder de verdad y no derivó → avisar a un humano (una sola
+  // vez) para que entre al inbox. Si no hay mail configurado, el único aviso
+  // es el badge de no-leídos del inbox.
+  if (couldNotAnswer && !handedOff) {
+    const to = botConfig.salesContactEmail || botConfig.billingContactEmail
+    if (to) {
+      notifyHuman({
+        orgId: msg.orgId, toEmail: to, toName: null,
+        subject: 'NISSI no pudo responder un WhatsApp',
+        heading: 'Revisá esta conversación de WhatsApp',
+        bodyText: `NISSI no pudo generar una respuesta para el número ${msg.customerPhone} (${couldNotAnswer}). El cliente recibió un mensaje de "en un rato te contesta un asesor". Entrá a Conversaciones en el CRM y respondé vos.`,
+      })
+    }
   }
 
   // Un humano pudo tomar el hilo mientras el modelo generaba — si es así,

@@ -114,7 +114,7 @@ en ninguna parte del CRM.
 
 | Modelo | Campos nuevos |
 |---|---|
-| `WhatsAppConversation` | `humanTakeoverAt`, `assignedUserId` (+ rel), `lastInboundAt`, `lastReadAt`, índice `[organizationId, lastMessageAt]` |
+| `WhatsAppConversation` | `humanTakeoverAt`, `assignedUserId` (+ rel), `lastInboundAt`, `lastReadAt`, `contextResetAt`, índice `[organizationId, lastMessageAt]` |
 | `WhatsAppMessage` | `processedAt`, `senderUserId` (+ rel), índice `[senderUserId]` |
 | `Ticket` | `contactoId` (+ rel a `DirectorioContacto`), índice |
 | `Deal` | `leadReason` |
@@ -142,9 +142,11 @@ Ninguno borra ni cambia datos existentes. **Requiere un backfill** de
 
 ## 5. Revisión de bugs
 
-Se corrió un agente de review sobre el diff completo. Encontró **1 blocker,
-3 bugs y 6 cabos sueltos**. Todos los accionables se corrigieron
-(commits `ff93933`, `e96efba`, `ca2bfdd`):
+Se corrieron **dos pasadas** de review sobre el diff completo. **Ningún blocker
+sin resolver.** Todos los hallazgos accionables se corrigieron (commits
+`ff93933`, `e96efba`, `ca2bfdd` y los de la segunda pasada).
+
+### Primera pasada — 1 blocker + 3 bugs + 6 cabos sueltos
 
 | Hallazgo | Resolución |
 |---|---|
@@ -157,11 +159,24 @@ Se corrió un agente de review sobre el diff completo. Encontró **1 blocker,
 | **Loose end**: el badge de WhatsApp se calculaba para todos los roles | Gateado a SELLER+. |
 | **Nits**: debounce sin tiebreaker; `res.text` spammeaba warnings; preámbulos usados como respuesta final; `MALFORMED_FUNCTION_CALL` no manejado | Todos corregidos en `engine.ts`. |
 
+### Segunda pasada (sobre el estado ya corregido) — 0 blockers, 2 bugs, varios cabos sueltos
+
+| Hallazgo | Resolución |
+|---|---|
+| **Bug**: `MALFORMED_FUNCTION_CALL` de Gemini se trataba como bloqueo fatal (mail "filtro de seguridad" + corte) | Sacado del set de bloqueos — ahora cae al reintento sin herramientas (el modelo se autocorrige). |
+| **Bug**: error genérico de la API de Gemini y `MAX_TOKENS` no avisaban a un humano | Un único `notifyHuman` al final si NISSI no pudo responder y no derivó (con el motivo). `MAX_OUTPUT_TOKENS` subió 800 → 1200. |
+| **Loose end**: `buscar_catalogo` hacía hasta ~13 queries a Supabase por llamada | Queries deduplicadas, la categoría se resuelve una sola vez. Guard de query < 2 caracteres. |
+| **Loose end**: al reabrir una conversación se le reenviaba a Gemini el transcript viejo entero | Campo `contextResetAt` — el engine sólo manda los mensajes desde el reinicio. |
+| **Loose end**: el guard de "plugin sin config" corría DESPUÉS de mutar el estado de la conversación | Movido antes — sin config, sólo se guarda el mensaje, no se toca nada más. |
+| **Loose end**: el ítem del sidebar fallaba "cerrado" ante un error de red (inconsistente con el resto) | `hasPlugin` ahora falla "abierto"; reusa la query `['plugins']` cacheada. |
+| **Nits**: `extractText` no saltaba parts de "thought"; `?c=` inválido dejaba un skeleton eterno; el modal del Pipeline no manejaba el 404 | Todos corregidos. |
+
 **No corregido (documentado, es preexistente)**: si el "Email de Ventas" del
 plugin no matchea un usuario del CRM, el Deal de NISSI queda con dueño
-SUPER_ADMIN y un vendedor con rol SELLER **no lo ve en su Pipeline** ni le abre
-el link desde el inbox. Solución: cargar bien ese email. Es el modelo de
-permisos que ya tenía el CRM.
+SUPER_ADMIN y un vendedor con rol SELLER **no lo ve en su Pipeline**; el link
+desde el inbox le muestra "no encontrada o sin acceso" (antes: skeleton
+infinito). Solución: cargar bien ese email. Es el modelo de permisos que ya
+tenía el CRM.
 
 ---
 

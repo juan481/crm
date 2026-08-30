@@ -136,22 +136,25 @@ export async function buscarCatalogoParaBot(
   orgId: string,
   args: { query: string; categoria?: string | null },
 ): Promise<CatalogoResultParaBot[]> {
-  // ILIKE de Postgres NO pliega acentos y el catálogo de Abba los tiene
-  // ("CÁMARA"). Se prueba: query tal cual → sin acentos → palabra más larga
-  // → sin la categoría. Best-effort, no perfecto (ver comentario del tool).
   const raw = args.query.trim()
+  if (raw.length < 2) return []
+
+  // ILIKE de Postgres NO pliega acentos y el catálogo de Abba los tiene
+  // ("CÁMARA"). Se prueban queries distintas (tal cual → sin acentos →
+  // palabra más larga), deduplicadas. La categoría se resuelve UNA sola vez
+  // (sólo en el primer intento) para no repetir el par de queries de
+  // resolveCategoriaFilter en cada vuelta.
   const noAccents = stripAccents(raw)
   const longestWord = noAccents.split(/\s+/).filter((w) => w.length >= 4).sort((a, b) => b.length - a.length)[0]
-  const attempts: { q: string; categoria: string | null }[] = [
-    { q: raw, categoria: args.categoria ?? null },
-    ...(noAccents !== raw ? [{ q: noAccents, categoria: args.categoria ?? null }] : []),
-    ...(longestWord ? [{ q: longestWord, categoria: args.categoria ?? null }] : []),
-    ...(args.categoria ? [{ q: longestWord || noAccents, categoria: null }] : []),
-  ]
+  const queries = Array.from(new Set([raw, noAccents, longestWord].filter((q): q is string => !!q && q.length >= 2)))
 
   let data: any[] = []
-  for (const a of attempts) {
-    const res = await searchCatalogo(orgId, { q: a.q, categoria: a.categoria, status: 'active', limit: 8, withCount: false })
+  for (let i = 0; i < queries.length; i++) {
+    const res = await searchCatalogo(orgId, {
+      q: queries[i],
+      categoria: i === 0 ? args.categoria ?? null : null,
+      status: 'active', limit: 8, withCount: false,
+    })
     if (res.data.length) { data = res.data; break }
   }
 

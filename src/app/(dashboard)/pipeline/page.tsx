@@ -75,7 +75,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string } | null>(null)
 
-  const { data, isLoading } = useQuery<Deal>({
+  const { data, isLoading, isError } = useQuery<Deal>({
     queryKey: ['deal', dealId],
     queryFn: async () => {
       const res = await fetch(`/api/deals/${dealId}`)
@@ -83,6 +83,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
       return res.json().then(j => j.data)
     },
     staleTime: 10 * 1000,
+    retry: false,
   })
 
   const d = draft ?? (data ? {
@@ -117,7 +118,13 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
 
   return (
     <Modal open onClose={onClose} title={data?.title ?? 'Oportunidad'} size="md">
-      {isLoading || !data || !d ? (
+      {isError ? (
+        <div className="py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          No se encontró esta oportunidad, o no tenés acceso a ella.
+          <br />
+          <span className="text-xs">Si te llegó desde una conversación de WhatsApp, avisale a un administrador para que te la reasigne.</span>
+        </div>
+      ) : isLoading || !data || !d ? (
         <div className="space-y-3">
           <Skeleton className="h-8 rounded-xl" />
           <Skeleton className="h-24 rounded-xl" />

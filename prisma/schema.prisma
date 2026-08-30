@@ -631,6 +631,11 @@ model WhatsAppConversation {
   // Marcador de lectura a nivel organización (equipo chico y bandeja
   // compartida) — no-leído = lastInboundAt > lastReadAt.
   lastReadAt      DateTime?
+  // Cuando una conversación se reabre "de cero" (estaba CLOSED, o el
+  // ticket/deal del handoff se cerró del lado humano), se setea acá el
+  // momento del reinicio — el engine sólo le manda al modelo los mensajes
+  // desde esta fecha, para no arrastrar el transcript viejo.
+  contextResetAt  DateTime?
   lastMessageAt  DateTime                   @default(now())
   createdAt      DateTime                   @default(now())
   messages       WhatsAppMessage[]

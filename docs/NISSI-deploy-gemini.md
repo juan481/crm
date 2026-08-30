@@ -34,8 +34,8 @@ Los cambios de schema son **todos aditivos + nullable** (columnas nuevas +
    NISSI — aceptable.)
 
 Campos nuevos: `WhatsAppConversation` (`humanTakeoverAt`, `assignedUserId`,
-`lastInboundAt`, `lastReadAt`), `WhatsAppMessage` (`processedAt`, `senderUserId`),
-`Ticket.contactoId`, `Deal.leadReason`.
+`lastInboundAt`, `lastReadAt`, `contextResetAt`), `WhatsAppMessage`
+(`processedAt`, `senderUserId`), `Ticket.contactoId`, `Deal.leadReason`.
 
 ---
 

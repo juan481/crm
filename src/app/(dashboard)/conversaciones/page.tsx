@@ -278,6 +278,11 @@ export default function ConversacionesPage() {
             <div className="flex-1 flex items-center justify-center text-sm text-[var(--color-text-muted)]">
               Elegí una conversación de la lista.
             </div>
+          ) : threadQuery.isError ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-[var(--color-text-muted)] p-6 text-center">
+              No se pudo abrir esta conversación (puede que ya no exista).
+              <Button variant="ghost" size="sm" onClick={() => select(null)}>Volver a la lista</Button>
+            </div>
           ) : threadQuery.isLoading || !thread ? (
             <div className="p-4 space-y-3">
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
