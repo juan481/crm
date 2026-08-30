@@ -4,6 +4,7 @@ import { SLA_HOURS } from '@/lib/tickets'
 import { fireWebhook } from '@/lib/webhooks'
 import { pickAvailableTechnician, findUserByEmail } from '@/lib/whatsapp-bot/technician-picker'
 import { resolveBotActorId } from '@/lib/whatsapp-bot/resolve-org'
+import { resolveContactoForLead } from '@/lib/whatsapp-bot/contacto'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 import type { WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
@@ -237,8 +238,17 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     const ownerId = contactUser?.id ?? (await resolveBotActorId(ctx.orgId))
     if (!ownerId) return { resultText: 'No se pudo crear la oportunidad: no hay ningún administrador cargado en esta organización todavía.' }
 
+    // Alta / match del contacto (persona) con lo que NISSI fue juntando en la
+    // charla — así el lead entra al CRM como Contacto + Oportunidad, no sólo
+    // como texto suelto en las notas. Falla suave: si no se puede, el Deal
+    // igual se crea sin contactoId.
+    const contactoId = await resolveContactoForLead(ctx.orgId, { conversationId: ctx.conversationId, customerPhone: ctx.customerPhone })
+
     const deal = await db.deal.create({
-      data: { title, notes: fullDetail, stage: 'LEAD', ownerId, organizationId: ctx.orgId, origen: 'WHATSAPP' },
+      data: {
+        title, notes: fullDetail, stage: 'LEAD', ownerId, organizationId: ctx.orgId, origen: 'WHATSAPP',
+        ...(contactoId ? { contactoId } : {}),
+      },
     })
     await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: 'VENTAS', dealId: deal.id } })
 
