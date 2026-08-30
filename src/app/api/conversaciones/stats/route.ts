@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     const [
       total, activasNissi, conHumano, derivadas, cerradas,
-      nuevas, derivadasPeriodo, tomadasPeriodo,
+      nuevas, derivadasPeriodo, tomadasPeriodo, resueltasNissiPeriodo,
       msgEntrantes, msgNissi, msgHumanos, msgFallidos,
       handoffGroups, leadGroups, sinLeerRaw, porDia,
     ] = await Promise.all([
@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since } } }),
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since }, status: 'HANDED_OFF' } }),
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since }, humanTakeoverAt: { not: null } } }),
+      // Sigue manejándola NISSI: ni derivada ni tomada por un humano.
+      db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since }, status: { not: 'HANDED_OFF' }, humanTakeoverAt: null } }),
 
       db.whatsAppMessage.count({ where: msgWhere({ role: 'user' }) }),
       db.whatsAppMessage.count({ where: msgWhere({ role: 'assistant', senderUserId: null }) }),
@@ -92,7 +94,6 @@ export async function GET(req: NextRequest) {
 
     const sinLeer = Number((sinLeerRaw as { count: number }[])[0]?.count ?? 0)
     const totalMsg = msgEntrantes + msgNissi + msgHumanos
-    const resueltasNissiPeriodo = Math.max(0, nuevas - derivadasPeriodo - tomadasPeriodo)
 
     const areaMap: Record<string, number> = {}
     for (const g of handoffGroups) areaMap[g.handedOffTo ?? 'OTRO'] = g._count._all

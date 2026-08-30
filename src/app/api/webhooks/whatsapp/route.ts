@@ -4,6 +4,7 @@ import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/db'
 import { resolveOrgByPhoneNumberId } from '@/lib/whatsapp-bot/resolve-org'
 import { handleIncomingWhatsAppMessage } from '@/lib/whatsapp-bot/engine'
+import { markWhatsAppMessageRead } from '@/lib/whatsapp-bot/send'
 
 export const dynamic = 'force-dynamic'
 // El procesamiento va en waitUntil (Gemini + debounce de 2.5s + loop de
@@ -185,6 +186,10 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
         const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type)
         if (!text) continue // texto vacío de verdad (raro, pero no hay nada que contestar)
         const contact = value.contacts?.find((c) => c.wa_id === m.from)
+
+        // Doble check azul para el cliente — sabe que su mensaje se vio.
+        // Fire-and-forget, cualquier error se ignora (ver send.ts).
+        if (resolved.config) void markWhatsAppMessageRead(resolved.config.apiToken, phoneNumberId, m.id)
 
         await handleIncomingWhatsAppMessage({
           orgId: resolved.orgId,
