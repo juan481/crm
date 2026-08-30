@@ -389,7 +389,15 @@ export default function CotizadorPage() {
     y += 8.5
 
     quote.cartItems.forEach((ci, idx) => {
-      const rowH     = 10
+      // Los KITs se cotizan como UNA línea con UN precio — el cliente nunca ve
+      // el desglose ni los precios por componente. Sólo se lista, en gris
+      // chico, qué trae el KIT ("Incluye: 2× cámara, 1× grabador…").
+      const kitComps = ci.type === 'PRODUCT' && (ci.item as Product).isKit ? ((ci.item as Product).kitComponents ?? []) : []
+      const incluyeStr = kitComps.length
+        ? 'Incluye: ' + kitComps.map(c => `${c.quantity}× ${c.component.name}`).join(', ')
+        : ''
+      const incluyeLines: string[] = incluyeStr ? doc.splitTextToSize(incluyeStr, cw * 0.62) : []
+      const rowH     = 10 + (incluyeLines.length ? incluyeLines.length * 3.2 + 1 : 0)
       if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
       const lineTotal = getPrice(ci, quote.priceMode) * ci.quantity
       const priceStr  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(lineTotal)
@@ -399,6 +407,11 @@ export default function CotizadorPage() {
 
       doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
       doc.text(ci.item.name, mg + 3, y + 7)
+      if (incluyeLines.length) {
+        doc.setTextColor(120, 130, 145); doc.setFontSize(7); doc.setFont('helvetica', 'italic')
+        doc.text(incluyeLines, mg + 3, y + 11)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30, 41, 59)
+      }
 
       // Type badge — ancho dinámico según el texto real (doc.getTextWidth),
       // no un pill fijo de 22mm centrado en un punto (mg+cw*0.55) distinto
@@ -408,7 +421,7 @@ export default function CotizadorPage() {
       // letras, más ancho) se salía del pill por la derecha — y como el
       // texto es blanco, esa parte quedaba invisible sobre el fondo blanco
       // de la página: se veía "PRODUC" cortado, no un bug de datos.
-      const badgeLabel = ci.type === 'SERVICE' ? 'SERVICIO' : 'PRODUCTO'
+      const badgeLabel = ci.type === 'SERVICE' ? 'SERVICIO' : (kitComps.length ? 'KIT' : 'PRODUCTO')
       doc.setFontSize(7); doc.setFont('helvetica', 'normal')
       const badgeW = doc.getTextWidth(badgeLabel) + 6
       const badgeCx = mg + cw * 0.52
@@ -987,12 +1000,24 @@ export default function CotizadorPage() {
                         const k = itemKey('PRODUCT', p.id)
                         const inCart = cart[k]?.quantity ?? 0
                         const unitPrice = getUnitPrice('PRODUCT', p, priceMode)
+                        const kitComps = p.isKit ? (p.kitComponents ?? []) : []
                         return (
                           <div key={k} className="surface rounded-2xl p-3 flex flex-col gap-2">
-                            <div className="w-full aspect-[4/3] rounded-xl bg-[var(--color-surface-raised)] flex items-center justify-center">
-                              <Package size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />
+                            <div className="w-full aspect-[4/3] rounded-xl bg-[var(--color-surface-raised)] flex items-center justify-center relative">
+                              {p.isKit
+                                ? <Boxes size={22} className="opacity-40" style={{ color: 'var(--color-primary)' }} />
+                                : <Package size={22} className="opacity-30" style={{ color: 'var(--color-text-muted)' }} />}
+                              {p.isKit && (
+                                <span className="absolute top-1.5 left-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md tracking-wide"
+                                  style={{ background: 'var(--color-primary)', color: '#fff' }}>KIT</span>
+                              )}
                             </div>
                             <p className="text-xs font-medium leading-snug line-clamp-2 flex-1" style={{ color: 'var(--color-text)' }}>{p.name}</p>
+                            {kitComps.length > 0 && (
+                              <p className="text-[10px] leading-tight line-clamp-2" style={{ color: 'var(--color-text-subtle)' }}>
+                                Incluye: {kitComps.map(c => `${c.quantity}× ${c.component.name}`).join(', ')}
+                              </p>
+                            )}
                             <p className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
                               {formatPrice(unitPrice, p.currency)}<span className="text-xs font-normal" style={{ color: 'var(--color-text-subtle)' }}>/{p.unit}</span>
                             </p>
@@ -1070,10 +1095,22 @@ export default function CotizadorPage() {
                     <div className="shrink-0">
                       {isService
                         ? <Wrench size={14} style={{ color: 'var(--color-primary)' }} />
-                        : <Package size={14} style={{ color: '#f59e0b' }} />}
+                        : (ci.item as Product).isKit
+                          ? <Boxes size={14} style={{ color: '#f59e0b' }} />
+                          : <Package size={14} style={{ color: '#f59e0b' }} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{ci.item.name}</p>
+                      <p className="text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+                        {(ci.item as Product).isKit && (
+                          <span className="text-[9px] font-bold px-1 py-0.5 rounded tracking-wide shrink-0" style={{ background: '#f59e0b', color: '#fff' }}>KIT</span>
+                        )}
+                        <span className="truncate">{ci.item.name}</span>
+                      </p>
+                      {ci.type === 'PRODUCT' && (ci.item as Product).isKit && ((ci.item as Product).kitComponents?.length ?? 0) > 0 && (
+                        <p className="text-[10px] mt-0.5 line-clamp-1" style={{ color: 'var(--color-text-subtle)' }}>
+                          Incluye: {(ci.item as Product).kitComponents!.map(c => `${c.quantity}× ${c.component.name}`).join(', ')}
+                        </p>
+                      )}
                       <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{priceLabel}</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

@@ -69,6 +69,22 @@ export async function DELETE(_: NextRequest, { params }: Params) {
     }
 
     const db = prisma as any
+
+    // Un producto que es componente de algún KIT no se puede hard-borrar
+    // (ProductComponent.component es onDelete: Restrict) — Postgres tiraría
+    // un P2003 y la request moría con 500. Se avisa cuál/es KIT lo usan para
+    // que primero lo saquen de ahí (o den de baja el producto con active:false).
+    const enKits = await db.productComponent.findMany({
+      where: { componentId: params.id, organizationId: payload.orgId },
+      select: { kit: { select: { name: true } } },
+    })
+    if (enKits.length > 0) {
+      const nombres = Array.from(new Set(enKits.map((c: any) => c.kit?.name).filter(Boolean)))
+      return NextResponse.json({
+        error: `Este producto es componente de ${enKits.length === 1 ? 'un KIT' : 'varios KITs'}: ${nombres.join(', ')}. Sacalo de ${enKits.length === 1 ? 'ese KIT' : 'esos KITs'} primero, o dalo de baja en vez de eliminarlo.`,
+      }, { status: 409 })
+    }
+
     await db.product.deleteMany({ where: { id: params.id, organizationId: payload.orgId } })
     return NextResponse.json({ message: 'Producto eliminado' })
   } catch (error) {

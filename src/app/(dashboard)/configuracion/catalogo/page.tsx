@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Boxes, Wrench } from 'lucide-react'
 import { SimpleProductsManager } from '@/components/configuracion/simple-products-manager'
+import { KitsManager } from '@/components/configuracion/kits-manager'
 import { SupplierCatalogManager } from '@/components/configuracion/supplier-catalog-manager'
 import { ServicesManager } from '@/components/configuracion/services-manager'
 
@@ -44,6 +45,8 @@ export default function ConfiguracionCatalogoPage() {
       {tab === 'PRODUCTOS' ? (
         <div className="space-y-8">
           <SimpleProductsManager />
+          <div className="h-px" style={{ background: 'var(--color-border)' }} />
+          <KitsManager />
           <div className="h-px" style={{ background: 'var(--color-border)' }} />
           <SupplierCatalogManager />
         </div>
