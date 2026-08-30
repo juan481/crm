@@ -454,7 +454,8 @@ SLIDES.push(SLIDE('agenda','Agenda','Qué vamos a ver hoy', 'Un recorrido comple
     <div class="card">${icon('layers',18)}<div class="card-title">4. Cada módulo, al detalle</div><div class="card-body">Empresas, Pipeline, Tareas, Cotizador, Tickets, Facturación, Documentos, Comunicaciones, RRHH, Eventos.</div></div>
     <div class="card">${icon('smartphone',18)}<div class="card-title">5. Uso desde el celular</div><div class="card-body">Qué se puede instalar y usar en el campo, sin computadora.</div></div>
     <div class="card">${icon('shield',18)}<div class="card-title">6. Seguridad y administración</div><div class="card-body">Aislamiento de datos, permisos, marca propia.</div></div>
-    <div class="card">${icon('robot',18)}<div class="card-title">7. Qué sigue (roadmap)</div><div class="card-body">Bot de WhatsApp con IA y catálogo B2B/B2C.</div></div>
+    <div class="card">${icon('robot',18)}<div class="card-title">7. NISSI — bot de WhatsApp con IA</div><div class="card-body">Contesta, califica, asesora y deriva — todo queda en el CRM, con bandeja para responder desde ahí.</div></div>
+    <div class="card">${icon('store',18)}<div class="card-title">8. Qué sigue (roadmap)</div><div class="card-body">Catálogo navegable B2B / B2C.</div></div>
   </div>
 `));
 
@@ -916,7 +917,8 @@ SLIDES.push(SLIDE('plugins','Plugins y extensiones','Prendés sólo lo que neces
     ${B([
       'Exportación de datos a Excel.',
       'Analíticas avanzadas (top clientes por ingreso).',
-      'Integración con WhatsApp Business.',
+      'Integración con WhatsApp Business (botón "Enviar WhatsApp" en la ficha del contacto).',
+      '<b>NISSI</b>, el bot de WhatsApp con IA (ver sección propia) — se activa por organización, con su propio número y credenciales.',
       'Facturación 100% automática.',
       'Zapier / Webhooks para conectar con otras herramientas.',
       'Avisos de asistencia para RRHH.',
@@ -939,25 +941,51 @@ SLIDES.push(SLIDE('marca','Marca propia','Tu logo, tus colores, tu nombre', null
   ])}
 `));
 
-/* ============================= SECCIÓN 6 — PRÓXIMAMENTE ============================= */
-SLIDES.push(DIVIDER('sec-proximo','SECCIÓN 6','Próximamente','Dos desarrollos que ya están en análisis, pensados para dar el siguiente paso.'));
+/* ============================= SECCIÓN 6 — NISSI (BOT DE WHATSAPP) ============================= */
+SLIDES.push(DIVIDER('sec-nissi','SECCIÓN 6','NISSI · el bot de WhatsApp con IA','Ya está construido. Contesta el primer mensaje al toque, califica la consulta, asesora sobre producto sin cotizar, y deja todo cargado en el CRM para que una persona siga.'));
 
-SLIDES.push(SLIDE('bot-whatsapp','Próximamente: Bot de WhatsApp con IA', 'Filtro y derivación automática de mensajes', 'La idea: que el primer mensaje de WhatsApp de un cliente no dependa de que alguien esté mirando el teléfono en ese momento.', `
+SLIDES.push(SLIDE('bot-whatsapp','NISSI — Bot de WhatsApp con IA', 'Que el primer mensaje no dependa de quién esté mirando el teléfono', 'Un cliente escribe al WhatsApp de la empresa y NISSI le contesta en segundos, cualquier día, cualquier hora. Entiende la intención real del mensaje, no palabras clave sueltas.', `
   <div class="grid2">
     ${B([
-      'Un bot recibe el primer mensaje y lo clasifica solo: ¿es un pago, una consulta de soporte, o una venta nueva?',
-      'Deriva automáticamente a la persona correspondiente del equipo (ej. pagos → administración, soporte → técnico, ventas → comercial).',
-      'Se integraría directo con Tickets y Contactos — la conversación queda registrada en el CRM, no se pierde en el teléfono de una persona.',
-      'Corre sobre la infraestructura de IA de Anthropic (la misma detrás de este análisis) para entender la intención real del mensaje, no sólo palabras clave sueltas.',
+      '<b>Clasifica y deriva sola</b>: ¿es una compra, un soporte técnico, una consulta de facturación, un gremio? Cada caso va a la persona o al área que corresponde.',
+      '<b>Hace el filtro</b> como un vendedor: interior o exterior, casa o comercio, zona, distancia al grabador — y junta nombre, teléfono y dirección para la proforma.',
+      '<b>Asesora sobre producto</b>: explica las líneas (analógica vs IP, con o sin grabador, cámara giratoria, funciones de IA) consultando el catálogo real — pero <b>nunca da un precio</b>. Para el presupuesto, deriva a un asesor.',
+      '<b>Todo queda en el CRM</b>: crea la Oportunidad o el Ticket, engancha el contacto, pega la conversación completa como nota, y avisa por mail al responsable. Nada se pierde en el teléfono de una persona.',
+      'Si el cliente se frustra o pide hablar con alguien, <b>deriva directo</b> sin insistir con más preguntas.',
     ])}
-    ${mock('WhatsApp Bot — vista previa', `
-      <div style="padding:8px; border-radius:10px; background:var(--surface-raised); font-size:11.5px; margin-bottom:6px;">👤 "Hola, la cámara del depósito dejó de andar"</div>
-      <div style="padding:8px; border-radius:10px; background:rgba(99,102,241,.1); font-size:11.5px; margin-bottom:6px;">🤖 Clasificado: Soporte técnico → derivado a Franco</div>
-      <div style="padding:8px; border-radius:10px; background:var(--surface-raised); font-size:11.5px;">🎫 Ticket #0089 creado automáticamente</div>
+    ${mock('WhatsApp — NISSI', `
+      <div style="padding:8px; border-radius:10px; background:var(--surface-raised); font-size:11.5px; margin-bottom:6px;">👤 "Hola, quiero poner cámaras en mi casa"</div>
+      <div style="padding:8px; border-radius:10px; background:rgba(99,102,241,.1); font-size:11.5px; margin-bottom:6px;">🤖 "¡Hola! ¿Buscás cámaras convencionales o con visión full color?"</div>
+      <div style="padding:8px; border-radius:10px; background:var(--surface-raised); font-size:11.5px; margin-bottom:6px;">👤 "Full color, y que giren"</div>
+      <div style="padding:8px; border-radius:10px; background:rgba(99,102,241,.1); font-size:11.5px; margin-bottom:6px;">🤖 "Tenemos línea IP PT giratoria para exterior 👍 ¿En qué localidad sería la instalación?"</div>
+      <div style="padding:8px; border-radius:10px; background:rgba(16,185,129,.1); font-size:11.5px;">✅ Oportunidad creada · contacto enganchado · mail a Ventas</div>
     `)}
   </div>
-  ${callout('info','robot','Ya se hizo un análisis de factibilidad con costos y requisitos estimados — próximo paso es una reunión puntual para definir alcance y arrancar.')}
+  ${callout('fixed','check','Corre sobre <b>Google Gemini</b>. Costo real: unos centavos por conversación entera — pocos dólares al mes, prepago y con tope.')}
 `));
+
+SLIDES.push(SLIDE('nissi-inbox','NISSI — Bandeja de WhatsApp en el CRM', 'El equipo lee y responde desde el CRM, no desde el teléfono de Meta', 'Todas las conversaciones de WhatsApp quedan en una pantalla dentro del CRM. No hace falta darle a cada persona acceso a las herramientas de Meta.', `
+  <div class="grid2">
+    ${B([
+      '<b>Lista de todas las conversaciones</b> — las que maneja NISSI, las que ya derivó, y las que un humano tomó — con buscador y un aviso de las que están sin leer.',
+      '<b>El hilo completo</b> de cada charla, con lo que NISSI fue juntando (nombre, zona, tipo de consulta) a la vista.',
+      '<b>Responder desde el CRM</b>: cuando una persona contesta, <b>toma la conversación y NISSI se calla</b> en ese chat, hasta que se lo devuelvan con un botón.',
+      'Link directo a la Oportunidad, el Ticket y el Contacto que generó esa charla.',
+      'Respeta la ventana de 24&nbsp;h de WhatsApp: si el cliente no escribe hace más de un día, avisa que no se le puede mandar un mensaje libre.',
+    ])}
+    ${mock('Conversaciones — CRM', `
+      ${mockRow(icon('chat',14)+' Juan P. · "gral pico, ranqueles 7"', 'NISSI','good')}
+      ${mockRow(icon('chat',14)+' Norma R. · "necesito la factura"', 'Derivada','info')}
+      ${mockRow(icon('chat',14)+' +54 9 351… · "sigo esperando"', 'Con humano','warn')}
+      <div style="margin-top:10px; padding:9px; border-radius:9px; background:var(--surface-raised); font-size:11.5px;">
+        <b>3 sin leer</b> · respondés y NISSI deja de contestar ese hilo
+      </div>
+    `)}
+  </div>
+`));
+
+/* ============================= SECCIÓN 7 — PRÓXIMAMENTE ============================= */
+SLIDES.push(DIVIDER('sec-proximo','SECCIÓN 7','Lo que sigue','En análisis, para dar el siguiente paso.'));
 
 SLIDES.push(SLIDE('catalogo-b2b-b2c','Próximamente: Gestión de catálogos B2B y B2C', 'Un catálogo de productos propio, para vender directo', 'Hoy el catálogo de Servicios/Productos alimenta al Cotizador. El siguiente paso es convertirlo en un catálogo navegable por el cliente final.', `
   ${B([
