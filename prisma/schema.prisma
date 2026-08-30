@@ -236,6 +236,7 @@ model Organization {
   emailTemplates          EmailTemplate[]
   services                Service[]
   products                Product[]
+  productComponents       ProductComponent[]
   productCategories       ProductCategory[]
   stockMovimientos        StockMovimiento[]
   quickActionUsage        QuickActionUsage[]
@@ -818,6 +819,14 @@ model Deal {
   client            Client?      @relation(fields: [clientId], references: [id])
   empresaId         String?
   empresa           Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // Contacto (persona) detrás de la oportunidad — nullable y aparte de
+  // empresaId a propósito: la mayoría de los leads de Abba son consumidor
+  // final (vivienda, quinta, campo particular), sin empresa. Un lead B2C es
+  // contactoId sin empresaId; uno B2B puede tener los dos. Lo completa el
+  // import de chats de WhatsApp, NISSI al derivar una venta, y el alta
+  // manual. onDelete: SetNull — borrar el contacto no borra la oportunidad.
+  contactoId        String?
+  contacto          DirectorioContacto? @relation(fields: [contactoId], references: [id], onDelete: SetNull)
   ownerId           String
   owner             User         @relation("DealOwner", fields: [ownerId], references: [id])
   organizationId    String
@@ -839,6 +848,7 @@ model Deal {
   // el costo de escritura en cada INSERT/UPDATE de Deal sin beneficio.
   @@index([organizationId, stage, createdAt])
   @@index([ownerId])
+  @@index([contactoId])
 }
 
 // ─── Actividad / Notas de Deal ─────────────────────────────────────────────
@@ -1104,6 +1114,7 @@ model DirectorioContacto {
   updatedAt      DateTime     @updatedAt
 
   notas DirectorioContactoNota[]
+  deals Deal[]
 
   @@index([organizationId])
   @@index([empresaId])
@@ -1196,6 +1207,20 @@ model Product {
   stock          Int               @default(0)
   movimientos    StockMovimiento[]
   pedidoItems    PedidoItem[]
+
+  // ── Producto KIT / compuesto ──────────────────────────────────────────
+  // isKit=true → este Product es un combo armado con otros productos del
+  // catálogo (ver ProductComponent). Se cotiza como UNA sola línea con UN
+  // precio: Product.price es el precio final del KIT, editable a mano — al
+  // cliente final NUNCA se le muestra el desglose por componente. La suma de
+  // los componentes se calcula sólo para la vista interna de margen. El
+  // stock de un KIT no se trackea sobre el KIT (trackStock queda false): al
+  // confirmar la venta se descuenta de cada componente. 100% aditivo —
+  // isKit=false en todo producto ya cargado.
+  isKit          Boolean           @default(false)
+  kitComponents  ProductComponent[] @relation("KitToComponents")
+  usedInKits     ProductComponent[] @relation("ComponentToKits")
+
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -1204,6 +1229,34 @@ model Product {
   @@unique([organizationId, sku])
   @@index([organizationId])
   @@index([organizationId, categoryId])
+  @@index([organizationId, isKit])
+}
+
+// Un renglón de la receta de un KIT: "el KIT `kit` lleva `quantity` unidades
+// del producto `component`". Sólo existe para Product.isKit=true. El precio
+// del componente se lee en vivo del Product referenciado y SÓLO alimenta la
+// vista interna de margen del KIT — nunca lo que paga el cliente (eso es
+// Product.price del KIT). onDelete Cascade del lado del KIT (borrar el KIT
+// se lleva su receta); Restrict del lado del componente (no se puede hard-
+// borrar un producto que está dentro de un KIT sin sacarlo antes — el
+// endpoint DELETE de productos devuelve 409 con el detalle).
+model ProductComponent {
+  id             String       @id @default(cuid())
+  kitId          String
+  kit            Product      @relation("KitToComponents", fields: [kitId], references: [id], onDelete: Cascade)
+  componentId    String
+  component      Product      @relation("ComponentToKits", fields: [componentId], references: [id], onDelete: Restrict)
+  quantity       Int          @default(1)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  // Un producto no puede figurar dos veces en el mismo KIT — se ajusta la
+  // cantidad, no se agrega otro renglón.
+  @@unique([kitId, componentId])
+  @@index([kitId])
+  @@index([componentId])
+  @@index([organizationId])
 }
 
 // Árbol de categorías del catálogo (ej. "CCTV > CAMARAS IP WIFI") — mismo
