@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const db = prisma as any
     const conv = await db.whatsAppConversation.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true, customerPhone: true, lastInboundAt: true, humanTakeoverAt: true },
+      select: { id: true, customerPhone: true, lastInboundAt: true },
     })
     if (!conv) return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 })
 
@@ -57,11 +57,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await db.whatsAppMessage.create({
       data: { conversationId: conv.id, role: 'assistant', content: message, senderUserId: payload.userId, processedAt: now },
     })
+    // humanTakeoverAt se refresca en CADA respuesta humana — la
+    // auto-liberación del engine (24hs) cuenta desde la última actividad del
+    // humano, no desde la primera.
     await db.whatsAppConversation.update({
       where: { id: conv.id },
       data: {
         lastMessageAt: now,
-        humanTakeoverAt: conv.humanTakeoverAt ?? now,
+        humanTakeoverAt: now,
         assignedUserId: payload.userId,
       },
     })

@@ -18,6 +18,7 @@ export async function GET() {
     const now = new Date()
     const { orgId, userId, role } = payload
     const isAdmin = canAccess(role, 'ADMIN')
+    const canSeeInbox = canAccess(role, 'SELLER') // el ítem "WhatsApp" es SELLER+
 
     const [tasks, tickets, invoices, whatsapp] = await Promise.all([
       // Tareas asignadas a mí O donde soy colaborador, pendientes o en curso.
@@ -51,15 +52,17 @@ export async function GET() {
       // Conversaciones de WhatsApp con mensajes entrantes sin leer (bandeja
       // compartida — marcador a nivel org, ver WhatsAppConversation.lastReadAt).
       // Raw: comparación columna-a-columna (lastReadAt < lastInboundAt).
-      prisma
-        .$queryRaw<{ count: number }[]>`
-          SELECT COUNT(*)::int AS count FROM "WhatsAppConversation"
-          WHERE "organizationId" = ${orgId}
-            AND "lastInboundAt" IS NOT NULL
-            AND ("lastReadAt" IS NULL OR "lastReadAt" < "lastInboundAt")
-        `
-        .then((r) => Number(r[0]?.count ?? 0))
-        .catch(() => 0),
+      canSeeInbox
+        ? prisma
+            .$queryRaw<{ count: number }[]>`
+              SELECT COUNT(*)::int AS count FROM "WhatsAppConversation"
+              WHERE "organizationId" = ${orgId}
+                AND "lastInboundAt" IS NOT NULL
+                AND ("lastReadAt" IS NULL OR "lastReadAt" < "lastInboundAt")
+            `
+            .then((r) => Number(r[0]?.count ?? 0))
+            .catch(() => 0)
+        : Promise.resolve(0),
     ])
 
     return NextResponse.json(

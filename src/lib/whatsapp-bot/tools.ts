@@ -47,8 +47,8 @@ export const WHATSAPP_BOT_TOOLS: FunctionDeclaration[] = [
     parameters: {
       type: Type.OBJECT,
       properties: {
-        query: { type: Type.STRING, description: 'Qué busca el cliente, ej. "cámara giratoria exterior", "alarma con app", "kit 4 cámaras"' },
-        categoria: { type: Type.STRING, description: 'Opcional: línea/categoría para acotar, ej. "cámaras IP", "alarmas", "CCTV"' },
+        query: { type: Type.STRING, description: 'Palabras clave simples, SIN tildes, ej. "camara giratoria exterior", "alarma app", "kit 4 camaras".' },
+        categoria: { type: Type.STRING, description: 'Opcional: línea/categoría para acotar, sin tildes, ej. "camaras IP", "alarmas", "CCTV"' },
       },
       required: ['query'],
     },

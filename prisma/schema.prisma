@@ -653,8 +653,11 @@ model WhatsAppMessage {
   // veces si Meta reintenta la entrega (pasa seguido). Null en los mensajes
   // que genera la IA (salen de acá hacia Meta, no al revés).
   waMessageId    String?              @unique
-  // Debounce: se marca cuando este mensaje entrante ya fue incluido en un
-  // turno procesado por el modelo. null = pendiente. Ver processConversationTurn.
+  // Se marca cuando NISSI (o la toma humana) ya "dio por atendido" este
+  // mensaje entrante — metadato para debug y para una eventual red de
+  // seguridad (reintentar turnos que quedaron sin respuesta). null =
+  // pendiente. El debounce en sí NO depende de este campo (usa el orden de
+  // createdAt, ver handleIncomingWhatsAppMessage).
   processedAt    DateTime?
   // Humano que mandó este mensaje desde el inbox del CRM. null = lo generó
   // NISSI (o es un mensaje entrante del cliente, role='user'). El role sigue

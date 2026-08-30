@@ -8,8 +8,7 @@ import { MessageCircle, Search, Send, Bot, User as UserIcon, ArrowLeft, Hand, Ro
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
-import { timeAgo, formatDateTime } from '@/lib/utils'
+import { cn, timeAgo, formatDateTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
 interface ConvListItem {
@@ -300,7 +299,7 @@ export default function ConversacionesPage() {
                     )}
                     {thread.deal && (
                       <Link href={`/pipeline?dealId=${thread.deal.id}`} className="text-[var(--color-primary)] hover:underline">
-                        Oportunidad: {thread.deal.stage}
+                        Oportunidad · {thread.deal.title}
                       </Link>
                     )}
                     {thread.ticket && (

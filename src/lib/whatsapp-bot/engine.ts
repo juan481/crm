@@ -35,7 +35,8 @@ const MAX_TOOL_ROUNDS = 4
 // dispara una llamada completa al modelo. Se persiste el mensaje entrante y
 // se espera un ratito; si mientras tanto llegó otro mensaje del cliente,
 // esta invocación se retira y deja que la última procese el batch completo
-// (el historial se reenvía entero igual). Ver processConversationTurn.
+// (el historial se reenvía entero igual). Ver el chequeo de `newest` en
+// handleIncomingWhatsAppMessage.
 const DEBOUNCE_MS = 2500
 
 // Toma humana desde el inbox: si un humano tomó la conversación hace menos
@@ -54,7 +55,17 @@ const SAFETY_SETTINGS: SafetySetting[] = [
   HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
 ].map((category) => ({ category, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }))
 
-const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION'])
+const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION', 'MALFORMED_FUNCTION_CALL'])
+
+// Texto de la respuesta sacado directamente de los parts (evita el
+// console.warn del getter res.text cuando hay parts de functionCall).
+function extractText(cand: { content?: { parts?: Part[] } } | undefined): string {
+  const parts = cand?.content?.parts ?? []
+  return parts
+    .map((p) => (typeof p.text === 'string' ? p.text : ''))
+    .join('')
+    .trim()
+}
 
 // Cuando el mensaje llega desde un anuncio "Click to WhatsApp" (Facebook/
 // Instagram Ads), Meta manda este objeto adentro del mensaje — es la forma
@@ -72,7 +83,10 @@ interface IncomingMessage {
   customerName: string | null
   text: string
   waMessageId: string
-  botConfig: WhatsAppBotConfig
+  // null cuando el plugin no tiene todas las credenciales (ej. falta la API
+  // key de Gemini) — el mensaje se guarda igual y aparece en el inbox, pero
+  // NISSI no lo responde. Ver resolveOrgByPhoneNumberId.
+  botConfig: WhatsAppBotConfig | null
   adReferral?: AdReferral | null
 }
 
@@ -179,11 +193,20 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     data: { lastMessageAt: now, lastInboundAt: now },
   })
 
+  // Plugin sin credenciales completas (ej. falta la API key de Gemini) — el
+  // mensaje ya quedó guardado y va a aparecer en el inbox; un humano puede
+  // responder desde ahí. NISSI no lo procesa.
+  if (!msg.botConfig) {
+    console.warn('[NISSI ENGINE] plugin sin config completa — mensaje guardado, NISSI no responde', { orgId: msg.orgId, conversationId: conversation.id })
+    return
+  }
+  const botConfig = msg.botConfig
+
   // ── Debounce ──────────────────────────────────────────────────────────
   await new Promise((r) => setTimeout(r, DEBOUNCE_MS))
   const newest = await db.whatsAppMessage.findFirst({
     where: { conversationId: conversation.id, role: 'user' },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], // tiebreaker si dos createdAt empatan
     select: { id: true },
   })
   if (newest?.id !== inbound.id) {
@@ -218,7 +241,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     const stillOpen = await isHandoffStillOpen(db, conversation)
     if (stillOpen) {
       await markUserMessagesProcessed(db, conversation.id)
-      const sent = await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone,
+      const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, msg.customerPhone,
         'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
       if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar el aviso de "ya derivado"', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
       return
@@ -236,9 +259,9 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   })
 
   const adOrigin = (conversation.collectedData as Record<string, unknown> | null)?.origen
-  const ai = new GoogleGenAI({ apiKey: msg.botConfig.geminiApiKey })
-  const model = msg.botConfig.geminiModel || DEFAULT_GEMINI_MODEL
-  const systemInstruction = buildNissiSystemPrompt(msg.orgName, msg.botConfig, {
+  const ai = new GoogleGenAI({ apiKey: botConfig.geminiApiKey })
+  const model = botConfig.geminiModel || DEFAULT_GEMINI_MODEL
+  const systemInstruction = buildNissiSystemPrompt(msg.orgName, botConfig, {
     adOrigin: typeof adOrigin === 'string' ? adOrigin : null,
     customerName: msg.customerName,
   })
@@ -286,9 +309,9 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       })
       finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
       // Que no se pierda: avisar a Ventas si hay email configurado.
-      if (msg.botConfig.salesContactEmail) {
+      if (botConfig.salesContactEmail) {
         notifyHuman({
-          orgId: msg.orgId, toEmail: msg.botConfig.salesContactEmail, toName: null,
+          orgId: msg.orgId, toEmail: botConfig.salesContactEmail, toName: null,
           subject: 'NISSI no pudo responder un WhatsApp (filtro de seguridad)',
           heading: 'Revisá esta conversación de WhatsApp',
           bodyText: `NISSI no pudo generar una respuesta para el número ${msg.customerPhone} (el modelo bloqueó la respuesta). Entrá a Conversaciones en el CRM y respondé vos.`,
@@ -298,10 +321,19 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     }
 
     const calls = res.functionCalls ?? []
-    const text = typeof res.text === 'string' ? res.text.trim() : ''
-    if (text) finalText = text
+    const text = extractText(cand)
+    // Sólo pisamos finalText con texto de una vuelta SIN herramientas — el
+    // texto que acompaña a un functionCall suele ser un preámbulo ("dejame
+    // que busco eso") que no sirve como respuesta final.
+    if (text && calls.length === 0) finalText = text
 
-    if (calls.length === 0) break
+    if (calls.length === 0) {
+      // Truncado por tokens sin texto útil → avisar a un humano.
+      if (!text && finish === 'MAX_TOKENS') {
+        console.error('[NISSI ENGINE] respuesta truncada por MAX_TOKENS sin texto', { orgId: msg.orgId, conversationId: conversation.id })
+      }
+      break
+    }
 
     contents.push({ role: 'model', parts: cand?.content?.parts ?? calls.map((c) => ({ functionCall: c })) })
 
@@ -318,7 +350,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       }
       try {
         const result = await runWhatsAppBotTool(fnName, (call.args ?? {}) as Record<string, unknown>, {
-          orgId: msg.orgId, conversationId: conversation.id, customerPhone: msg.customerPhone, botConfig: msg.botConfig,
+          orgId: msg.orgId, conversationId: conversation.id, customerPhone: msg.customerPhone, botConfig,
         })
         if (result.handedOff) handedOff = result.handedOff
         responseParts.push(fr({ output: result.resultText }))
@@ -333,6 +365,27 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       // Sin vuelta extra al modelo — texto fijo si no redactó confirmación.
       if (!finalText.trim()) finalText = handoffConfirmationText(handedOff.to)
       break
+    }
+  }
+
+  // Se agotaron las vueltas de herramientas sin una respuesta de texto
+  // limpia (y sin handoff) — una última llamada SIN herramientas para que
+  // redacte la respuesta con lo que ya juntó, en vez de mandar el fallback
+  // genérico o un preámbulo.
+  if (!handedOff && !finalText.trim()) {
+    try {
+      const res = await ai.models.generateContent({
+        model, contents,
+        config: {
+          systemInstruction, maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4,
+          safetySettings: SAFETY_SETTINGS,
+          ...(model.includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+        },
+      })
+      const t = extractText(res.candidates?.[0])
+      if (t) finalText = t
+    } catch (err) {
+      console.error('[NISSI ENGINE] Gemini error en la vuelta final sin tools', err)
     }
   }
 
@@ -357,6 +410,6 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   await db.whatsAppMessage.create({ data: { conversationId: conversation.id, role: 'assistant', content: finalText } })
   await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } })
 
-  const sent = await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone, finalText)
+  const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, msg.customerPhone, finalText)
   if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar la respuesta final', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
 }

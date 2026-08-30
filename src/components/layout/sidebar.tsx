@@ -41,6 +41,9 @@ interface NavItem {
   // por ModulePermission (Configuración > Permisos). Sin declarar = no pasa
   // por ese filtro (los settingsItems no lo llevan a propósito).
   moduleId?: string
+  // Id de plugin (src/plugins/definitions.ts) — el ítem sólo se muestra si
+  // ese plugin está activado para la organización. Sin declarar = siempre.
+  requiresPlugin?: string
   exact?: boolean
   badgeKey?: keyof NotificationCounts
 }
@@ -83,7 +86,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
   {
     label: 'Comunicación',
     items: [
-      { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'conversaciones', badgeKey: 'whatsapp' },
+      { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'conversaciones', requiresPlugin: 'whatsapp-ai-bot', badgeKey: 'whatsapp' },
       { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
       { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
       { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
@@ -165,6 +168,19 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     staleTime: 5 * 60 * 1000,
   })
 
+  // Plugins activados de la org — para ítems con `requiresPlugin` (ej.
+  // "WhatsApp" sólo aparece si el plugin whatsapp-ai-bot está activo).
+  const { data: enabledPlugins } = useQuery<Set<string>>({
+    queryKey: ['sidebar-plugins'],
+    queryFn: async () => {
+      const res = await fetch('/api/plugins')
+      if (!res.ok) return new Set<string>()
+      const json = await res.json()
+      return new Set<string>((json.data ?? []).filter((p: { enabled: boolean }) => p.enabled).map((p: { id: string }) => p.id))
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href
     return pathname === item.href || pathname.startsWith(item.href + '/')
@@ -180,10 +196,18 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     return row.roles[user.role] !== false
   }
 
+  // `requiresPlugin`: el ítem aparece sólo si el plugin está activo. Mientras
+  // no resolvió la query queda oculto (mejor que mostrar de más un feature
+  // que la org no tiene; la query tiene 5 min de cache así que resuelve
+  // rápido).
+  const hasPlugin = (item: NavItem) =>
+    !item.requiresPlugin || (!!enabledPlugins && enabledPlugins.has(item.requiresPlugin))
+
   const filterItems = (items: NavItem[]) => items
     .filter((item) => !item.roles || item.roles.includes(user.role))
     .filter(matchesVertical)
     .filter(isModuleAllowed)
+    .filter(hasPlugin)
   const filteredSections = NAV_SECTIONS
     .map((section) => ({ ...section, items: filterItems(section.items) }))
     .filter((section) => section.items.length > 0)

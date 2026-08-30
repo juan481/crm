@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     const result = await searchCatalogo(payload.orgId, {
       q,
       categoria: categoryId,
+      categoriaExactId: true,
       brand,
       status: statusParam,
       gremio: payload.role === 'GREMIO',

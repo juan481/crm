@@ -35,10 +35,10 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const [deal, ticket] = await Promise.all([
       conv.dealId
-        ? db.deal.findUnique({ where: { id: conv.dealId }, select: { id: true, title: true, stage: true, contacto: { select: { id: true, firstName: true, lastName: true } } } })
+        ? db.deal.findFirst({ where: { id: conv.dealId, organizationId: payload.orgId }, select: { id: true, title: true, stage: true, contacto: { select: { id: true, firstName: true, lastName: true } } } })
         : Promise.resolve(null),
       conv.ticketId
-        ? db.ticket.findUnique({ where: { id: conv.ticketId }, select: { id: true, number: true, title: true, status: true, contacto: { select: { id: true, firstName: true, lastName: true } } } })
+        ? db.ticket.findFirst({ where: { id: conv.ticketId, organizationId: payload.orgId }, select: { id: true, number: true, title: true, status: true, contacto: { select: { id: true, firstName: true, lastName: true } } } })
         : Promise.resolve(null),
     ])
     const contacto = deal?.contacto ?? ticket?.contacto ?? null

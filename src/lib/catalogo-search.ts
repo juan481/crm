@@ -10,6 +10,9 @@ export interface CatalogoSearchOpts {
   q?: string | null
   /** id de categoría (raíz o hoja) O nombre de categoría (match parcial). */
   categoria?: string | null
+  /** true = `categoria` es un id exacto (viene de la UI). Si no matchea, se
+   *  filtra por ese id igual (0 resultados) en vez de ignorar el filtro. */
+  categoriaExactId?: boolean
   brand?: string | null
   /** 'active' (default) | 'inactive' | 'all' */
   status?: 'active' | 'inactive' | 'all'
@@ -28,7 +31,7 @@ export interface CatalogoSearchResult {
   totalPages: number
 }
 
-async function resolveCategoriaFilter(orgId: string, categoria: string): Promise<unknown | null> {
+async function resolveCategoriaFilter(orgId: string, categoria: string, exactId: boolean): Promise<unknown | null> {
   const db = prisma as any
   const raw = categoria.trim()
   if (!raw) return null
@@ -45,6 +48,11 @@ async function resolveCategoriaFilter(orgId: string, categoria: string): Promise
     })
     return children.length > 0 ? { in: [raw, ...children.map((c: any) => c.id)] } : raw
   }
+
+  // Vino como id exacto de la UI y no existe (categoría borrada, caché vieja,
+  // otra org) → filtrar por ese id igual = 0 resultados (comportamiento
+  // original de la ruta, NO devolver el catálogo entero).
+  if (exactId) return raw
 
   // 2) match por nombre (parcial, insensitive) — puede matchear varias
   //    categorías (ej. "camaras" -> "CAMARAS IP WIFI", "CAMARAS ANALOGICAS")
@@ -82,7 +90,7 @@ export async function searchCatalogo(orgId: string, opts: CatalogoSearchOpts): P
   }
   if (opts.gremio) where.price = { gt: 0 }
   if (opts.categoria) {
-    const catFilter = await resolveCategoriaFilter(orgId, opts.categoria)
+    const catFilter = await resolveCategoriaFilter(orgId, opts.categoria, opts.categoriaExactId === true)
     if (catFilter) where.categoryId = catFilter
   }
   if (opts.brand) where.brand = opts.brand
@@ -122,17 +130,31 @@ export interface CatalogoResultParaBot {
   disponibilidad: string
 }
 
+const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+
 export async function buscarCatalogoParaBot(
   orgId: string,
   args: { query: string; categoria?: string | null },
 ): Promise<CatalogoResultParaBot[]> {
-  const { data } = await searchCatalogo(orgId, {
-    q: args.query,
-    categoria: args.categoria ?? null,
-    status: 'active',
-    limit: 8,
-    withCount: false,
-  })
+  // ILIKE de Postgres NO pliega acentos y el catálogo de Abba los tiene
+  // ("CÁMARA"). Se prueba: query tal cual → sin acentos → palabra más larga
+  // → sin la categoría. Best-effort, no perfecto (ver comentario del tool).
+  const raw = args.query.trim()
+  const noAccents = stripAccents(raw)
+  const longestWord = noAccents.split(/\s+/).filter((w) => w.length >= 4).sort((a, b) => b.length - a.length)[0]
+  const attempts: { q: string; categoria: string | null }[] = [
+    { q: raw, categoria: args.categoria ?? null },
+    ...(noAccents !== raw ? [{ q: noAccents, categoria: args.categoria ?? null }] : []),
+    ...(longestWord ? [{ q: longestWord, categoria: args.categoria ?? null }] : []),
+    ...(args.categoria ? [{ q: longestWord || noAccents, categoria: null }] : []),
+  ]
+
+  let data: any[] = []
+  for (const a of attempts) {
+    const res = await searchCatalogo(orgId, { q: a.q, categoria: a.categoria, status: 'active', limit: 8, withCount: false })
+    if (res.data.length) { data = res.data; break }
+  }
+
   return data.map((p: any): CatalogoResultParaBot => ({
     nombre: p.name,
     marca: p.brand ?? null,

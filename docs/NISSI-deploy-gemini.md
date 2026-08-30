@@ -22,6 +22,16 @@ Los cambios de schema son **todos aditivos + nullable** (columnas nuevas +
    `db:push` = `prisma db push`. Usa `DIRECT_URL` del `.env`.
 3. Verificar que no pidió `--accept-data-loss` (no debería). Si lo pide, **frenar**
    y revisar el diff.
+4. **Backfill de `lastInboundAt`** (Supabase → SQL Editor) — si no, las
+   conversaciones que ya existían quedan "fuera de la ventana de 24 h" y no se
+   pueden responder desde el inbox hasta que el cliente vuelva a escribir:
+   ```sql
+   UPDATE "WhatsAppConversation"
+   SET "lastInboundAt" = "lastMessageAt"
+   WHERE "lastInboundAt" IS NULL;
+   ```
+   (Sobreestima un poco la ventana si el último mensaje fue una respuesta de
+   NISSI — aceptable.)
 
 Campos nuevos: `WhatsAppConversation` (`humanTakeoverAt`, `assignedUserId`,
 `lastInboundAt`, `lastReadAt`), `WhatsAppMessage` (`processedAt`, `senderUserId`),
@@ -93,8 +103,18 @@ CRM → **Configuración → Plugins → NISSI** → activar → **Configurar**:
 
 > ⚠️ **Migración de la key**: el plugin de Abba tenía cargada la key vieja de
 > Anthropic en un campo que ya no existe. Hasta que guardes la nueva config con
-> la **API Key de Gemini**, NISSI no responde nada (el inbox del CRM sí funciona
-> para responder a mano). Al guardar, el campo viejo se borra solo.
+> la **API Key de Gemini**, NISSI no responde sola — **pero los mensajes que
+> entren en ese lapso SÍ se guardan** y aparecen en el inbox (Conversaciones),
+> y desde ahí se pueden responder a mano. No se pierde nada. Al guardar la key,
+> NISSI retoma. Igual, hacelo apenas deployás para minimizar la ventana.
+>
+> Alternativa para no tener ventana: apenas corrés `db push`, antes del deploy,
+> inyectá la key con SQL:
+> ```sql
+> UPDATE "PluginConfig"
+> SET config = jsonb_set(config::jsonb, '{geminiApiKey}', to_jsonb('AIza...'::text))::text
+> WHERE "pluginId" = 'whatsapp-ai-bot';
+> ```
 
 ---
 
@@ -142,6 +162,12 @@ Desde un WhatsApp registrado, escribiéndole a `+1 555 675 6899`:
 
 ## Notas
 
+- **Deals de NISSI y el rol SELLER**: si el "Email de Ventas" del plugin apunta
+  a un usuario del CRM, la oportunidad queda con ese usuario de dueño (bien). Si
+  no está cargado o no matchea, el dueño es el SUPER_ADMIN más viejo, y un
+  vendedor con rol SELLER **no la ve en su Pipeline** ni le abre el link desde el
+  inbox (le da "Deal no encontrado"). Cargá bien el email de Ventas. (Es el
+  modelo de permisos que ya tenía el CRM, no algo nuevo de esta entrega.)
 - **Permisos del inbox**: SUPER_ADMIN / ADMIN / SELLER. Para sumar TECHNICIAN:
   agregar `'TECHNICIAN'` a `defaultRoles` de `conversaciones` en
   `src/lib/modules.ts` y `/conversaciones` a `ROLE_ALLOWED_PREFIXES.TECHNICIAN`

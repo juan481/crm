@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { getPluginConfig } from '@/lib/plugins'
 import { getWhatsAppBotConfig, type WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
 // El webhook de Meta es UNO SOLO por app (compartido por todas las
@@ -10,21 +11,30 @@ import { getWhatsAppBotConfig, type WhatsAppBotConfig } from '@/lib/whatsapp-bot
 // que tiene esta plataforma hoy (unas pocas) traer todas las filas
 // habilitadas de este plugin y comparar en JS es más simple que pelear con
 // un filtro JSON crudo en Postgres, y no es un endpoint de alto tráfico.
-export async function resolveOrgByPhoneNumberId(phoneNumberId: string): Promise<{ orgId: string; config: WhatsAppBotConfig } | null> {
+//
+// IMPORTANTE: el match a la organización se hace con el phoneNumberId CRUDO
+// (getPluginConfig), NO con la config validada — así, si al plugin le falta
+// la API key de Gemini (ej. durante la ventana entre deploy y re-guardar la
+// config con la key nueva), igual sabemos a qué org pertenece el mensaje y
+// lo guardamos en el inbox en vez de perderlo. `config` viene null en ese
+// caso y el engine guarda el mensaje sin invocar al modelo.
+export async function resolveOrgByPhoneNumberId(
+  phoneNumberId: string,
+): Promise<{ orgId: string; config: WhatsAppBotConfig | null } | null> {
   const db = prisma as any
   const rows = await db.pluginConfig.findMany({
     where: { pluginId: 'whatsapp-ai-bot', enabled: true },
     select: { organizationId: true },
   })
-  // Independientes entre sí — Promise.all en vez de un await secuencial por
-  // fila (mismo criterio que el resto del proyecto, ver validaciones de FK
-  // en tickets/deals). Con pocas organizaciones no cambia nada hoy, pero
-  // esto corre en CADA mensaje entrante de CUALQUIER organización, así que
-  // escala mal si se deja secuencial.
-  const configs = await Promise.all(rows.map((row: { organizationId: string }) => getWhatsAppBotConfig(row.organizationId)))
-  const match = rows.findIndex((_row: unknown, i: number) => configs[i]?.phoneNumberId === phoneNumberId)
+  const raws = await Promise.all(rows.map((row: { organizationId: string }) => getPluginConfig(row.organizationId, 'whatsapp-ai-bot')))
+  const match = rows.findIndex((_row: unknown, i: number) => {
+    const pid = raws[i]?.phoneNumberId
+    return typeof pid === 'string' && pid.trim() === phoneNumberId
+  })
   if (match === -1) return null
-  return { orgId: rows[match].organizationId, config: configs[match]! }
+  const orgId = rows[match].organizationId
+  const config = await getWhatsAppBotConfig(orgId) // null si le falta alguna credencial
+  return { orgId, config }
 }
 
 // Ticket.createdById y Deal.ownerId son NOT NULL — no existe un "usuario
