@@ -277,7 +277,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
 
   // Sólo desde el último reinicio de contexto (si la conversación se reabrió
   // de cero) — no arrastra el transcript viejo al modelo.
-  const history = await db.whatsAppMessage.findMany({
+  let history = await db.whatsAppMessage.findMany({
     where: {
       conversationId: conversation.id,
       ...(conversation.contextResetAt ? { createdAt: { gte: conversation.contextResetAt } } : {}),
@@ -285,6 +285,16 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     orderBy: { createdAt: 'asc' },
     select: { role: true, content: true },
   })
+  // Salvavidas: si el filtro por contextResetAt dejó todo afuera (skew de
+  // reloj, timestamps raros), traer el historial completo — mejor de más
+  // contexto que un array vacío que rompe la llamada a Gemini.
+  if (history.length === 0) {
+    history = await db.whatsAppMessage.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, content: true },
+    })
+  }
 
   const adOrigin = (conversation.collectedData as Record<string, unknown> | null)?.origen
   const ai = new GoogleGenAI({ apiKey: botConfig.geminiApiKey })
