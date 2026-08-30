@@ -102,17 +102,23 @@ export default function ConversacionesPage() {
   })
 
   const thread = threadQuery.data?.data
+  const markedRef = useRef<string>('')
 
-  // Marcar como leída al abrir + bajar el badge del sidebar.
+  // Marcar como leída al abrir y cuando llega un mensaje nuevo mientras la
+  // mirás — pero sólo una vez por (conversación + cantidad de mensajes), no
+  // en cada tick del polling.
   useEffect(() => {
-    if (!selectedId) return
+    if (!selectedId || !thread) return
+    const key = `${selectedId}:${thread.messages.length}`
+    if (markedRef.current === key) return
+    markedRef.current = key
     fetch(`/api/conversaciones/${selectedId}/read`, { method: 'POST' })
       .then(() => {
         qc.invalidateQueries({ queryKey: ['notification-counts'] })
         qc.invalidateQueries({ queryKey: ['conversaciones'] })
       })
       .catch(() => {})
-  }, [selectedId, qc, thread?.messages.length])
+  }, [selectedId, qc, thread])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'auto' })
