@@ -6,9 +6,10 @@ import { fireWebhook } from '@/lib/webhooks'
 interface Params { params: { id: string } }
 
 const INCLUDE = {
-  empresa: { select: { id: true, name: true, city: true } },
-  client:  { select: { id: true, name: true, company: true } },
-  owner:   { select: { id: true, name: true } },
+  empresa:  { select: { id: true, name: true, city: true } },
+  client:   { select: { id: true, name: true, company: true } },
+  contacto: { select: { id: true, firstName: true, lastName: true, phone: true } },
+  owner:    { select: { id: true, name: true } },
   cotizaciones: {
     orderBy: { createdAt: 'desc' as const },
     select: { id: true, ref: true, finalTotal: true, currency: true, status: true, createdAt: true },
@@ -55,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     })
     if (!existing) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
 
-    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, ownerId, closedAt } = await req.json()
+    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, contactoId, ownerId, closedAt } = await req.json()
 
     let resolvedOwnerId = ownerId
     if (ownerId) {
@@ -80,6 +81,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const client = await db.client.findFirst({ where: { id: clientId, organizationId: payload.orgId }, select: { id: true } })
       if (!client) return NextResponse.json({ error: 'Cliente no encontrado en esta organización' }, { status: 400 })
     }
+    if (contactoId) {
+      const contacto = await db.directorioContacto.findFirst({ where: { id: contactoId, organizationId: payload.orgId }, select: { id: true } })
+      if (!contacto) return NextResponse.json({ error: 'Contacto no encontrado en esta organización' }, { status: 400 })
+    }
 
     const deal = await db.deal.update({
       where: { id: params.id },
@@ -93,6 +98,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(notes !== undefined      && { notes: notes || null }),
         ...(empresaId !== undefined  && { empresaId: empresaId || null }),
         ...(clientId !== undefined   && { clientId: clientId || null }),
+        ...(contactoId !== undefined && { contactoId: contactoId || null }),
         ...(resolvedOwnerId          && { ownerId: resolvedOwnerId }),
         ...(closedAt !== undefined   && { closedAt: closedAt ? new Date(closedAt) : null }),
       },

@@ -268,6 +268,37 @@ export interface Product {
   active?:               boolean
   catalogSource?:        string | null
   lastSyncedAt?:         string | null
+  // ── Producto KIT / compuesto ──────────────────────────────────────────
+  isKit?:                boolean
+  kitComponents?:        KitComponent[]
+}
+
+export interface KitComponent {
+  id:          string
+  quantity:    number
+  componentId: string
+  component: {
+    id:         string
+    name:       string
+    sku:        string | null
+    price:      number
+    currency:   string
+    costo:      number | null
+    stock:      number
+    trackStock: boolean
+  }
+}
+
+// Un KIT es un Product con isKit=true. Se cotiza como 1 línea / 1 precio
+// (Product.price). El desglose (kitComponents) y el margen son sólo internos.
+export interface Kit extends Product {
+  isKit:          true
+  kitComponents:  KitComponent[]
+  componentesSubtotal: number  // Σ component.price × qty (precio público)
+  componentesCosto:    number  // Σ component.costo  × qty
+  margen:              number  // price − componentesSubtotal
+  margenPct:           number
+  algunComponenteSinStock: boolean
 }
 
 export interface ProductCategory {
@@ -480,6 +511,8 @@ export interface Deal {
   empresa?: { id: string; name: string; city?: string | null } | null
   clientId: string | null
   client?: { id: string; name: string; company: string | null } | null
+  contactoId: string | null
+  contacto?: { id: string; firstName: string; lastName: string; phone: string | null } | null
   ownerId: string
   owner?: { id: string; name: string }
   organizationId: string
