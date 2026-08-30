@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
-  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug,
+  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug, MessageCircle,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -83,6 +83,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
   {
     label: 'Comunicación',
     items: [
+      { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'conversaciones', badgeKey: 'whatsapp' },
       { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
       { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
       { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
@@ -130,7 +131,7 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     queryFn: async () => {
       const res = await fetch('/api/notifications/counts')
       const json = await res.json()
-      return json.data ?? { tasks: 0, tickets: 0, invoices: 0 }
+      return json.data ?? { tasks: 0, tickets: 0, invoices: 0, whatsapp: 0 }
     },
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,

@@ -28,6 +28,14 @@ const STAGES: { key: DealStage; label: string; color: string; prob: number }[] =
   { key: 'PERDIDO',     label: 'Perdido',     color: 'bg-red-500/15 text-red-400 border-red-500/20',           prob: 0   },
 ]
 
+// Motivo del lead que dejó NISSI al derivar (Deal.leadReason).
+const LEAD_REASON_LABEL: Record<string, string> = {
+  compra: 'Compra de equipos',
+  instalacion_nueva: 'Instalación',
+  gremio: 'Gremio',
+  asesor: 'Pidió un asesor',
+}
+
 // Días sin cambios (updatedAt) para marcar una oportunidad como estancada.
 // No aplica a etapas ya cerradas.
 const STALE_DAYS = 14
@@ -138,6 +146,11 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               </a>
             )}
             {data.owner && <span className="flex items-center gap-1"><User size={11} />{data.owner.name}</span>}
+            {data.origen === 'WHATSAPP' && (
+              <span className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                WhatsApp{data.leadReason ? ` · ${LEAD_REASON_LABEL[data.leadReason] ?? data.leadReason}` : ''}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

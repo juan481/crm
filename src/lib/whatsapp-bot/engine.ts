@@ -1,26 +1,64 @@
-import Anthropic from '@anthropic-ai/sdk'
+import {
+  GoogleGenAI,
+  FunctionCallingConfigMode,
+  HarmCategory,
+  HarmBlockThreshold,
+  type Content,
+  type Part,
+  type SafetySetting,
+} from '@google/genai'
 import { prisma } from '@/lib/db'
-import type { WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
+import { DEFAULT_GEMINI_MODEL, type WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 import { buildNissiSystemPrompt } from '@/lib/whatsapp-bot/system-prompt'
 import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool } from '@/lib/whatsapp-bot/tools'
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
+import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 
-// Haiku alcanza y sobra para un flujo guiado por herramientas como este —
-// no hace falta razonamiento profundo, sí baja latencia (WhatsApp espera
-// respuesta en segundos) y costo bajo (potencialmente cientos de mensajes
-// por día). Ver la memoria del proyecto para el resto del análisis de costo.
-const MODEL = 'claude-haiku-4-5-20251001'
-const MAX_TOKENS = 1024
-// Tope de vueltas de tool-calling dentro de UN SOLO mensaje entrante — nunca
-// debería hacer falta más de un par de herramientas por turno (guardar
-// datos + eventualmente escalar), esto es sólo un freno de seguridad contra
-// un loop si el modelo se cuelga pidiendo la misma herramienta.
-const MAX_TOOL_ROUNDS = 6
+// NISSI corre sobre Gemini Flash — un flujo guiado por herramientas como este
+// no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
+// respuesta en segundos) y costo bajo (potencialmente cientos de mensajes por
+// día). Precio verificado (ago-2026): Gemini 2.5 Flash ~USD 0.15-0.30 / 1M
+// entrada, ~1.25-2.50 / 1M salida; Flash-Lite ~0.10 / 0.40. El modelo exacto
+// se lee de la config del plugin (default DEFAULT_GEMINI_MODEL) para poder
+// bajar a flash-lite sin deploy. El caché es IMPLÍCITO (Gemini 2.5 lo hace
+// solo cuando el prefijo systemInstruction+tools se repite — no requiere
+// código; se puede sumar caché explícito si usageMetadata.cachedContentTokenCount
+// muestra baja tasa de acierto).
+const MAX_OUTPUT_TOKENS = 800
+// Tope de vueltas de tool-calling dentro de UN SOLO turno del cliente — un
+// turno realista necesita como mucho buscar_catalogo + save_customer_info +
+// una herramienta de handoff. Freno de seguridad contra un loop.
+const MAX_TOOL_ROUNDS = 4
+
+// Debounce: los clientes de WhatsApp mandan varios mensajes cortos seguidos
+// ("Gral pico" / "Ranqueles 7" / "que la instalen"). Sin esto, cada uno
+// dispara una llamada completa al modelo. Se persiste el mensaje entrante y
+// se espera un ratito; si mientras tanto llegó otro mensaje del cliente,
+// esta invocación se retira y deja que la última procese el batch completo
+// (el historial se reenvía entero igual). Ver processConversationTurn.
+const DEBOUNCE_MS = 2500
+
+// Toma humana desde el inbox: si un humano tomó la conversación hace menos
+// de esto, NISSI no contesta nada (el humano responde desde /conversaciones).
+// Pasado el plazo, se libera sola en la próxima entrada.
+const HUMAN_TAKEOVER_AUTO_RELEASE_MS = 24 * 60 * 60 * 1000
+
+// El chat de alarmas/seguridad ("alarma disparada", "sensor perimetral",
+// "central de monitoreo") es un falso positivo real de DANGEROUS_CONTENT con
+// umbrales bajos. BLOCK_ONLY_HIGH: no requiere allow-list en la cuenta y
+// igual frena lo genuinamente grave.
+const SAFETY_SETTINGS: SafetySetting[] = [
+  HarmCategory.HARM_CATEGORY_HARASSMENT,
+  HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+  HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+  HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+].map((category) => ({ category, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }))
+
+const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION'])
 
 // Cuando el mensaje llega desde un anuncio "Click to WhatsApp" (Facebook/
 // Instagram Ads), Meta manda este objeto adentro del mensaje — es la forma
-// de saber, sin preguntarle nada al cliente, de qué publicación vino
-// (ver Fase 2 del embudo publicitario, memoria abba-bot-whatsapp-ia-spec).
+// de saber, sin preguntarle nada al cliente, de qué publicación vino.
 export interface AdReferral {
   headline?: string
   sourceType?: string
@@ -42,19 +80,33 @@ function buildOriginLabel(ref: AdReferral): string {
   return ref.headline ? `Facebook/Instagram Ads - ${ref.headline}` : 'Anuncio de WhatsApp (Facebook/Instagram Ads)'
 }
 
-// Bug real encontrado en auditoría: nada en el código escribía nunca
-// `CLOSED`, así que un handoff (Ticket/Deal creado) dejaba ese número
-// taponado PARA SIEMPRE — cualquier mensaje futuro, sea en 5 minutos o en 3
-// meses, sea sobre lo mismo o algo totalmente distinto, sólo recibía el
-// mensaje enlatado de "ya derivamos" sin que la IA volviera a intervenir
-// nunca, contradiciendo la propia promesa de ese mensaje ("si es algo
-// nuevo, contámelo"). Se resuelve chequeando si el Ticket/Deal que motivó
-// el handoff ya se cerró del lado humano — si es así, se considera "el caso
-// terminó" y se reabre la charla de cero para lo que venga.
+function handoffConfirmationText(to: string): string {
+  if (to === 'SOPORTE') return 'Listo, ya derivé tu consulta al equipo técnico. En minutos se comunican con vos.'
+  if (to === 'ADMINISTRACION') return 'Listo, ya derivé tu consulta a Administración. En minutos se comunican con vos.'
+  return 'Listo, ya le pasé tus datos a un asesor. En minutos se comunican con vos.'
+}
+
+// Reconstruye el historial para Gemini: assistant -> 'model', y fusiona
+// mensajes consecutivos del mismo rol (Gemini espera roles alternados; con
+// el debounce pueden quedar dos 'user' seguidos sin respuesta en el medio).
+function buildContents(history: { role: string; content: string }[]): Content[] {
+  const out: Content[] = []
+  for (const h of history) {
+    const role = h.role === 'assistant' ? 'model' : 'user'
+    const last = out[out.length - 1]
+    if (last && last.role === role) {
+      ;(last.parts as Part[]).push({ text: h.content })
+    } else {
+      out.push({ role, parts: [{ text: h.content }] })
+    }
+  }
+  return out
+}
+
 async function isHandoffStillOpen(db: any, conversation: { ticketId: string | null; dealId: string | null }): Promise<boolean> {
   if (conversation.ticketId) {
     const ticket = await db.ticket.findUnique({ where: { id: conversation.ticketId }, select: { status: true } })
-    if (!ticket) return false // se borró — no hay nada que siga "abierto"
+    if (!ticket) return false
     return ticket.status !== 'RESUELTO' && ticket.status !== 'CERRADO'
   }
   if (conversation.dealId) {
@@ -62,22 +114,23 @@ async function isHandoffStillOpen(db: any, conversation: { ticketId: string | nu
     if (!deal) return false
     return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO'
   }
-  return false // handed off sin ticket ni deal asociado (no debería pasar) — no hay nada que bloquee
+  return false
 }
 
-/** Punto de entrada del webhook para un mensaje de texto entrante — carga o
- *  crea la conversación, arma el historial, corre el loop de tool-calling
- *  contra Anthropic, y manda la respuesta final por WhatsApp. No relanza:
- *  si algo falla a mitad de camino, el mensaje entrante ya quedó guardado
- *  (idempotencia por waMessageId) así que un reintento de Meta no duplica
- *  nada, aunque sí puede reprocesar sin respuesta si falló ANTES de
- *  guardarlo — ver el chequeo de duplicado más abajo. */
+async function markUserMessagesProcessed(db: any, conversationId: string): Promise<void> {
+  await db.whatsAppMessage.updateMany({
+    where: { conversationId, role: 'user', processedAt: null },
+    data: { processedAt: new Date() },
+  })
+}
+
+/** Punto de entrada del webhook para un mensaje entrante. Persiste el
+ *  mensaje, aplica el debounce, y si esta invocación es la que tiene que
+ *  contestar, corre el turno contra Gemini. Idempotente por waMessageId. */
 export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promise<void> {
   const db = prisma as any
 
-  // Idempotencia: Meta reintenta la entrega del webhook si no contestamos
-  // 200 a tiempo — si ya procesamos este waMessageId, no lo procesamos de
-  // nuevo (evita mandar la respuesta duplicada o crear el ticket dos veces).
+  // Idempotencia: Meta reintenta la entrega si no contestamos 200 a tiempo.
   const already = await db.whatsAppMessage.findUnique({ where: { waMessageId: msg.waMessageId }, select: { id: true } })
   if (already) return
 
@@ -96,15 +149,8 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
         },
       })
     } catch (err: any) {
-      // Dos mensajes del mismo cliente casi simultáneos pueden llegar como
-      // dos invocaciones del webhook en paralelo (Meta no los agrupa
-      // siempre en un solo POST) — la segunda choca contra el
-      // @@unique([organizationId, customerPhone]) porque la primera ya
-      // creó la fila microsegundos antes. Sin este catch, esa segunda
-      // ejecución explotaba silenciosamente (el error sólo se logueaba en
-      // el .catch del waitUntil del webhook) y ese mensaje del cliente se
-      // guardaba pero JAMÁS recibía respuesta. Se resuelve releyendo la
-      // fila que la otra ejecución ya creó, y siguiendo normal con esa.
+      // Race: dos mensajes casi simultáneos = dos invocaciones del webhook,
+      // la segunda choca contra @@unique([organizationId, customerPhone]).
       if (err.code !== 'P2002') throw err
       conversation = await db.whatsAppConversation.findUnique({
         where: { organizationId_customerPhone: { organizationId: msg.orgId, customerPhone: msg.customerPhone } },
@@ -112,39 +158,71 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       if (!conversation) throw err
     }
   } else if (conversation.status === 'CLOSED') {
-    // Charla vieja que se retoma — vuelve a ACTIVE, arranca de cero
-    // (no tiene sentido arrastrar el contexto de una charla ya cerrada).
     conversation = await db.whatsAppConversation.update({
       where: { id: conversation.id },
-      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null },
+      data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null, humanTakeoverAt: null, assignedUserId: null },
     })
   } else if (originLabel && !(conversation.collectedData as Record<string, unknown> | null)?.origen) {
-    // Conversación activa que todavía no tenía origen guardado (ej. el
-    // cliente escribió una vez sin venir de un anuncio, y ahora sí) — lo
-    // sumamos sin pisar el resto de collectedData ya juntado.
     conversation = await db.whatsAppConversation.update({
       where: { id: conversation.id },
       data: { collectedData: { ...(conversation.collectedData as Record<string, unknown> | null ?? {}), origen: originLabel } },
     })
   }
 
-  await db.whatsAppMessage.create({
+  const inbound = await db.whatsAppMessage.create({
     data: { conversationId: conversation.id, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
+    select: { id: true },
   })
-  await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } })
+  const now = new Date()
+  await db.whatsAppConversation.update({
+    where: { id: conversation.id },
+    data: { lastMessageAt: now, lastInboundAt: now },
+  })
 
-  // Ya se derivó a un humano — NISSI no vuelve a opinar sola MIENTRAS ese
-  // caso siga abierto (evita pisar lo que un humano ya está resolviendo).
+  // ── Debounce ──────────────────────────────────────────────────────────
+  await new Promise((r) => setTimeout(r, DEBOUNCE_MS))
+  const newest = await db.whatsAppMessage.findFirst({
+    where: { conversationId: conversation.id, role: 'user' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  })
+  if (newest?.id !== inbound.id) {
+    // Llegó otro mensaje del cliente mientras esperábamos — la última
+    // invocación procesa el batch completo.
+    return
+  }
+
+  // Recargar la conversación (pudo cambiar de estado durante el debounce,
+  // ej. un humano la tomó desde el inbox).
+  conversation = await db.whatsAppConversation.findUnique({ where: { id: conversation.id } })
+  if (!conversation) return
+
+  // ── Toma humana ───────────────────────────────────────────────────────
+  if (conversation.humanTakeoverAt) {
+    const ageMs = Date.now() - new Date(conversation.humanTakeoverAt).getTime()
+    if (ageMs <= HUMAN_TAKEOVER_AUTO_RELEASE_MS) {
+      // El humano maneja el hilo — NISSI no manda nada, el mensaje queda en
+      // el inbox como no leído.
+      await markUserMessagesProcessed(db, conversation.id)
+      return
+    }
+    // Pasó el plazo sin actividad — se libera y NISSI retoma.
+    conversation = await db.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: { humanTakeoverAt: null, assignedUserId: null },
+    })
+  }
+
+  // ── Ya derivado a un humano (ticket/deal) ─────────────────────────────
   if (conversation.status === 'HANDED_OFF') {
     const stillOpen = await isHandoffStillOpen(db, conversation)
     if (stillOpen) {
+      await markUserMessagesProcessed(db, conversation.id)
       const sent = await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone,
         'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
       if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar el aviso de "ya derivado"', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
       return
     }
-    // El caso ya se cerró del lado humano — se reabre de cero, mismo
-    // criterio que una conversación CLOSED.
     conversation = await db.whatsAppConversation.update({
       where: { id: conversation.id },
       data: { status: 'ACTIVE', collectedData: originLabel ? { origen: originLabel } : null, ticketId: null, dealId: null, handedOffTo: null },
@@ -158,94 +236,123 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   })
 
   const adOrigin = (conversation.collectedData as Record<string, unknown> | null)?.origen
-  const anthropic = new Anthropic({ apiKey: msg.botConfig.anthropicApiKey })
-  const system = buildNissiSystemPrompt(msg.orgName, msg.botConfig, {
+  const ai = new GoogleGenAI({ apiKey: msg.botConfig.geminiApiKey })
+  const model = msg.botConfig.geminiModel || DEFAULT_GEMINI_MODEL
+  const systemInstruction = buildNissiSystemPrompt(msg.orgName, msg.botConfig, {
     adOrigin: typeof adOrigin === 'string' ? adOrigin : null,
     customerName: msg.customerName,
   })
-  const messages: Anthropic.MessageParam[] = history.map((h: { role: string; content: string }) => ({
-    role: h.role === 'assistant' ? 'assistant' : 'user',
-    content: h.content,
-  }))
+  const contents = buildContents(history)
 
   let finalText = ''
-  let handedOff = false
+  let handedOff: { to: string } | null = null
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    let response: Anthropic.Message
+    let res: Awaited<ReturnType<typeof ai.models.generateContent>>
     try {
-      response = await anthropic.messages.create({
-        // Una vez derivado, no se le vuelve a ofrecer ninguna herramienta —
-        // bug real encontrado en auditoría: antes el modelo seguía teniendo
-        // el toolset completo disponible en la vuelta "extra" que se le da
-        // para redactar el texto de confirmación, y podía terminar
-        // invocando OTRA herramienta de handoff (ej. create_support_ticket
-        // Y create_sales_lead en la misma respuesta, o de nuevo en la
-        // vuelta siguiente) — como ticketId/dealId son campos escalares que
-        // cada llamada pisa, el primer Ticket/Deal creado quedaba huérfano
-        // (existe, ya se le avisó al humano, pero la conversación sólo
-        // apunta al segundo).
-        model: MODEL, max_tokens: MAX_TOKENS, system, messages,
-        ...(handedOff ? {} : { tools: WHATSAPP_BOT_TOOLS }),
+      res = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          temperature: 0.4,
+          safetySettings: SAFETY_SETTINGS,
+          // Sólo los modelos 2.5 aceptan thinkingConfig; 2.0 devuelve 400.
+          ...(model.includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          // Una vez derivado, no se le vuelve a ofrecer ninguna herramienta —
+          // evita que el modelo invoque OTRA herramienta de handoff en la
+          // vuelta de confirmación y deje el primer Ticket/Deal huérfano.
+          ...(handedOff
+            ? {}
+            : {
+                tools: [{ functionDeclarations: WHATSAPP_BOT_TOOLS }],
+                toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+              }),
+        },
       })
     } catch (err) {
-      console.error('[NISSI ENGINE] Anthropic error', err)
+      console.error('[NISSI ENGINE] Gemini error', err, { orgId: msg.orgId, conversationId: conversation.id })
       finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
       break
     }
 
-    const textBlocks = response.content.filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    if (textBlocks.length) finalText = textBlocks.map((b) => b.text).join('\n\n')
+    const cand = res.candidates?.[0]
+    const finish = cand?.finishReason as string | undefined
+    if (res.promptFeedback?.blockReason || (finish && BLOCKING_FINISH_REASONS.has(finish))) {
+      console.error('[NISSI ENGINE] Gemini bloqueó la respuesta', {
+        blockReason: res.promptFeedback?.blockReason, finishReason: finish,
+        orgId: msg.orgId, conversationId: conversation.id,
+      })
+      finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
+      // Que no se pierda: avisar a Ventas si hay email configurado.
+      if (msg.botConfig.salesContactEmail) {
+        notifyHuman({
+          orgId: msg.orgId, toEmail: msg.botConfig.salesContactEmail, toName: null,
+          subject: 'NISSI no pudo responder un WhatsApp (filtro de seguridad)',
+          heading: 'Revisá esta conversación de WhatsApp',
+          bodyText: `NISSI no pudo generar una respuesta para el número ${msg.customerPhone} (el modelo bloqueó la respuesta). Entrá a Conversaciones en el CRM y respondé vos.`,
+        })
+      }
+      break
+    }
 
-    if (response.stop_reason !== 'tool_use') break
+    const calls = res.functionCalls ?? []
+    const text = typeof res.text === 'string' ? res.text.trim() : ''
+    if (text) finalText = text
 
-    const toolUseBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-    messages.push({ role: 'assistant', content: response.content })
+    if (calls.length === 0) break
 
-    const toolResults: Anthropic.ToolResultBlockParam[] = []
-    for (const block of toolUseBlocks) {
+    contents.push({ role: 'model', parts: cand?.content?.parts ?? calls.map((c) => ({ functionCall: c })) })
+
+    const responseParts: Part[] = []
+    for (const call of calls) {
+      const fnName = call.name ?? ''
       if (handedOff) {
-        // Ya se derivó con una herramienta anterior DENTRO de esta misma
-        // vuelta — no ejecutamos una segunda (mismo bug de arriba, pero la
-        // variante de "dos tool_use en la misma respuesta de Claude").
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Esta conversación ya se derivó a un humano — no hace falta crear otro registro.' })
+        responseParts.push({ functionResponse: { name: fnName, response: { result: 'Esta conversación ya se derivó a un humano — no hace falta crear otro registro.' } } })
         continue
       }
       try {
-        const result = await runWhatsAppBotTool(block.name, block.input as Record<string, unknown>, {
+        const result = await runWhatsAppBotTool(fnName, (call.args ?? {}) as Record<string, unknown>, {
           orgId: msg.orgId, conversationId: conversation.id, customerPhone: msg.customerPhone, botConfig: msg.botConfig,
         })
-        if (result.handedOff) handedOff = true
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result.resultText })
+        if (result.handedOff) handedOff = result.handedOff
+        responseParts.push({ functionResponse: { name: fnName, response: { result: result.resultText } } })
       } catch (err) {
-        console.error('[NISSI ENGINE] tool error', block.name, err)
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Error interno al ejecutar esta acción.', is_error: true })
+        console.error('[NISSI ENGINE] tool error', fnName, err)
+        responseParts.push({ functionResponse: { name: fnName, response: { error: 'Error interno al ejecutar esta acción.' } } })
       }
     }
-    messages.push({ role: 'user', content: toolResults })
+    contents.push({ role: 'user', parts: responseParts })
 
-    if (handedOff && !finalText) {
-      // El modelo puede cortar en tool_use sin texto final en la misma
-      // vuelta — le damos UNA vuelta más para que redacte la confirmación
-      // (sin tools disponibles, ver arriba), pero si ya se derivó no hace
-      // falta seguir loopeando de más.
-      continue
+    if (handedOff) {
+      // Sin vuelta extra al modelo — texto fijo si no redactó confirmación.
+      if (!finalText.trim()) finalText = handoffConfirmationText(handedOff.to)
+      break
     }
-    if (handedOff) break
   }
 
   if (!finalText.trim()) {
     finalText = handedOff
-      ? 'Listo, ya quedó cargado. En minutos un asesor o responsable de área se comunicará con usted.'
+      ? handoffConfirmationText(handedOff.to)
       : 'Contame un poco más para poder ayudarte.'
   }
 
+  // Un humano pudo tomar el hilo mientras el modelo generaba — si es así,
+  // no mandamos la respuesta de NISSI (la maneja la persona desde el inbox).
+  const fresh = await db.whatsAppConversation.findUnique({
+    where: { id: conversation.id }, select: { humanTakeoverAt: true },
+  })
+  if (fresh?.humanTakeoverAt) {
+    await markUserMessagesProcessed(db, conversation.id)
+    console.warn('[NISSI ENGINE] un humano tomó el hilo mientras se generaba — no se manda la respuesta de NISSI', { conversationId: conversation.id })
+    return
+  }
+
+  await markUserMessagesProcessed(db, conversation.id)
   await db.whatsAppMessage.create({ data: { conversationId: conversation.id, role: 'assistant', content: finalText } })
-  // Bug real encontrado en auditoría: este resultado se descartaba sin
-  // chequear `ok` — si Meta rechaza el envío (token vencido, ventana de
-  // 24hs de servicio al cliente cerrada, número bloqueado, rate limit),
-  // el cliente se quedaba sin la respuesta Y sin ningún rastro en logs de
-  // que eso había pasado.
+  await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } })
+
   const sent = await sendWhatsAppBotMessage(msg.botConfig.apiToken, msg.botConfig.phoneNumberId, msg.customerPhone, finalText)
   if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar la respuesta final', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
 }

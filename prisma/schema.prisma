@@ -342,6 +342,8 @@ model User {
   memberships             OrganizationMembership[]
   pedidosComoAutor        Pedido[]                 @relation("PedidoAutor")
   pedidosAsignados        Pedido[]                 @relation("PedidoAsignado")
+  whatsAppConvsAssigned   WhatsAppConversation[]   @relation("WhatsAppAssignee")
+  whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
 
   @@index([organizationId])
 }
@@ -613,12 +615,29 @@ model WhatsAppConversation {
   handedOffTo    String?
   ticketId       String?
   dealId         String?
+  // Toma humana desde el inbox del CRM. null = NISSI al mando. Cuando está
+  // seteado, el engine NO invoca al modelo para esta conversación (el humano
+  // responde desde /conversaciones). Ortogonal a `status` a propósito: una
+  // charla ACTIVE o HANDED_OFF puede estar tomada por un humano igual. Se
+  // libera con el botón "Devolver a NISSI" o solo tras
+  // HUMAN_TAKEOVER_AUTO_RELEASE_MS (ver engine.ts).
+  humanTakeoverAt DateTime?
+  assignedUserId  String?
+  assignedUser    User?                     @relation("WhatsAppAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  // Solo se actualiza con mensajes ENTRANTES del cliente (a diferencia de
+  // lastMessageAt, que también sube cuando NISSI o un humano responden).
+  // Gobierna la ventana de 24hs de Meta y el cálculo de "no leído".
+  lastInboundAt   DateTime?
+  // Marcador de lectura a nivel organización (equipo chico y bandeja
+  // compartida) — no-leído = lastInboundAt > lastReadAt.
+  lastReadAt      DateTime?
   lastMessageAt  DateTime                   @default(now())
   createdAt      DateTime                   @default(now())
   messages       WhatsAppMessage[]
 
   @@unique([organizationId, customerPhone])
   @@index([organizationId, status])
+  @@index([organizationId, lastMessageAt])
   @@index([phoneNumberId])
 }
 
@@ -626,17 +645,26 @@ model WhatsAppMessage {
   id             String               @id @default(cuid())
   conversationId String
   conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  // 'user' | 'assistant' — mismo vocabulario que la Messages API de
-  // Anthropic, se reconstruye el historial mandándolo tal cual.
+  // 'user' | 'assistant' — mismo vocabulario que la Messages API (histórico).
+  // El historial que ve el modelo se reconstruye mapeando assistant -> 'model'.
   role           String
   content        String               @db.Text
   // Id de Meta en mensajes entrantes — evita procesar el mismo webhook dos
   // veces si Meta reintenta la entrega (pasa seguido). Null en los mensajes
   // que genera la IA (salen de acá hacia Meta, no al revés).
   waMessageId    String?              @unique
+  // Debounce: se marca cuando este mensaje entrante ya fue incluido en un
+  // turno procesado por el modelo. null = pendiente. Ver processConversationTurn.
+  processedAt    DateTime?
+  // Humano que mandó este mensaje desde el inbox del CRM. null = lo generó
+  // NISSI (o es un mensaje entrante del cliente, role='user'). El role sigue
+  // siendo 'assistant' para no romper la reconstrucción del historial.
+  senderUserId   String?
+  sender         User?                @relation("WhatsAppMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
   createdAt      DateTime             @default(now())
 
   @@index([conversationId, createdAt])
+  @@index([senderUserId])
 }
 
 // ─── Communications ────────────────────────────────────────────────────────
@@ -815,6 +843,10 @@ model Deal {
   // amerita enum de Prisma porque sumar una fuente nueva no debe pedir
   // migración. null = alta manual anterior a este campo.
   origen            String?
+  // Motivo del lead cuando lo crea NISSI ('compra' | 'instalacion_nueva' |
+  // 'gremio' | 'asesor') — string libre, mismo criterio que `origen`. null =
+  // alta manual o anterior a este campo.
+  leadReason        String?
   clientId          String?
   client            Client?      @relation(fields: [clientId], references: [id])
   empresaId         String?
@@ -982,6 +1014,11 @@ model Ticket {
   client              Client?              @relation(fields: [clientId], references: [id])
   empresaId           String?
   empresa             Empresa?             @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // Contacto (persona) del directorio detrás del ticket — nullable, mismo
+  // patrón que Deal.contactoId. Lo completa NISSI al derivar soporte/
+  // facturación (match por teléfono/nombre, ver resolveContactoForConversation).
+  contactoId          String?
+  contacto            DirectorioContacto?  @relation(fields: [contactoId], references: [id], onDelete: SetNull)
   // Direct contact for client-facing notifications — independent of
   // Client/Empresa (which don't reliably carry a single contact email),
   // same pattern already used by Cotizacion.recipientEmail.
@@ -1018,6 +1055,7 @@ model Ticket {
   @@index([assignedToId])
   @@index([clientId])
   @@index([empresaId])
+  @@index([contactoId])
   @@index([satisfactionToken])
 }
 
@@ -1113,8 +1151,9 @@ model DirectorioContacto {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  notas DirectorioContactoNota[]
-  deals Deal[]
+  notas   DirectorioContactoNota[]
+  deals   Deal[]
+  tickets Ticket[]
 
   @@index([organizationId])
   @@index([empresaId])

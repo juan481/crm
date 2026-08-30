@@ -6,6 +6,10 @@ import { resolveOrgByPhoneNumberId } from '@/lib/whatsapp-bot/resolve-org'
 import { handleIncomingWhatsAppMessage } from '@/lib/whatsapp-bot/engine'
 
 export const dynamic = 'force-dynamic'
+// El procesamiento va en waitUntil (Gemini + debounce de 2.5s + loop de
+// herramientas) — el default de ~10s de Vercel corta eso a la mitad. 60s
+// alcanza de sobra; el plan Pro de Vercel soporta hasta 300.
+export const maxDuration = 60
 
 // Webhook ÚNICO compartido por todas las organizaciones que activen el
 // plugin whatsapp-ai-bot — así funciona la Cloud API de Meta: se registra
@@ -135,6 +139,10 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
       const org = await db.organization.findUnique({ where: { id: resolved.orgId }, select: { name: true, crmName: true } })
       const orgName = org?.name || org?.crmName || 'nuestra empresa'
 
+      // Meta casi siempre manda un mensaje por POST. En el caso raro de
+      // varios en el mismo POST, el debounce del engine (ver engine.ts) los
+      // procesa igual bien salvo que puede mandar una respuesta por mensaje
+      // en vez de una sola — aceptable, las respuestas quedan en contexto.
       for (const m of messages) {
         const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type)
         if (!text) continue // texto vacío de verdad (raro, pero no hay nada que contestar)

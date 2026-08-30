@@ -507,6 +507,7 @@ export interface Deal {
   closedAt: string | null
   notes: string | null
   origen: string | null
+  leadReason: string | null
   empresaId: string | null
   empresa?: { id: string; name: string; city?: string | null } | null
   clientId: string | null
