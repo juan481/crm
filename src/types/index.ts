@@ -657,6 +657,15 @@ export interface DirectorioContacto {
   organizationId: string
   createdAt: string
   updatedAt: string
+  // Oportunidades de Pipeline donde este contacto es la persona (Deal.contactoId).
+  deals?: Array<{
+    id: string
+    title: string
+    stage: DealStage
+    amount: number
+    currency: string
+    expectedCloseDate: string | null
+  }>
 }
 
 // ─── API Response wrapper ─────────────────────────────────────────────────

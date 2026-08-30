@@ -15,6 +15,7 @@ import { formatCurrency, formatMultiCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { DealNotas } from '@/components/pipeline/deal-notas'
 import { ForecastPanel } from '@/components/pipeline/forecast-panel'
+import { ContactoPicker } from '@/components/pipeline/contacto-picker'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -51,12 +52,14 @@ interface DealFormState {
   currency:    string
   probability: string
   stage:       DealStage
-  notes:       string
-  empresaId:   string
+  notes:         string
+  empresaId:     string
+  contactoId:    string
+  contactoLabel: string
 }
 
 const EMPTY_FORM: DealFormState = {
-  title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '',
+  title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '', contactoId: '', contactoLabel: '',
 }
 
 function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => void }) {
@@ -298,6 +301,7 @@ export default function PipelinePage() {
           stage:       form.stage,
           notes:       form.notes.trim() || null,
           empresaId:   form.empresaId || null,
+          contactoId:  form.contactoId || null,
         }),
       })
       const json = await res.json()
@@ -588,10 +592,15 @@ export default function PipelinePage() {
               {...field('probability')} />
           </div>
           <Select
-            label="Empresa (opcional)"
+            label="Empresa (opcional — dejala vacía si es consumidor final)"
             options={empresaOptions}
             value={form.empresaId}
             onChange={e => setForm(f => ({ ...f, empresaId: e.target.value }))}
+          />
+          <ContactoPicker
+            value={form.contactoId}
+            valueLabel={form.contactoLabel}
+            onChange={(id, label) => setForm(f => ({ ...f, contactoId: id, contactoLabel: label }))}
           />
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Notas</label>

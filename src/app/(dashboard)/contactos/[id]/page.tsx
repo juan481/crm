@@ -3,7 +3,9 @@
 import { useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Mail, Phone, PhoneCall, MessageCircle, Building2, Pencil, Trash2, UserCircle2 } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, PhoneCall, MessageCircle, Building2, Pencil, Trash2, UserCircle2, Target, DollarSign } from 'lucide-react'
+import Link from 'next/link'
+import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -167,6 +169,37 @@ export default function ContactoDetailPage() {
           )}
         </div>
       </div>
+
+      {(data.deals?.length ?? 0) > 0 && (
+        <div className="rounded-2xl p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Target size={16} style={{ color: 'var(--color-primary)' }} />
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Oportunidades</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+              {data.deals!.length}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {data.deals!.map(d => (
+              <Link
+                key={d.id}
+                href={`/pipeline?dealId=${d.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-[var(--color-surface-raised)]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate" style={{ color: 'var(--color-text)' }}>{d.title}</span>
+                  <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>{d.stage}</span>
+                </span>
+                {d.amount > 0 && (
+                  <span className="flex items-center gap-1 shrink-0 font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+                    <DollarSign size={11} />{formatCurrency(d.amount, d.currency)}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
         <ContactoNotas ref={notasRef} contactoId={data.id} />

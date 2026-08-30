@@ -14,13 +14,27 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contacto = await (prisma as any).directorioContacto.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      include: { empresa: { select: { id: true, name: true } } },
+      include: {
+        empresa: { select: { id: true, name: true } },
+        deals: {
+          orderBy: { updatedAt: 'desc' },
+          select: { id: true, title: true, stage: true, amount: true, currency: true, expectedCloseDate: true },
+        },
+      },
     })
 
     if (!contacto) return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
 
     return NextResponse.json({
-      data: { ...contacto, createdAt: contacto.createdAt.toISOString(), updatedAt: contacto.updatedAt.toISOString() }
+      data: {
+        ...contacto,
+        deals: (contacto.deals ?? []).map((d: any) => ({
+          ...d,
+          expectedCloseDate: d.expectedCloseDate ? d.expectedCloseDate.toISOString() : null,
+        })),
+        createdAt: contacto.createdAt.toISOString(),
+        updatedAt: contacto.updatedAt.toISOString(),
+      }
     })
   } catch (error) {
     console.error('[CONTACTO GET]', error)
