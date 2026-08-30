@@ -654,9 +654,10 @@ model WhatsAppMessage {
   // El historial que ve el modelo se reconstruye mapeando assistant -> 'model'.
   role           String
   content        String               @db.Text
-  // Id de Meta en mensajes entrantes — evita procesar el mismo webhook dos
-  // veces si Meta reintenta la entrega (pasa seguido). Null en los mensajes
-  // que genera la IA (salen de acá hacia Meta, no al revés).
+  // Id de Meta del mensaje. En los ENTRANTES: dedup de reintentos del webhook
+  // (pasa seguido). En los SALIENTES: el id que devuelve la Cloud API al
+  // enviar, para poder matchear después los webhooks de status (entregado /
+  // leído / falló). Los wamid son únicos entre entrantes y salientes.
   waMessageId    String?              @unique
   // Se marca cuando NISSI (o la toma humana) ya "dio por atendido" este
   // mensaje entrante — metadato para debug y para una eventual red de
@@ -669,6 +670,13 @@ model WhatsAppMessage {
   // siendo 'assistant' para no romper la reconstrucción del historial.
   senderUserId   String?
   sender         User?                @relation("WhatsAppMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  // Estado de entrega de un mensaje SALIENTE (NISSI o humano), según los
+  // webhooks de status de Meta: 'sent' | 'delivered' | 'read' | 'failed'.
+  // null = entrante, o saliente del que todavía no llegó ningún status.
+  // Para poder matchear el status con el mensaje, `waMessageId` guarda el id
+  // que devuelve Meta también en los salientes (no sólo en los entrantes).
+  deliveryStatus String?
+  deliveryError  String?
   createdAt      DateTime             @default(now())
 
   @@index([conversationId, createdAt])

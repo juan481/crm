@@ -87,10 +87,41 @@ function describeNonTextMessage(type: string): string {
   }
   return `[El cliente envió ${labels[type] ?? 'un mensaje que no podés leer directamente (tipo: ' + type + ')'} — no podés verlo/escucharlo. Si estabas esperando justo eso (ej. le pediste una captura), agradecele y avisale que se lo vas a dejar a un humano para que lo revise; si no, pedile que te lo resuma en un mensaje de texto corto.]`
 }
+interface MetaStatus {
+  id: string
+  status: 'sent' | 'delivered' | 'read' | 'failed'
+  errors?: { title?: string; message?: string }[]
+}
 interface MetaChangeValue {
   metadata: { phone_number_id: string }
   contacts?: { profile?: { name?: string }; wa_id: string }[]
   messages?: MetaMessage[]
+  statuses?: MetaStatus[]
+}
+
+// Ranking para no "bajar" de estado si los webhooks llegan fuera de orden
+// (ej. un 'delivered' que llega después del 'read').
+const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, read: 3 }
+
+async function applyStatuses(db: any, statuses: MetaStatus[]): Promise<void> {
+  for (const s of statuses) {
+    if (!s.id) continue
+    if (s.status === 'failed') {
+      const err = s.errors?.[0]
+      await db.whatsAppMessage.updateMany({
+        where: { waMessageId: s.id },
+        data: { deliveryStatus: 'failed', deliveryError: err?.title || err?.message || 'Meta rechazó el mensaje' },
+      })
+      continue
+    }
+    const rank = STATUS_RANK[s.status]
+    if (!rank) continue
+    const lower = Object.keys(STATUS_RANK).filter((k) => STATUS_RANK[k] < rank)
+    await db.whatsAppMessage.updateMany({
+      where: { waMessageId: s.id, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: lower } }] },
+      data: { deliveryStatus: s.status },
+    })
+  }
 }
 
 // POST — mensajes/eventos entrantes. Meta espera un 200 rápido (unos
@@ -124,8 +155,15 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value
+
+      // Webhooks de status de entrega (entregado / leído / falló) de los
+      // mensajes que mandamos — actualizan los ticks del inbox.
+      if (value.statuses?.length) {
+        await applyStatuses(db, value.statuses).catch((e) => console.error('[WHATSAPP WEBHOOK] error aplicando statuses', e))
+      }
+
       const messages = value.messages ?? []
-      if (!messages.length) continue // status updates (delivered/read) u otros campos — no hay nada que contestar
+      if (!messages.length) continue // no hay mensaje entrante que contestar
 
       const phoneNumberId = value.metadata?.phone_number_id
       if (!phoneNumberId) continue

@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
           humanTakeoverAt: true, handedOffTo: true, ticketId: true, dealId: true,
           lastMessageAt: true, lastInboundAt: true, lastReadAt: true,
           assignedUser: { select: { id: true, name: true } },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { content: true, role: true, senderUserId: true } },
+          messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { content: true, role: true, senderUserId: true, deliveryStatus: true } },
         },
       }),
       db.whatsAppConversation.count({ where }),
@@ -70,6 +70,8 @@ export async function GET(req: NextRequest) {
           dealId: c.dealId,
           lastMessageAt: c.lastMessageAt,
           unread,
+          // El último mensaje saliente falló al enviarse → se marca en la lista.
+          lastFailed: !!last && last.role !== 'user' && last.deliveryStatus === 'failed',
           preview: last
             ? `${last.role === 'user' ? '' : last.senderUserId ? '↩ ' : 'NISSI: '}${String(last.content).slice(0, 90)}`
             : '',

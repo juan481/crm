@@ -146,6 +146,31 @@ async function markUserMessagesProcessed(db: any, conversationId: string): Promi
   })
 }
 
+/** Guarda un mensaje saliente de NISSI, lo manda por WhatsApp, y deja
+ *  registrado el id de Meta + el estado de entrega (para los ticks del
+ *  inbox y para saber si un envío falló). */
+async function persistAndSendOutbound(
+  db: any,
+  conversationId: string,
+  botConfig: WhatsAppBotConfig,
+  customerPhone: string,
+  text: string,
+): Promise<void> {
+  const row = await db.whatsAppMessage.create({
+    data: { conversationId, role: 'assistant', content: text },
+    select: { id: true },
+  })
+  await db.whatsAppConversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
+  const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, customerPhone, text)
+  await db.whatsAppMessage.update({
+    where: { id: row.id },
+    data: sent.ok
+      ? { waMessageId: sent.messageId ?? null, deliveryStatus: 'sent' }
+      : { deliveryStatus: 'failed', deliveryError: sent.error ?? 'Error al enviar' },
+  })
+  if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar la respuesta', sent.error, { conversationId })
+}
+
 /** Punto de entrada del webhook para un mensaje entrante. Persiste el
  *  mensaje, aplica el debounce, y si esta invocación es la que tiene que
  *  contestar, corre el turno contra Gemini. Idempotente por waMessageId. */
@@ -257,9 +282,8 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     const stillOpen = await isHandoffStillOpen(db, conversation)
     if (stillOpen) {
       await markUserMessagesProcessed(db, conversation.id)
-      const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, msg.customerPhone,
+      await persistAndSendOutbound(db, conversation.id, botConfig, msg.customerPhone,
         'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
-      if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar el aviso de "ya derivado"', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
       return
     }
     // El contexto se reinicia desde el primer mensaje de ESTE turno (los que
@@ -460,9 +484,5 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   await markUserMessagesProcessed(db, conversation.id)
-  await db.whatsAppMessage.create({ data: { conversationId: conversation.id, role: 'assistant', content: finalText } })
-  await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: new Date() } })
-
-  const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, msg.customerPhone, finalText)
-  if (!sent.ok) console.error('[NISSI ENGINE] no se pudo mandar la respuesta final', sent.error, { orgId: msg.orgId, conversationId: conversation.id })
+  await persistAndSendOutbound(db, conversation.id, botConfig, msg.customerPhone, finalText)
 }

@@ -22,16 +22,21 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         humanTakeoverAt: true, handedOffTo: true, ticketId: true, dealId: true,
         collectedData: true, lastInboundAt: true,
         assignedUser: { select: { id: true, name: true } },
+        // Acotado a los últimos 500 mensajes (desc + reverse) — una charla
+        // normal tiene decenas; esto sólo frena un caso patológico.
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
+          take: 500,
           select: {
             id: true, role: true, content: true, createdAt: true, senderUserId: true,
+            deliveryStatus: true,
             sender: { select: { id: true, name: true } },
           },
         },
       },
     })
     if (!conv) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
+    conv.messages.reverse()
 
     const [deal, ticket] = await Promise.all([
       conv.dealId
@@ -66,8 +71,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           role: m.role,
           content: m.content,
           createdAt: m.createdAt,
-          author: m.role === 'user' ? 'cliente' : m.sender?.name ? m.sender.name : 'NISSI',
+          author: m.role === 'user'
+            ? 'cliente'
+            : m.senderUserId
+              ? (m.senderUserId === payload.userId ? 'vos' : m.sender?.name || 'un asesor')
+              : 'NISSI',
           fromHuman: !!m.senderUserId,
+          deliveryStatus: m.role === 'user' ? null : m.deliveryStatus ?? null,
         })),
       },
     })

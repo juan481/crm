@@ -54,8 +54,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const now = new Date()
-    await db.whatsAppMessage.create({
-      data: { conversationId: conv.id, role: 'assistant', content: message, senderUserId: payload.userId, processedAt: now },
+    const created = await db.whatsAppMessage.create({
+      data: {
+        conversationId: conv.id, role: 'assistant', content: message,
+        senderUserId: payload.userId, processedAt: now,
+        waMessageId: sent.messageId ?? null, deliveryStatus: 'sent',
+      },
+      select: { id: true, createdAt: true },
     })
     // humanTakeoverAt se refresca en CADA respuesta humana — la
     // auto-liberación del engine (24hs) cuenta desde la última actividad del
@@ -69,7 +74,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
     })
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({
+      ok: true,
+      message: {
+        id: created.id,
+        role: 'assistant',
+        content: message,
+        createdAt: created.createdAt,
+        author: 'vos',
+        fromHuman: true,
+        deliveryStatus: 'sent',
+      },
+    })
   } catch (error) {
     console.error('[CONVERSACION REPLY]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

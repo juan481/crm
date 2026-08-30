@@ -4,7 +4,7 @@
 // whatsapp-ai-bot, potencialmente distintos) así que no vuelve a leer la
 // config — evita una vuelta más a la DB por cada mensaje de una conversación
 // que ya puede tener varias idas y vueltas.
-interface SendResult { ok: boolean; error?: string }
+interface SendResult { ok: boolean; error?: string; messageId?: string }
 
 export async function sendWhatsAppBotMessage(
   apiToken: string,
@@ -26,9 +26,11 @@ export async function sendWhatsAppBotMessage(
         text: { body: message.trim() },
       }),
     })
+    const json = await res.json().catch(() => null) as
+      | { messages?: { id?: string }[]; error?: { message?: string } }
+      | null
     if (!res.ok) {
-      const errJson = await res.json().catch(() => null) as { error?: { message?: string } } | null
-      const error = errJson?.error?.message || `WhatsApp devolvió un error (HTTP ${res.status})`
+      const error = json?.error?.message || `WhatsApp devolvió un error (HTTP ${res.status})`
       // Bug real encontrado en auditoría: esta rama no logueaba nada — sólo
       // el catch de excepción de red de abajo lo hacía. Un error HTTP de la
       // Cloud API (token vencido, ventana de 24hs de servicio al cliente
@@ -39,7 +41,7 @@ export async function sendWhatsAppBotMessage(
       console.error('[NISSI SEND] WhatsApp Cloud API respondió error', { status: res.status, error, phoneNumberId })
       return { ok: false, error }
     }
-    return { ok: true }
+    return { ok: true, messageId: json?.messages?.[0]?.id }
   } catch (err) {
     console.error('[NISSI SEND]', err)
     return { ok: false, error: 'Error de conexión con la API de WhatsApp' }
