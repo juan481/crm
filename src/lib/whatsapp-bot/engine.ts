@@ -156,12 +156,20 @@ async function persistAndSendOutbound(
   botConfig: WhatsAppBotConfig,
   customerPhone: string,
   text: string,
+  // markConversationRead: NISSI resolvió el turno por sí sola → adelantar
+  // lastReadAt para que la conversación NO quede marcada como no-leída en el
+  // inbox. Se pasa false cuando la respuesta es el fallback de "en un rato te
+  // contesta un asesor" (ahí SÍ queremos que una persona la vea).
+  opts?: { markConversationRead?: boolean },
 ): Promise<void> {
   const row = await db.whatsAppMessage.create({
     data: { conversationId, organizationId: orgId, role: 'assistant', content: text },
     select: { id: true },
   })
-  await db.whatsAppConversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } })
+  await db.whatsAppConversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: new Date(), ...(opts?.markConversationRead ? { lastReadAt: new Date() } : {}) },
+  })
   const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, customerPhone, text)
   await db.whatsAppMessage.update({
     where: { id: row.id },
@@ -283,8 +291,11 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     const stillOpen = await isHandoffStillOpen(db, conversation)
     if (stillOpen) {
       await markUserMessagesProcessed(db, conversation.id)
+      // Ya hay un ticket/deal abierto + se avisó por mail al derivar — el
+      // badge del inbox no tiene que volver a saltar por este mensaje.
       await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone,
-        'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.')
+        'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.',
+        { markConversationRead: true })
       return
     }
     // El contexto se reinicia desde el primer mensaje de ESTE turno (los que
@@ -485,5 +496,10 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   await markUserMessagesProcessed(db, conversation.id)
-  await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, finalText)
+  // Si NISSI contestó de verdad, la conversación queda "atendida" (no aparece
+  // como no-leída). Si cayó al fallback genérico (couldNotAnswer), se deja
+  // sin leer a propósito para que una persona entre al inbox.
+  await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, finalText, {
+    markConversationRead: !couldNotAnswer,
+  })
 }

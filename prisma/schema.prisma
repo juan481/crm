@@ -628,8 +628,12 @@ model WhatsAppConversation {
   // lastMessageAt, que también sube cuando NISSI o un humano responden).
   // Gobierna la ventana de 24hs de Meta y el cálculo de "no leído".
   lastInboundAt   DateTime?
-  // Marcador de lectura a nivel organización (equipo chico y bandeja
-  // compartida) — no-leído = lastInboundAt > lastReadAt.
+  // Marcador de "esto ya está atendido" a nivel organización (equipo chico y
+  // bandeja compartida) — no-leído = lastInboundAt > lastReadAt. Lo adelanta
+  // un humano al abrir/responder el hilo, Y TAMBIÉN NISSI cuando contesta un
+  // turno por sí sola: así el badge del sidebar sólo marca lo que necesita a
+  // una persona (toma humana con mensaje nuevo, o NISSI que no pudo responder)
+  // y no cada charla que la IA maneja bien.
   lastReadAt      DateTime?
   // Cuando una conversación se reabre "de cero" (estaba CLOSED, o el
   // ticket/deal del handoff se cerró del lado humano), se setea acá el
