@@ -5,7 +5,7 @@
 // cotización — y se le pone UN precio final. Al cliente sólo se le muestra
 // ese precio: el desglose de componentes y el margen son internos.
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Pencil, Trash2, Package, Boxes, AlertTriangle, X, ClipboardPaste,
@@ -31,6 +31,7 @@ interface DraftComponent {
   name: string
   sku: string | null
   price: number | null
+  currency: string | null
   quantity: number
   error?: string | null // sólo para códigos pegados que no matchearon
 }
@@ -54,6 +55,11 @@ export function KitsManager() {
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Kit | null>(null)
   const [form, setForm] = useState<KitForm>(EMPTY_FORM)
+  // El usuario eligió la moneda a mano → no la pisamos con la de los componentes.
+  const [currencyTouched, setCurrencyTouched] = useState(false)
+  // Campo auxiliar "Marcación %": si tiene un número, el precio se calcula
+  // como costo × (1 + marcación/100). Vacío = precio manual.
+  const [markupDraft, setMarkupDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleteKit, setDeleteKit] = useState<Kit | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -79,19 +85,52 @@ export function KitsManager() {
   })
   const searchResults = (searchData?.data ?? []).filter((p) => !p.isKit)
 
-  // ── Totales internos (margen) ────────────────────────────────────────────
+  // ── Totales internos (margen / marcación) ────────────────────────────────
   const totals = useMemo(() => {
     const matched = form.components.filter((c) => c.productId && c.price != null)
     const subtotal = matched.reduce((s, c) => s + (c.price ?? 0) * c.quantity, 0)
     const price = Number(form.price) || 0
     const margen = price - subtotal
+    // Margen = ganancia ÷ precio de venta. Marcación = ganancia ÷ costo.
     const margenPct = price > 0 ? (margen / price) * 100 : 0
+    const marcacionPct = subtotal > 0 ? (margen / subtotal) * 100 : 0
     const unresolved = form.components.filter((c) => c.error).length
-    return { subtotal, price, margen, margenPct, unresolved, count: matched.length }
-  }, [form.components, form.price])
+    // Moneda de los componentes matcheados: una sola, o null si hay mezcla.
+    const monedas = Array.from(new Set(matched.map((c) => c.currency).filter(Boolean))) as string[]
+    const componentsCurrency = monedas.length === 1 ? monedas[0] : null
+    const mixedCurrency = monedas.length > 1
+    const currencyMismatch = componentsCurrency != null && componentsCurrency !== form.currency
+    return {
+      subtotal, price, margen, margenPct, marcacionPct, unresolved, count: matched.length,
+      componentsCurrency, mixedCurrency, currencyMismatch, monedas,
+    }
+  }, [form.components, form.price, form.currency])
+
+  // Los productos del catálogo tienen su propia moneda (ej. Abba carga todo en
+  // USD). Si el KIT arrancó en otra, el costo/margen mezclan monedas — se
+  // adopta la de los componentes salvo que el usuario la haya tocado a mano.
+  useEffect(() => {
+    if (!currencyTouched && totals.componentsCurrency && totals.componentsCurrency !== form.currency) {
+      setForm((f) => ({ ...f, currency: totals.componentsCurrency! }))
+    }
+  }, [totals.componentsCurrency, currencyTouched, form.currency])
+
+  // Si el usuario está trabajando con "Marcación %", al agregar/sacar un
+  // componente el precio se recalcula solo para mantener esa marcación
+  // (es lo que se espera: "puse 40% arriba" → el precio sube si sumo algo).
+  // Si tipeó un precio a mano (markupDraft vacío), no se toca.
+  useEffect(() => {
+    const mk = Number(markupDraft)
+    if (markupDraft.trim() !== '' && !isNaN(mk) && totals.subtotal > 0) {
+      const next = (totals.subtotal * (1 + mk / 100)).toFixed(2)
+      setForm((f) => (f.price === next ? f : { ...f, price: next }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totals.subtotal])
 
   const openCreate = () => {
-    setEditing(null); setForm(EMPTY_FORM); setPasteText(''); setShowPaste(false); setCompSearch(''); setShowModal(true)
+    setEditing(null); setForm(EMPTY_FORM); setCurrencyTouched(false); setMarkupDraft('')
+    setPasteText(''); setShowPaste(false); setCompSearch(''); setShowModal(true)
   }
   const openEdit = (k: Kit) => {
     setEditing(k)
@@ -106,12 +145,15 @@ export function KitsManager() {
         name: c.component.name,
         sku: c.component.sku,
         price: c.component.price,
+        currency: c.component.currency,
         quantity: c.quantity,
       })),
     })
+    // Ya tiene moneda propia elegida — respetarla, no auto-adoptar.
+    setCurrencyTouched(true); setMarkupDraft('')
     setPasteText(''); setShowPaste(false); setCompSearch(''); setShowModal(true)
   }
-  const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY_FORM) }
+  const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY_FORM); setCurrencyTouched(false); setMarkupDraft('') }
 
   const addComponent = (c: DraftComponent) => {
     setForm((f) => {
@@ -144,7 +186,7 @@ export function KitsManager() {
       if (!res.ok) { toast.error(json.error ?? 'Error al resolver'); return }
       const rows: DraftComponent[] = (json.data ?? []).map((r: any) => ({
         productId: r.productId, name: r.name ?? r.sku ?? '(sin nombre)', sku: r.sku,
-        price: r.price, quantity: r.quantity, error: r.error,
+        price: r.price, currency: r.currency ?? null, quantity: r.quantity, error: r.error,
       }))
       if (rows.length === 0) { toast.error('No se detectaron códigos en el texto'); return }
       // Mergea: los que matchearon se agregan/actualizan; los que no, quedan como fila roja.
@@ -168,10 +210,12 @@ export function KitsManager() {
     } catch { toast.error('Error de conexión') } finally { setResolving(false) }
   }
 
+  const priceInvalid = form.price.trim() === '' || isNaN(Number(form.price)) || Number(form.price) < 0
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) { toast.error('Poné un nombre al KIT'); return }
-    if (form.price === '' || isNaN(Number(form.price)) || Number(form.price) < 0) { toast.error('Precio final inválido'); return }
+    if (priceInvalid) { toast.error('Cargá el precio final del KIT (arriba del botón está el aviso)'); return }
     const matched = form.components.filter((c) => c.productId)
     if (matched.length === 0) { toast.error('Agregá al menos un componente válido'); return }
     if (totals.unresolved > 0 && !confirm(`Hay ${totals.unresolved} código(s) sin match en el catálogo. Se van a ignorar. ¿Guardar igual?`)) return
@@ -288,11 +332,19 @@ export function KitsManager() {
                 <td className="px-4 py-3 text-right font-bold" style={{ color: 'var(--color-text)' }}>
                   {formatCurrency(k.price, k.currency)}
                 </td>
-                <td className="px-4 py-3 text-right hidden md:table-cell font-semibold" style={{ color: k.margen >= 0 ? '#10b981' : '#ef4444' }}>
-                  {formatCurrency(k.margen, k.currency)}
-                  <span className="block text-[10px] font-normal" style={{ color: 'var(--color-text-subtle)' }}>
-                    {k.margenPct.toFixed(0)}%
-                  </span>
+                <td className="px-4 py-3 text-right hidden md:table-cell font-semibold" style={{ color: k.monedaDesalineada ? '#d97706' : k.margen >= 0 ? '#10b981' : '#ef4444' }}>
+                  {k.monedaDesalineada ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-normal">
+                      <TriangleAlert size={10} /> moneda mezclada
+                    </span>
+                  ) : (
+                    <>
+                      {formatCurrency(k.margen, k.currency)}
+                      <span className="block text-[10px] font-normal" style={{ color: 'var(--color-text-subtle)' }}>
+                        {k.margenPct.toFixed(0)}% margen · {k.marcacionPct.toFixed(0)}% marcación
+                      </span>
+                    </>
+                  )}
                 </td>
                 {canManage && (
                   <td className="px-4 py-3">
@@ -346,7 +398,7 @@ export function KitsManager() {
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => { addComponent({ productId: p.id, name: p.name, sku: p.sku ?? null, price: p.price, quantity: 1 }); setCompSearch('') }}
+                    onClick={() => { addComponent({ productId: p.id, name: p.name, sku: p.sku ?? null, price: p.price, currency: p.currency, quantity: 1 }); setCompSearch('') }}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
                     style={{ color: 'var(--color-text)' }}
                   >
@@ -439,16 +491,63 @@ export function KitsManager() {
             </div>
           )}
 
-          {/* Precio + margen */}
-          <div className="grid sm:grid-cols-2 gap-3">
+          {/* Precio + moneda + marcación */}
+          <div className="grid sm:grid-cols-3 gap-3">
             <Input
               label="Precio final del KIT *"
               type="number" min="0" step="0.01" placeholder="0.00"
               value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              onChange={(e) => {
+                // Edición manual del precio → soltamos el campo "Marcación %".
+                setMarkupDraft('')
+                setForm((f) => ({ ...f, price: e.target.value }))
+              }}
             />
-            <Select label="Moneda" options={CURRENCY_OPTIONS} value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))} />
+            <Select
+              label="Moneda"
+              options={CURRENCY_OPTIONS}
+              value={form.currency}
+              onChange={(e) => { setCurrencyTouched(true); setForm((f) => ({ ...f, currency: e.target.value })) }}
+            />
+            <Input
+              label="Marcación %"
+              type="number" min="0" step="1"
+              placeholder={totals.subtotal > 0 ? totals.marcacionPct.toFixed(0) : '—'}
+              value={markupDraft}
+              onChange={(e) => {
+                const v = e.target.value
+                setMarkupDraft(v)
+                const mk = Number(v)
+                if (v.trim() !== '' && !isNaN(mk) && totals.subtotal > 0) {
+                  setForm((f) => ({ ...f, price: (totals.subtotal * (1 + mk / 100)).toFixed(2) }))
+                }
+              }}
+            />
           </div>
+          <p className="text-[11px] -mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+            Poné el precio a mano, o escribí una <b>marcación</b> (ej. 40) y te calcula el precio: costo × 1,40.
+          </p>
+
+          {/* Aviso de moneda desalineada */}
+          {(totals.currencyMismatch || totals.mixedCurrency) && (
+            <div className="rounded-xl p-3 text-xs flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', color: '#d97706' }}>
+              <TriangleAlert size={14} className="shrink-0 mt-0.5" />
+              {totals.mixedCurrency ? (
+                <span>Los componentes tienen monedas distintas ({totals.monedas.join(', ')}). El costo total no es real hasta que estén todos en la misma moneda.</span>
+              ) : (
+                <span className="flex-1">
+                  Los componentes están en <b>{totals.componentsCurrency}</b> y el KIT en <b>{form.currency}</b> — el costo y el margen de abajo mezclan monedas.{' '}
+                  <button
+                    type="button"
+                    className="underline font-semibold"
+                    onClick={() => { setCurrencyTouched(true); setForm((f) => ({ ...f, currency: totals.componentsCurrency! })) }}
+                  >
+                    Pasar el KIT a {totals.componentsCurrency}
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="rounded-xl p-3 text-xs space-y-1" style={{ background: 'var(--color-surface-raised)' }}>
             <div className="flex justify-between" style={{ color: 'var(--color-text-muted)' }}>
@@ -459,18 +558,32 @@ export function KitsManager() {
               <span>Precio final del KIT (lo que ve el cliente)</span>
               <span className="font-semibold">{formatCurrency(totals.price, form.currency)}</span>
             </div>
-            <div className="flex justify-between font-semibold" style={{ color: totals.margen >= 0 ? '#10b981' : '#ef4444' }}>
-              <span>Margen</span>
-              <span>{formatCurrency(totals.margen, form.currency)} ({totals.margenPct.toFixed(0)}%)</span>
+            <div className="flex justify-between font-semibold pt-0.5" style={{ color: totals.margen >= 0 ? '#10b981' : '#ef4444' }}>
+              <span>Ganancia</span>
+              <span>{formatCurrency(totals.margen, form.currency)}</span>
+            </div>
+            <div className="flex justify-between" style={{ color: 'var(--color-text-muted)' }}>
+              <span>· Margen <span style={{ color: 'var(--color-text-subtle)' }}>(sobre el precio de venta)</span></span>
+              <span>{totals.margenPct.toFixed(0)}%</span>
+            </div>
+            <div className="flex justify-between" style={{ color: 'var(--color-text-muted)' }}>
+              <span>· Marcación <span style={{ color: 'var(--color-text-subtle)' }}>(sobre el costo)</span></span>
+              <span>{totals.marcacionPct.toFixed(0)}%</span>
             </div>
             {totals.unresolved > 0 && (
               <p className="text-red-400 pt-1">{totals.unresolved} código(s) sin match — se ignoran al guardar.</p>
             )}
           </div>
 
+          {priceInvalid && form.components.some((c) => c.productId) && (
+            <p className="text-xs text-red-500 flex items-center gap-1.5">
+              <TriangleAlert size={13} className="shrink-0" /> Falta el <b>precio final del KIT</b> — cargalo (o poné una marcación) para poder crear el KIT.
+            </p>
+          )}
+
           <ModalFooter>
             <Button type="button" variant="ghost" onClick={closeModal}>Cancelar</Button>
-            <Button type="submit" loading={saving}>{editing ? 'Guardar KIT' : 'Crear KIT'}</Button>
+            <Button type="submit" loading={saving} disabled={priceInvalid}>{editing ? 'Guardar KIT' : 'Crear KIT'}</Button>
           </ModalFooter>
         </form>
       </Modal>

@@ -20,7 +20,7 @@ export const KIT_SELECT = {
 
 interface RawKit {
   id: string; name: string; price: number; currency: string
-  kitComponents: { quantity: number; component: { price: number; costo: number | null; stock: number; trackStock: boolean } }[]
+  kitComponents: { quantity: number; component: { price: number; currency: string; costo: number | null; stock: number; trackStock: boolean } }[]
   [k: string]: unknown
 }
 
@@ -29,9 +29,23 @@ export function withKitMetrics<T extends RawKit>(kit: T) {
   const componentesSubtotal = kit.kitComponents.reduce((s, c) => s + c.component.price * c.quantity, 0)
   const componentesCosto = kit.kitComponents.reduce((s, c) => s + (c.component.costo ?? 0) * c.quantity, 0)
   const margen = kit.price - componentesSubtotal
+  // Margen = ganancia sobre el PRECIO DE VENTA (definición contable estándar).
   const margenPct = kit.price > 0 ? (margen / kit.price) * 100 : 0
+  // Marcación = ganancia sobre el COSTO (lo que la mayoría piensa como
+  // "le pongo un X% arriba"). 40% de marcación == ~28,6% de margen.
+  const marcacionPct = componentesSubtotal > 0 ? (margen / componentesSubtotal) * 100 : 0
   const algunComponenteSinStock = kit.kitComponents.some((c) => c.component.trackStock && c.component.stock < c.quantity)
-  return { ...kit, componentesSubtotal, componentesCosto, margen, margenPct, algunComponenteSinStock }
+  // Moneda de los componentes: si todos comparten una, es esa; si hay mezcla
+  // o no hay componentes, null. Si no coincide con la del KIT, el
+  // subtotal/margen mezclan monedas y no son reales.
+  const monedas = Array.from(new Set(kit.kitComponents.map((c) => c.component.currency)))
+  const componentesMoneda = monedas.length === 1 ? monedas[0] : null
+  const monedaDesalineada = monedas.length > 1 || (componentesMoneda != null && componentesMoneda !== kit.currency)
+  return {
+    ...kit,
+    componentesSubtotal, componentesCosto, margen, margenPct, marcacionPct,
+    algunComponenteSinStock, componentesMoneda, monedaDesalineada,
+  }
 }
 
 export interface ComponentInput {
@@ -46,6 +60,7 @@ export interface ResolvedComponent {
   name: string | null
   sku: string | null
   price: number | null
+  currency: string | null
   quantity: number
   error: string | null
 }
@@ -63,10 +78,10 @@ export async function resolveComponents(orgId: string, inputs: ComponentInput[])
 
   const [byId, bySku] = await Promise.all([
     ids.length
-      ? db.product.findMany({ where: { id: { in: ids }, organizationId: orgId }, select: { id: true, name: true, sku: true, price: true, isKit: true } })
+      ? db.product.findMany({ where: { id: { in: ids }, organizationId: orgId }, select: { id: true, name: true, sku: true, price: true, currency: true, isKit: true } })
       : [],
     skus.length
-      ? db.product.findMany({ where: { organizationId: orgId, sku: { in: skus } }, select: { id: true, name: true, sku: true, price: true, isKit: true } })
+      ? db.product.findMany({ where: { organizationId: orgId, sku: { in: skus } }, select: { id: true, name: true, sku: true, price: true, currency: true, isKit: true } })
       : [],
   ])
   const idMap = new Map<string, any>(byId.map((p: any) => [p.id, p]))
@@ -81,12 +96,12 @@ export async function resolveComponents(orgId: string, inputs: ComponentInput[])
         : null
 
     if (!p) {
-      return { input, productId: null, name: null, sku: input.sku ?? null, price: null, quantity, error: 'No se encontró en el catálogo' }
+      return { input, productId: null, name: null, sku: input.sku ?? null, price: null, currency: null, quantity, error: 'No se encontró en el catálogo' }
     }
     if (p.isKit) {
-      return { input, productId: null, name: p.name, sku: p.sku, price: null, quantity, error: 'Es un KIT — no se puede anidar dentro de otro KIT' }
+      return { input, productId: null, name: p.name, sku: p.sku, price: null, currency: null, quantity, error: 'Es un KIT — no se puede anidar dentro de otro KIT' }
     }
-    return { input, productId: p.id, name: p.name, sku: p.sku, price: p.price, quantity, error: null }
+    return { input, productId: p.id, name: p.name, sku: p.sku, price: p.price, currency: p.currency, quantity, error: null }
   })
 }
 

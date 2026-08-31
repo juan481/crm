@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
         name: r.name,
         sku: r.sku,
         price: r.price,
+        currency: r.currency,
         quantity: r.quantity,
         error: r.error,
       })),

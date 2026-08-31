@@ -297,7 +297,10 @@ export interface Kit extends Product {
   componentesSubtotal: number  // Σ component.price × qty (precio público)
   componentesCosto:    number  // Σ component.costo  × qty
   margen:              number  // price − componentesSubtotal
-  margenPct:           number
+  margenPct:           number  // margen ÷ precio de venta
+  marcacionPct:        number  // margen ÷ costo de componentes
+  componentesMoneda:   string | null  // moneda común de los componentes, null si hay mezcla
+  monedaDesalineada:   boolean        // la moneda del KIT no coincide con la de los componentes
   algunComponenteSinStock: boolean
 }
 
