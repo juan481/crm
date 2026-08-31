@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
 
 export const dynamic = 'force-dynamic'
 
@@ -106,7 +107,22 @@ export async function POST(req: NextRequest) {
       include: INCLUDE,
     })
 
-    return NextResponse.json({ data: deal }, { status: 201 })
+    // Alta de una venta ya cerrada (ej. cargar retroactivamente algo vendido)
+    // → el cliente queda marcado igual que al arrastrar la tarjeta a Ganado.
+    let cliente: DealWonClienteResult | null = null
+    if (deal.stage === 'GANADO') {
+      try {
+        cliente = await marcarClienteAlGanar(
+          db2,
+          { id: deal.id, empresaId: deal.empresaId, contactoId: deal.contactoId, ownerId: deal.ownerId },
+          payload.orgId,
+        )
+      } catch (e) {
+        console.error('[DEAL WON→CLIENTE]', e)
+      }
+    }
+
+    return NextResponse.json({ data: deal, cliente }, { status: 201 })
 
   } catch (error) {
     console.error('[DEALS POST]', error)
