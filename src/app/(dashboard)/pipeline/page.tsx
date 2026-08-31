@@ -340,8 +340,20 @@ export default function PipelinePage() {
           closedAt: isClosing ? new Date().toISOString() : null,
         }),
       })
-      if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(j.error); return }
       qc.invalidateQueries({ queryKey: ['deals'] })
+      // Ganar la oportunidad marcó (o creó) al cliente.
+      if (j?.cliente?.nuevoCliente) {
+        qc.invalidateQueries({ queryKey: ['empresas-clientes'] })
+        qc.invalidateQueries({ queryKey: ['empresas-pipeline'] })
+        qc.invalidateQueries({ queryKey: ['empresas'] })
+        toast.success(
+          j.cliente.empresaCreada
+            ? `${j.cliente.nombre} quedó cargado como Cliente`
+            : `${j.cliente.nombre} pasó a Cliente`,
+        )
+      }
     } catch { toast.error('Error') } finally { setMovingId(null) }
   }
 

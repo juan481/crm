@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
+import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
 
 interface Params { params: { id: string } }
 
@@ -107,14 +108,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     // Sólo dispara al ENTRAR a Ganado — no en cada guardado subsiguiente de
     // un deal que ya estaba ganado (ej. editar el monto después).
+    let cliente: DealWonClienteResult | null = null
     if (stage === 'GANADO' && existing.stage !== 'GANADO') {
       fireWebhook(payload.orgId, 'deal.won', {
         id: deal.id, title: deal.title, amount: deal.amount, currency: deal.currency,
         empresa: deal.empresa?.name ?? null, client: deal.client?.name ?? null,
       })
+      // Ganar la oportunidad marca al cliente como tal (Empresa.isCliente).
+      // Falla suave: si esto se rompe, el deal igual queda ganado.
+      try {
+        cliente = await marcarClienteAlGanar(
+          db,
+          { id: deal.id, empresaId: deal.empresaId, contactoId: deal.contactoId, ownerId: deal.ownerId },
+          payload.orgId,
+        )
+      } catch (e) {
+        console.error('[DEAL WON→CLIENTE]', e)
+      }
     }
 
-    return NextResponse.json({ data: deal })
+    return NextResponse.json({ data: deal, cliente })
   } catch (error) {
     console.error('[DEAL PATCH]', error)
     return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 })
