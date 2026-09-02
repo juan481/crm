@@ -4,8 +4,13 @@ import { waitUntil } from '@vercel/functions'
 import { prisma } from '@/lib/db'
 import { resolveOrgByPhoneNumberId } from '@/lib/whatsapp-bot/resolve-org'
 import { handleIncomingWhatsAppMessage } from '@/lib/whatsapp-bot/engine'
+import { markWhatsAppMessageRead } from '@/lib/whatsapp-bot/send'
 
 export const dynamic = 'force-dynamic'
+// El procesamiento va en waitUntil (Gemini + debounce de 2.5s + loop de
+// herramientas) — el default de ~10s de Vercel corta eso a la mitad. 60s
+// alcanza de sobra; el plan Pro de Vercel soporta hasta 300.
+export const maxDuration = 60
 
 // Webhook ÚNICO compartido por todas las organizaciones que activen el
 // plugin whatsapp-ai-bot — así funciona la Cloud API de Meta: se registra
@@ -83,10 +88,48 @@ function describeNonTextMessage(type: string): string {
   }
   return `[El cliente envió ${labels[type] ?? 'un mensaje que no podés leer directamente (tipo: ' + type + ')'} — no podés verlo/escucharlo. Si estabas esperando justo eso (ej. le pediste una captura), agradecele y avisale que se lo vas a dejar a un humano para que lo revise; si no, pedile que te lo resuma en un mensaje de texto corto.]`
 }
+interface MetaStatus {
+  id: string
+  status: 'sent' | 'delivered' | 'read' | 'failed'
+  errors?: { title?: string; message?: string }[]
+}
 interface MetaChangeValue {
   metadata: { phone_number_id: string }
   contacts?: { profile?: { name?: string }; wa_id: string }[]
   messages?: MetaMessage[]
+  statuses?: MetaStatus[]
+}
+
+// Ranking para no "bajar" de estado si los webhooks llegan fuera de orden
+// (ej. un 'delivered' que llega después del 'read').
+const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, read: 3 }
+
+async function applyStatuses(db: any, orgId: string, statuses: MetaStatus[]): Promise<void> {
+  for (const s of statuses) {
+    if (!s.id) continue
+    // Scopeado a la org que resolvimos por phone_number_id — un webhook
+    // falsificado (firma opcional si falta WHATSAPP_APP_SECRET) no puede
+    // tocar mensajes de otra organización.
+    if (s.status === 'failed') {
+      const err = s.errors?.[0]
+      // No pisar un 'delivered'/'read' con un 'failed' que llega fuera de
+      // orden (Meta no debería, pero por las dudas).
+      await db.whatsAppMessage.updateMany({
+        where: { waMessageId: s.id, organizationId: orgId, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: ['sent', 'pending'] } }] },
+        data: { deliveryStatus: 'failed', deliveryError: err?.title || err?.message || 'Meta rechazó el mensaje' },
+      })
+      continue
+    }
+    const rank = STATUS_RANK[s.status]
+    if (!rank) continue
+    // 'pending' es el estado inicial de un saliente ANTES de que se confirme
+    // el envío — cualquier status de Meta lo supera.
+    const lower = ['pending', ...Object.keys(STATUS_RANK).filter((k) => STATUS_RANK[k] < rank)]
+    await db.whatsAppMessage.updateMany({
+      where: { waMessageId: s.id, organizationId: orgId, OR: [{ deliveryStatus: null }, { deliveryStatus: { in: lower } }] },
+      data: { deliveryStatus: s.status },
+    })
+  }
 }
 
 // POST — mensajes/eventos entrantes. Meta espera un 200 rápido (unos
@@ -120,8 +163,6 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value
-      const messages = value.messages ?? []
-      if (!messages.length) continue // status updates (delivered/read) u otros campos — no hay nada que contestar
 
       const phoneNumberId = value.metadata?.phone_number_id
       if (!phoneNumberId) continue
@@ -132,13 +173,31 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
         continue
       }
 
+      // Webhooks de status de entrega (entregado / leído / falló) de los
+      // mensajes que mandamos — actualizan los ticks del inbox. Scopeado a
+      // la org resuelta por phone_number_id.
+      if (value.statuses?.length) {
+        await applyStatuses(db, resolved.orgId, value.statuses).catch((e) => console.error('[WHATSAPP WEBHOOK] error aplicando statuses', e))
+      }
+
+      const messages = value.messages ?? []
+      if (!messages.length) continue // no hay mensaje entrante que contestar
+
       const org = await db.organization.findUnique({ where: { id: resolved.orgId }, select: { name: true, crmName: true } })
       const orgName = org?.name || org?.crmName || 'nuestra empresa'
 
+      // Meta casi siempre manda un mensaje por POST. En el caso raro de
+      // varios en el mismo POST, el debounce del engine (ver engine.ts) los
+      // procesa igual bien salvo que puede mandar una respuesta por mensaje
+      // en vez de una sola — aceptable, las respuestas quedan en contexto.
       for (const m of messages) {
         const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type)
         if (!text) continue // texto vacío de verdad (raro, pero no hay nada que contestar)
         const contact = value.contacts?.find((c) => c.wa_id === m.from)
+
+        // Doble check azul para el cliente — sabe que su mensaje se vio.
+        // Fire-and-forget, cualquier error se ignora (ver send.ts).
+        if (resolved.config) void markWhatsAppMessageRead(resolved.config.apiToken, phoneNumberId, m.id)
 
         await handleIncomingWhatsAppMessage({
           orgId: resolved.orgId,

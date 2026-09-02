@@ -28,6 +28,14 @@ const STAGES: { key: DealStage; label: string; color: string; prob: number }[] =
   { key: 'PERDIDO',     label: 'Perdido',     color: 'bg-red-500/15 text-red-400 border-red-500/20',           prob: 0   },
 ]
 
+// Motivo del lead que dejó NISSI al derivar (Deal.leadReason).
+const LEAD_REASON_LABEL: Record<string, string> = {
+  compra: 'Compra de equipos',
+  instalacion_nueva: 'Instalación',
+  gremio: 'Gremio',
+  asesor: 'Pidió un asesor',
+}
+
 // Días sin cambios (updatedAt) para marcar una oportunidad como estancada.
 // No aplica a etapas ya cerradas.
 const STALE_DAYS = 14
@@ -67,7 +75,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string } | null>(null)
 
-  const { data, isLoading } = useQuery<Deal>({
+  const { data, isLoading, isError } = useQuery<Deal>({
     queryKey: ['deal', dealId],
     queryFn: async () => {
       const res = await fetch(`/api/deals/${dealId}`)
@@ -75,6 +83,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
       return res.json().then(j => j.data)
     },
     staleTime: 10 * 1000,
+    retry: false,
   })
 
   const d = draft ?? (data ? {
@@ -109,7 +118,13 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
 
   return (
     <Modal open onClose={onClose} title={data?.title ?? 'Oportunidad'} size="md">
-      {isLoading || !data || !d ? (
+      {isError ? (
+        <div className="py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          No se encontró esta oportunidad, o no tenés acceso a ella.
+          <br />
+          <span className="text-xs">Si te llegó desde una conversación de WhatsApp, avisale a un administrador para que te la reasigne.</span>
+        </div>
+      ) : isLoading || !data || !d ? (
         <div className="space-y-3">
           <Skeleton className="h-8 rounded-xl" />
           <Skeleton className="h-24 rounded-xl" />
@@ -138,6 +153,11 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               </a>
             )}
             {data.owner && <span className="flex items-center gap-1"><User size={11} />{data.owner.name}</span>}
+            {data.origen === 'WHATSAPP' && (
+              <span className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                WhatsApp{data.leadReason ? ` · ${LEAD_REASON_LABEL[data.leadReason] ?? data.leadReason}` : ''}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

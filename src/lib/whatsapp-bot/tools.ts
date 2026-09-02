@@ -1,48 +1,70 @@
-import type Anthropic from '@anthropic-ai/sdk'
+import { Type, type FunctionDeclaration } from '@google/genai'
 import { prisma } from '@/lib/db'
 import { SLA_HOURS } from '@/lib/tickets'
 import { fireWebhook } from '@/lib/webhooks'
 import { pickAvailableTechnician, findUserByEmail } from '@/lib/whatsapp-bot/technician-picker'
 import { resolveBotActorId } from '@/lib/whatsapp-bot/resolve-org'
-import { resolveContactoForLead } from '@/lib/whatsapp-bot/contacto'
+import { resolveContactoForConversation } from '@/lib/whatsapp-bot/contacto'
+import { buildConversationTranscript } from '@/lib/whatsapp-bot/transcript'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
+import { buscarCatalogoParaBot } from '@/lib/catalogo-search'
 import type { WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
 // Herramientas que NISSI puede invocar durante la charla. A propósito son
-// pocas y de grano grueso (guardar dato, escalar a soporte, escalar a
-// ventas, escalar a administración) — el resto del criterio de ruteo (qué
-// preguntar en qué orden, cuándo alcanza para escalar) vive en el prompt,
-// no acá: estas funciones sólo ejecutan lo que la IA ya decidió, nunca
-// deciden por su cuenta.
-export const WHATSAPP_BOT_TOOLS: Anthropic.Tool[] = [
+// pocas y de grano grueso (guardar dato, buscar en el catálogo, escalar a
+// soporte, escalar a ventas, escalar a administración) — el resto del
+// criterio de ruteo (qué preguntar en qué orden, cuándo alcanza para
+// escalar) vive en el prompt, no acá: estas funciones sólo ejecutan lo que
+// la IA ya decidió, nunca deciden por su cuenta.
+//
+// Formato: FunctionDeclaration de Gemini (@google/genai). El schema usa
+// `Type.*` (subset OpenAPI). Gemini NO soporta `additionalProperties` con
+// mapa libre — por eso save_customer_info tiene campos fijos.
+export const WHATSAPP_BOT_TOOLS: FunctionDeclaration[] = [
   {
     name: 'save_customer_info',
     description:
-      'Guarda o actualiza datos del cliente que se van juntando durante la charla (nombre, teléfono/mail de contacto si es distinto al de WhatsApp, dirección, horario para que lo llamen, y cualquier respuesta a los filtros de ventas/soporte). Llamala cada vez que el cliente te da un dato nuevo, no esperes a tener todo — así no se pierde nada si la charla se corta.',
-    input_schema: {
-      type: 'object',
+      'Guarda o actualiza datos del cliente que se van juntando durante la charla. Llamala cada vez que el cliente te da un dato nuevo, no esperes a tener todo — así no se pierde nada si la charla se corta. Pasá sólo los campos que tengas.',
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        data: {
-          type: 'object',
-          description: 'Pares clave/valor con lo que se sabe hasta ahora. Usá claves en español simple, ej: nombre, apellido, telefono, email, direccion, horarioContacto, tipoConsulta, filtroVentas, filtroTecnico.',
-          additionalProperties: { type: 'string' },
-        },
+        nombre: { type: Type.STRING, description: 'Nombre de pila del cliente' },
+        apellido: { type: Type.STRING, description: 'Apellido del cliente' },
+        telefono: { type: Type.STRING, description: 'Teléfono de contacto si es distinto al de WhatsApp' },
+        email: { type: Type.STRING, description: 'Mail del cliente' },
+        direccion: { type: Type.STRING, description: 'Dirección / domicilio' },
+        localidad: { type: Type.STRING, description: 'Localidad, ciudad o zona' },
+        horarioContacto: { type: Type.STRING, description: 'Horario en el que lo puede llamar un asesor' },
+        tipoConsulta: { type: Type.STRING, description: 'compra / instalación / soporte / facturación / gremio / asesor' },
+        detalle: { type: Type.STRING, description: 'Cualquier otra respuesta del filtro de ventas o técnico, o dato relevante que no encaje en los campos de arriba' },
       },
-      required: ['data'],
+    },
+  },
+  {
+    name: 'buscar_catalogo',
+    description:
+      'Consultá el catálogo de la empresa para explicarle al cliente qué tipos/líneas de producto hay y confirmar disponibilidad. NO devuelve precios y vos NUNCA cotizás. Usala cuando el cliente pregunta si tenés cierto tipo de equipo, qué diferencia hay entre opciones, o qué le conviene para su caso. Después de orientar, seguí con el filtro de ventas y derivá con create_sales_lead para que un asesor arme el presupuesto.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: { type: Type.STRING, description: 'Palabras clave simples, SIN tildes, ej. "camara giratoria exterior", "alarma app", "kit 4 camaras".' },
+        categoria: { type: Type.STRING, description: 'Opcional: línea/categoría para acotar, sin tildes, ej. "camaras IP", "alarmas", "CCTV"' },
+      },
+      required: ['query'],
     },
   },
   {
     name: 'create_support_ticket',
     description:
       'Crea un ticket de soporte técnico en el CRM y lo asigna a un técnico libre. Usala recién cuando ya hiciste el filtro técnico inicial según el tipo de falla (alarma o cámaras) y tenés el detalle completo — no antes.',
-    input_schema: {
-      type: 'object',
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        title: { type: 'string', description: 'Resumen corto del problema, ej: "Alarma no reporta a central"' },
-        description: { type: 'string', description: 'Todo el detalle recopilado: qué falla, respuestas del filtro técnico, dirección si la dio, etc.' },
-        urgent: { type: 'boolean', description: 'true SOLO si es una alarma que no está reportando a la central de monitoreo (regla explícita de Abba) — eso sube la prioridad, todo lo demás queda en prioridad normal.' },
-        customerName: { type: 'string' },
-        customerEmail: { type: 'string', description: 'Opcional, sólo si el cliente lo dio.' },
+        title: { type: Type.STRING, description: 'Resumen corto del problema, ej: "Alarma no reporta a central"' },
+        description: { type: Type.STRING, description: 'Todo el detalle recopilado: qué falla, respuestas del filtro técnico, dirección si la dio, etc.' },
+        urgent: { type: Type.BOOLEAN, description: 'true SOLO si es una alarma que no está reportando a la central de monitoreo (regla explícita de Abba) — eso sube la prioridad, todo lo demás queda en prioridad normal.' },
+        customerName: { type: Type.STRING },
+        customerEmail: { type: Type.STRING, description: 'Opcional, sólo si el cliente lo dio.' },
       },
       required: ['title', 'description'],
     },
@@ -51,14 +73,14 @@ export const WHATSAPP_BOT_TOOLS: Anthropic.Tool[] = [
     name: 'create_sales_lead',
     description:
       'Registra una oportunidad de venta en el CRM (compra de equipos, instalación nueva, o consulta de gremio/importador) y avisa a Ventas. Usala recién cuando ya hiciste el filtro de ventas correspondiente y tenés los datos para la proforma (nombre, apellido, teléfono, mail, dirección, horario de contacto) — la IA NUNCA cotiza ni da precios, sólo junta el detalle.',
-    input_schema: {
-      type: 'object',
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        reason: { type: 'string', enum: ['compra', 'instalacion_nueva', 'gremio', 'asesor'], description: '"asesor" si el cliente pidió explícitamente hablar con alguien de ventas sin encajar en los otros casos.' },
-        title: { type: 'string', description: 'Resumen corto, ej: "Cámaras para local comercial chico"' },
-        summary: { type: 'string', description: 'Todo el detalle para armar la proforma: qué necesita, respuestas del filtro de ventas, nombre y apellido, teléfono, mail, dirección, horario de contacto.' },
-        customerName: { type: 'string' },
-        customerEmail: { type: 'string' },
+        reason: { type: Type.STRING, enum: ['compra', 'instalacion_nueva', 'gremio', 'asesor'], description: '"asesor" si el cliente pidió explícitamente hablar con alguien de ventas sin encajar en los otros casos.' },
+        title: { type: Type.STRING, description: 'Resumen corto, ej: "Cámaras para local comercial chico"' },
+        summary: { type: Type.STRING, description: 'Todo el detalle para armar la proforma: qué necesita, respuestas del filtro de ventas, nombre y apellido, teléfono, mail, dirección, horario de contacto.' },
+        customerName: { type: Type.STRING },
+        customerEmail: { type: Type.STRING },
       },
       required: ['reason', 'title', 'summary'],
     },
@@ -66,13 +88,13 @@ export const WHATSAPP_BOT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'create_billing_ticket',
     description: 'Deriva una consulta de facturación o pagos a Administración, creando un ticket para que Norma (o quien esté a cargo) lo vea.',
-    input_schema: {
-      type: 'object',
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        title: { type: 'string' },
-        description: { type: 'string', description: 'Detalle de la consulta (qué factura, qué pago, qué necesita).' },
-        customerName: { type: 'string' },
-        customerEmail: { type: 'string' },
+        title: { type: Type.STRING },
+        description: { type: Type.STRING, description: 'Detalle de la consulta (qué factura, qué pago, qué necesita).' },
+        customerName: { type: Type.STRING },
+        customerEmail: { type: Type.STRING },
       },
       required: ['title', 'description'],
     },
@@ -108,15 +130,73 @@ async function prependOrigin(db: any, conversationId: string, text: string): Pro
   return typeof origen === 'string' && origen ? `Origen: ${origen}\n\n${text}` : text
 }
 
+// Pega el transcript completo de la charla como registro interno del
+// Deal/Ticket recién creado — así el humano que lo toma ve todo el contexto
+// sin abrir el inbox. Falla suave: el handoff no se rompe si esto falla.
+async function attachTranscript(
+  db: any,
+  target: { dealId: string } | { ticketId: string },
+  conversationId: string,
+  orgId: string,
+  userId: string,
+): Promise<void> {
+  try {
+    const content = await buildConversationTranscript(conversationId)
+    if (!content) return
+    if ('dealId' in target) {
+      await db.dealNota.create({ data: { dealId: target.dealId, organizationId: orgId, userId, tipo: 'CHAT', content } })
+    } else {
+      await db.ticketMessage.create({ data: { ticketId: target.ticketId, userId, isInternal: true, content } })
+    }
+  } catch (err) {
+    console.error('[NISSI] no se pudo adjuntar el transcript al registro', err)
+  }
+}
+
 export async function runWhatsAppBotTool(name: string, input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const db = prisma as any
 
   if (name === 'save_customer_info') {
-    const patch = (input.data && typeof input.data === 'object') ? input.data as Record<string, unknown> : {}
+    // Campos fijos (Gemini no soporta objeto abierto) — se filtran los
+    // strings no vacíos y se hace shallow-merge a collectedData.
+    const KEYS = ['nombre', 'apellido', 'telefono', 'email', 'direccion', 'localidad', 'horarioContacto', 'tipoConsulta', 'detalle']
+    const patch: Record<string, string> = {}
+    for (const k of KEYS) {
+      const v = input[k]
+      if (typeof v === 'string' && v.trim()) patch[k] = v.trim()
+    }
+    if (Object.keys(patch).length === 0) return { resultText: 'No había datos nuevos para guardar.' }
     const conv = await db.whatsAppConversation.findUnique({ where: { id: ctx.conversationId }, select: { collectedData: true } })
     const merged = { ...(conv?.collectedData as Record<string, unknown> | null ?? {}), ...patch }
     await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { collectedData: merged } })
     return { resultText: 'Datos guardados.' }
+  }
+
+  if (name === 'buscar_catalogo') {
+    const query = String(input.query ?? '').trim()
+    const categoria = typeof input.categoria === 'string' ? input.categoria.trim() : null
+    if (!query) return { resultText: 'Falta qué buscar. Preguntale al cliente qué tipo de equipo necesita.' }
+    try {
+      const results = await buscarCatalogoParaBot(ctx.orgId, { query, categoria })
+      if (results.length === 0) {
+        return { resultText: `No encontré nada en el catálogo para "${query}". No inventes: ofrecele derivar a un asesor para que lo asesore con más detalle.` }
+      }
+      const lines = results.map((r) => {
+        const bits = [r.nombre]
+        if (r.marca) bits.push(`(${r.marca})`)
+        if (r.categoria) bits.push(`— ${r.categoria}`)
+        if (r.resumen) bits.push(`— ${r.resumen}`)
+        return `• ${bits.join(' ')}`
+      })
+      return {
+        resultText:
+          `Resultados del catálogo (NUNCA menciones precios — no los tenés):\n${lines.join('\n')}\n\n` +
+          `Usá esto para explicar y orientar. Para el presupuesto, seguí el filtro de ventas y derivá con create_sales_lead.`,
+      }
+    } catch (err) {
+      console.error('[NISSI] buscar_catalogo falló', err)
+      return { resultText: 'No pude consultar el catálogo ahora. Seguí con el filtro de ventas igual y derivá a un asesor.' }
+    }
   }
 
   if (name === 'create_support_ticket') {
@@ -132,9 +212,10 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     const customerName = typeof input.customerName === 'string' ? input.customerName.trim() : null
     const customerEmail = typeof input.customerEmail === 'string' ? input.customerEmail.trim() : null
 
-    const [createdById, technician] = await Promise.all([
+    const [createdById, technician, contactoId] = await Promise.all([
       resolveBotActorId(ctx.orgId),
       pickAvailableTechnician(ctx.orgId),
+      resolveContactoForConversation(ctx.orgId, { conversationId: ctx.conversationId, customerPhone: ctx.customerPhone }),
     ])
     if (!createdById) return { resultText: 'No se pudo crear el ticket: no hay ningún administrador cargado en esta organización todavía.' }
 
@@ -149,6 +230,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
             number: (last?.number ?? 0) + 1,
             title, description: fullDescription, priority, category: 'SOPORTE',
             recipientName: customerName, recipientEmail: customerEmail,
+            contactoId: contactoId ?? null,
             assignedToId: technician?.id ?? null,
             createdById, organizationId: ctx.orgId,
             slaDueAt: new Date(Date.now() + SLA_HOURS[priority] * 60 * 60 * 1000),
@@ -163,6 +245,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
       where: { id: ctx.conversationId },
       data: { status: 'HANDED_OFF', handedOffTo: 'SOPORTE', ticketId: ticket.id },
     })
+    await attachTranscript(db, { ticketId: ticket.id }, ctx.conversationId, ctx.orgId, createdById)
 
     fireWebhook(ctx.orgId, 'ticket.created', { id: ticket.id, number: ticket.number, title: ticket.title, priority, category: 'SOPORTE', source: 'whatsapp-ai-bot' })
 
@@ -194,6 +277,12 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     const contactEmail = isBilling ? ctx.botConfig.billingContactEmail : ctx.botConfig.salesContactEmail
     const contactUser = await findUserByEmail(ctx.orgId, contactEmail)
 
+    // Alta / match del contacto (persona) con lo que NISSI fue juntando —
+    // así el registro entra al CRM como Contacto + Oportunidad/Ticket, no
+    // sólo como texto suelto. Falla suave: si no se puede, se crea sin
+    // contactoId.
+    const contactoId = await resolveContactoForConversation(ctx.orgId, { conversationId: ctx.conversationId, customerPhone: ctx.customerPhone })
+
     if (isBilling) {
       const createdById = contactUser?.id ?? (await resolveBotActorId(ctx.orgId))
       if (!createdById) return { resultText: 'No se pudo derivar a Administración: no hay ningún administrador cargado en esta organización todavía.' }
@@ -207,6 +296,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
               number: (last?.number ?? 0) + 1,
               title, description: fullDetail, priority: 'MEDIA', category: 'FACTURACION',
               recipientName: customerName, recipientEmail: customerEmail,
+              contactoId: contactoId ?? null,
               assignedToId: contactUser?.id ?? null,
               createdById, organizationId: ctx.orgId,
               slaDueAt: new Date(Date.now() + SLA_HOURS.MEDIA * 60 * 60 * 1000),
@@ -217,6 +307,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
         }
       }
       await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: 'ADMINISTRACION', ticketId: ticket.id } })
+      await attachTranscript(db, { ticketId: ticket.id }, ctx.conversationId, ctx.orgId, createdById)
       fireWebhook(ctx.orgId, 'ticket.created', { id: ticket.id, number: ticket.number, title, category: 'FACTURACION', source: 'whatsapp-ai-bot' })
 
       const notifyTarget = contactUser ?? (contactEmail ? { name: null, email: contactEmail } : null)
@@ -238,19 +329,18 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     const ownerId = contactUser?.id ?? (await resolveBotActorId(ctx.orgId))
     if (!ownerId) return { resultText: 'No se pudo crear la oportunidad: no hay ningún administrador cargado en esta organización todavía.' }
 
-    // Alta / match del contacto (persona) con lo que NISSI fue juntando en la
-    // charla — así el lead entra al CRM como Contacto + Oportunidad, no sólo
-    // como texto suelto en las notas. Falla suave: si no se puede, el Deal
-    // igual se crea sin contactoId.
-    const contactoId = await resolveContactoForLead(ctx.orgId, { conversationId: ctx.conversationId, customerPhone: ctx.customerPhone })
+    const reason = typeof input.reason === 'string' ? input.reason.trim() : ''
+    const leadReason = ['compra', 'instalacion_nueva', 'gremio', 'asesor'].includes(reason) ? reason : null
 
     const deal = await db.deal.create({
       data: {
         title, notes: fullDetail, stage: 'LEAD', ownerId, organizationId: ctx.orgId, origen: 'WHATSAPP',
+        ...(leadReason ? { leadReason } : {}),
         ...(contactoId ? { contactoId } : {}),
       },
     })
     await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: 'VENTAS', dealId: deal.id } })
+    await attachTranscript(db, { dealId: deal.id }, ctx.conversationId, ctx.orgId, ownerId)
 
     const notifyTarget = contactUser ?? (contactEmail ? { name: null, email: contactEmail } : null)
     if (notifyTarget) {

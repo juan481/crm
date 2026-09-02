@@ -1,13 +1,14 @@
 import { prisma } from '@/lib/db'
 
-// Resuelve (matchea o crea) el DirectorioContacto de la persona detrás de un
-// lead de ventas que NISSI acaba de calificar, para poder vincularlo al Deal
-// vía Deal.contactoId. La mayoría de los leads de Abba son consumidor final
-// (vivienda, quinta, campo particular) → contacto SIN empresa, igual criterio
-// que el import de chats de WhatsApp (scripts/import-abba-leads.ts).
+// Resuelve (matchea o crea) el DirectorioContacto de la persona detrás de una
+// conversación de WhatsApp que NISSI acaba de calificar, para vincularlo al
+// registro que se crea al derivar: Deal.contactoId (ventas) o Ticket.contactoId
+// (soporte/facturación). La mayoría de los contactos de Abba son consumidor
+// final (vivienda, quinta, campo particular) → contacto SIN empresa, igual
+// criterio que el import de chats de WhatsApp (scripts/import-abba-leads.ts).
 //
-// Falla suave: si algo sale mal devuelve null y el Deal se crea igual sin
-// contacto vinculado (mismo espíritu que el resto del bot).
+// Falla suave: si algo sale mal devuelve null y el Deal/Ticket se crea igual
+// sin contacto vinculado (mismo espíritu que el resto del bot).
 
 const digitsOnly = (s: string): string => (s || '').replace(/\D/g, '')
 
@@ -35,7 +36,7 @@ export interface ResolveContactoCtx {
   customerPhone: string // wa_id, sólo dígitos (sin "+")
 }
 
-export async function resolveContactoForLead(orgId: string, ctx: ResolveContactoCtx): Promise<string | null> {
+export async function resolveContactoForConversation(orgId: string, ctx: ResolveContactoCtx): Promise<string | null> {
   const db = prisma as any
   try {
     const conv = await db.whatsAppConversation.findUnique({
@@ -100,7 +101,7 @@ export async function resolveContactoForLead(orgId: string, ctx: ResolveContacto
     })
     return created.id
   } catch (err) {
-    console.error('[NISSI] resolveContactoForLead falló — el Deal se crea sin contacto', err)
+    console.error('[NISSI] resolveContactoForConversation falló — el registro se crea sin contacto', err)
     return null
   }
 }

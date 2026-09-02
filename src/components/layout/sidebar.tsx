@@ -7,10 +7,11 @@ import {
   LayoutDashboard, Users, Mail, Settings, LogOut, ChevronRight, ChevronsUpDown, Check,
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
-  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug,
+  Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug, MessageCircle,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { usePlugins } from '@/hooks/use-plugin'
 import { useAuthStore } from '@/store/auth-store'
 import { Avatar } from '@/components/ui/avatar'
 import Image from 'next/image'
@@ -41,6 +42,9 @@ interface NavItem {
   // por ModulePermission (Configuración > Permisos). Sin declarar = no pasa
   // por ese filtro (los settingsItems no lo llevan a propósito).
   moduleId?: string
+  // Id de plugin (src/plugins/definitions.ts) — el ítem sólo se muestra si
+  // ese plugin está activado para la organización. Sin declarar = siempre.
+  requiresPlugin?: string
   exact?: boolean
   badgeKey?: keyof NotificationCounts
 }
@@ -83,6 +87,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
   {
     label: 'Comunicación',
     items: [
+      { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'conversaciones', requiresPlugin: 'whatsapp-ai-bot', badgeKey: 'whatsapp' },
       { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
       { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
       { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
@@ -130,7 +135,7 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     queryFn: async () => {
       const res = await fetch('/api/notifications/counts')
       const json = await res.json()
-      return json.data ?? { tasks: 0, tickets: 0, invoices: 0 }
+      return json.data ?? { tasks: 0, tickets: 0, invoices: 0, whatsapp: 0 }
     },
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
@@ -164,6 +169,15 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     staleTime: 5 * 60 * 1000,
   })
 
+  // Plugins activados de la org — para ítems con `requiresPlugin` (ej.
+  // "WhatsApp" sólo aparece si el plugin whatsapp-ai-bot está activo).
+  // Reusa la misma query `['plugins']` que el resto de la app (usePlugin),
+  // así suele venir del cache. `pluginsResolved` distingue "todavía no cargó"
+  // de "cargó y no hay ninguno".
+  const pluginRows = usePlugins()
+  const pluginsResolved = pluginRows.length > 0
+  const enabledPlugins = new Set(pluginRows.filter((p) => p.enabled).map((p) => p.id))
+
   const isActive = (item: NavItem) => {
     if (item.exact) return pathname === item.href
     return pathname === item.href || pathname.startsWith(item.href + '/')
@@ -179,10 +193,17 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
     return row.roles[user.role] !== false
   }
 
+  // `requiresPlugin`: el ítem aparece sólo si el plugin está activo. Mientras
+  // la lista de plugins no resolvió, se deja pasar — mismo criterio fail-open
+  // que isModuleAllowed (un hiccup de red no debe hacer desaparecer un ítem).
+  const hasPlugin = (item: NavItem) =>
+    !item.requiresPlugin || !pluginsResolved || enabledPlugins.has(item.requiresPlugin)
+
   const filterItems = (items: NavItem[]) => items
     .filter((item) => !item.roles || item.roles.includes(user.role))
     .filter(matchesVertical)
     .filter(isModuleAllowed)
+    .filter(hasPlugin)
   const filteredSections = NAV_SECTIONS
     .map((section) => ({ ...section, items: filterItems(section.items) }))
     .filter((section) => section.items.length > 0)

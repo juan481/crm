@@ -7,6 +7,7 @@ export interface NotificationCounts {
   tasks: number
   tickets: number
   invoices: number
+  whatsapp: number
 }
 
 export async function GET() {
@@ -17,8 +18,9 @@ export async function GET() {
     const now = new Date()
     const { orgId, userId, role } = payload
     const isAdmin = canAccess(role, 'ADMIN')
+    const canSeeInbox = canAccess(role, 'SELLER') // el ítem "WhatsApp" es SELLER+
 
-    const [tasks, tickets, invoices] = await Promise.all([
+    const [tasks, tickets, invoices, whatsapp] = await Promise.all([
       // Tareas asignadas a mí O donde soy colaborador, pendientes o en curso.
       prisma.task.count({
         where: {
@@ -47,14 +49,28 @@ export async function GET() {
             },
           })
         : Promise.resolve(0),
+      // Conversaciones de WhatsApp con mensajes entrantes sin leer (bandeja
+      // compartida — marcador a nivel org, ver WhatsAppConversation.lastReadAt).
+      // Raw: comparación columna-a-columna (lastReadAt < lastInboundAt).
+      canSeeInbox
+        ? prisma
+            .$queryRaw<{ count: number }[]>`
+              SELECT COUNT(*)::int AS count FROM "WhatsAppConversation"
+              WHERE "organizationId" = ${orgId}
+                AND "lastInboundAt" IS NOT NULL
+                AND ("lastReadAt" IS NULL OR "lastReadAt" < "lastInboundAt")
+            `
+            .then((r) => Number(r[0]?.count ?? 0))
+            .catch(() => 0)
+        : Promise.resolve(0),
     ])
 
     return NextResponse.json(
-      { data: { tasks, tickets, invoices } as NotificationCounts },
+      { data: { tasks, tickets, invoices, whatsapp } as NotificationCounts },
       { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } },
     )
   } catch (error) {
     console.error('[NOTIFICATION COUNTS]', error)
-    return NextResponse.json({ data: { tasks: 0, tickets: 0, invoices: 0 } })
+    return NextResponse.json({ data: { tasks: 0, tickets: 0, invoices: 0, whatsapp: 0 } })
   }
 }
