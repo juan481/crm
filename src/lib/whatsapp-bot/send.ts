@@ -6,6 +6,18 @@
 // que ya puede tener varias idas y vueltas.
 interface SendResult { ok: boolean; error?: string; messageId?: string }
 
+// El wa_id que Meta manda en el webhook trae, para algunos países, un dígito
+// que hay que SACAR al enviar (Meta entrega igual al mismo WhatsApp):
+//  - Argentina: 549 + 10 dígitos  ->  54 + 10   (el "9" de celular)
+//  - México:    521 + 10 dígitos  ->  52 + 10   (el "1")
+// Con el dígito de más, la Cloud API rebota #131030 ("Recipient phone number
+// not in allowed list") en modo prueba y puede fallar en producción.
+export function normalizeWhatsAppTo(digits: string): string {
+  if (/^549\d{10}$/.test(digits)) return '54' + digits.slice(3)
+  if (/^521\d{10}$/.test(digits)) return '52' + digits.slice(3)
+  return digits
+}
+
 export async function sendWhatsAppBotMessage(
   apiToken: string,
   phoneNumberId: string,
@@ -15,13 +27,15 @@ export async function sendWhatsAppBotMessage(
   if (!toDigitsOnly) return { ok: false, error: 'Número de destino vacío' }
   if (!message.trim()) return { ok: false, error: 'Mensaje vacío' }
 
+  const to = normalizeWhatsAppTo(toDigitsOnly)
+
   try {
     const res = await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to: toDigitsOnly,
+        to,
         type: 'text',
         text: { body: message.trim() },
       }),
@@ -38,7 +52,7 @@ export async function sendWhatsAppBotMessage(
       // rastro, aunque el caller ahora chequee `ok` (ver engine.ts) —
       // loguear acá también para que cualquier caller futuro que no lo
       // chequee no deje esto mudo.
-      console.error('[NISSI SEND] WhatsApp Cloud API respondió error', { status: res.status, error, phoneNumberId })
+      console.error('[NISSI SEND] WhatsApp Cloud API respondió error', { status: res.status, error, phoneNumberId, to })
       return { ok: false, error }
     }
     return { ok: true, messageId: json?.messages?.[0]?.id }
