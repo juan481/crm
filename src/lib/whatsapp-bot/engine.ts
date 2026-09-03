@@ -3,6 +3,7 @@ import {
   FunctionCallingConfigMode,
   HarmCategory,
   HarmBlockThreshold,
+  ThinkingLevel,
   type Content,
   type Part,
   type SafetySetting,
@@ -14,16 +15,17 @@ import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool } from '@/lib/whatsapp-bot/tools
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 
-// NISSI corre sobre Gemini Flash — un flujo guiado por herramientas como este
-// no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
+// NISSI corre sobre Gemini Flash-Lite — un flujo guiado por herramientas como
+// este no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
 // respuesta en segundos) y costo bajo (potencialmente cientos de mensajes por
-// día). Precio verificado (ago-2026): Gemini 2.5 Flash ~USD 0.15-0.30 / 1M
-// entrada, ~1.25-2.50 / 1M salida; Flash-Lite ~0.10 / 0.40. El modelo exacto
-// se lee de la config del plugin (default DEFAULT_GEMINI_MODEL) para poder
-// bajar a flash-lite sin deploy. El caché es IMPLÍCITO (Gemini 2.5 lo hace
-// solo cuando el prefijo systemInstruction+tools se repite — no requiere
-// código; se puede sumar caché explícito si usageMetadata.cachedContentTokenCount
-// muestra baja tasa de acierto).
+// día). Precios (sep-2026, por 1M tokens entrada/salida): gemini-3.1-flash-lite
+// $0.25/$1.50, gemini-2.5-flash-lite $0.10/$0.40 (bloqueado para proyectos
+// nuevos), gemini-3.6-flash $0.75/$3.75. Google sacó gemini-2.5-flash para
+// cuentas nuevas. El modelo exacto se lee de la config del plugin (default
+// DEFAULT_GEMINI_MODEL) para poder cambiarlo sin deploy. El caché es IMPLÍCITO
+// (se activa solo cuando el prefijo systemInstruction+tools se repite — no
+// requiere código; se puede sumar caché explícito si
+// usageMetadata.cachedContentTokenCount muestra baja tasa de acierto).
 const MAX_OUTPUT_TOKENS = 1200
 // Tope de vueltas de tool-calling dentro de UN SOLO turno del cliente — un
 // turno realista necesita como mucho buscar_catalogo + save_customer_info +
@@ -60,6 +62,18 @@ const SAFETY_SETTINGS: SafetySetting[] = [
 // autocorrige solo la vuelta siguiente (más probable con thinking apagado),
 // así que se trata como "corté sin respuesta" y cae al reintento sin tools.
 const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION'])
+
+// Apagar / minimizar el "pensar" del modelo — NISSI es un flujo guiado por
+// herramientas, no razona, y los tokens de razonamiento se facturan como
+// salida. Gemini 2.5 usa thinkingBudget:0 (apagado total). Gemini 3.x no
+// acepta budget y no se puede apagar del todo: thinkingLevel 'LOW' es el
+// mínimo que soportan todos los 3.x ('MINIMAL' no está en 3.7/3.8). Gemini
+// 2.0/1.5 no aceptan thinkingConfig (devuelven 400).
+function thinkingConfigFor(model: string): { thinkingConfig?: { thinkingBudget?: number; thinkingLevel?: ThinkingLevel } } {
+  if (model.includes('-2.5')) return { thinkingConfig: { thinkingBudget: 0 } }
+  if (model.includes('-2.0') || model.includes('-1.5')) return {}
+  return { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+}
 
 // Texto de la respuesta sacado directamente de los parts (evita el
 // console.warn del getter res.text cuando hay parts de functionCall).
@@ -359,8 +373,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
           maxOutputTokens: MAX_OUTPUT_TOKENS,
           temperature: 0.4,
           safetySettings: SAFETY_SETTINGS,
-          // Sólo los modelos 2.5 aceptan thinkingConfig; 2.0 devuelve 400.
-          ...(model.includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          ...thinkingConfigFor(model),
           // Una vez derivado, no se le vuelve a ofrecer ninguna herramienta —
           // evita que el modelo invoque OTRA herramienta de handoff en la
           // vuelta de confirmación y deje el primer Ticket/Deal huérfano.
@@ -450,7 +463,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
         config: {
           systemInstruction, maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4,
           safetySettings: SAFETY_SETTINGS,
-          ...(model.includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          ...thinkingConfigFor(model),
         },
       })
       const t = extractText(res.candidates?.[0])

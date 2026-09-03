@@ -12,9 +12,10 @@ export interface WhatsAppBotConfig {
   // API Key de Google Gemini (Google AI Studio) — el motor de NISSI corre
   // sobre Gemini Flash (ver src/lib/whatsapp-bot/engine.ts).
   geminiApiKey: string
-  // Modelo de Gemini a usar. Opcional — default 'gemini-2.5-flash'. Se deja
-  // configurable para poder bajar a 'gemini-2.5-flash-lite' (más barato) sin
-  // un deploy si la calidad del tool-calling aguanta.
+  // Modelo de Gemini a usar. Opcional — default DEFAULT_GEMINI_MODEL. Se deja
+  // configurable para cambiarlo sin deploy (ej. subir a 'gemini-3.6-flash' si
+  // el flash-lite falla algún escenario, o bajar a 'gemini-2.5-flash-lite' si
+  // el proyecto lo tiene habilitado).
   geminiModel: string | null
   businessHours: string | null
   address: string | null
@@ -24,7 +25,10 @@ export interface WhatsAppBotConfig {
   billingContactEmail: string | null
 }
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
+// gemini-2.5-flash quedó bloqueado para proyectos de Google nuevos (dan 404
+// "no longer available to new users"). flash-lite alcanza de sobra para el
+// flujo de NISSI y es ~3x más barato que gemini-3.6-flash.
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite'
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : ''

@@ -51,7 +51,7 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
       apiToken: { type: 'password', label: 'Token permanente de WhatsApp Cloud API', required: true },
       phoneNumberId: { type: 'string', label: 'Phone Number ID (Meta)', required: true },
       geminiApiKey: { type: 'password', label: 'API Key de Google Gemini (Google AI Studio)', required: true },
-      geminiModel: { type: 'string', label: 'Modelo de Gemini (opcional, default gemini-2.5-flash)', required: false },
+      geminiModel: { type: 'string', label: 'Modelo de Gemini (opcional, default gemini-3.1-flash-lite)', required: false },
       businessHours: { type: 'string', label: 'Horario de atención (para que el bot lo responda)', required: false },
       address: { type: 'string', label: 'Dirección (para que el bot la responda)', required: false },
       coverage: { type: 'string', label: 'Cobertura / zona de atención', required: false },
