@@ -1,12 +1,14 @@
 import { getPluginConfig } from '@/lib/plugins'
+import { normalizeWhatsAppTo } from '@/lib/whatsapp-bot/send'
 
 interface SendResult { ok: boolean; error?: string }
 
-// Envío server-side vía WhatsApp Cloud API (Meta) — plugin
-// whatsapp-integration, configSchema { apiToken, phoneNumberId }, cargados
-// por el SUPER_ADMIN de la organización desde el modal genérico de
-// plugins. Sin esas credenciales configuradas, el endpoint que llama a
-// esto devuelve un error claro en vez de intentar mandar nada.
+// Envío server-side vía WhatsApp Cloud API (Meta) para el botón "Enviar
+// WhatsApp" de la ficha de contacto. Reutiliza las credenciales del plugin
+// NISSI (whatsapp-ai-bot) — antes había un plugin aparte (whatsapp-integration)
+// que se quitó para no tener dos configuraciones de lo mismo. Sin token +
+// phoneNumberId cargados en NISSI, el endpoint que llama a esto devuelve un
+// error claro en vez de intentar mandar nada.
 //
 // LIMITACIÓN CONOCIDA (API de Meta, no de este código): un número de
 // WhatsApp Business sólo puede mandar mensajes de texto libres dentro de
@@ -16,14 +18,14 @@ interface SendResult { ok: boolean; error?: string }
 // no lo soporta. Si el envío falla por eso, Meta lo devuelve como error
 // específico y se lo pasamos tal cual al usuario.
 export async function sendWhatsAppMessage(orgId: string, to: string, message: string): Promise<SendResult> {
-  const config = await getPluginConfig(orgId, 'whatsapp-integration')
+  const config = await getPluginConfig(orgId, 'whatsapp-ai-bot')
   const apiToken = typeof config?.apiToken === 'string' ? config.apiToken.trim() : ''
   const phoneNumberId = typeof config?.phoneNumberId === 'string' ? config.phoneNumberId.trim() : ''
   if (!apiToken || !phoneNumberId) {
-    return { ok: false, error: 'WhatsApp Business no está configurado — cargá el API Token y el Phone Number ID en Plugins.' }
+    return { ok: false, error: 'WhatsApp no está configurado — cargá el token y el Phone Number ID en Configuración → NISSI.' }
   }
 
-  const digits = to.replace(/\D/g, '')
+  const digits = normalizeWhatsAppTo(to.replace(/\D/g, ''))
   if (!digits) return { ok: false, error: 'Número de teléfono inválido' }
   if (!message.trim()) return { ok: false, error: 'El mensaje no puede estar vacío' }
 

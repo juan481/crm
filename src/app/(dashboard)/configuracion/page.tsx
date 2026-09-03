@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound } from 'lucide-react'
+import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound, Bot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { useAuthStore } from '@/store/auth-store'
@@ -50,6 +50,14 @@ const settingsSections = [
     description: 'Administrá productos propios, el catálogo del proveedor (con sync y baja/alta) y los servicios.',
     roles: ['SUPER_ADMIN', 'ADMIN'],
     color: '#f59e0b',
+  },
+  {
+    href: '/configuracion/nissi',
+    icon: <Bot size={24} />,
+    title: 'NISSI · WhatsApp',
+    description: 'Conexión con Meta y Gemini, datos de la empresa, tono, instrucciones, a quién deriva y quién puede responder desde la bandeja.',
+    roles: ['SUPER_ADMIN', 'ADMIN'],
+    color: '#ec4899',
   },
 ]
 

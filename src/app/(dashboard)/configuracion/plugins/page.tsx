@@ -43,8 +43,7 @@ const PLUGIN_EFFECTS: Record<string, { text: string; action?: { label: string; h
   'export-data': { text: 'Agrega un botón "Exportar" en Empresas y Facturas.', action: { label: 'Ir a Empresas', href: '/empresas' } },
   'invoice-automation': { text: 'El día 1 de cada mes genera solas las facturas recurrentes y te avisa por mail — quedan Pendientes, no se envían solas al cliente.' },
   'zapier-webhooks': { text: 'Manda un POST a la URL configurada cuando ganás un deal, cobrás una factura o entra un ticket nuevo.' },
-  'whatsapp-integration': { text: 'Agrega un botón "Enviar WhatsApp" en la ficha de contacto.', action: { label: 'Ir a Contactos', href: '/contactos' } },
-  'whatsapp-ai-bot': { text: 'Responde solo los mensajes que llegan al WhatsApp configurado y crea Tickets/Oportunidades en el CRM cuando junta los datos necesarios.' },
+  'whatsapp-ai-bot': { text: 'Responde los mensajes que llegan al WhatsApp de la empresa, habilita la bandeja en el CRM y el botón "Enviar WhatsApp" en los contactos.', action: { label: 'Configurar NISSI', href: '/configuracion/nissi' } },
   'attendance-alerts': { text: 'RRHH/Admin recibe un mail diario con quién no fichó o llegó tarde el último día hábil.', action: { label: 'Ir a RRHH', href: '/rrhh' } },
   'google-calendar': { text: 'Conectá tu cuenta de Google para poder agregar tareas del CRM a tu calendario.', action: { label: 'Conectar con Google', href: '/api/plugins/google-calendar/authorize' } },
 }

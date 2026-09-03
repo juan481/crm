@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    if (!(await isPluginEnabled(payload.orgId, 'whatsapp-integration'))) {
-      return NextResponse.json({ error: 'El plugin de WhatsApp Business no está activado' }, { status: 400 })
+    if (!(await isPluginEnabled(payload.orgId, 'whatsapp-ai-bot'))) {
+      return NextResponse.json({ error: 'El plugin de NISSI (WhatsApp) no está activado' }, { status: 400 })
     }
 
     const { to, message } = await req.json()

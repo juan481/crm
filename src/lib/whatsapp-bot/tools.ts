@@ -257,6 +257,18 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
         bodyText: `NISSI (el bot de WhatsApp) creó el ticket #${ticket.number} "${title}"${urgent ? ' — marcado como URGENTE (alarma sin reportar a central)' : ''} y te lo asignó porque estás fichado y con menos carga ahora mismo.\n\n${description}`,
       })
     }
+    // Aviso adicional al responsable de Soporte configurado en el panel de
+    // NISSI (además del técnico asignado) — para que un referente del área
+    // esté al tanto aunque no sea quien lo toma.
+    const supportEmail = ctx.botConfig.supportContactEmail
+    if (supportEmail && supportEmail !== technician?.email) {
+      notifyHuman({
+        orgId: ctx.orgId, toEmail: supportEmail, toName: ctx.botConfig.supportContactName,
+        subject: `Nuevo ticket de soporte por WhatsApp: ${title}`,
+        heading: 'Nuevo ticket de soporte desde WhatsApp',
+        bodyText: `NISSI creó el ticket #${ticket.number} "${title}"${urgent ? ' — URGENTE' : ''}${technician ? ` y lo asignó a ${technician.name}` : ' (sin técnico disponible para asignar)'}.\n\n${description}`,
+      })
+    }
 
     return {
       resultText: technician

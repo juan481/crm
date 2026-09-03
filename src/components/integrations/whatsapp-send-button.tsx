@@ -19,7 +19,7 @@ interface Props {
 // manda el mensaje server-side vía la API de WhatsApp Business, sin
 // depender de que el usuario tenga WhatsApp abierto en ese dispositivo).
 export function WhatsAppSendButton({ phone, name }: Props) {
-  const { enabled } = usePlugin('whatsapp-integration')
+  const { enabled } = usePlugin('whatsapp-ai-bot')
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
