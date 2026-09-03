@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { canReplyToConversations } from '@/lib/whatsapp-bot/permissions'
 
 export const dynamic = 'force-dynamic'
+
+// collectedData tiene claves internas del engine (prefijo _) que no van al
+// cliente — sólo los datos que juntó NISSI del cliente.
+function publicCollectedData(cd: unknown): Record<string, unknown> | null {
+  if (!cd || typeof cd !== 'object') return null
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(cd as Record<string, unknown>)) {
+    if (!k.startsWith('_')) out[k] = v
+  }
+  return Object.keys(out).length ? out : null
+}
 
 const WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -50,6 +62,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const windowExpiresAt = conv.lastInboundAt ? new Date(new Date(conv.lastInboundAt).getTime() + WINDOW_MS) : null
     const windowOpen = !!windowExpiresAt && windowExpiresAt.getTime() > Date.now()
+    const canReply = await canReplyToConversations(payload.orgId, payload.role)
 
     return NextResponse.json({
       data: {
@@ -60,7 +73,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         humanHandling: !!conv.humanTakeoverAt,
         assignedUser: conv.assignedUser,
         handedOffTo: conv.handedOffTo,
-        collectedData: conv.collectedData ?? null,
+        collectedData: publicCollectedData(conv.collectedData),
+        canReply,
         windowOpen,
         windowExpiresAt,
         deal: deal ? { id: deal.id, title: deal.title, stage: deal.stage } : null,

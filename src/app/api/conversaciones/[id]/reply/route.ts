@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { getPluginConfig } from '@/lib/plugins'
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
+import { canReplyToConversations } from '@/lib/whatsapp-bot/permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!(await canReplyToConversations(payload.orgId, payload.role))) {
+      return NextResponse.json({ error: 'Tu rol puede ver la bandeja pero no responder. Pedile a un administrador que lo habilite en Configuración → NISSI.' }, { status: 403 })
+    }
 
     const body = await req.json().catch(() => ({}))
     const message = typeof body.message === 'string' ? body.message.trim() : ''

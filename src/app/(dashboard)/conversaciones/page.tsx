@@ -54,6 +54,7 @@ interface ConvThread {
   assignedUser: { id: string; name: string } | null
   handedOffTo: string | null
   collectedData: Record<string, unknown> | null
+  canReply: boolean
   windowOpen: boolean
   windowExpiresAt: string | null
   deal: { id: string; title: string; stage: string } | null
@@ -431,7 +432,7 @@ function Inbox() {
                 </div>
               </div>
               <div className="shrink-0">
-                {thread.humanHandling ? (
+                {thread.canReply && (thread.humanHandling ? (
                   <Button variant="ghost" size="xs" leftIcon={<RotateCcw size={13} />} onClick={() => doTakeover(false)}>
                     <span className="hidden sm:inline">Devolver a </span>NISSI
                   </Button>
@@ -439,7 +440,7 @@ function Inbox() {
                   <Button variant="secondary" size="xs" leftIcon={<Hand size={13} />} onClick={() => doTakeover(true)}>
                     Tomar
                   </Button>
-                )}
+                ))}
               </div>
             </div>
 
@@ -495,7 +496,12 @@ function Inbox() {
               className="p-3 border-t"
               style={{ borderColor: 'var(--color-border)', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
             >
-              {!thread.windowOpen ? (
+              {!thread.canReply ? (
+                <div className="flex items-start gap-2 text-xs text-[var(--color-text-muted)] bg-surface-raised rounded-xl p-3">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  Tu rol puede ver la bandeja pero no responder. Un administrador lo habilita en Configuración → NISSI.
+                </div>
+              ) : !thread.windowOpen ? (
                 <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 rounded-xl p-3 border border-amber-200">
                   <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                   Fuera de la ventana de 24&nbsp;h de WhatsApp — el cliente tiene que volver a escribir para poder mandarle un mensaje de texto libre.
