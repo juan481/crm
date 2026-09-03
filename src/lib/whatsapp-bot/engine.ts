@@ -14,6 +14,7 @@ import { buildNissiSystemPrompt } from '@/lib/whatsapp-bot/system-prompt'
 import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool } from '@/lib/whatsapp-bot/tools'
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
+import { looksAbusive, ABUSE_MAX_REPLIES_PER_HOUR, ABUSE_MAX_REPLIES_PER_DAY } from '@/lib/whatsapp-bot/abuse-guard'
 
 // NISSI corre sobre Gemini Flash-Lite — un flujo guiado por herramientas como
 // este no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
@@ -174,6 +175,81 @@ async function markUserMessagesProcessed(db: any, conversationId: string): Promi
   })
 }
 
+const NUDGE_TEXT =
+  'Contame en un mensaje qué necesitás (alarmas, cámaras, monitoreo) y te ayudo. Si son mensajes sueltos no voy a poder seguir respondiendo por acá.'
+
+/**
+ * Corre ANTES de llamar a Gemini. Devuelve true si el turno se frenó (relleno,
+ * repetición, o NISSI ya contestó demasiado en poco tiempo) — el caller debe
+ * cortar sin llamar al modelo. Marca los mensajes como procesados y manda UN
+ * aviso por conversación (después, silencio). No molesta si ya la tomó un
+ * humano.
+ */
+async function abuseGuardTripped(
+  db: any,
+  conversation: any,
+  botConfig: WhatsAppBotConfig,
+  msg: { orgId: string; customerPhone: string },
+): Promise<boolean> {
+  const turnMsgs = await db.whatsAppMessage.findMany({
+    where: { conversationId: conversation.id, role: 'user', processedAt: null },
+    orderBy: { createdAt: 'asc' }, select: { content: true },
+  })
+  if (turnMsgs.length === 0) return false
+  const turnText = turnMsgs.map((m: any) => m.content).join(' ')
+
+  const priorUser = await db.whatsAppMessage.findMany({
+    where: { conversationId: conversation.id, role: 'user', processedAt: { not: null } },
+    orderBy: { createdAt: 'desc' }, take: 5, select: { content: true },
+  })
+
+  const now = Date.now()
+  const [repliesHour, repliesDay] = await Promise.all([
+    db.whatsAppMessage.count({ where: { conversationId: conversation.id, role: 'assistant', createdAt: { gte: new Date(now - 60 * 60 * 1000) } } }),
+    db.whatsAppMessage.count({ where: { conversationId: conversation.id, role: 'assistant', createdAt: { gte: new Date(now - 24 * 60 * 60 * 1000) } } }),
+  ])
+  const overLimit = repliesHour >= ABUSE_MAX_REPLIES_PER_HOUR || repliesDay >= ABUSE_MAX_REPLIES_PER_DAY
+  const verdict = looksAbusive(turnText, priorUser.map((m: any) => m.content))
+
+  if (!verdict.abusive && !overLimit) return false
+
+  await markUserMessagesProcessed(db, conversation.id)
+  const reason = overLimit ? `volumen (${repliesHour}/h, ${repliesDay}/día)` : verdict.reason
+  const cd = (conversation.collectedData as Record<string, unknown> | null) ?? {}
+  const alreadyNudged = typeof cd._abuseNudgedAt === 'string'
+  console.warn('[NISSI ENGINE] turno frenado por anti-abuso', { conversationId: conversation.id, reason, alreadyNudged })
+
+  // Si un humano ya tomó el hilo, no mandamos nada (lo ve en el inbox).
+  const humanHandling =
+    conversation.humanTakeoverAt &&
+    now - new Date(conversation.humanTakeoverAt).getTime() <= HUMAN_TAKEOVER_AUTO_RELEASE_MS
+
+  if (!alreadyNudged && !humanHandling) {
+    await db.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: { collectedData: { ...cd, _abuseNudgedAt: new Date().toISOString() } },
+    })
+    // Contenido de relleno = basura, se marca leída (no molesta a nadie).
+    // Tope de volumen = puede ser un cliente real trabado / abuso sostenido —
+    // se deja SIN leer y se avisa a un humano una vez.
+    await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, NUDGE_TEXT, {
+      markConversationRead: !overLimit,
+    })
+    if (overLimit) {
+      const to = botConfig.salesContactEmail || botConfig.billingContactEmail
+      if (to) {
+        notifyHuman({
+          orgId: msg.orgId, toEmail: to, toName: null,
+          subject: 'NISSI frenó una conversación de WhatsApp por volumen',
+          heading: 'Revisá esta conversación de WhatsApp',
+          bodyText: `NISSI dejó de responder al número ${msg.customerPhone} porque ya contestó demasiadas veces en poco tiempo (${repliesHour} en la última hora). Puede ser abuso o un cliente que quedó trabado. Entrá a Conversaciones en el CRM y revisalo.`,
+        })
+      }
+    }
+  }
+  return true
+}
+
 /** Guarda un mensaje saliente de NISSI, lo manda por WhatsApp, y deja
  *  registrado el id de Meta + el estado de entrega (para los ticks del
  *  inbox y para saber si un envío falló). */
@@ -297,6 +373,15 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // ej. un humano la tomó desde el inbox).
   conversation = await db.whatsAppConversation.findUnique({ where: { id: conversation.id } })
   if (!conversation) return
+
+  // ── Freno anti-abuso ──────────────────────────────────────────────────
+  // Antes de gastar un token: si el turno es puro relleno / repetición, o
+  // NISSI ya contestó demasiado en poco tiempo, no llama al modelo. Manda
+  // UN aviso por conversación y después se calla.
+  if (botConfig.abuseGuardEnabled) {
+    const bail = await abuseGuardTripped(db, conversation, botConfig, msg)
+    if (bail) return
+  }
 
   // ── Toma humana ───────────────────────────────────────────────────────
   if (conversation.humanTakeoverAt) {
