@@ -132,18 +132,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const enabled = body?.enabled === true || body?.enabled === undefined
-      ? true
-      : Boolean(body.enabled)
-
+    // Guardar la config NO cambia el estado enabled del plugin — eso se
+    // maneja desde Plugins & Extensiones. Sólo al crearlo por primera vez se
+    // deja activo (configurarlo implica querer usarlo).
     await prisma.pluginConfig.upsert({
       where: { pluginId_organizationId: { pluginId: PLUGIN_ID, organizationId: payload.orgId } },
-      update: { config: JSON.stringify(next), ...(body?.enabled !== undefined ? { enabled } : {}) },
+      update: { config: JSON.stringify(next) },
       create: { pluginId: PLUGIN_ID, organizationId: payload.orgId, enabled: true, config: JSON.stringify(next) },
     })
     revalidateTag('plugins')
 
-    const ready = !!str(next.apiToken || current.apiToken) && !!str(next.phoneNumberId) && !!str(next.geminiApiKey || current.geminiApiKey)
+    const ready = !!str(next.apiToken) && !!str(next.phoneNumberId) && !!str(next.geminiApiKey)
     return NextResponse.json({ ok: true, ready })
   } catch (error) {
     console.error('[NISSI CONFIG POST]', error)

@@ -190,6 +190,9 @@ async function abuseGuardTripped(
   conversation: any,
   botConfig: WhatsAppBotConfig,
   msg: { orgId: string; customerPhone: string },
+  // El techo de volumen (protección de costo / anti-loop) corre SIEMPRE.
+  // El detector de relleno/repetición sólo si abuseGuardEnabled.
+  contentGuard: boolean,
 ): Promise<boolean> {
   const turnMsgs = await db.whatsAppMessage.findMany({
     where: { conversationId: conversation.id, role: 'user', processedAt: null },
@@ -198,18 +201,16 @@ async function abuseGuardTripped(
   if (turnMsgs.length === 0) return false
   const turnText = turnMsgs.map((m: any) => m.content).join(' ')
 
-  const priorUser = await db.whatsAppMessage.findMany({
-    where: { conversationId: conversation.id, role: 'user', processedAt: { not: null } },
-    orderBy: { createdAt: 'desc' }, take: 5, select: { content: true },
-  })
-
   const now = Date.now()
-  const [repliesHour, repliesDay] = await Promise.all([
+  const [repliesHour, repliesDay, priorUser] = await Promise.all([
     db.whatsAppMessage.count({ where: { conversationId: conversation.id, role: 'assistant', createdAt: { gte: new Date(now - 60 * 60 * 1000) } } }),
     db.whatsAppMessage.count({ where: { conversationId: conversation.id, role: 'assistant', createdAt: { gte: new Date(now - 24 * 60 * 60 * 1000) } } }),
+    contentGuard
+      ? db.whatsAppMessage.findMany({ where: { conversationId: conversation.id, role: 'user', processedAt: { not: null } }, orderBy: { createdAt: 'desc' }, take: 5, select: { content: true } })
+      : Promise.resolve([] as { content: string }[]),
   ])
   const overLimit = repliesHour >= ABUSE_MAX_REPLIES_PER_HOUR || repliesDay >= ABUSE_MAX_REPLIES_PER_DAY
-  const verdict = looksAbusive(turnText, priorUser.map((m: any) => m.content))
+  const verdict = contentGuard ? looksAbusive(turnText, priorUser.map((m: any) => m.content)) : { abusive: false, reason: '' }
 
   if (!verdict.abusive && !overLimit) return false
 
@@ -375,13 +376,10 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   if (!conversation) return
 
   // ── Freno anti-abuso ──────────────────────────────────────────────────
-  // Antes de gastar un token: si el turno es puro relleno / repetición, o
-  // NISSI ya contestó demasiado en poco tiempo, no llama al modelo. Manda
-  // UN aviso por conversación y después se calla.
-  if (botConfig.abuseGuardEnabled) {
-    const bail = await abuseGuardTripped(db, conversation, botConfig, msg)
-    if (bail) return
-  }
+  // Antes de gastar un token: si NISSI ya contestó demasiado en poco tiempo
+  // (siempre), o el turno es puro relleno / repetición (si está activado),
+  // no llama al modelo. Manda UN aviso por conversación y después se calla.
+  if (await abuseGuardTripped(db, conversation, botConfig, msg, botConfig.abuseGuardEnabled)) return
 
   // ── Toma humana ───────────────────────────────────────────────────────
   if (conversation.humanTakeoverAt) {
