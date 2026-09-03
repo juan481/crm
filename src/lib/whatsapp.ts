@@ -28,7 +28,7 @@ export async function sendWhatsAppMessage(orgId: string, to: string, message: st
   if (!message.trim()) return { ok: false, error: 'El mensaje no puede estar vacío' }
 
   try {
-    const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
       body: JSON.stringify({

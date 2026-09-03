@@ -16,7 +16,7 @@ export async function sendWhatsAppBotMessage(
   if (!message.trim()) return { ok: false, error: 'Mensaje vacío' }
 
   try {
-    const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+    const res = await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
       body: JSON.stringify({
@@ -57,7 +57,7 @@ export async function markWhatsAppMessageRead(
   waMessageId: string,
 ): Promise<void> {
   try {
-    await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+    await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
       body: JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: waMessageId }),
