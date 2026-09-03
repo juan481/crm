@@ -38,7 +38,10 @@ export const NISSI_INSTRUCTIONS_MAX = 12000
 // Ojo: renombrar/borrar los nombres de herramienta (create_sales_lead, etc.)
 // rompe la derivación; el núcleo bloqueado igual obliga a derivar, pero mejor
 // mantenerlos.
-export const NISSI_DEFAULT_INSTRUCTIONS = `# Ruteo
+export const NISSI_DEFAULT_INSTRUCTIONS = `# Sobre la empresa
+Es una empresa de seguridad electrónica: alarmas, cámaras de seguridad (CCTV) y sistemas de monitoreo, para hogares, comercios, empresas y campos.
+
+# Ruteo
 1. Compra de equipos (cámaras, alarmas) -> filtro de ventas -> create_sales_lead reason="compra".
 2. Instalación nueva o ampliar un sistema instalado -> filtro de ventas -> create_sales_lead reason="instalacion_nueva" (aclará en el resumen si es ampliación o desde cero). Siempre pasa por Ventas primero; nunca mandes una ampliación directo a soporte.
 3. Soporte técnico / problema con algo instalado -> filtro técnico -> create_support_ticket.
