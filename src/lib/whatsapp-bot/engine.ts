@@ -63,6 +63,20 @@ const SAFETY_SETTINGS: SafetySetting[] = [
 // así que se trata como "corté sin respuesta" y cae al reintento sin tools.
 const BLOCKING_FINISH_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION'])
 
+// Red de seguridad de SALIDA, independiente del modelo: NISSI no puede mandar
+// precios ni datos de acceso ni links, ni por jailbreak ni por alucinación.
+// El prompt ya lo prohíbe; esto es el segundo cerrojo. Conservador a propósito
+// — "4 canales", "1080p", "8 MP", "2 años de garantía" NO matchean.
+const OUTBOUND_LEAK_PATTERN = new RegExp(
+  [
+    '(?:\\$|us\\$|u\\$s|usd|ars|eur|€)\\s?\\d',          // $1000, US$ 50, USD30
+    '\\d[\\d.,]*\\s?(?:pesos|d[oó]lares|usd|ars|euros?)\\b', // 1000 pesos, 50 dólares
+    '\\b(?:contrase[nñ]a|password|credencial(?:es)?|clave de acceso|usuario y (?:clave|contrase[nñ]a))\\b',
+    'https?://',                                          // NISSI nunca manda links
+  ].join('|'),
+  'i',
+)
+
 // Apagar / minimizar el "pensar" del modelo — NISSI es un flujo guiado por
 // herramientas, no razona, y los tokens de razonamiento se facturan como
 // salida. Gemini 2.5 usa thinkingBudget:0 (apagado total). Gemini 3.x no
@@ -480,6 +494,19 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
       couldNotAnswer = couldNotAnswer ?? 'no generó una respuesta después de todas las vueltas'
     }
+  }
+
+  // Filtro de salida: si a pesar del prompt la respuesta trae un precio, un
+  // dato de acceso o un link, NO se manda — se reemplaza y (si no derivó ya)
+  // se avisa a un humano.
+  if (OUTBOUND_LEAK_PATTERN.test(finalText)) {
+    console.error('[NISSI ENGINE] respuesta bloqueada por el filtro de salida', {
+      conversationId: conversation.id, sample: finalText.slice(0, 200),
+    })
+    finalText = handedOff
+      ? handoffConfirmationText(handedOff.to)
+      : 'Eso te lo confirma un asesor. Ya le paso tu consulta así te contactan.'
+    if (!handedOff) couldNotAnswer = couldNotAnswer ?? 'el filtro de salida detectó un precio / dato sensible'
   }
 
   // No pudo responder de verdad y no derivó → avisar a un humano (una sola
