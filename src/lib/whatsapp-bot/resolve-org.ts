@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { getPluginConfig } from '@/lib/plugins'
-import { getWhatsAppBotConfig, type WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
+import { parseWhatsAppBotConfig, type WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
 // El webhook de Meta es UNO SOLO por app (compartido por todas las
 // organizaciones que activen el plugin, presente o futuras) — lo único que
@@ -18,9 +18,14 @@ import { getWhatsAppBotConfig, type WhatsAppBotConfig } from '@/lib/whatsapp-bot
 // config con la key nueva), igual sabemos a qué org pertenece el mensaje y
 // lo guardamos en el inbox en vez de perderlo. `config` viene null en ese
 // caso y el engine guarda el mensaje sin invocar al modelo.
+// El nombre de la organización se usa en cada mensaje entrante (va al prompt)
+// y cambia rarísimo — se cachea a nivel módulo por la vida de la instancia
+// tibia, igual que resolveBotActorId.
+const orgNameCache = new Map<string, string>()
+
 export async function resolveOrgByPhoneNumberId(
   phoneNumberId: string,
-): Promise<{ orgId: string; config: WhatsAppBotConfig | null } | null> {
+): Promise<{ orgId: string; orgName: string; config: WhatsAppBotConfig | null } | null> {
   const db = prisma as any
   const rows = await db.pluginConfig.findMany({
     where: { pluginId: 'whatsapp-ai-bot', enabled: true },
@@ -33,8 +38,16 @@ export async function resolveOrgByPhoneNumberId(
   })
   if (match === -1) return null
   const orgId = rows[match].organizationId
-  const config = await getWhatsAppBotConfig(orgId) // null si le falta alguna credencial
-  return { orgId, config }
+  // Ya tenemos el JSON crudo del map — validar en memoria, sin re-consultar.
+  const config = parseWhatsAppBotConfig(raws[match])
+
+  let orgName = orgNameCache.get(orgId)
+  if (!orgName) {
+    const org = await db.organization.findUnique({ where: { id: orgId }, select: { name: true, crmName: true } })
+    orgName = (org?.name || org?.crmName || 'nuestra empresa') as string
+    orgNameCache.set(orgId, orgName)
+  }
+  return { orgId, orgName, config }
 }
 
 // Ticket.createdById y Deal.ownerId son NOT NULL — no existe un "usuario

@@ -76,7 +76,13 @@ function roleOrNull(v: unknown): Role | null {
  *  plugin está apagado o le faltan las 3 credenciales imprescindibles
  *  (WhatsApp token+phoneNumberId, Gemini key). */
 export async function getWhatsAppBotConfig(orgId: string): Promise<WhatsAppBotConfig | null> {
-  const raw = await getPluginConfig(orgId, 'whatsapp-ai-bot')
+  return parseWhatsAppBotConfig(await getPluginConfig(orgId, 'whatsapp-ai-bot'))
+}
+
+/** Igual que getWhatsAppBotConfig pero sin tocar la DB — para cuando el
+ *  JSON crudo ya se trajo (ver resolveOrgByPhoneNumberId, que lo necesita
+ *  para el match por phoneNumberId antes de validar). */
+export function parseWhatsAppBotConfig(raw: Record<string, unknown> | null): WhatsAppBotConfig | null {
   if (!raw) return null
 
   const apiToken = str(raw.apiToken)

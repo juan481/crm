@@ -27,11 +27,16 @@ import { looksAbusive, ABUSE_MAX_REPLIES_PER_HOUR, ABUSE_MAX_REPLIES_PER_DAY } f
 // (se activa solo cuando el prefijo systemInstruction+tools se repite — no
 // requiere código; se puede sumar caché explícito si
 // usageMetadata.cachedContentTokenCount muestra baja tasa de acierto).
-const MAX_OUTPUT_TOKENS = 1200
+// Respuestas de WhatsApp son cortas — 600 alcanza de sobra. Más bajo = el
+// modelo tiende a ser más conciso y genera más rápido (y no se paga texto
+// de más si iba a divagar). Si algo se corta por MAX_TOKENS, hay reintento.
+const MAX_OUTPUT_TOKENS = 600
 // Tope de vueltas de tool-calling dentro de UN SOLO turno del cliente — un
 // turno realista necesita como mucho buscar_catalogo + save_customer_info +
 // una herramienta de handoff. Freno de seguridad contra un loop.
 const MAX_TOOL_ROUNDS = 4
+// Máximo de mensajes de historial que se le reenvían al modelo por turno.
+const HISTORY_LIMIT = 40
 
 // Debounce: los clientes de WhatsApp mandan varios mensajes cortos seguidos
 // ("Gral pico" / "Ranqueles 7" / "que la instalen"). Sin esto, cada uno
@@ -39,8 +44,10 @@ const MAX_TOOL_ROUNDS = 4
 // se espera un ratito; si mientras tanto llegó otro mensaje del cliente,
 // esta invocación se retira y deja que la última procese el batch completo
 // (el historial se reenvía entero igual). Ver el chequeo de `newest` en
-// handleIncomingWhatsAppMessage.
-const DEBOUNCE_MS = 2500
+// handleIncomingWhatsAppMessage. 1800ms atrapa la mayoría de los "bursts"
+// (la gente manda el 2º mensaje en ~1s) y le saca 0,7s a la latencia de
+// cada turno.
+const DEBOUNCE_MS = 1800
 
 // Toma humana desde el inbox: si un humano tomó la conversación hace menos
 // de esto, NISSI no contesta nada (el humano responde desde /conversaciones).
@@ -267,14 +274,16 @@ async function persistAndSendOutbound(
   // contesta un asesor" (ahí SÍ queremos que una persona la vea).
   opts?: { markConversationRead?: boolean },
 ): Promise<void> {
-  const row = await db.whatsAppMessage.create({
-    data: { conversationId, organizationId: orgId, role: 'assistant', content: text },
-    select: { id: true },
-  })
-  await db.whatsAppConversation.update({
-    where: { id: conversationId },
-    data: { lastMessageAt: new Date(), ...(opts?.markConversationRead ? { lastReadAt: new Date() } : {}) },
-  })
+  const [row] = await Promise.all([
+    db.whatsAppMessage.create({
+      data: { conversationId, organizationId: orgId, role: 'assistant', content: text },
+      select: { id: true },
+    }),
+    db.whatsAppConversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: new Date(), ...(opts?.markConversationRead ? { lastReadAt: new Date() } : {}) },
+    }),
+  ])
   const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, customerPhone, text)
   await db.whatsAppMessage.update({
     where: { id: row.id },
@@ -291,13 +300,18 @@ async function persistAndSendOutbound(
 export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promise<void> {
   const db = prisma as any
 
-  // Idempotencia: Meta reintenta la entrega si no contestamos 200 a tiempo.
-  const already = await db.whatsAppMessage.findUnique({ where: { waMessageId: msg.waMessageId }, select: { id: true } })
+  // Idempotencia (Meta reintenta si no contestamos 200 a tiempo) + traer la
+  // conversación — independientes, van juntas (Supabase está lejos de Vercel,
+  // cada round-trip son ~250ms).
+  const [already, existingConv] = await Promise.all([
+    db.whatsAppMessage.findUnique({ where: { waMessageId: msg.waMessageId }, select: { id: true } }),
+    db.whatsAppConversation.findUnique({
+      where: { organizationId_customerPhone: { organizationId: msg.orgId, customerPhone: msg.customerPhone } },
+    }),
+  ])
   if (already) return
 
-  let conversation = await db.whatsAppConversation.findUnique({
-    where: { organizationId_customerPhone: { organizationId: msg.orgId, customerPhone: msg.customerPhone } },
-  })
+  let conversation = existingConv
   const originLabel = msg.adReferral ? buildOriginLabel(msg.adReferral) : null
   if (!conversation) {
     try {
@@ -348,31 +362,38 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     })
   }
 
-  const inbound = await db.whatsAppMessage.create({
-    data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
-    select: { id: true },
-  })
-  await db.whatsAppConversation.update({
-    where: { id: conversation.id },
-    data: { lastMessageAt: now, lastInboundAt: now },
-  })
+  const [inbound] = await Promise.all([
+    db.whatsAppMessage.create({
+      data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
+      select: { id: true },
+    }),
+    db.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: now, lastInboundAt: now },
+    }),
+  ])
 
   // ── Debounce ──────────────────────────────────────────────────────────
   await new Promise((r) => setTimeout(r, DEBOUNCE_MS))
-  const newest = await db.whatsAppMessage.findFirst({
-    where: { conversationId: conversation.id, role: 'user' },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], // tiebreaker si dos createdAt empatan
-    select: { id: true },
-  })
+  // El chequeo de "¿soy el último mensaje?" y la recarga de la conversación
+  // van juntos — si bajamos por no ser el último, perdimos una query pero
+  // le sacamos un round-trip al camino común.
+  const [newest, reloaded] = await Promise.all([
+    db.whatsAppMessage.findFirst({
+      where: { conversationId: conversation.id, role: 'user' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], // tiebreaker si dos createdAt empatan
+      select: { id: true },
+    }),
+    db.whatsAppConversation.findUnique({ where: { id: conversation.id } }),
+  ])
   if (newest?.id !== inbound.id) {
     // Llegó otro mensaje del cliente mientras esperábamos — la última
     // invocación procesa el batch completo.
     return
   }
-
-  // Recargar la conversación (pudo cambiar de estado durante el debounce,
-  // ej. un humano la tomó desde el inbox).
-  conversation = await db.whatsAppConversation.findUnique({ where: { id: conversation.id } })
+  // La conversación pudo cambiar de estado durante el debounce (ej. un
+  // humano la tomó desde el inbox).
+  conversation = reloaded
   if (!conversation) return
 
   // ── Freno anti-abuso ──────────────────────────────────────────────────
@@ -423,24 +444,31 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   }
 
   // Sólo desde el último reinicio de contexto (si la conversación se reabrió
-  // de cero) — no arrastra el transcript viejo al modelo.
-  let history = await db.whatsAppMessage.findMany({
+  // de cero) — no arrastra el transcript viejo al modelo. Cap a los últimos
+  // HISTORY_LIMIT mensajes: una charla de NISSI antes de derivar rara vez pasa
+  // de ~20 turnos, y un hilo patológicamente largo no debe inflar el costo ni
+  // la latencia de cada llamada.
+  const historyDesc = await db.whatsAppMessage.findMany({
     where: {
       conversationId: conversation.id,
       ...(conversation.contextResetAt ? { createdAt: { gte: conversation.contextResetAt } } : {}),
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
+    take: HISTORY_LIMIT,
     select: { role: true, content: true },
   })
+  let history = historyDesc.reverse()
   // Salvavidas: si el filtro por contextResetAt dejó todo afuera (skew de
-  // reloj, timestamps raros), traer el historial completo — mejor de más
-  // contexto que un array vacío que rompe la llamada a Gemini.
+  // reloj, timestamps raros), traer el historial reciente completo — mejor de
+  // más contexto que un array vacío que rompe la llamada a Gemini.
   if (history.length === 0) {
-    history = await db.whatsAppMessage.findMany({
+    const fallbackDesc = await db.whatsAppMessage.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
+      take: HISTORY_LIMIT,
       select: { role: true, content: true },
     })
+    history = fallbackDesc.reverse()
   }
 
   const adOrigin = (conversation.collectedData as Record<string, unknown> | null)?.origen
@@ -516,7 +544,11 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       break
     }
 
-    contents.push({ role: 'model', parts: cand?.content?.parts ?? calls.map((c) => ({ functionCall: c })) })
+    // Sin los parts de "thought": si se reinyectan, el próximo request los
+    // paga otra vez como input (y no aportan nada al contexto).
+    const modelParts = (cand?.content?.parts ?? calls.map((c) => ({ functionCall: c })))
+      .filter((p) => !(p as { thought?: boolean }).thought)
+    contents.push({ role: 'model', parts: modelParts })
 
     const responseParts: Part[] = []
     for (const call of calls) {
@@ -607,18 +639,17 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     }
   }
 
-  // Un humano pudo tomar el hilo mientras el modelo generaba — si es así,
-  // no mandamos la respuesta de NISSI (la maneja la persona desde el inbox).
-  const fresh = await db.whatsAppConversation.findUnique({
-    where: { id: conversation.id }, select: { humanTakeoverAt: true },
-  })
+  // Marcar procesado siempre (los dos caminos lo hacen) + chequear si un
+  // humano tomó el hilo mientras el modelo generaba — en paralelo.
+  const [fresh] = await Promise.all([
+    db.whatsAppConversation.findUnique({ where: { id: conversation.id }, select: { humanTakeoverAt: true } }),
+    markUserMessagesProcessed(db, conversation.id),
+  ])
   if (fresh?.humanTakeoverAt) {
-    await markUserMessagesProcessed(db, conversation.id)
     console.warn('[NISSI ENGINE] un humano tomó el hilo mientras se generaba — no se manda la respuesta de NISSI', { conversationId: conversation.id })
     return
   }
 
-  await markUserMessagesProcessed(db, conversation.id)
   // Si NISSI contestó de verdad, la conversación queda "atendida" (no aparece
   // como no-leída). Si cayó al fallback genérico (couldNotAnswer), se deja
   // sin leer a propósito para que una persona entre al inbox.

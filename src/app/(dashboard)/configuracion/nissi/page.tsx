@@ -168,7 +168,7 @@ export default function NissiConfigPage() {
         <Input label="API Key de Google Gemini" type="password" value={String(form.geminiApiKey ?? '')} onChange={(e) => set('geminiApiKey', e.target.value)}
           placeholder={loaded.credentials.geminiApiKey ? '••••••••••• (cargada)' : 'AIza… / AQ.…'} hint={credHint(loaded.credentials.geminiApiKey)} />
         <Input label="Modelo de Gemini (opcional)" value={String(form.geminiModel ?? '')} onChange={(e) => set('geminiModel', e.target.value)}
-          placeholder={loaded.defaults.geminiModel} hint={`Vacío = ${loaded.defaults.geminiModel}. Subí a gemini-3.6-flash si el lite falla algún escenario.`} />
+          placeholder={loaded.defaults.geminiModel} hint={`Vacío = ${loaded.defaults.geminiModel}. gemini-2.5-flash-lite es ~3x más barato y más rápido si tu proyecto de Google lo permite. gemini-3.6-flash si el lite falla algún escenario.`} />
       </Section>
 
       <Section icon={<Building2 size={16} />} title="Datos de la empresa" desc="NISSI responde SOLO con estos datos. Lo que no cargues, no lo sabe — y deriva en vez de inventar.">

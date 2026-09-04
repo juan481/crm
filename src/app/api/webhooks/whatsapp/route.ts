@@ -183,16 +183,14 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
       const messages = value.messages ?? []
       if (!messages.length) continue // no hay mensaje entrante que contestar
 
-      const org = await db.organization.findUnique({ where: { id: resolved.orgId }, select: { name: true, crmName: true } })
-      const orgName = org?.name || org?.crmName || 'nuestra empresa'
-
-      // Meta casi siempre manda un mensaje por POST. En el caso raro de
-      // varios en el mismo POST, el debounce del engine (ver engine.ts) los
-      // procesa igual bien salvo que puede mandar una respuesta por mensaje
-      // en vez de una sola — aceptable, las respuestas quedan en contexto.
-      for (const m of messages) {
+      // Meta casi siempre manda UN mensaje por POST. En el caso raro de
+      // varios, se procesan EN PARALELO: cada uno se persiste y entra al
+      // debounce; el que resulta ser el último manda una sola respuesta con
+      // todo el batch, los demás se retiran (ver `newest` en engine.ts).
+      // Secuencial mandaría una respuesta por mensaje.
+      await Promise.all(messages.map(async (m) => {
         const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type)
-        if (!text) continue // texto vacío de verdad (raro, pero no hay nada que contestar)
+        if (!text) return // texto vacío de verdad (raro, pero no hay nada que contestar)
         const contact = value.contacts?.find((c) => c.wa_id === m.from)
 
         // Doble check azul para el cliente — sabe que su mensaje se vio.
@@ -201,7 +199,7 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
 
         await handleIncomingWhatsAppMessage({
           orgId: resolved.orgId,
-          orgName,
+          orgName: resolved.orgName,
           phoneNumberId,
           customerPhone: m.from,
           customerName: contact?.profile?.name ?? null,
@@ -210,7 +208,7 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
           botConfig: resolved.config,
           adReferral: m.referral ? { headline: m.referral.headline, sourceType: m.referral.source_type } : null,
         })
-      }
+      }))
     }
   }
 }
