@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, resolveOrgSmtpConfig } from '@/lib/email'
+import { computeQuoteTotals, type QuoteTotals } from '@/lib/quote-totals'
 import type { QuoteItem } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -18,12 +19,21 @@ function formatMoney(amount: number, currency: string) {
 
 function buildQuoteHtml(opts: {
   orgName: string; primaryColor: string; recipientName: string
-  items: QuoteItem[]; total: number; discount?: number; finalTotal?: number; currency: string
+  items: QuoteItem[]; totals: QuoteTotals; currency: string
   notes?: string; quoteRef: string; agentName: string
 }): string {
-  const { orgName, primaryColor, recipientName, items, total, discount = 0, finalTotal, currency, notes, quoteRef, agentName } = opts
-  const displayTotal = finalTotal ?? total
+  const { orgName, primaryColor, recipientName, items, totals: tt, currency, notes, quoteRef, agentName } = opts
   const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
+  const fd = tt.discriminado ? 2 : 0
+  const money = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: fd, maximumFractionDigits: fd }).format(n)
+  const footRow = (label: string, value: string, color: string, bold = false) =>
+    `<tr><td colspan="2" style="padding:4px 0;font-size:13px;color:${color}${bold ? ';font-weight:700' : ''}">${label}</td>
+     <td style="padding:4px 0;font-size:13px;color:${color};text-align:right${bold ? ';font-weight:700' : ''}">${value}</td></tr>`
+  const foot =
+    footRow('Subtotal (neto)', money(tt.neto), '#64748b')
+    + (tt.descuentoMonto > 0 ? footRow(`Descuento (${tt.descuentoPct}%)`, `− ${money(tt.descuentoMonto)}`, '#10b981') : '')
+    + (tt.discriminado && tt.iva.length && tt.descuentoMonto > 0 ? footRow('Neto gravado', money(tt.netoGravado), '#94a3b8') : '')
+    + (tt.discriminado ? tt.iva.map(b => footRow(`IVA ${String(b.pct).replace('.', ',')}%`, money(b.monto), '#94a3b8')).join('') : '')
 
   const rows = items.map(item => `
     <tr>
@@ -66,18 +76,10 @@ function buildQuoteHtml(opts: {
         </thead>
         <tbody>${rows}</tbody>
         <tfoot>
-          ${discount > 0 ? `
+          ${foot}
           <tr>
-            <td colspan="2" style="padding:8px 0 4px;font-size:13px;color:#64748b">Subtotal</td>
-            <td style="padding:8px 0 4px;font-size:13px;color:#64748b;text-align:right">${formatMoney(total, currency)}</td>
-          </tr>
-          <tr>
-            <td colspan="2" style="padding:4px 0;font-size:13px;color:#10b981">Descuento (${discount}%)</td>
-            <td style="padding:4px 0;font-size:13px;color:#10b981;text-align:right">− ${formatMoney(total * discount / 100, currency)}</td>
-          </tr>` : ''}
-          <tr>
-            <td colspan="2" style="padding:${discount > 0 ? '8' : '16'}px 0 4px;font-size:15px;font-weight:700;color:#1e293b;border-top:${discount > 0 ? '2px solid #e2e8f0' : 'none'}">Total</td>
-            <td style="padding:${discount > 0 ? '8' : '16'}px 0 4px;font-size:18px;font-weight:800;color:${primaryColor};text-align:right;border-top:${discount > 0 ? '2px solid #e2e8f0' : 'none'}">${formatMoney(displayTotal, currency)}</td>
+            <td colspan="2" style="padding:8px 0 4px;font-size:15px;font-weight:700;color:#1e293b;border-top:2px solid #e2e8f0">Total${tt.discriminado ? ' (IVA incl.)' : ''}</td>
+            <td style="padding:8px 0 4px;font-size:18px;font-weight:800;color:${primaryColor};text-align:right;border-top:2px solid #e2e8f0">${money(tt.total)}</td>
           </tr>
         </tfoot>
       </table>
@@ -144,9 +146,7 @@ export async function POST(req: NextRequest) {
       orgName, primaryColor,
       recipientName: cotizacion.recipientName,
       items:         cotizacion.items as QuoteItem[],
-      total:         cotizacion.total,
-      discount:      cotizacion.discount ?? 0,
-      finalTotal:    cotizacion.finalTotal ?? cotizacion.total,
+      totals:        computeQuoteTotals(cotizacion.items as QuoteItem[], cotizacion.discount ?? 0, cotizacion.ivaDiscriminado === true),
       currency:      cotizacion.currency,
       notes:         cotizacion.notes ?? undefined,
       quoteRef:      cotizacion.ref,

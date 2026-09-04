@@ -4,6 +4,7 @@ import { Boxes, Tag, ShoppingCart } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
+import { sanitizeIvaPct } from '@/lib/quote-totals'
 import type { Product } from '@/types'
 
 interface ProductDetailModalProps {
@@ -69,16 +70,19 @@ export function ProductDetailModal({ product: p, onClose, onAdd, addLabel = 'Agr
 
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <div>
-            <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Precio público</p>
+            <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Precio público (sin IVA)</p>
             <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(p.price, p.currency)} <span className="text-xs font-normal">/ {p.unit}</span></p>
           </div>
           {p.precioGremio != null && (
             <div className="text-right">
-              <p className="text-[11px] text-emerald-500">Precio Gremio</p>
+              <p className="text-[11px] text-emerald-500">Precio Gremio (sin IVA)</p>
               <p className="text-lg font-bold text-emerald-500">{formatCurrency(p.precioGremio, p.currency)}</p>
             </div>
           )}
         </div>
+        <p className="text-[10px] text-right -mt-2" style={{ color: 'var(--color-text-subtle)' }}>
+          IVA {String(sanitizeIvaPct(p.ivaPct)).replace('.', ',')}% — se discrimina al cotizar
+        </p>
 
         {onAdd && (
           <Button onClick={() => onAdd(p)} leftIcon={<ShoppingCart size={16} />} className="w-full">

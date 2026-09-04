@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
           total:         true,
           discount:      true,
           finalTotal:    true,
+          ivaDiscriminado: true,
           currency:      true,
           status:        true,
           createdAt:     true,

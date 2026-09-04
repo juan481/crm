@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
+import { computeQuoteTotals } from '@/lib/quote-totals'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -39,7 +40,9 @@ interface CotizacionDetail {
   createdAt:      string
   notes:          string | null
   validityDays:   number
-  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number }>
+  ivaDiscriminado: boolean | null
+  priceMode:      string | null
+  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null }>
   empresa:        { id: string; name: string } | null
   user:           { id: string; name: string } | null
   orgName:        string
@@ -67,6 +70,10 @@ export default function CotizacionDetailPage() {
       return (await res.json()).data
     },
   })
+
+  const totals = data
+    ? computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
+    : null
 
   // Build PDF when data loads
   useEffect(() => {
@@ -134,14 +141,12 @@ export default function CotizacionDetailPage() {
         doc.setFont('helvetica', 'normal'); y += 9
       })
 
-      // Total
+      // Totales — subtotal, descuento, IVA por alícuota, TOTAL.
       y += 2
       doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
-      doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59)
-      doc.text('Total', mg + 2, y)
-      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: data.currency, minimumFractionDigits: 0 }).format(data.finalTotal ?? data.total)
-      doc.setTextColor(pr, pg, pb); doc.setFontSize(13)
-      doc.text(totalStr, mg + cw - 2, y, { align: 'right' }); y += 12
+      const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
+      const boxW = 78
+      y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: tt, currency: data.currency, pr, pg, pb })
 
       // Notes
       if (data.notes) {
@@ -227,9 +232,15 @@ export default function CotizacionDetailPage() {
     t += `Hola ${data.recipientName},\n\nTe comparto el detalle:\n\n`
     data.items.forEach(i => {
       const lt = i.price * i.quantity
-      t += `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${formatCurrency(lt, i.currency)}/${BILLING_LABELS[i.billingCycle] ?? 'mes'}\n`
+      const per = i.type === 'PRODUCT' ? (i.unit || 'unidad') : (BILLING_LABELS[i.billingCycle] ?? 'mes')
+      t += `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${formatCurrency(lt, i.currency)}/${per}\n`
     })
-    t += `\n*Total: ${formatCurrency(data.finalTotal ?? data.total, data.currency)}*`
+    const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
+    const wfd = tt.discriminado ? 2 : 0
+    t += `\nSubtotal (neto): ${formatCurrency(tt.neto, data.currency, wfd)}`
+    if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatCurrency(tt.descuentoMonto, data.currency, wfd)}`
+    if (tt.discriminado) for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatCurrency(b.monto, data.currency, wfd)}`
+    t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatCurrency(tt.total, data.currency, wfd)}*`
     if (data.notes) t += `\n\n📝 ${data.notes}`
     t += `\n\nCualquier consulta, estamos a disposición.`
     return `https://wa.me/?text=${encodeURIComponent(t)}`
@@ -306,7 +317,7 @@ export default function CotizacionDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { icon: <Building2 size={14} />, label: 'Empresa',      value: data.empresa?.name ?? '—' },
-          { icon: <DollarSign size={14} />, label: 'Total',       value: formatCurrency(data.finalTotal ?? data.total, data.currency) },
+          { icon: <DollarSign size={14} />, label: totals?.discriminado ? 'Total (IVA incl.)' : 'Total', value: formatCurrency(totals?.total ?? data.finalTotal ?? data.total, data.currency, totals?.discriminado ? 2 : 0) },
           { icon: <Calendar size={14} />,   label: 'Fecha',       value: date },
           { icon: <Mail size={14} />,       label: 'Destinatario',value: data.recipientEmail },
         ].map(item => (

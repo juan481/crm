@@ -1419,6 +1419,11 @@ model Cotizacion {
   // PDF. Default 'PUBLICO' preserva el significado de toda cotización
   // emitida antes de este campo.
   priceMode      String           @default("PUBLICO")
+  // Si true, el IVA se discrimina en el PDF/preview y `finalTotal` YA
+  // incluye el IVA. Cada QuoteItem dentro de `items` lleva su `ivaPct`
+  // resuelto al momento de cotizar. Default false = toda cotización anterior
+  // a esto (se cotizaba neto, sin IVA) sigue significando lo mismo.
+  ivaDiscriminado Boolean         @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

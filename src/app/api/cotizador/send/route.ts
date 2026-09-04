@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { isOrgEmailConfigured } from '@/lib/email'
+import { computeQuoteTotals, sanitizeIvaPct } from '@/lib/quote-totals'
 import type { QuoteItem } from '@/types'
 
 // This endpoint ONLY saves the cotizacion to DB and creates the EmpresaNota.
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode } = body as {
+    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode, ivaDiscriminado } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       dealId?: string | null
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
       currency: string
       validityDays?: number
       priceMode?: string
+      ivaDiscriminado?: boolean
     }
     // 'PUBLICO' | 'GREMIO' — qué lista de precios se aplicó (Módulo 2). Los
     // QuoteItem.price ya vienen resueltos desde el cliente; esto sólo queda
@@ -36,13 +38,34 @@ export async function POST(req: NextRequest) {
     if (!items?.length)  return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
     if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
 
-    // El total nunca se confía del cliente — se recalcula server-side a
-    // partir de los ítems, que sí quedan guardados tal cual en la cotización.
-    const total        = items.reduce((s, i) => s + Number(i.price) * Number(i.quantity), 0)
-    const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
-    const finalTotal   = total * (1 - discountPct / 100)
-
     const db = prisma as any
+    const discriminarIva = ivaDiscriminado === true
+
+    // La alícuota de IVA NO se confía del cliente: para los productos de
+    // catálogo se relee de la DB. Servicios / ítems manuales usan la que
+    // vino (saneada) o el default 21.
+    const productIds = items.filter(i => i.type === 'PRODUCT' && i.productId).map(i => i.productId!) as string[]
+    const productIva = new Map<string, number>()
+    if (productIds.length) {
+      const prods = await db.product.findMany({
+        where: { id: { in: productIds }, organizationId: payload.orgId },
+        select: { id: true, ivaPct: true },
+      })
+      for (const p of prods) productIva.set(p.id, sanitizeIvaPct(p.ivaPct))
+    }
+    const itemsResolved: QuoteItem[] = items.map(i => ({
+      ...i,
+      ivaPct: i.type === 'PRODUCT' && i.productId && productIva.has(i.productId)
+        ? productIva.get(i.productId)!
+        : sanitizeIvaPct(i.ivaPct),
+    }))
+
+    // El total nunca se confía del cliente — se recalcula server-side a
+    // partir de los ítems (que quedan guardados tal cual) + el descuento.
+    const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
+    const totals       = computeQuoteTotals(itemsResolved, discountPct, discriminarIva)
+    const total        = totals.neto        // neto sin descuento sin IVA (mismo significado histórico)
+    const finalTotal   = totals.total       // con IVA si se discrimina; si no, neto − descuento
 
     // Si viene de una oportunidad de Pipeline, validar que exista en esta org
     // (y, para SELLER, que sea suya) antes de vincularla estructuralmente.
@@ -105,7 +128,7 @@ export async function POST(req: NextRequest) {
         dealId:         linkedDealId,
         recipientEmail,
         recipientName:  recipientName || 'Cliente',
-        items:          items as any,
+        items:          itemsResolved as any,
         total,
         discount:       discountPct,
         finalTotal,
@@ -114,6 +137,7 @@ export async function POST(req: NextRequest) {
         validityDays:   validityDaysFinal,
         status:         'GUARDADA',
         priceMode:      priceModeFinal,
+        ivaDiscriminado: discriminarIva,
       },
       select: { id: true },
     })
@@ -121,7 +145,8 @@ export async function POST(req: NextRequest) {
     // Create EmpresaNota if empresa is linked
     if (linkedEmpresaId) {
       const serviceNames = items.map(i => i.name).join(', ')
-      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 0 }).format(total)
+      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 0 }).format(finalTotal)
+        + (discriminarIva ? ' (IVA incl.)' : '')
       await db.empresaNota.create({
         data: {
           empresaId: linkedEmpresaId,
@@ -143,6 +168,9 @@ export async function POST(req: NextRequest) {
       agentName,
       discount:     discountPct,
       finalTotal,
+      ivaDiscriminado: discriminarIva,
+      totals,
+      items: itemsResolved,
       validityDays: validityDaysFinal,
       smtpConfigured: isOrgEmailConfigured(org),
     })

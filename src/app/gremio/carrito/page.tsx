@@ -97,7 +97,7 @@ export default function GremioCarritoPage() {
           <span className="line-through" style={{ color: 'var(--color-text-subtle)' }}>{formatCurrency(totalPublico, currency)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Total Gremio</span>
+          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Total Gremio (sin IVA)</span>
           <span className="text-xl font-bold text-emerald-500">{formatCurrency(totalGremio, currency)}</span>
         </div>
         {ahorro > 0 && (

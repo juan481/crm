@@ -143,9 +143,13 @@ export default function GremioCatalogoPage() {
                           <p className="text-sm font-bold text-emerald-500">{formatCurrency(p.precioGremio!, p.currency)}</p>
                           {ahorroPct > 0 && <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500">-{ahorroPct}%</span>}
                         </div>
+                        <p className="text-[9px]" style={{ color: 'var(--color-text-subtle)' }}>+ IVA</p>
                       </>
                     ) : (
-                      <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(p.price, p.currency)}</p>
+                      <>
+                        <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(p.price, p.currency)}</p>
+                        <p className="text-[9px]" style={{ color: 'var(--color-text-subtle)' }}>+ IVA</p>
+                      </>
                     )}
                   </div>
                   {inCartQty > 0 ? (

@@ -17,15 +17,20 @@ export function cn(...inputs: ClassValue[]) {
 // mal") cualquier pantalla que liste precios (Cotizador, catálogo de
 // Productos, cotizaciones guardadas). Fallback: formatear sólo el número y
 // anteponer el código tal cual vino, nunca crashear por esto.
-export function formatCurrency(amount: number, currency = 'USD'): string {
+// fractionDigits: default 0 (comportamiento histórico). Se pasa 2 para
+// montos donde el centavo importa (ej. líneas de IVA discriminado — el
+// redondeo a entero puede hacer que Subtotal + IVA no sume visualmente el
+// Total).
+export function formatCurrency(amount: number, currency = 'USD', fractionDigits = 0): string {
   try {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency,
-      minimumFractionDigits: 0,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
     }).format(amount)
   } catch {
-    return `${currency || '?'} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0 }).format(amount)}`
+    return `${currency || '?'} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(amount)}`
   }
 }
 

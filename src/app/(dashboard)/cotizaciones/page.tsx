@@ -15,6 +15,7 @@ interface CotizacionItem {
   recipientEmail:string
   total:         number
   finalTotal:    number
+  ivaDiscriminado: boolean | null
   currency:      string
   status:        string
   createdAt:     string
@@ -167,8 +168,11 @@ export default function CotizacionesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                        {formatCurrency(c.finalTotal, c.currency)}
+                        {formatCurrency(c.finalTotal, c.currency, c.ivaDiscriminado ? 2 : 0)}
                       </span>
+                      {c.ivaDiscriminado && (
+                        <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>IVA incl.</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center hidden sm:table-cell">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium ${statusInfo.color}`}>

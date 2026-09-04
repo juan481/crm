@@ -1,4 +1,55 @@
 import type { jsPDF } from 'jspdf'
+import type { QuoteTotals } from '@/lib/quote-totals'
+
+/**
+ * Caja de totales de una cotización, alineada a la derecha: Subtotal (neto),
+ * Descuento, Neto gravado, IVA por alícuota, TOTAL. Devuelve la `y` después
+ * de la caja. Usada por el cotizador y por la vista de una cotización guardada
+ * — así el desglose de IVA se dibuja en un solo lugar.
+ */
+export function drawQuoteTotalsBox(
+  doc: jsPDF,
+  opts: { x: number; y: number; w: number; totals: QuoteTotals; currency: string; pr: number; pg: number; pb: number },
+): number {
+  const { x, y, w, totals: tt, currency, pr, pg, pb } = opts
+  // Con IVA discriminado se muestran centavos (documento fiscal); sin IVA se
+  // mantiene el redondeo a entero de siempre.
+  const fd = tt.discriminado ? 2 : 0
+  const money = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: fd, maximumFractionDigits: fd }).format(n)
+
+  type Row = { label: string; value: string; kind: 'normal' | 'discount' | 'muted' }
+  const rows: Row[] = [{ label: 'Subtotal (neto)', value: money(tt.neto), kind: 'normal' }]
+  if (tt.descuentoMonto > 0) rows.push({ label: `Descuento (${tt.descuentoPct}%)`, value: `-${money(tt.descuentoMonto)}`, kind: 'discount' })
+  if (tt.discriminado && tt.iva.length > 0) {
+    if (tt.descuentoMonto > 0) rows.push({ label: 'Neto gravado', value: money(tt.netoGravado), kind: 'muted' })
+    for (const b of tt.iva) rows.push({ label: `IVA ${String(b.pct).replace('.', ',')}%`, value: money(b.monto), kind: 'muted' })
+  }
+
+  const rowH = 7
+  const boxH = rows.length * rowH + 12
+  doc.setFillColor(246, 248, 252)
+  doc.roundedRect(x, y, w, boxH, 2, 2, 'F')
+  doc.setFillColor(pr, pg, pb)
+  doc.rect(x, y, 3, boxH, 'F')
+
+  let ry = y + 6
+  for (const r of rows) {
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal')
+    doc.setTextColor(r.kind === 'discount' ? 16 : 100, r.kind === 'discount' ? 185 : 116, r.kind === 'discount' ? 129 : 139)
+    doc.text(r.label, x + 7, ry)
+    doc.setFont('helvetica', r.kind === 'muted' ? 'normal' : 'bold')
+    if (r.kind === 'discount') doc.setTextColor(16, 185, 129)
+    else if (r.kind === 'muted') doc.setTextColor(100, 116, 139)
+    else doc.setTextColor(30, 41, 59)
+    doc.text(r.value, x + w - 4, ry, { align: 'right' })
+    ry += rowH
+  }
+  doc.setDrawColor(226, 232, 240); doc.line(x + 4, ry - 3, x + w - 2, ry - 3)
+  doc.setFontSize(11); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
+  doc.text(tt.discriminado ? 'TOTAL (IVA incl.)' : 'TOTAL', x + 7, ry + 4)
+  doc.text(money(tt.total), x + w - 4, ry + 4, { align: 'right' })
+  return y + boxH + 10
+}
 
 /**
  * Fetches a logo (PNG/JPEG/WEBP/SVG) and rasterizes it to a PNG data URL via canvas.

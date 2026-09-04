@@ -327,6 +327,9 @@ export interface QuoteItem {
   billingCycle?: string
   unit?:         string
   quantity:      number
+  // Alícuota de IVA resuelta al cotizar (del producto, o el default 21).
+  // Ausente en cotizaciones anteriores a la discriminación de IVA.
+  ivaPct?:       number | null
 }
 
 // ─── RRHH ─────────────────────────────────────────────────────────────────

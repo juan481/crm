@@ -15,7 +15,8 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Pagination } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/utils'
-import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter } from '@/lib/pdf-branding'
+import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, type QuoteTotals } from '@/lib/quote-totals'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
 import { useThemeStore } from '@/store/theme-store'
 import { CatalogFilters } from '@/components/catalogo/catalog-filters'
 import { ProductCard } from '@/components/catalogo/product-card'
@@ -74,6 +75,8 @@ interface SavedQuote {
   subtotal:       number
   discount:       number
   finalTotal:     number
+  ivaDiscriminado: boolean
+  totals:         QuoteTotals
   currency:       string
   notes:          string
   validityDays:   number
@@ -87,6 +90,9 @@ export default function CotizadorPage() {
   const [cart,       setCart]       = useState<Record<string, CartItem>>({})
   const [activeTab,  setActiveTab]  = useState<ItemType>('SERVICE')
   const [discount,   setDiscount]   = useState(0)
+  // IVA discriminado: el precio del catálogo es NETO; con esto activado el
+  // PDF/preview discrimina el IVA por alícuota y el total lo incluye.
+  const [ivaDiscriminado, setIvaDiscriminado] = useState(true)
   const [validityDays, setValidityDays] = useState(30)
   const [validityTouched, setValidityTouched] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
@@ -275,9 +281,13 @@ export default function CotizadorPage() {
   const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
 
   const cartItems  = Object.values(cart)
-  const subtotal   = cartItems.reduce((s, i) => s + getPrice(i, priceMode) * i.quantity, 0)
-  const discountAmt = subtotal * (discount / 100)
-  const finalTotal = subtotal - discountAmt
+  const ivaRateFor = (ci: CartItem) => ci.type === 'PRODUCT' ? sanitizeIvaPct((ci.item as Product).ivaPct) : DEFAULT_IVA_PCT
+  const quoteLines = cartItems.map(ci => ({ price: getPrice(ci, priceMode), quantity: ci.quantity, ivaPct: ivaRateFor(ci), type: ci.type }))
+  const totals     = computeQuoteTotals(quoteLines, discount, ivaDiscriminado)
+  const ivaFd      = ivaDiscriminado ? 2 : 0 // centavos cuando se discrimina IVA (documento fiscal)
+  const subtotal   = totals.neto
+  const discountAmt = totals.descuentoMonto
+  const finalTotal = totals.total
   const currency   = cartItems[0] ? getCurrency(cartItems[0]) : 'USD'
   // Público y Gremio en paralelo (no sólo el que está resuelto por
   // priceMode) — para mostrar los dos valores lado a lado en el resumen del
@@ -441,43 +451,11 @@ export default function CotizadorPage() {
       doc.setFont('helvetica', 'normal'); y += rowH
     })
 
-    // Totals section
+    // Totals — subtotal, descuento, neto gravado, IVA por alícuota, TOTAL.
     y += 4
     doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
-
-    const subtotalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(quote.subtotal)
-    const finalStr    = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(quote.finalTotal)
-
-    const boxW = 74, boxX = mg + cw - boxW
-    doc.setFillColor(246, 248, 252)
-    doc.roundedRect(boxX, y, boxW, quote.discount > 0 ? 28 : 16, 2, 2, 'F')
-    doc.setFillColor(pr, pg, pb)
-    doc.rect(boxX, y, 3, quote.discount > 0 ? 28 : 16, 'F')
-
-    doc.setFontSize(8); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal')
-    doc.text('Subtotal', boxX + 7, y + 6)
-    doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold')
-    doc.text(subtotalStr, boxX + boxW - 4, y + 6, { align: 'right' })
-
-    if (quote.discount > 0) {
-      const discAmt = quote.subtotal - quote.finalTotal
-      const discStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(discAmt)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(16, 185, 129); doc.setFontSize(8)
-      doc.text(`Descuento (${quote.discount}%)`, boxX + 7, y + 13)
-      doc.setFont('helvetica', 'bold')
-      doc.text(`-${discStr}`, boxX + boxW - 4, y + 13, { align: 'right' })
-
-      doc.setDrawColor(226, 232, 240); doc.line(boxX + 4, y + 16, boxX + boxW - 2, y + 16)
-      doc.setFontSize(11); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
-      doc.text('TOTAL', boxX + 7, y + 24)
-      doc.text(finalStr, boxX + boxW - 4, y + 24, { align: 'right' })
-      y += 36
-    } else {
-      doc.setFontSize(12); doc.setTextColor(pr, pg, pb); doc.setFont('helvetica', 'bold')
-      doc.text('TOTAL', boxX + 7, y + 13)
-      doc.text(finalStr, boxX + boxW - 4, y + 13, { align: 'right' })
-      y += 24
-    }
+    const boxW = 78
+    y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: quote.totals, currency: quote.currency, pr, pg, pb })
 
     // Notes
     if (quote.notes) {
@@ -513,6 +491,7 @@ export default function CotizadorPage() {
         billingCycle: ci.type === 'SERVICE' ? (ci.item as Service).billingCycle : undefined,
         unit:         ci.type === 'PRODUCT' ? (ci.item as Product).unit : undefined,
         quantity:     ci.quantity,
+        ivaPct:       ivaRateFor(ci),
       }))
 
       const res  = await fetch('/api/cotizador/send', {
@@ -522,7 +501,7 @@ export default function CotizadorPage() {
           items, empresaId: clientMode === 'existing' ? selectedEmpresaId || null : null,
           dealId,
           recipientEmail, recipientName: recipientName || 'Cliente',
-          notes, total: subtotal, discount, currency, validityDays, priceMode,
+          notes, total: subtotal, discount, currency, validityDays, priceMode, ivaDiscriminado,
         }),
       })
       const json = await res.json()
@@ -546,6 +525,8 @@ export default function CotizadorPage() {
         subtotal,
         discount:     json.discount,
         finalTotal:   json.finalTotal,
+        ivaDiscriminado: json.ivaDiscriminado ?? ivaDiscriminado,
+        totals:       json.totals ?? totals,
         currency,
         notes,
         validityDays: json.validityDays ?? validityDays,
@@ -588,8 +569,9 @@ export default function CotizadorPage() {
   }
 
   const buildWhatsApp = (quote?: SavedQuote) => {
-    const src = quote ?? { recipientName: recipientName || '', cartItems, subtotal, finalTotal, discount, currency, notes: notes || '', ref: '' }
+    const src = quote ?? { recipientName: recipientName || '', cartItems, subtotal, finalTotal, discount, currency, notes: notes || '', ref: '', totals }
     const mode = quote?.priceMode ?? priceMode
+    const tt = src.totals
     let t = `*Presupuesto de Servicios*`
     if ((src as any).ref) t += ` · ${(src as any).ref}`
     if (mode === 'GREMIO') t += ` · Precio Gremio`
@@ -608,13 +590,14 @@ export default function CotizadorPage() {
       if (showArs && arsRate && ci.item.currency === 'USD') l += ` (${formatCurrency(lt * arsRate, 'ARS')})`
       t += l + '\n'
     })
-    t += `\n*Subtotal: ${formatCurrency(src.subtotal, src.currency)}*`
-    if (src.discount > 0) {
-      const da = src.subtotal * (src.discount / 100)
-      t += `\nDescuento (${src.discount}%): -${formatCurrency(da, src.currency)}`
-      t += `\n*Total: ${formatCurrency(src.finalTotal, src.currency)}*`
+    const wfd = tt.discriminado ? 2 : 0
+    t += `\nSubtotal (neto): ${formatCurrency(tt.neto, src.currency, wfd)}`
+    if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatCurrency(tt.descuentoMonto, src.currency, wfd)}`
+    if (tt.discriminado && tt.iva.length > 0) {
+      for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatCurrency(b.monto, src.currency, wfd)}`
     }
-    if (showArs && arsRate && src.currency === 'USD') t += ` (ARS ${formatCurrency(src.finalTotal * arsRate, 'ARS')})`
+    t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatCurrency(tt.total, src.currency, wfd)}*`
+    if (showArs && arsRate && src.currency === 'USD') t += ` (ARS ${formatCurrency(tt.total * arsRate, 'ARS')})`
     if (src.notes) t += `\n\n📝 ${src.notes}`
     t += `\n\nCualquier consulta, estamos a disposición.`
     return `https://wa.me/?text=${encodeURIComponent(t)}`
@@ -1180,6 +1163,26 @@ export default function CotizadorPage() {
           </div>
       </section>
 
+      {/* ── IVA (pantalla 3) ──────────────────────────────────────────────── */}
+      <section hidden={currentStep !== 3} className="mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+            style={{ background: 'var(--color-surface-overlay)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-subtle)' }}>%</span>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>IVA</p>
+        </div>
+        <label className="rounded-2xl px-4 py-3 flex items-start gap-3 cursor-pointer"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <input type="checkbox" checked={ivaDiscriminado} onChange={e => setIvaDiscriminado(e.target.checked)}
+            className="w-4 h-4 mt-0.5 accent-[var(--color-primary)]" />
+          <span className="text-sm" style={{ color: 'var(--color-text)' }}>
+            Discriminar IVA
+            <span className="block text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Los precios del catálogo son netos. Con esto, el presupuesto muestra el IVA por alícuota (21% / 10,5% según el producto) y el total lo incluye.
+            </span>
+          </span>
+        </label>
+      </section>
+
       {/* ── Validez (pantalla 3) ──────────────────────────────────────────── */}
       <section hidden={currentStep !== 3} className="mb-5">
           <div className="flex items-center gap-2 mb-3">
@@ -1254,12 +1257,24 @@ export default function CotizadorPage() {
                   <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(subtotal, currency)}</p>
                 </div>
               )}
-              {discount > 0 && (
-                <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Descuento {discount}%: -{formatCurrency(discountAmt, currency)}</p>
-                  <p className="text-base font-bold" style={{ color: 'var(--color-text)' }}>Final: {formatCurrency(finalTotal, currency)}</p>
-                </div>
-              )}
+              <div className="pt-2 border-t space-y-0.5" style={{ borderColor: 'var(--color-border)' }}>
+                {discount > 0 && (
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Descuento {discount}%: -{formatCurrency(totals.descuentoMonto, currency, ivaFd)}</p>
+                )}
+                {ivaDiscriminado && totals.iva.length > 0 && (
+                  <>
+                    {discount > 0 && <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Neto gravado: {formatCurrency(totals.netoGravado, currency, ivaFd)}</p>}
+                    {totals.iva.map(b => (
+                      <p key={b.pct} className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        IVA {String(b.pct).replace('.', ',')}%: {formatCurrency(b.monto, currency, ivaFd)}
+                      </p>
+                    ))}
+                  </>
+                )}
+                <p className="text-base font-bold pt-0.5" style={{ color: 'var(--color-text)' }}>
+                  Total{ivaDiscriminado ? ' (IVA incl.)' : ''}: {formatCurrency(totals.total, currency, ivaFd)}
+                </p>
+              </div>
             </div>
           </div>
         </div>
