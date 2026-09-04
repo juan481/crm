@@ -6,15 +6,21 @@
 // Los precios del catálogo son NETOS (sin IVA) — ver el comentario de
 // Product.price en schema.prisma. El IVA se suma acá.
 
-// Alícuotas de IVA válidas en Argentina. Cualquier otro valor (ej. 22, que
-// aparece por un typo en la planilla del proveedor) o null/blank cae a
-// DEFAULT_IVA_PCT.
-export const VALID_IVA_RATES = [0, 2.5, 5, 10.5, 21, 27] as const
+// La fuente de verdad de la alícuota es el Excel/Sheet del proveedor
+// (Product.ivaPct) — el sistema NO tiene una lista cerrada de "alícuotas
+// válidas" (hoy son 21% y 10,5%, pero si mañana cargan un producto al 8%,
+// al 27%, o a lo que sea, se respeta tal cual). Sólo se cae a
+// DEFAULT_IVA_PCT cuando el dato falta (null/blank) o es imposible como
+// porcentaje (negativo, no numérico, o > 100 — típicamente un error de
+// tipeo como "210" en vez de "21,0").
 export const DEFAULT_IVA_PCT = 21
+const MIN_SANE_IVA_PCT = 0
+const MAX_SANE_IVA_PCT = 100
 
 export function sanitizeIvaPct(raw: unknown): number {
   const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
-  return (VALID_IVA_RATES as readonly number[]).includes(n) ? n : DEFAULT_IVA_PCT
+  if (!Number.isFinite(n) || n < MIN_SANE_IVA_PCT || n > MAX_SANE_IVA_PCT) return DEFAULT_IVA_PCT
+  return n
 }
 
 export interface QuoteLine {
