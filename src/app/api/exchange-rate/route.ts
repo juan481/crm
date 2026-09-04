@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
+import { getCurrentUserAny } from '@/lib/auth'
 
 interface DolarRate {
   venta: number
@@ -27,6 +28,13 @@ const fetchOfficialRate = unstable_cache(
 
 export async function GET() {
   try {
+    // Antes esta ruta se apoyaba SOLO en el middleware para exigir sesión
+    // (no tenía chequeo propio). Con /api/* saltando el paso de Supabase en
+    // el middleware (ver src/middleware.ts) por latencia, cada ruta necesita
+    // su propio guard — este es el único caso que no lo tenía.
+    const payload = await getCurrentUserAny()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+
     const rate = await fetchOfficialRate()
     return NextResponse.json(
       { data: rate },

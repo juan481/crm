@@ -59,7 +59,20 @@ export async function middleware(req: NextRequest) {
   // This is the key guard against redirect loops on /login
   if (isPublic) return NextResponse.next()
 
-  // Protected paths: check auth via Supabase
+  // Rutas de API (no públicas): NO se repite acá el chequeo de sesión.
+  // Cada ruta de API ya llama a getCurrentUser()/getCurrentUserAny() (ver
+  // src/lib/auth.ts) y devuelve 401 si no hay sesión — la seguridad no
+  // depende de este middleware para /api/*, sólo la redirección a /login
+  // (que no aplica a una respuesta JSON de todos modos). Sin este atajo,
+  // CADA fetch de CADA pantalla pagaba un round-trip de red extra a
+  // Supabase Auth (getUser(), no es una lectura local de cookie) antes de
+  // siquiera llegar al handler — con pantallas que disparan varios fetches
+  // en paralelo (ej. el Cotizador, 7-8 llamadas), eso multiplicaba la carga
+  // de autenticación real sin agregar protección. Medido: este chequeo solo
+  // ya rondaba ~100-300ms por request.
+  if (pathname.startsWith('/api/')) return NextResponse.next()
+
+  // Protected paths (páginas): check auth via Supabase
   let supabaseResponse = NextResponse.next({ request: req })
 
   const supabase = createServerClient(
