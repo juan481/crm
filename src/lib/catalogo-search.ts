@@ -97,6 +97,7 @@ export async function searchCatalogo(orgId: string, opts: CatalogoSearchOpts): P
   if (q.length >= 2) {
     where.OR = [
       { name: { contains: q, mode: 'insensitive' } },
+      { description: { contains: q, mode: 'insensitive' } }, // "PTZ", "giratoria", etc. suelen estar sólo acá
       { sku: { contains: q, mode: 'insensitive' } },
       { brand: { contains: q, mode: 'insensitive' } },
       { mpn: { contains: q, mode: 'insensitive' } },

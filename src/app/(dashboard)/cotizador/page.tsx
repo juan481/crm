@@ -322,7 +322,11 @@ export default function CotizadorPage() {
   // vuelve a aplicar el filtro por nombre acá — filtrar de nuevo por
   // nombre dejaría afuera un resultado que matcheó por SKU o marca.
   const filteredServices: Service[] = services.filter(s => !itemSearch || s.name.toLowerCase().includes(itemSearch.toLowerCase()))
-  const filteredSimpleProducts: Product[] = products.filter(p => !itemSearch || p.name.toLowerCase().includes(itemSearch.toLowerCase()))
+  const filteredSimpleProducts: Product[] = products.filter(p => {
+    if (!itemSearch) return true
+    const q = itemSearch.toLowerCase()
+    return p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)
+  })
 
   // El banner grande de "sin nada cargado" sólo aplica a Servicios — el
   // catálogo de Productos puede tener miles de SKUs buscables aunque no
