@@ -259,6 +259,30 @@ model Organization {
   suppressions            EmailSuppression[]
   emailUsage              EmailUsageMonthly[]
   memberships             OrganizationMembership[]
+  notificationSettings    NotificationSetting[]
+}
+
+// ─── Ruteo de avisos automáticos ───────────────────────────────────────────
+// Una fila por (org, tipo de aviso). Define si el aviso sale y a quién le
+// llega. Si NO existe fila para un tipo, el cron correspondiente cae al
+// comportamiento viejo (gate por plugin + destinatarios por rol) — así las
+// demás organizaciones del CRM no cambian en nada. Ver src/lib/notifications.ts.
+model NotificationSetting {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // 'attendance' | 'it-activity'  (más tipos en fases siguientes)
+  type           String
+  enabled        Boolean      @default(true)
+  // JSON serializado: [{ "userId": "..." } | { "email": "..." }] — se
+  // resuelve a una lista de emails al momento de enviar. Mismo criterio que
+  // PluginConfig.config (string, no Json nativo).
+  recipients     String       @default("[]")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, type])
+  @@index([organizationId])
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before

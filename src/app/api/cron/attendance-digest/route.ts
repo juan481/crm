@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
 import { isPluginEnabled } from '@/lib/plugins'
+import { resolveNotification } from '@/lib/notifications'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { argentinaDayStart } from '@/lib/timezone'
 
@@ -76,11 +77,16 @@ export async function GET(req: NextRequest) {
     const wouldSend: { org: string; email: string }[] = []
 
     for (const org of orgs) {
-      // Plugin "attendance-alerts" — apagado por defecto para toda
-      // organización que nunca lo tocó (PluginConfig sin fila = enabled:
-      // false, ver /api/plugins). Antes este aviso salía siempre, sin
-      // forma de pausarlo por organización.
-      if (!(await isPluginEnabled(org.id, 'attendance-alerts'))) { orgsSkippedDisabled++; continue }
+      // Ruteo del aviso. Si la org lo configuró en /configuracion/notificaciones
+      // (fila NotificationSetting) esa config manda: on/off + lista exacta de
+      // destinatarios. Si NO lo configuró, cae al comportamiento viejo: gate por
+      // el plugin "attendance-alerts" + destinatarios por rol (ADMIN/HR).
+      const notif = await resolveNotification(org.id, 'attendance')
+      if (notif.configured) {
+        if (!notif.enabled) { orgsSkippedDisabled++; continue }
+      } else if (!(await isPluginEnabled(org.id, 'attendance-alerts'))) {
+        orgsSkippedDisabled++; continue
+      }
 
       const orgUsers = usersByOrg.get(org.id) ?? []
       const sinFichar = orgUsers.filter((u: any) => !recordByUser.has(u.id))
@@ -94,12 +100,17 @@ export async function GET(req: NextRequest) {
       // de nuevo — ver modelo CronRun. En dry run no se reclama nada.
       if (!dryRun && !(await claimCronRun(JOB_NAME, org.id, target))) { orgsSkippedAlreadySent++; continue }
 
-      const recipients = orgUsers.filter((u: any) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(u.role))
-      const recipientUsers = await db.user.findMany({
-        where: { id: { in: recipients.map((u: any) => u.id) } },
-        select: { email: true },
-      })
-      const emails: string[] = recipientUsers.map((u: any) => u.email).filter(Boolean)
+      let emails: string[]
+      if (notif.configured) {
+        emails = notif.emails
+      } else {
+        const recipients = orgUsers.filter((u: any) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(u.role))
+        const recipientUsers = await db.user.findMany({
+          where: { id: { in: recipients.map((u: any) => u.id) } },
+          select: { email: true },
+        })
+        emails = recipientUsers.map((u: any) => u.email).filter(Boolean)
+      }
       if (emails.length === 0) continue
 
       const dateLabel = target.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })

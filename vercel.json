@@ -9,6 +9,10 @@
       "schedule": "0 13 * * 1-5"
     },
     {
+      "path": "/api/cron/it-activity-report",
+      "schedule": "0 12 * * 1-5"
+    },
+    {
       "path": "/api/cron/invoice-automation",
       "schedule": "0 13 1 * *"
     },

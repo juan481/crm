@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound, Bot } from 'lucide-react'
+import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound, Bot, BellRing } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { useAuthStore } from '@/store/auth-store'
@@ -58,6 +58,14 @@ const settingsSections = [
     description: 'Conexión con Meta y Gemini, datos de la empresa, tono, instrucciones, a quién deriva y quién puede responder desde la bandeja.',
     roles: ['SUPER_ADMIN', 'ADMIN'],
     color: '#ec4899',
+  },
+  {
+    href: '/configuracion/notificaciones',
+    icon: <BellRing size={24} />,
+    title: 'Notificaciones automáticas',
+    description: 'Elegí qué correos automáticos salen (asistencia, reporte diario de soporte IT) y a quién le llegan.',
+    roles: ['SUPER_ADMIN', 'ADMIN'],
+    color: '#0ea5e9',
   },
 ]
 
