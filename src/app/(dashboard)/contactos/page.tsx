@@ -3,17 +3,27 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle, AlertTriangle, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { ContactoForm } from '@/components/directorio/contacto-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
+import { exportToExcel } from '@/lib/xlsx-export'
 import type { DirectorioContacto } from '@/types'
 import toast from 'react-hot-toast'
 
 const CHUNK = 20
+
+interface OmitidaRow {
+  fila: number
+  nombre: string
+  apellido: string
+  empresa: string
+  mail: string
+  motivo: string
+}
 
 interface ImportProgress {
   processed: number
@@ -21,6 +31,7 @@ interface ImportProgress {
   created:   number
   dupes:     number
   skipped:   number
+  omitidas:  OmitidaRow[]
   done?:     boolean
   error?:    string
 }
@@ -80,11 +91,12 @@ export default function ContactosPage() {
     if (rows.length === 0) { toast.error('El archivo está vacío'); return }
 
     setImporting(true)
-    setProgress({ processed: 0, total: rows.length, created: 0, dupes: 0, skipped: 0 })
+    setProgress({ processed: 0, total: rows.length, created: 0, dupes: 0, skipped: 0, omitidas: [] })
 
     let created = 0
     let dupes   = 0
     let skipped = 0
+    const omitidas: OmitidaRow[] = []
 
     try {
       for (let i = 0; i < rows.length; i += CHUNK) {
@@ -92,7 +104,7 @@ export default function ContactosPage() {
         const res   = await fetch('/api/contactos/importar', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ rows: chunk }),
+          body:    JSON.stringify({ rows: chunk, offset: i }),
         })
 
         if (!res.ok) {
@@ -105,13 +117,14 @@ export default function ContactosPage() {
         created += result.created ?? 0
         dupes   += result.dupes   ?? 0
         skipped += result.skipped ?? 0
+        if (Array.isArray(result.omitidas)) omitidas.push(...result.omitidas)
 
-        setProgress({ processed: Math.min(i + CHUNK, rows.length), total: rows.length, created, dupes, skipped })
+        setProgress({ processed: Math.min(i + CHUNK, rows.length), total: rows.length, created, dupes, skipped, omitidas })
 
         if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
       }
 
-      setProgress(p => p ? { ...p, processed: rows.length, done: true } : null)
+      setProgress(p => p ? { ...p, processed: rows.length, done: true, omitidas } : null)
       qc.invalidateQueries({ queryKey: ['contactos'] })
     } catch {
       toast.error('Error de conexión')
@@ -350,6 +363,33 @@ export default function ContactosPage() {
             {progress.done && (
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
                 <CheckCircle2 size={16} /> Importación completada exitosamente
+              </div>
+            )}
+
+            {progress.done && progress.omitidas.length > 0 && (
+              <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {progress.omitidas.length} fila{progress.omitidas.length !== 1 ? 's' : ''} no se cargaron. Descargá el detalle para ver cuáles y por qué.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<Download size={14} />}
+                  onClick={() => exportToExcel(
+                    `filas-omitidas-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                    'Omitidas',
+                    progress.omitidas.map(o => ({
+                      'Fila del Excel': o.fila,
+                      'Nombre': o.nombre,
+                      'Apellido': o.apellido,
+                      'Empresa': o.empresa,
+                      'Mail': o.mail,
+                      'Motivo': o.motivo,
+                    })),
+                  )}
+                >
+                  Descargar filas omitidas ({progress.omitidas.length})
+                </Button>
               </div>
             )}
 

@@ -20,6 +20,15 @@ import toast from 'react-hot-toast'
 
 const CHUNK = 20
 
+interface OmitidaRow {
+  fila: number
+  empresa: string
+  nombre: string
+  apellido: string
+  mail: string
+  motivo: string
+}
+
 interface ImportProgress {
   processed: number
   total: number
@@ -29,6 +38,7 @@ interface ImportProgress {
   contactosCreados: number
   contactosActualizados: number
   filasOmitidas: number
+  omitidas: OmitidaRow[]
   done?: boolean
   error?: string
 }
@@ -164,7 +174,7 @@ export default function EmpresasPage() {
     if (rows.length === 0) { toast.error('El archivo está vacío'); return }
 
     setImporting(true)
-    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, empresasActualizadas: 0, contactosCreados: 0, contactosActualizados: 0, filasOmitidas: 0 })
+    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, empresasActualizadas: 0, contactosCreados: 0, contactosActualizados: 0, filasOmitidas: 0, omitidas: [] })
 
     let empresasCreadas      = 0
     let empresasExistentes   = 0
@@ -172,6 +182,7 @@ export default function EmpresasPage() {
     let contactosCreados     = 0
     let contactosActualizados = 0
     let filasOmitidas        = 0
+    const omitidas: OmitidaRow[] = []
 
     try {
       for (let i = 0; i < rows.length; i += CHUNK) {
@@ -179,7 +190,7 @@ export default function EmpresasPage() {
         const res   = await fetch('/api/directorio/importar', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ rows: chunk }),
+          body:    JSON.stringify({ rows: chunk, offset: i }),
         })
 
         if (!res.ok) {
@@ -195,6 +206,7 @@ export default function EmpresasPage() {
         contactosCreados     += result.contactosCreados     ?? 0
         contactosActualizados += result.contactosActualizados ?? 0
         filasOmitidas        += result.filasOmitidas        ?? 0
+        if (Array.isArray(result.omitidas)) omitidas.push(...result.omitidas)
 
         setProgress({
           processed: Math.min(i + CHUNK, rows.length),
@@ -205,12 +217,13 @@ export default function EmpresasPage() {
           contactosCreados,
           contactosActualizados,
           filasOmitidas,
+          omitidas,
         })
 
         if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
       }
 
-      setProgress(p => p ? { ...p, processed: rows.length, done: true } : null)
+      setProgress(p => p ? { ...p, processed: rows.length, done: true, omitidas } : null)
       qc.invalidateQueries({ queryKey: ['empresas'] })
       qc.invalidateQueries({ queryKey: ['contactos'] })
     } catch {
@@ -834,6 +847,32 @@ export default function EmpresasPage() {
             {progress.done && (
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
                 <CheckCircle2 size={16} /> Importación completada exitosamente
+              </div>
+            )}
+            {progress.done && progress.omitidas.length > 0 && (
+              <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {progress.omitidas.length} fila{progress.omitidas.length !== 1 ? 's' : ''} no se cargaron. Descargá el detalle para ver cuáles y por qué.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<Download size={14} />}
+                  onClick={() => exportToExcel(
+                    `filas-omitidas-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                    'Omitidas',
+                    progress.omitidas.map(o => ({
+                      'Fila del Excel': o.fila,
+                      'Empresa': o.empresa,
+                      'Nombre': o.nombre,
+                      'Apellido': o.apellido,
+                      'Mail': o.mail,
+                      'Motivo': o.motivo,
+                    })),
+                  )}
+                >
+                  Descargar filas omitidas ({progress.omitidas.length})
+                </Button>
               </div>
             )}
             {progress.error && (

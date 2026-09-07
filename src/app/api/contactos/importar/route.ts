@@ -21,9 +21,10 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const body = await req.json() as { rows: ImportRow[] }
+    const body = await req.json() as { rows: ImportRow[]; offset?: number }
     const rows = body.rows ?? []
     if (rows.length === 0) return NextResponse.json({ error: 'No se recibieron filas' }, { status: 400 })
+    const baseFila = (Number(body.offset) || 0) + 2
 
     const db    = prisma as any
     const orgId = payload.orgId
@@ -36,20 +37,38 @@ export async function POST(req: NextRequest) {
     let created = 0
     let dupes   = 0
     let skipped = 0
+    const omitidas: { fila: number; nombre: string; apellido: string; empresa: string; mail: string; motivo: string }[] = []
 
-    for (const row of rows) {
-      try {
-        const str = (keys: string[]) => {
-          for (const k of keys) {
-            const v = (row[k] ?? '').toString().trim()
-            if (v) return v
-          }
-          return ''
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx]
+      const filaExcel = baseFila + idx
+      const str = (keys: string[]) => {
+        for (const k of keys) {
+          const v = (row[k] ?? '').toString().trim()
+          if (v) return v
         }
+        return ''
+      }
+      const omitir = (motivo: string) => {
+        skipped++
+        omitidas.push({
+          fila: filaExcel,
+          nombre:   str(['Nombre', 'nombre']),
+          apellido: str(['Apellido', 'apellido']),
+          empresa:  str(['Empresa', 'empresa']),
+          mail:     str(['Mail', 'mail', 'Email']),
+          motivo,
+        })
+      }
 
+      try {
         const firstName = str(['Nombre', 'nombre'])
         const lastName  = str(['Apellido', 'apellido'])
-        if (!firstName || !lastName) { skipped++; continue }
+        if (!firstName || !lastName) {
+          const faltan = [!firstName && 'Nombre', !lastName && 'Apellido'].filter(Boolean).join(' y ')
+          omitir(`Falta ${faltan}`)
+          continue
+        }
 
         const companyRaw = str(['Empresa', 'empresa'])   || null
         const role       = str(['Cargo', 'cargo'])        || null
@@ -74,12 +93,13 @@ export async function POST(req: NextRequest) {
           data: { organizationId: orgId, firstName, lastName, companyRaw, role, email, phone, empresaId },
         })
         created++
-      } catch {
-        skipped++
+      } catch (rowErr) {
+        const msg = rowErr instanceof Error ? rowErr.message : 'error desconocido'
+        omitir(`Error al procesar la fila: ${msg}`)
       }
     }
 
-    return NextResponse.json({ created, dupes, skipped })
+    return NextResponse.json({ created, dupes, skipped, omitidas })
   } catch (error) {
     console.error('[CONTACTOS IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el lote' }, { status: 500 })

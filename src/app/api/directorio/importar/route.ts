@@ -50,8 +50,12 @@ export async function POST(req: NextRequest) {
     // importar en lote llamándola directo, sin pasar por la UI).
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const body = await req.json() as { rows: ImportRow[] }
+    const body = await req.json() as { rows: ImportRow[]; offset?: number }
     const rows = body.rows ?? []
+    // Fila del Excel de la primera fila de este lote (1-based + fila de
+    // encabezados) — para poder decirle al usuario exactamente qué fila
+    // revisar en su archivo.
+    const baseFila = (Number(body.offset) || 0) + 2
 
     if (rows.length === 0) return NextResponse.json({ error: 'No se recibieron filas' }, { status: 400 })
 
@@ -64,15 +68,35 @@ export async function POST(req: NextRequest) {
     let contactosCreados     = 0
     let contactosActualizados = 0
     let filasOmitidas        = 0
+    const omitidas: { fila: number; empresa: string; nombre: string; apellido: string; mail: string; motivo: string }[] = []
 
-    for (const rawRow of rows) {
+    for (let idx = 0; idx < rows.length; idx++) {
+      const rawRow = rows[idx]
+      const filaExcel = baseFila + idx
+      let row: Record<string, string> = {}
+
+      const omitir = (motivo: string) => {
+        filasOmitidas++
+        omitidas.push({
+          fila: filaExcel,
+          empresa:  col(row, 'empresa', 'company', 'razon social', 'nombre empresa'),
+          nombre:   col(row, 'nombre', 'first name', 'firstname'),
+          apellido: col(row, 'apellido', 'last name', 'lastname'),
+          mail:     col(row, 'mail', 'email', 'correo'),
+          motivo,
+        })
+      }
+
       try {
-        const row = normalizeRow(rawRow)
-
+        row = normalizeRow(rawRow)
         const empresaName = col(row, 'empresa', 'company', 'razon social', 'nombre empresa')
         const firstName   = col(row, 'nombre', 'first name', 'firstname')
 
-        if (!empresaName || !firstName) { filasOmitidas++; continue }
+        if (!empresaName || !firstName) {
+          const faltan = [!empresaName && 'Empresa', !firstName && 'Nombre'].filter(Boolean).join(' y ')
+          omitir(`Falta ${faltan}`)
+          continue
+        }
 
         const newActivity = col(row, 'actividad', 'rubro', 'sector')
         const newAddress  = col(row, 'domicilio laboral', 'domicilio', 'direccion', 'address')
@@ -146,7 +170,7 @@ export async function POST(req: NextRequest) {
             await db.directorioContacto.update({ where: { id: existing.id }, data: contactoPatch })
             contactosActualizados++
           } else {
-            filasOmitidas++
+            omitir('Contacto repetido, sin datos nuevos (mismo nombre + apellido + empresa)')
           }
           continue
         }
@@ -167,11 +191,12 @@ export async function POST(req: NextRequest) {
       } catch (rowErr) {
         // Fila individual falla → omitir y continuar con el resto
         console.error('[DIRECTORIO IMPORTAR] row error:', rowErr)
-        filasOmitidas++
+        const msg = rowErr instanceof Error ? rowErr.message : 'error desconocido'
+        omitir(`Error al procesar la fila: ${msg}`)
       }
     }
 
-    return NextResponse.json({ empresasCreadas, empresasExistentes, empresasActualizadas, contactosCreados, contactosActualizados, filasOmitidas })
+    return NextResponse.json({ empresasCreadas, empresasExistentes, empresasActualizadas, contactosCreados, contactosActualizados, filasOmitidas, omitidas })
   } catch (error) {
     console.error('[DIRECTORIO IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el lote' }, { status: 500 })
