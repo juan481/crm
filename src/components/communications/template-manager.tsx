@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, FileText, Pencil, Trash2, Eye, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input, Textarea } from '@/components/ui/input'
+import { Input } from '@/components/ui/input'
+import { RichEditor, type RichEditorHandle } from '@/components/ui/rich-editor'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils'
+import { toEditorHtml } from '@/lib/rich-text'
 import type { EmailTemplate } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -26,6 +28,7 @@ export function TemplateManager() {
   const [previewing, setPreviewing] = useState<EmailTemplate | null>(null)
   const [form, setForm]           = useState<TemplateFormState>(EMPTY)
   const [saving, setSaving]       = useState(false)
+  const editorRef = useRef<RichEditorHandle>(null)
 
   const { data, isLoading } = useQuery<EmailTemplate[]>({
     queryKey: ['email-templates'],
@@ -51,8 +54,10 @@ export function TemplateManager() {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.subject.trim() || !form.body.trim()) {
-      toast.error('Completá todos los campos')
+    const body  = (editorRef.current?.getHTML() ?? '').trim()
+    const plain = body.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+    if (!form.name.trim() || !form.subject.trim() || plain.length < 3) {
+      toast.error('Completá nombre, asunto y cuerpo')
       return
     }
     setSaving(true)
@@ -62,7 +67,7 @@ export function TemplateManager() {
       const res    = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ name: form.name.trim(), subject: form.subject.trim(), body }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
@@ -158,7 +163,7 @@ export function TemplateManager() {
         open={formOpen}
         onClose={() => setFormOpen(false)}
         title={editing ? 'Editar Plantilla' : 'Nueva Plantilla'}
-        size="md"
+        size="lg"
       >
         <div className="space-y-4">
           <Input
@@ -173,17 +178,20 @@ export function TemplateManager() {
             value={form.subject}
             onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
           />
-          <Textarea
-            label="Cuerpo del email"
-            placeholder="Escribí el contenido. Podés usar {{nombre}} para personalizar."
-            rows={8}
-            value={form.body}
-            onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-          />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-[var(--color-text-muted)]">Cuerpo del email</label>
+            <RichEditor
+              key={editing?.id ?? 'new'}
+              ref={editorRef}
+              initialHTML={toEditorHtml(form.body)}
+              placeholder="Escribí el contenido. Podés usar {{nombre}} para personalizar."
+              minHeight={220}
+            />
+          </div>
           <div className="flex items-start gap-2 p-3 bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/15 rounded-xl">
             <span className="text-[var(--color-primary)] text-xs shrink-0 mt-0.5">💡</span>
             <p className="text-xs text-[var(--color-text-muted)]">
-              Usá <code className="text-[var(--color-primary)] font-mono bg-[var(--color-primary)]/10 px-1 rounded">{'{{nombre}}'}</code> para insertar el nombre del destinatario automáticamente.
+              Usá <code className="text-[var(--color-primary)] font-mono bg-[var(--color-primary)]/10 px-1 rounded">{'{{nombre}}'}</code> para insertar el nombre del destinatario automáticamente. Podés dar formato, sumar imágenes y ponerles un link o botón de WhatsApp.
             </p>
           </div>
           <ModalFooter>
@@ -210,7 +218,12 @@ export function TemplateManager() {
             </div>
             <div className="p-4 surface-raised rounded-xl">
               <p className="text-xs text-[var(--color-text-subtle)] mb-2">Cuerpo</p>
-              <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap leading-relaxed">{previewing.body}</p>
+              {/* Contenido propio de la org (lo escribe un admin en el editor) —
+                  se muestra tal cual va a salir en el mail. */}
+              <div
+                className="rich-editor-area text-sm text-[var(--color-text)] leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: toEditorHtml(previewing.body) }}
+              />
             </div>
             <ModalFooter>
               <Button variant="ghost" onClick={() => setPreviewing(null)} leftIcon={<X size={14} />}>Cerrar</Button>

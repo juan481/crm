@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
+import { useRef, useCallback, useState, useEffect, forwardRef, useImperativeHandle } from 'react'
 import {
   Bold, Italic, Underline, List, ListOrdered,
   Link2, AlignLeft, AlignCenter, AlignRight,
@@ -56,6 +56,8 @@ interface RichEditorProps {
   placeholder?: string
   minHeight?: number
   className?: string
+  /** HTML inicial (modo edición). Se aplica una sola vez al montar. */
+  initialHTML?: string
   onChange?: (html: string) => void
 }
 
@@ -77,12 +79,22 @@ const TOOLBAR = [
 ]
 
 export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
-  function RichEditor({ placeholder = 'Escribí el contenido del email...', minHeight = 220, className, onChange }, ref) {
+  function RichEditor({ placeholder = 'Escribí el contenido del email...', minHeight = 220, className, initialHTML, onChange }, ref) {
     const editorRef = useRef<HTMLDivElement>(null)
     // Selección guardada antes de abrir el modal (se pierde el foco del editor).
     const savedRange = useRef<Range | null>(null)
     // Nodo de la imagen que se está editando (null = insertar una nueva).
     const editingEl = useRef<HTMLElement | null>(null)
+    // Prefill del HTML inicial — una sola vez por montaje. Después, el propio
+    // contentEditable es la fuente de verdad (si React lo re-pisara borraría lo
+    // que el usuario escribió).
+    const prefilled = useRef(false)
+
+    useEffect(() => {
+      if (prefilled.current || !editorRef.current) return
+      if (initialHTML) editorRef.current.innerHTML = initialHTML
+      prefilled.current = true
+    }, [initialHTML])
 
     const [imgModalOpen, setImgModalOpen] = useState(false)
     const [imgInitial, setImgInitial] = useState<Parameters<typeof ImageLinkModal>[0]['initial']>(undefined)

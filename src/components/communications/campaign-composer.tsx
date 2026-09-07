@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { RichEditor, type RichEditorHandle } from '@/components/ui/rich-editor'
+import { toEditorHtml } from '@/lib/rich-text'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -265,7 +266,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
     const t = templates.find(t => t.id === id)
     if (!t) return
     setValue('subject', t.subject)
-    editorRef.current?.setHTML(t.body)
+    editorRef.current?.setHTML(toEditorHtml(t.body))
   }
 
   const switchSource = (s: Source) => {
