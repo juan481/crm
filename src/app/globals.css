@@ -183,6 +183,12 @@ body {
 .rich-editor-area h3 { font-size: 1.05em; font-weight: 600; margin: 0.3em 0; }
 .rich-editor-area a  { color: var(--color-primary); text-decoration: underline; }
 .rich-editor-area img { max-width: 100%; border-radius: 8px; margin: 4px 0; }
+/* Bloque de imagen insertado por el modal (con o sin link a WhatsApp) —
+   respeta el text-align, y da una pista visual de que es clickeable/editable. */
+.rich-editor-area .rt-img { margin: 14px 0; }
+.rich-editor-area .rt-img a { text-decoration: none; display: inline-block; }
+.rich-editor-area .rt-img img { cursor: pointer; margin: 0; transition: outline-color .15s; outline: 2px solid transparent; outline-offset: 2px; }
+.rich-editor-area .rt-img img:hover { outline-color: var(--color-primary); }
 .rich-editor-area ul, .rich-editor-area ol { padding-left: 1.5em; margin: 0.4em 0; }
 .rich-editor-area blockquote {
   border-left: 3px solid var(--color-primary);
