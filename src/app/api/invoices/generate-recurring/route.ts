@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
+import { empresasConAbono } from '@/lib/billing-recurrente'
 
-// Returns empresas that would be billed (preview) or creates invoices (action).
-// Uses Empresa.monthlyAmount — the legacy Client.mrr this used to read from
-// belongs to a model the live Clientes/Empresas workflow never populates.
+// Botón "Generar Facturas del Mes" en Facturación. Factura el monto plano
+// Empresa.monthlyAmount de las empresas cliente que NO tienen ningún abono
+// activo (si tienen abono, se factura desde Servicios / el cron, no acá, para
+// no duplicar). Las facturas de abonos se generan solas el día 1 (cron
+// invoice-automation) o a mano desde /servicios.
 export async function GET() {
   try {
     const payload = await getCurrentUser()
@@ -18,11 +21,12 @@ export async function GET() {
     const startOfMonth = new Date(Date.UTC(argToday.getUTCFullYear(), argToday.getUTCMonth(), 1))
     const endOfMonth = new Date(Date.UTC(argToday.getUTCFullYear(), argToday.getUTCMonth() + 1, 1))
 
-    const billableEmpresas = await prisma.empresa.findMany({
+    const conAbono = await empresasConAbono(payload.orgId)
+    const billableEmpresas = (await prisma.empresa.findMany({
       where: { organizationId: payload.orgId, isCliente: true, monthlyAmount: { gt: 0 } },
       select: { id: true, name: true, monthlyAmount: true, billingCurrency: true },
       orderBy: { name: 'asc' },
-    })
+    })).filter((e) => !conAbono.has(e.id))
 
     // Find which empresas already have an invoice this month
     const existingInvoices = await prisma.invoice.findMany({
@@ -71,9 +75,13 @@ export async function POST(req: NextRequest) {
     // se mostraba como "día 4" en vez de "5". Ver src/lib/timezone.ts.
     const dueDate = dateOnlyArgentina(argToday.getUTCFullYear(), argToday.getUTCMonth() + 1, 5)
 
-    const empresas = await prisma.empresa.findMany({
+    // Defensa: aunque una empresa con abono no aparece en el preview, un
+    // request viejo/manual podría mandarla igual — nunca la facturamos por
+    // monthlyAmount si ya tiene un abono activo (lo cubre el abono).
+    const conAbono = await empresasConAbono(payload.orgId)
+    const empresas = (await prisma.empresa.findMany({
       where: { id: { in: empresaIds }, organizationId: payload.orgId, isCliente: true },
-    })
+    })).filter((e) => !conAbono.has(e.id))
 
     // createMany en vez de $transaction(array de creates) — este último NO
     // paraleliza, ejecuta cada create como un INSERT secuencial (su propio

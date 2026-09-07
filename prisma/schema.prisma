@@ -149,6 +149,27 @@ enum BillingCycle {
   ONE_TIME
 }
 
+// ─── Servicios recurrentes / abonos (Empresa) ──────────────────────────────
+enum CicloFacturacion {
+  MENSUAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+  UNICO
+}
+
+enum EstadoServicioRecurrente {
+  ACTIVO
+  PAUSADO
+  BAJA
+}
+
+enum ModoLicencia {
+  SAAS
+  PERPETUA
+  NINGUNA
+}
+
 enum CotizacionStatus {
   GUARDADA
   ENVIADA
@@ -260,6 +281,7 @@ model Organization {
   emailUsage              EmailUsageMonthly[]
   memberships             OrganizationMembership[]
   notificationSettings    NotificationSetting[]
+  serviciosRecurrentes    ServicioRecurrente[]
 }
 
 // ─── Ruteo de avisos automáticos ───────────────────────────────────────────
@@ -283,6 +305,56 @@ model NotificationSetting {
 
   @@unique([organizationId, type])
   @@index([organizationId])
+}
+
+// ─── Servicio recurrente / abono ───────────────────────────────────────────
+// Un servicio que un cliente paga periódicamente: monitoreo 24hs, licencia de
+// software, mantenimiento, etc. Reemplaza (de forma aditiva) al viejo campo
+// plano Empresa.monthlyAmount: una empresa puede tener varios, con distinto
+// ciclo (mensual, anual…), y guarda el modo de licencia y si incluye
+// monitoreo — datos que la v1 mostraba y la v2 había perdido. La facturación
+// automática (cron invoice-automation) genera las facturas según el ciclo.
+// Ver src/lib/servicios-recurrentes.ts.
+model ServicioRecurrente {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  empresaId      String
+  empresa        Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  nombre           String
+  modoLicencia     ModoLicencia             @default(NINGUNA)
+  incluyeMonitoreo Boolean                  @default(false)
+
+  monto            Float                    @default(0)
+  moneda           String                   @default("USD")
+  ciclo            CicloFacturacion         @default(MENSUAL)
+  // Día del mes para el vencimiento de la factura generada (1–28).
+  diaVencimiento   Int                      @default(10)
+
+  contratoInicio   DateTime?
+  contratoFin      DateTime?                // null = sin fecha de fin / renovación automática
+
+  estado           EstadoServicioRecurrente @default(ACTIVO)
+  // Canal que genera el ingreso: "CRM", "Trisquelia", "Instalación", "Otro".
+  // Texto libre a propósito (mismo criterio que país/condición IVA): la lista
+  // curada vive en src/lib/servicios-recurrentes.ts y puede crecer sin migración.
+  canalIngreso     String                   @default("CRM")
+
+  // Datos opcionales de licencia (rescatados de la v1).
+  serial           String?
+  version          String?
+  puestos          Int?
+  notas            String?
+
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  invoices         Invoice[]
+
+  @@index([organizationId])
+  @@index([empresaId])
+  @@index([organizationId, estado])
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before
@@ -497,6 +569,10 @@ model Invoice {
   client         Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   empresaId      String?
   empresa        Empresa?      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  // Abono que originó esta factura (facturación recurrente por ciclo). null =
+  // factura manual o del flujo viejo por Empresa.monthlyAmount.
+  servicioRecurrenteId String?
+  servicioRecurrente   ServicioRecurrente? @relation(fields: [servicioRecurrenteId], references: [id], onDelete: SetNull)
   organizationId String
   amount         Float
   currency       String        @default("USD")
@@ -519,6 +595,9 @@ model Invoice {
   @@index([organizationId, empresaId])
   @@index([status])
   @@index([dueDate])
+  // Idempotencia de la facturación recurrente por abono (¿ya se facturó este
+  // abono este mes?).
+  @@index([servicioRecurrenteId, createdAt])
 }
 
 // ─── Timeline Notes ────────────────────────────────────────────────────────
@@ -1182,6 +1261,7 @@ model Empresa {
   tasks        Task[]
   tickets      Ticket[]
   invoices     Invoice[]
+  serviciosRecurrentes ServicioRecurrente[]
 
   @@index([organizationId])
   @@index([organizationId, name])

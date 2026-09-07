@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db'
 // comportamiento viejo (gate por plugin + destinatarios por rol) — así las
 // demás orgs del CRM no se ven afectadas por este cambio.
 
-export const NOTIFICATION_TYPES = ['attendance', 'it-activity'] as const
+export const NOTIFICATION_TYPES = ['attendance', 'it-activity', 'renewals'] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
 export const NOTIFICATION_META: Record<NotificationType, { label: string; description: string; roleFallback: string }> = {
@@ -18,6 +18,11 @@ export const NOTIFICATION_META: Record<NotificationType, { label: string; descri
   'it-activity': {
     label: 'Reporte diario de soporte IT',
     description: 'Cada mañana (lun–vie): tickets de soporte nuevos, resueltos, sin asignar, vencidos por SLA y backlog.',
+    roleFallback: 'Nadie hasta configurarlo',
+  },
+  'renewals': {
+    label: 'Contratos por vencer',
+    description: 'Aviso cuando un contrato de un servicio recurrente vence en 30, 15 o 7 días.',
     roleFallback: 'Nadie hasta configurarlo',
   },
 }

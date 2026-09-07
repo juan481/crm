@@ -10,7 +10,11 @@
     },
     {
       "path": "/api/cron/it-activity-report",
-      "schedule": "0 12 * * 1-5"
+      "schedule": "15 12 * * 1-5"
+    },
+    {
+      "path": "/api/cron/contract-renewals",
+      "schedule": "30 12 * * *"
     },
     {
       "path": "/api/cron/invoice-automation",

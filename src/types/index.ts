@@ -649,6 +649,32 @@ export interface Empresa {
   updatedAt: string
   _count?: { contactos: number }
   contactos?: DirectorioContacto[]
+  serviciosRecurrentes?: ServicioRecurrente[]
+}
+
+export interface ServicioRecurrente {
+  id: string
+  empresaId: string
+  empresa?: { id: string; name: string; isCliente: boolean }
+  nombre: string
+  modoLicencia: 'SAAS' | 'PERPETUA' | 'NINGUNA'
+  incluyeMonitoreo: boolean
+  monto: number
+  moneda: string
+  ciclo: 'MENSUAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'UNICO'
+  cicloLabel?: string
+  diaVencimiento: number
+  contratoInicio: string | null
+  contratoFin: string | null
+  diasHastaFin?: number | null
+  estado: 'ACTIVO' | 'PAUSADO' | 'BAJA'
+  canalIngreso: string
+  serial: string | null
+  version: string | null
+  puestos: number | null
+  notas: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface DirectorioContacto {

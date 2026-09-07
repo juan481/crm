@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
 import { isPluginEnabled } from '@/lib/plugins'
+import { billAbonosForOrg, empresasConAbono } from '@/lib/billing-recurrente'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 
@@ -13,9 +14,13 @@ const JOB_NAME = 'invoice-automation'
 // Corre el primer día de cada mes (vercel.json). Sólo actúa sobre
 // organizaciones que activaron el plugin "Facturación Automática" — el
 // resto sigue usando el botón manual "Generar del Mes" en Facturación,
-// exactamente igual que hoy. Misma lógica de selección que ese botón
-// (POST /api/invoices/generate-recurring): empresas cliente con
-// monthlyAmount > 0 que todavía no tienen factura este mes.
+// exactamente igual que hoy.
+//
+// Factura dos cosas:
+//  1) Abonos (ServicioRecurrente) según su ciclo — ver src/lib/billing-recurrente.ts.
+//  2) Empresas cliente con monthlyAmount > 0 que NO tienen ningún abono activo
+//     (flujo viejo). Si una empresa tiene abono, su monthlyAmount se ignora
+//     para no facturar dos veces.
 //
 // A propósito NO manda la factura por mail al cliente — no hay todavía un
 // campo de "mail de facturación" por empresa, y automatizar el primer
@@ -58,18 +63,27 @@ export async function GET(req: NextRequest) {
     let orgsSkippedAlreadySent = 0
     let orgsWithNothingToBill = 0
     let invoicesCreated = 0
-    const wouldCreate: { org: string; empresa: string; amount: number; currency: string }[] = []
+    const wouldCreate: { org: string; empresa: string; concepto: string; amount: number; currency: string }[] = []
 
     for (const org of orgs) {
       if (!(await isPluginEnabled(org.id, 'invoice-automation'))) { orgsSkippedDisabled++; continue }
+      const orgName = org.name || org.crmName || 'CRM'
 
-      const billableEmpresas = await prisma.empresa.findMany({
+      // 1) Abonos (ServicioRecurrente) por su ciclo — un anual factura una vez
+      //    al año, un mensual todos los meses, etc. billAbonosForOrg es
+      //    idempotente: no duplica si ya se facturó ese abono este mes.
+      const abonoPreview = await billAbonosForOrg(org.id, { dryRun: true })
+
+      // 2) Flujo viejo por Empresa.monthlyAmount — SÓLO para empresas que NO
+      //    tienen ningún abono activo (si tienen abono, ese es la fuente de
+      //    verdad y el monthlyAmount se ignora, para no facturar dos veces).
+      const conAbono = await empresasConAbono(org.id)
+      const billableEmpresas = (await prisma.empresa.findMany({
         where: { organizationId: org.id, isCliente: true, monthlyAmount: { gt: 0 } },
         select: { id: true, name: true, monthlyAmount: true, billingCurrency: true },
-      })
-      if (billableEmpresas.length === 0) { orgsWithNothingToBill++; continue }
+      })).filter((e) => !conAbono.has(e.id))
 
-      const existingInvoices = await prisma.invoice.findMany({
+      const existingInvoices = billableEmpresas.length === 0 ? [] : await prisma.invoice.findMany({
         where: {
           empresaId: { in: billableEmpresas.map((e) => e.id) },
           createdAt: { gte: startOfMonth, lt: endOfMonth },
@@ -77,12 +91,18 @@ export async function GET(req: NextRequest) {
         select: { empresaId: true },
       })
       const alreadyBilledIds = new Set(existingInvoices.map((i) => i.empresaId))
-      const pending = billableEmpresas.filter((e) => !alreadyBilledIds.has(e.id))
-      if (pending.length === 0) { orgsWithNothingToBill++; continue }
+      const legacyPending = billableEmpresas.filter((e) => !alreadyBilledIds.has(e.id))
+
+      if (abonoPreview.items.length === 0 && legacyPending.length === 0) {
+        orgsWithNothingToBill++; continue
+      }
 
       if (dryRun) {
-        for (const e of pending) {
-          wouldCreate.push({ org: org.name || org.crmName || 'CRM', empresa: e.name, amount: e.monthlyAmount ?? 0, currency: e.billingCurrency || 'USD' })
+        for (const it of abonoPreview.items) {
+          wouldCreate.push({ org: orgName, empresa: it.empresa, concepto: it.concepto, amount: it.amount, currency: it.currency })
+        }
+        for (const e of legacyPending) {
+          wouldCreate.push({ org: orgName, empresa: e.name, concepto: `Facturación recurrente — ${monthName}`, amount: e.monthlyAmount ?? 0, currency: e.billingCurrency || 'USD' })
         }
         continue
       }
@@ -92,33 +112,41 @@ export async function GET(req: NextRequest) {
       // nuevo. Ver modelo CronRun.
       if (!(await claimCronRun(JOB_NAME, org.id, startOfMonth))) { orgsSkippedAlreadySent++; continue }
 
-      // createMany en vez de $transaction(array de creates) — este último NO
-      // paraleliza, ejecuta cada create como un INSERT secuencial (mismo
-      // anti-patrón ya corregido en generate-recurring/route.ts, el botón
-      // manual equivalente).
-      const created = await prisma.invoice.createMany({
-        data: pending.map((e) => ({
-          empresaId: e.id,
-          organizationId: org.id,
-          amount: e.monthlyAmount ?? 0,
-          currency: e.billingCurrency || 'USD',
-          description: `Facturación recurrente — ${monthName}`,
-          dueDate,
-          status: 'PENDING' as const,
-        })),
-      })
-      invoicesCreated += created.count
+      const abonoRes = await billAbonosForOrg(org.id, {})
+      invoicesCreated += abonoRes.created
 
-      if (isOrgEmailConfigured(org)) {
+      let legacyCreated = 0
+      if (legacyPending.length > 0) {
+        // createMany en vez de $transaction(array de creates) — este último NO
+        // paraleliza, ejecuta cada create como un INSERT secuencial.
+        const created = await prisma.invoice.createMany({
+          data: legacyPending.map((e) => ({
+            empresaId: e.id,
+            organizationId: org.id,
+            amount: e.monthlyAmount ?? 0,
+            currency: e.billingCurrency || 'USD',
+            description: `Facturación recurrente — ${monthName}`,
+            dueDate,
+            status: 'PENDING' as const,
+          })),
+        })
+        legacyCreated = created.count
+        invoicesCreated += legacyCreated
+      }
+
+      const totalCreated = abonoRes.created + legacyCreated
+      if (totalCreated > 0 && isOrgEmailConfigured(org)) {
         try {
           const staff = await prisma.user.findMany({
             where: { organizationId: org.id, status: 'ACTIVE', role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
             select: { email: true },
           })
-          const orgName = org.name || org.crmName || 'CRM'
-          const lines = pending.map((e) => `• ${e.name} — ${e.billingCurrency || 'USD'} ${(e.monthlyAmount ?? 0).toLocaleString('es-AR')}`).join('\n')
+          const lines = [
+            ...abonoRes.items.map((it) => `• ${it.empresa} — ${it.concepto} — ${it.currency} ${it.amount.toLocaleString('es-AR')}`),
+            ...legacyPending.map((e) => `• ${e.name} — ${e.billingCurrency || 'USD'} ${(e.monthlyAmount ?? 0).toLocaleString('es-AR')}`),
+          ].join('\n')
           const html = buildEmailHtml(
-            `${created.count} factura${created.count !== 1 ? 's' : ''} generada${created.count !== 1 ? 's' : ''} automáticamente`,
+            `${totalCreated} factura${totalCreated !== 1 ? 's' : ''} generada${totalCreated !== 1 ? 's' : ''} automáticamente`,
             `Facturación recurrente de ${monthName}:\n\n${lines}\n\nQuedaron en estado "Pendiente" — entrá a Facturación para revisarlas antes de avisarle a cada cliente.`,
             orgName,
             org.primaryColor || '#6366f1',
@@ -128,7 +156,7 @@ export async function GET(req: NextRequest) {
             if (!s.email) continue
             await sendEmail({
               to: s.email,
-              subject: `${created.count} factura${created.count !== 1 ? 's' : ''} generada${created.count !== 1 ? 's' : ''} — ${monthName} — ${orgName}`,
+              subject: `${totalCreated} factura${totalCreated !== 1 ? 's' : ''} generada${totalCreated !== 1 ? 's' : ''} — ${monthName} — ${orgName}`,
               html,
               smtpConfig: resolveOrgSmtpConfig(org),
             })

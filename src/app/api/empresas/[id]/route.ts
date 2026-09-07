@@ -24,6 +24,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
             createdAt: true, updatedAt: true,
           },
         },
+        serviciosRecurrentes: {
+          orderBy: [{ estado: 'asc' }, { createdAt: 'desc' }],
+        },
       },
     })
 
@@ -39,6 +42,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           ...c,
           createdAt: c.createdAt.toISOString(),
           updatedAt: c.updatedAt.toISOString(),
+        })),
+        serviciosRecurrentes: (empresa.serviciosRecurrentes ?? []).map((s: any) => ({
+          ...s,
+          contratoInicio: s.contratoInicio?.toISOString() ?? null,
+          contratoFin:    s.contratoFin?.toISOString() ?? null,
+          createdAt:      s.createdAt.toISOString(),
+          updatedAt:      s.updatedAt.toISOString(),
         })),
       },
     })

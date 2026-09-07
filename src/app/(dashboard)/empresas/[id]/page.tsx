@@ -18,8 +18,10 @@ import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { ContactoForm } from '@/components/directorio/contacto-form'
 import { EmpresaNotas, type EmpresaNotasHandle } from '@/components/directorio/empresa-notas'
 import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
+import { ServicioForm } from '@/components/servicios/servicio-form'
+import { ESTADO_LABEL } from '@/lib/servicios-recurrentes'
 import { useAuthStore } from '@/store/auth-store'
-import type { DirectorioContacto, Empresa } from '@/types'
+import type { DirectorioContacto, Empresa, ServicioRecurrente } from '@/types'
 import toast from 'react-hot-toast'
 
 export default function EmpresaDetailPage() {
@@ -37,6 +39,9 @@ export default function EmpresaDetailPage() {
   const [deleting,          setDeleting]          = useState(false)
   const [togglingCliente,   setTogglingCliente]   = useState(false)
   const [savingBilling,     setSavingBilling]     = useState(false)
+  const [servicioFormOpen,  setServicioFormOpen]  = useState(false)
+  const [editingServicio,   setEditingServicio]   = useState<ServicioRecurrente | null>(null)
+  const [deleteServicioId,  setDeleteServicioId]  = useState<string | null>(null)
 
   // Email selectivo
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set())
@@ -114,6 +119,18 @@ export default function EmpresaDetailPage() {
       qc.invalidateQueries({ queryKey: ['empresa', id] })
     } catch { toast.error('Error de conexión') }
     finally { setSavingBilling(false) }
+  }
+
+  const handleDeleteServicio = async () => {
+    if (!deleteServicioId) return
+    try {
+      const res = await fetch(`/api/servicios-recurrentes/${deleteServicioId}`, { method: 'DELETE' })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error || 'No se pudo borrar'); return }
+      toast.success('Servicio borrado')
+      setDeleteServicioId(null)
+      qc.invalidateQueries({ queryKey: ['empresa', id] })
+    } catch { toast.error('Error de conexión') }
   }
 
   const handleDeleteEmpresa = async () => {
@@ -308,41 +325,101 @@ export default function EmpresaDetailPage() {
         </div>
       </div>
 
-      {/* Recurring billing (only relevant once marked as cliente) */}
-      {empresa.isCliente && (
-        <div className="rounded-2xl p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          <div className="flex items-center gap-2 mb-3">
-            <DollarSign size={15} style={{ color: 'var(--color-text-muted)' }} />
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
-              Facturación recurrente
-            </p>
+      {/* Servicios recurrentes / abonos (only relevant once marked as cliente) */}
+      {empresa.isCliente && (() => {
+        const abonos = empresa.serviciosRecurrentes ?? []
+        // "Usa abonos" = tiene al menos uno vigente (no de baja). En ese caso
+        // el monto mensual rápido queda inhabilitado (la facturación va por
+        // los abonos, para no duplicar). Los de baja se muestran igual, como historia.
+        const usaAbonos = abonos.some((a) => a.estado !== 'BAJA')
+        const tieneAbonos = abonos.length > 0
+        return (
+          <div className="rounded-2xl p-5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <DollarSign size={15} style={{ color: 'var(--color-text-muted)' }} />
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+                  Servicios recurrentes
+                </p>
+              </div>
+              {canManage && (
+                <button
+                  onClick={() => { setEditingServicio(null); setServicioFormOpen(true) }}
+                  className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+                >
+                  <Plus size={13} /> Agregar
+                </button>
+              )}
+            </div>
+
+            {tieneAbonos ? (
+              <div className="space-y-2">
+                {abonos.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 group" style={{ border: '1px solid var(--color-border)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                        {s.nombre}
+                        {s.incluyeMonitoreo && <span className="ml-2 text-[10px] text-emerald-500">monitoreo</span>}
+                        {s.estado !== 'ACTIVO' && <span className="ml-2 text-[10px] text-[var(--color-text-subtle)]">({ESTADO_LABEL[s.estado] ?? s.estado})</span>}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        {formatCurrency(s.monto, s.moneda)} · {s.cicloLabel ?? s.ciclo}
+                        {s.contratoFin ? ` · hasta ${new Date(s.contratoFin).toLocaleDateString('es-AR')}` : ''}
+                        {s.canalIngreso && s.canalIngreso !== 'CRM' ? ` · ${s.canalIngreso}` : ''}
+                      </p>
+                    </div>
+                    {canManage && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => { setEditingServicio(s); setServicioFormOpen(true) }}
+                          className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-[var(--color-primary)]" title="Editar">
+                          <Edit size={13} />
+                        </button>
+                        <button onClick={() => setDeleteServicioId(s.id)}
+                          className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-red-400" title="Borrar">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
+                Cargá acá los abonos que este cliente paga todos los meses (monitoreo, licencia, mantenimiento…).
+                Las facturas se generan solas según el ciclo de cada uno.
+              </p>
+            )}
+
+            {/* Monto mensual rápido — sólo se usa si NO hay abonos vigentes */}
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+              <p className="text-[11px] mb-2" style={{ color: 'var(--color-text-subtle)' }}>
+                {usaAbonos
+                  ? 'Monto mensual rápido (ignorado: este cliente ya factura por los abonos de arriba).'
+                  : 'O cargá un monto mensual rápido, sin abrir un abono completo.'}
+              </p>
+              <div className="grid grid-cols-[1fr_auto] gap-2 max-w-xs" key={`${empresa.monthlyAmount}-${empresa.billingCurrency}`}>
+                <Input
+                  type="number" min="0" step="0.01"
+                  placeholder="0.00"
+                  defaultValue={empresa.monthlyAmount ?? ''}
+                  disabled={savingBilling || usaAbonos}
+                  onBlur={(e) => {
+                    if (Number(e.target.value || 0) !== (empresa.monthlyAmount ?? 0)) {
+                      handleSaveBilling(e.target.value, empresa.billingCurrency)
+                    }
+                  }}
+                />
+                <Select
+                  options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }, { value: 'EUR', label: 'EUR' }]}
+                  defaultValue={empresa.billingCurrency}
+                  disabled={savingBilling || usaAbonos}
+                  onChange={(e) => handleSaveBilling(String(empresa.monthlyAmount ?? ''), e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
-            Si esta empresa se factura todos los meses por el mismo monto, cargalo acá — así aparece en
-            &quot;Generar Facturas del Mes&quot; en Facturación.
-            {empresa.monthlyAmount ? ` Hoy: ${formatCurrency(empresa.monthlyAmount, empresa.billingCurrency)}/mes.` : ''}
-          </p>
-          <div className="grid grid-cols-[1fr_auto] gap-2 max-w-xs" key={`${empresa.monthlyAmount}-${empresa.billingCurrency}`}>
-            <Input
-              type="number" min="0" step="0.01"
-              placeholder="0.00"
-              defaultValue={empresa.monthlyAmount ?? ''}
-              disabled={savingBilling}
-              onBlur={(e) => {
-                if (Number(e.target.value || 0) !== (empresa.monthlyAmount ?? 0)) {
-                  handleSaveBilling(e.target.value, empresa.billingCurrency)
-                }
-              }}
-            />
-            <Select
-              options={[{ value: 'USD', label: 'USD' }, { value: 'ARS', label: 'ARS' }, { value: 'EUR', label: 'EUR' }]}
-              defaultValue={empresa.billingCurrency}
-              disabled={savingBilling}
-              onChange={(e) => handleSaveBilling(String(empresa.monthlyAmount ?? ''), e.target.value)}
-            />
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Activity / Notas section */}
       <div className="flex justify-end -mb-2">
@@ -603,6 +680,25 @@ export default function EmpresaDetailPage() {
           <Button variant="danger" onClick={handleDeleteContacto} disabled={deleting}>
             {deleting ? 'Eliminando...' : 'Eliminar'}
           </Button>
+        </div>
+      </Modal>
+
+      {/* Servicio recurrente */}
+      <ServicioForm
+        open={servicioFormOpen}
+        onClose={() => setServicioFormOpen(false)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ['empresa', id] })}
+        servicio={editingServicio}
+        empresaId={editingServicio ? undefined : id}
+        empresaNombre={empresa?.name}
+      />
+      <Modal open={!!deleteServicioId} onClose={() => setDeleteServicioId(null)} title="Borrar servicio" size="sm">
+        <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
+          ¿Borrar este servicio recurrente? Las facturas ya emitidas quedan intactas.
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button variant="outline" onClick={() => setDeleteServicioId(null)}>Cancelar</Button>
+          <Button variant="danger" onClick={handleDeleteServicio}>Borrar</Button>
         </div>
       </Modal>
 
