@@ -12,23 +12,39 @@ import { prisma } from '@/lib/db'
 
 const digitsOnly = (s: string): string => (s || '').replace(/\D/g, '')
 
+// ¿Parece un nombre de persona real y no un placeholder / un mail / puro número?
+function looksLikeRealName(s: string): boolean {
+  const t = (s || '').trim()
+  if (t.length < 2) return false
+  if (/@|\d{4,}/.test(t)) return false                              // mail, o tira de dígitos
+  if (/^(sin nombre|cliente|desconocido|n\/?a|no s[eé])/i.test(t)) return false
+  return /[a-zà-ÿ]{2,}/i.test(t)                                    // al menos 2 letras seguidas
+}
+
+// Devuelve el nombre real de la persona, o `null` si no hay uno usable.
+// null = NO se crea un contacto genérico ("Sin nombre (+549...)") — el Deal
+// queda sin contacto vinculado y una persona lo completa (el teléfono ya
+// queda en las notas del Deal). Ver comentario en resolveContactoForConversation.
 function pickName(
   collected: Record<string, unknown>,
   waName: string | null,
-  phoneForFallback: string,
-): { firstName: string; lastName: string } {
+): { firstName: string; lastName: string } | null {
   const c = (k: string) => (typeof collected[k] === 'string' ? (collected[k] as string).trim() : '')
+
+  // 1) Lo que NISSI juntó explícitamente (save_customer_info).
   let firstName = c('nombre') || c('firstName')
   let lastName = c('apellido') || c('lastName')
 
-  if (!firstName && waName) {
+  // 2) El nombre del perfil de WhatsApp — suele ser el nombre real ("Camila
+  //    Preves" pone eso como nombre de WhatsApp). Sólo si NISSI no juntó nada.
+  if (!firstName && waName && looksLikeRealName(waName)) {
     const parts = waName.trim().split(/\s+/).filter(Boolean)
     firstName = parts[0] ?? ''
     lastName = lastName || parts.slice(1).join(' ')
   }
-  if (!firstName) firstName = 'Sin nombre'
-  if (!lastName) lastName = `(${phoneForFallback})`
-  return { firstName, lastName }
+
+  if (!looksLikeRealName(firstName)) return null
+  return { firstName: firstName.trim(), lastName: lastName.trim() }
 }
 
 export interface ResolveContactoCtx {
@@ -63,10 +79,17 @@ export async function resolveContactoForConversation(orgId: string, ctx: Resolve
       if (byPhone) return byPhone.id
     }
 
-    const { firstName, lastName } = pickName(collected, waName, phoneRaw)
+    const nombrePersona = pickName(collected, waName)
+
+    // Sin un nombre real: NO se crea un contacto genérico. El Deal/Ticket se
+    // crea sin contactoId; el teléfono queda en las notas y una persona
+    // completa el nombre en el CRM. Así el directorio no se llena de
+    // "Sin nombre (+549...)" que después no se pueden buscar por nombre.
+    if (!nombrePersona) return null
+    const { firstName, lastName } = nombrePersona
 
     // 2) Match por nombre + apellido (contacto sin empresa).
-    if (firstName !== 'Sin nombre') {
+    {
       const byName = await db.directorioContacto.findFirst({
         where: {
           organizationId: orgId,

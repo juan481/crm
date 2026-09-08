@@ -336,7 +336,7 @@ model ServicioRecurrente {
   contratoFin      DateTime?                // null = sin fecha de fin / renovación automática
 
   estado           EstadoServicioRecurrente @default(ACTIVO)
-  // Canal que genera el ingreso: "CRM", "Trisquelia", "Instalación", "Otro".
+  // Canal / origen del ingreso: "CRM", "Instalación", "Otro".
   // Texto libre a propósito (mismo criterio que país/condición IVA): la lista
   // curada vive en src/lib/servicios-recurrentes.ts y puede crecer sin migración.
   canalIngreso     String                   @default("CRM")

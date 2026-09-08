@@ -49,8 +49,21 @@ export async function marcarClienteAlGanar(
   // Consumidor final: no hay ninguna Empresa en juego, pero sí un contacto
   // suelto → se crea la Empresa a nombre de la persona.
   if (!empresaId && contacto) {
-    const nombre = `${contacto.firstName ?? ''} ${contacto.lastName ?? ''}`.trim() || 'Cliente sin nombre'
-    const nueva = await db.empresa.create({
+    const nombre = `${contacto.firstName ?? ''} ${contacto.lastName ?? ''}`.trim()
+    // Sin un nombre real no se crea una Empresa "fantasma" — se deja el Deal
+    // ganado sin cliente y una persona lo carga bien. (Abba: nada de
+    // "Consumidor final 1", "Cliente sin nombre", etc.)
+    if (!nombre || /^(sin nombre|cliente sin nombre|desconocido|n\/?a)/i.test(nombre)) return null
+
+    // Si Seba ya cargó a esta persona como Empresa (así carga los
+    // particulares: nombre y apellido en el campo Empresa), reusarla en vez de
+    // crear un duplicado.
+    const existente = await db.empresa.findFirst({
+      where: { organizationId: orgId, name: { equals: nombre, mode: 'insensitive' } },
+      select: { id: true, name: true, isCliente: true },
+    })
+
+    const target = existente ?? await db.empresa.create({
       data: {
         name: nombre,
         organizationId: orgId,
@@ -59,11 +72,14 @@ export async function marcarClienteAlGanar(
         clienteDesde: new Date(),
         tipoCliente: 'CONSUMIDOR_FINAL', // se creó a nombre de una persona
       },
-      select: { id: true, name: true },
+      select: { id: true, name: true, isCliente: true },
     })
-    await db.directorioContacto.update({ where: { id: contacto.id }, data: { empresaId: nueva.id } })
-    await db.deal.update({ where: { id: deal.id }, data: { empresaId: nueva.id } })
-    return { empresaId: nueva.id, nombre: nueva.name, nuevoCliente: true, empresaCreada: true }
+    if (existente && !existente.isCliente) {
+      await db.empresa.update({ where: { id: existente.id }, data: { isCliente: true, clienteDesde: new Date(), tipoCliente: 'CONSUMIDOR_FINAL' } })
+    }
+    await db.directorioContacto.update({ where: { id: contacto.id }, data: { empresaId: target.id } })
+    await db.deal.update({ where: { id: deal.id }, data: { empresaId: target.id } })
+    return { empresaId: target.id, nombre: target.name, nuevoCliente: !existente?.isCliente, empresaCreada: !existente }
   }
 
   if (!empresaId) return null // ni empresa ni contacto: no hay a quién marcar

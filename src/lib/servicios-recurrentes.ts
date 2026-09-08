@@ -37,8 +37,9 @@ export const MODO_LICENCIA_OPTIONS = (Object.keys(MODO_LICENCIA_LABEL) as ModoLi
   value, label: MODO_LICENCIA_LABEL[value],
 }))
 
-// Canal de ingreso — lista curada (crece sin migración, el campo es texto libre).
-export const CANAL_OPTIONS = ['CRM', 'Trisquelia', 'Instalación', 'Otro']
+// Canal / origen del ingreso — lista curada (crece sin migración, el campo es
+// texto libre). Sirve para separar el MRR por de dónde viene la plata.
+export const CANAL_OPTIONS = ['CRM', 'Instalación', 'Otro']
 
 // Monedas soportadas en abonos (mismas que el resto de la facturación).
 export const MONEDAS_VALIDAS = ['USD', 'ARS', 'EUR', 'MXN', 'CLP', 'COP', 'UYU', 'BRL']

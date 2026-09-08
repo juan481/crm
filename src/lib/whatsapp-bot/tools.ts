@@ -280,9 +280,17 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
 
   if (name === 'create_sales_lead' || name === 'create_billing_ticket') {
     const isBilling = name === 'create_billing_ticket'
-    const title = (String(input.title ?? '').trim() || (isBilling ? 'Consulta de facturación por WhatsApp' : 'Lead de ventas por WhatsApp'))
+    const rawCustomerName = typeof input.customerName === 'string' ? input.customerName.trim() : ''
+    // Nunca dejar entrar "Sin nombre" / placeholders al nombre ni al título.
+    const customerName = (!rawCustomerName || /^(sin nombre|cliente|desconocido|n\/?a)/i.test(rawCustomerName)) ? null : rawCustomerName
+    const rawTitle = String(input.title ?? '').trim().replace(/\s*[—-]?\s*sin nombre\s*(\([^)]*\))?/i, '').trim()
+    let title = rawTitle || (isBilling ? 'Consulta de facturación por WhatsApp' : 'Lead de ventas por WhatsApp')
+    // Si NISSI no metió el nombre en el título y lo tenemos, agregarlo — así se
+    // busca por nombre en el Pipeline (pedido de Abba).
+    if (customerName && !title.toLowerCase().includes(customerName.toLowerCase())) {
+      title = `${title} — ${customerName}`
+    }
     const detail = (String((isBilling ? input.description : input.summary) ?? '').trim() || 'Sin detalle — revisar la conversación completa en el CRM.')
-    const customerName = typeof input.customerName === 'string' ? input.customerName.trim() : null
     const customerEmail = typeof input.customerEmail === 'string' ? input.customerEmail.trim() : null
     const fullDetail = await prependOrigin(db, ctx.conversationId, `${detail}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`)
 
