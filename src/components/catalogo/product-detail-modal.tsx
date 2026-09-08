@@ -3,7 +3,7 @@
 import { Boxes, Tag, ShoppingCart } from 'lucide-react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 import { sanitizeIvaPct } from '@/lib/quote-totals'
 import type { Product } from '@/types'
 
@@ -71,12 +71,12 @@ export function ProductDetailModal({ product: p, onClose, onAdd, addLabel = 'Agr
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <div>
             <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Precio público (sin IVA)</p>
-            <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(p.price, p.currency)} <span className="text-xs font-normal">/ {p.unit}</span></p>
+            <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatMoneyExact(p.price, p.currency)} <span className="text-xs font-normal">/ {p.unit}</span></p>
           </div>
           {p.precioGremio != null && (
             <div className="text-right">
               <p className="text-[11px] text-emerald-500">Precio Gremio (sin IVA)</p>
-              <p className="text-lg font-bold text-emerald-500">{formatCurrency(p.precioGremio, p.currency)}</p>
+              <p className="text-lg font-bold text-emerald-500">{formatMoneyExact(p.precioGremio, p.currency)}</p>
             </div>
           )}
         </div>

@@ -19,7 +19,7 @@ const SELECT = {
   // su propio SELECT) — la respuesta de "crear empresa" nunca traía de
   // vuelta el CUIT/condición de IVA/forma de pago recién cargados, aunque
   // sí habían quedado guardados en la DB.
-  cuit: true, condicionIva: true, formaPagoHabitual: true,
+  tipoCliente: true, cuit: true, condicionIva: true, formaPagoHabitual: true,
   createdAt: true, updatedAt: true,
   _count: { select: { contactos: true } },
 }
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
-    const { name, activity, address, codigoPostal, city, province, country, website, ownerId, cuit, condicionIva, formaPagoHabitual } = body
+    const { name, activity, address, codigoPostal, city, province, country, website, ownerId, tipoCliente, cuit, condicionIva, formaPagoHabitual } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
@@ -134,6 +134,7 @@ export async function POST(req: NextRequest) {
         province:     province?.trim()     || null,
         country:      country?.trim()      || null,
         website:      website?.trim()      || null,
+        tipoCliente:        ['EMPRESA', 'CONSUMIDOR_FINAL'].includes(tipoCliente) ? tipoCliente : null,
         cuit:               cuit?.trim()               || null,
         condicionIva:       condicionIva?.trim()        || null,
         formaPagoHabitual:  formaPagoHabitual?.trim()   || null,

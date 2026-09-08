@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { FileText, Calendar, DollarSign, Send, Clock, CheckCircle2 } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 
 interface CotizacionRow {
   id: string; ref: string; recipientName: string; total: number
@@ -84,7 +84,7 @@ export function EmpresaCotizaciones({ empresaId }: { empresaId: string }) {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                        {formatCurrency(c.total, c.currency)}
+                        {formatMoneyExact(c.total, c.currency)}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center hidden sm:table-cell">

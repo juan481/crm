@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Building2, MapPin, Globe, UserCheck,
   TrendingUp, FileText, LifeBuoy, ClipboardList, Users,
-  DollarSign, Target, CheckSquare, Square, Clock, Mail, Plus, Trash2,
+  DollarSign, Target, CheckSquare, Square, Clock, Mail, Plus, Trash2, Calculator, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { EmpresaNotas } from '@/components/directorio/empresa-notas'
 import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
+import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { formatCurrency, formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import type { Empresa, Deal, DealStage, Ticket, Task, TaskPriority } from '@/types'
@@ -42,6 +44,8 @@ export default function ClienteDetailPage() {
   const qc            = useQueryClient()
   const { user }      = useAuthStore()
   const [tab, setTab] = useState<Tab>('resumen')
+  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'SELLER'
+  const [editOpen, setEditOpen] = useState(false)
 
   // Task form state
   const [showTaskForm, setShowTaskForm] = useState(false)
@@ -208,6 +212,13 @@ export default function ClienteDetailPage() {
                   <MapPin size={13} />{[empresa.city, empresa.province].filter(Boolean).join(', ')}
                 </span>
               )}
+              {(empresa.tipoCliente || empresa.condicionIva) && (
+                <span className="flex items-center gap-1.5">
+                  {empresa.tipoCliente === 'CONSUMIDOR_FINAL' ? 'Consumidor final' : empresa.tipoCliente === 'EMPRESA' ? 'Empresa' : null}
+                  {empresa.tipoCliente && empresa.condicionIva ? ' · ' : ''}
+                  {empresa.condicionIva}
+                </span>
+              )}
               {empresa.website && (
                 <a href={empresa.website.startsWith('http') ? empresa.website : `https://${empresa.website}`}
                   target="_blank" rel="noopener noreferrer"
@@ -217,6 +228,23 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
+          {canManage && (
+            <div className="flex flex-col gap-2 shrink-0">
+              <Link
+                href={`/cotizador?empresaId=${id}`}
+                className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg gradient-bg text-white hover:opacity-90 transition-opacity"
+              >
+                <Calculator size={14} /> Cotizar
+              </Link>
+              <button
+                onClick={() => setEditOpen(true)}
+                className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg surface hover:border-[var(--color-border-strong)] transition-colors"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <Pencil size={14} /> Editar datos
+              </button>
+            </div>
+          )}
         </div>
 
         {/* KPI strip */}
@@ -460,6 +488,17 @@ export default function ClienteDetailPage() {
           </table>
         </div>
       )}
+
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar datos del cliente" size="md">
+        <EmpresaForm
+          empresa={empresa}
+          onSuccess={() => {
+            setEditOpen(false)
+            qc.invalidateQueries({ queryKey: ['empresa', id] })
+            qc.invalidateQueries({ queryKey: ['empresas-clientes'] })
+          }}
+        />
+      </Modal>
     </div>
   )
 }

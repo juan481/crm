@@ -119,7 +119,16 @@ export default function ClientesPage() {
                         style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
                         <Building2 size={14} style={{ color: 'var(--color-primary)' }} />
                       </div>
-                      <span className="font-medium" style={{ color: 'var(--color-text)' }}>{e.name}</span>
+                      <div className="min-w-0">
+                        <span className="font-medium block truncate" style={{ color: 'var(--color-text)' }}>{e.name}</span>
+                        {(e.tipoCliente || e.condicionIva) && (
+                          <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>
+                            {e.tipoCliente === 'CONSUMIDOR_FINAL' ? 'Consumidor final' : e.tipoCliente === 'EMPRESA' ? 'Empresa' : ''}
+                            {e.tipoCliente && e.condicionIva ? ' · ' : ''}
+                            {e.condicionIva ?? ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell" style={{ color: 'var(--color-text-muted)' }}>{e.activity ?? '—'}</td>

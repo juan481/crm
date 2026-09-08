@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAny, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,11 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
+    if (
+      payload.role !== 'GREMIO' &&
+      !canAccess(payload.role, 'SELLER') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'catalogo'))
+    ) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
     // Mismo criterio que GET /api/catalogo/products — sin esto, el panel de

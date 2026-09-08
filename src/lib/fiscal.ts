@@ -4,6 +4,12 @@
 // país/ciudad: agregar o corregir una categoría es tocar este archivo, no
 // una migración de base.
 
+// Empresa vs individuo. Independiente de la condición frente al IVA.
+export const TIPOS_CLIENTE = [
+  { value: 'EMPRESA',          label: 'Empresa' },
+  { value: 'CONSUMIDOR_FINAL', label: 'Consumidor final' },
+]
+
 export const CONDICIONES_IVA = [
   'Responsable Inscripto',
   'Monotributo',

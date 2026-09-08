@@ -69,9 +69,16 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
     items: [
       { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'clientes' },
       { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'pipeline' },
-      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizador' },
-      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'cotizaciones' },
-      { label: 'Catálogo',     href: '/catalogo',     icon: <Boxes size={17} />,           roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'catalogo' },
+      // TECHNICIAN incluido en `roles` a propósito: NO lo ve por default (el
+      // permiso del módulo lo tiene en SELLER+), sólo si un Super Admin lo
+      // habilita en Configuración → Permisos. Ver isModuleAllowed.
+      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'cotizador' },
+      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'cotizaciones' },
+      { label: 'Catálogo',     href: '/catalogo',     icon: <Boxes size={17} />,           roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'catalogo' },
+      // Sólo para roles que no tienen la Configuración (ADMIN/SUPER_ADMIN usan
+      // Configuración → Catálogo). Aparece únicamente si un Super Admin habilita
+      // "Catálogo · cargar productos y stock" para ese rol.
+      { label: 'Gestionar catálogo', href: '/catalogo/gestion', icon: <Package size={17} />, roles: ['TECHNICIAN', 'SELLER'], moduleId: 'catalogo-gestion' },
       { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'empresas' },
       { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'contactos' },
     ],

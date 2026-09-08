@@ -2,12 +2,13 @@
 
 import { useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
   Briefcase, Plus, Mail, UserCircle2, UserCheck, UserX, MessageCircle, Phone, PhoneCall,
-  Send, X, CheckSquare, DollarSign,
+  Send, X, CheckSquare, DollarSign, Calculator,
 } from 'lucide-react'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
@@ -257,6 +258,12 @@ export default function EmpresaDetailPage() {
                 ? <><UserX size={14} /> Quitar cliente</>
                 : <><UserCheck size={14} /> Marcar como cliente</>}
             </Button>
+            <Link
+              href={`/cotizador?empresaId=${id}`}
+              className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-xl gradient-bg text-white hover:opacity-90 transition-opacity"
+            >
+              <Calculator size={14} /> Cotizar
+            </Link>
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Edit size={14} /> Editar
             </Button>

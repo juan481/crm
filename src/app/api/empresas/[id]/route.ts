@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const {
       name, activity, address, codigoPostal, city, province, country, website,
       isCliente, monthlyAmount, billingCurrency,
-      cuit, condicionIva, formaPagoHabitual, ownerId,
+      tipoCliente, cuit, condicionIva, formaPagoHabitual, ownerId,
     } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
@@ -102,6 +102,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (monthlyAmount !== undefined)  updateData.monthlyAmount  = monthlyAmount === null || monthlyAmount === '' ? null : Number(monthlyAmount)
     if (billingCurrency !== undefined) updateData.billingCurrency = billingCurrency || 'USD'
 
+    if (tipoCliente       !== undefined) updateData.tipoCliente       = ['EMPRESA', 'CONSUMIDOR_FINAL'].includes(tipoCliente) ? tipoCliente : null
     if (cuit              !== undefined) updateData.cuit              = cuit?.trim()              || null
     if (condicionIva      !== undefined) updateData.condicionIva      = condicionIva?.trim()       || null
     if (formaPagoHabitual !== undefined) updateData.formaPagoHabitual = formaPagoHabitual?.trim()  || null

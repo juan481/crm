@@ -8,7 +8,7 @@ import {
   Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
 import { computeQuoteTotals } from '@/lib/quote-totals'
 import toast from 'react-hot-toast'
@@ -130,7 +130,7 @@ export default function CotizacionDetailPage() {
         // no cosmético. Mismo fallback que ya usa correctamente
         // api/cotizador/enviar-mail/route.ts para esta misma info.
         const period    = item.type === 'PRODUCT' ? (item.unit || 'unidad') : (BILLING_LABELS[item.billingCycle] ?? 'mes')
-        const price     = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.currency, minimumFractionDigits: 0 }).format(lineTotal)
+        const price     = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(lineTotal)
 
         doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
         doc.text(label, mg + 2, y + 6)
@@ -233,14 +233,13 @@ export default function CotizacionDetailPage() {
     data.items.forEach(i => {
       const lt = i.price * i.quantity
       const per = i.type === 'PRODUCT' ? (i.unit || 'unidad') : (BILLING_LABELS[i.billingCycle] ?? 'mes')
-      t += `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${formatCurrency(lt, i.currency)}/${per}\n`
+      t += `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${formatMoneyExact(lt, i.currency)}/${per}\n`
     })
     const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
-    const wfd = tt.discriminado ? 2 : 0
-    t += `\nSubtotal (neto): ${formatCurrency(tt.neto, data.currency, wfd)}`
-    if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatCurrency(tt.descuentoMonto, data.currency, wfd)}`
-    if (tt.discriminado) for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatCurrency(b.monto, data.currency, wfd)}`
-    t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatCurrency(tt.total, data.currency, wfd)}*`
+    t += `\nSubtotal (neto): ${formatMoneyExact(tt.neto, data.currency)}`
+    if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatMoneyExact(tt.descuentoMonto, data.currency)}`
+    if (tt.discriminado) for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatMoneyExact(b.monto, data.currency)}`
+    t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatMoneyExact(tt.total, data.currency)}*`
     if (data.notes) t += `\n\n📝 ${data.notes}`
     t += `\n\nCualquier consulta, estamos a disposición.`
     return `https://wa.me/?text=${encodeURIComponent(t)}`
@@ -317,7 +316,7 @@ export default function CotizacionDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { icon: <Building2 size={14} />, label: 'Empresa',      value: data.empresa?.name ?? '—' },
-          { icon: <DollarSign size={14} />, label: totals?.discriminado ? 'Total (IVA incl.)' : 'Total', value: formatCurrency(totals?.total ?? data.finalTotal ?? data.total, data.currency, totals?.discriminado ? 2 : 0) },
+          { icon: <DollarSign size={14} />, label: totals?.discriminado ? 'Total (IVA incl.)' : 'Total', value: formatMoneyExact(totals?.total ?? data.finalTotal ?? data.total, data.currency) },
           { icon: <Calendar size={14} />,   label: 'Fecha',       value: date },
           { icon: <Mail size={14} />,       label: 'Destinatario',value: data.recipientEmail },
         ].map(item => (

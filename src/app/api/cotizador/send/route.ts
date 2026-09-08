@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { isOrgEmailConfigured } from '@/lib/email'
 import { computeQuoteTotals, sanitizeIvaPct } from '@/lib/quote-totals'
@@ -11,7 +12,10 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN', 'SELLER'].includes(payload.role)) {
+    if (
+      !['SUPER_ADMIN', 'ADMIN', 'SELLER'].includes(payload.role) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'cotizador'))
+    ) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
@@ -145,7 +149,7 @@ export async function POST(req: NextRequest) {
     // Create EmpresaNota if empresa is linked
     if (linkedEmpresaId) {
       const serviceNames = items.map(i => i.name).join(', ')
-      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 0 }).format(finalTotal)
+      const totalStr = new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(finalTotal)
         + (discriminarIva ? ' (IVA incl.)' : '')
       await db.empresaNota.create({
         data: {

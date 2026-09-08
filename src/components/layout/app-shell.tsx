@@ -10,9 +10,14 @@ import { AppHeader } from '@/components/layout/AppHeader'
 import { MobileQuickBar } from '@/components/layout/mobile-quick-bar'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { actionKeyForPath } from '@/lib/quick-actions'
+import { MODULE_ROUTES } from '@/lib/modules'
+import { useModulePermissions } from '@/hooks/use-module-access'
 import type { User } from '@/types'
 
-// Routes each restricted role may access. Everything else redirects to their default.
+// Routes each restricted role may access. Everything else redirects to their
+// default. Ojo: para TECHNICIAN esto se AMPLÍA en runtime con las rutas de los
+// módulos que un Super Admin le haya habilitado en Configuración → Permisos
+// (catálogo, cotizador…) — ver `allowedPrefixes` más abajo.
 const ROLE_ALLOWED_PREFIXES: Partial<Record<User['role'], string[]>> = {
   HR:         ['/rrhh', '/mi-asistencia', '/tareas', '/ayuda', '/mi-perfil'],
   TECHNICIAN: ['/mi-dia', '/mi-asistencia', '/tareas', '/tickets', '/eventos', '/ayuda', '/mi-perfil'],
@@ -21,6 +26,10 @@ const ROLE_DEFAULT: Partial<Record<User['role'], string>> = {
   HR:         '/rrhh',
   TECHNICIAN: '/mi-dia',
 }
+// Prefijos que un rol restringido podría ganar por permiso de módulo — mientras
+// la lista de permisos no resolvió, NO se redirige desde estas rutas (fail-open,
+// igual que el sidebar).
+const EARNABLE_PREFIXES = Object.values(MODULE_ROUTES)
 
 interface Branding {
   crmName: string
@@ -78,15 +87,30 @@ export function AppShell({ user, branding, children }: AppShellProps) {
     }).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Módulos que un Super Admin le habilitó a este rol restringido (catálogo,
+  // cotizador…) — amplían la lista de rutas permitidas de abajo.
+  const modulePerms = useModulePermissions()
+  const permsResolved = modulePerms.length > 0
+
   // Protect restricted roles from accessing routes outside their allowed list
   useEffect(() => {
-    const allowed  = ROLE_ALLOWED_PREFIXES[user.role]
+    const base     = ROLE_ALLOWED_PREFIXES[user.role]
     const fallback = ROLE_DEFAULT[user.role]
-    if (allowed && fallback) {
-      const ok = allowed.some(p => pathname === p || pathname.startsWith(p + '/'))
-      if (!ok) router.replace(fallback)
-    }
-  }, [pathname, user.role]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!base || !fallback) return
+
+    const earned = permsResolved
+      ? Object.entries(MODULE_ROUTES)
+          .filter(([id]) => modulePerms.find(r => r.id === id)?.roles[user.role])
+          .map(([, route]) => route)
+      : []
+    const allowed = [...base, ...earned]
+
+    const ok = allowed.some(p => pathname === p || pathname.startsWith(p + '/'))
+    // Mientras los permisos no resolvieron, no expulsar de una ruta que el rol
+    // PODRÍA tener habilitada — se re-evalúa cuando cargan (fail-open).
+    const maybeEarnable = !permsResolved && EARNABLE_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
+    if (!ok && !maybeEarnable) router.replace(fallback)
+  }, [pathname, user.role, permsResolved]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Uso real para la Barra Rápida (v2, ver src/lib/quick-actions.ts) — cada
   // navegación a una pantalla candidata cuenta como "uso", sin importar si

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserAny, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { searchCatalogo } from '@/lib/catalogo-search'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,13 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role !== 'GREMIO' && !canAccess(payload.role, 'SELLER')) {
+    // SELLER+ o GREMIO siempre; TECHNICIAN sólo si un Super Admin le habilitó
+    // el módulo "Catálogo" en Configuración → Permisos.
+    if (
+      payload.role !== 'GREMIO' &&
+      !canAccess(payload.role, 'SELLER') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'catalogo'))
+    ) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

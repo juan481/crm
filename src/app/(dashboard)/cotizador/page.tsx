@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Pagination } from '@/components/ui/table'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, type QuoteTotals } from '@/lib/quote-totals'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
 import { useThemeStore } from '@/store/theme-store'
@@ -41,6 +41,10 @@ interface CartItem {
   type:     ItemType
   item:     Service | Product
   quantity: number
+  // Precio unitario propio de ESTA cotización — pisa el del catálogo. Sirve
+  // para servicios que valen distinto según el trabajo (ej. "Instalación").
+  // null/undefined = usar el precio del catálogo.
+  priceOverride?: number | null
 }
 
 // 'PUBLICO' | 'GREMIO' — a qué lista de precios cotizar (Módulo 2, catálogo
@@ -57,7 +61,10 @@ function getUnitPrice(type: ItemType, item: Service | Product, mode: PriceMode):
   }
   return item.price
 }
-const getPrice = (ci: CartItem, mode: PriceMode) => getUnitPrice(ci.type, ci.item, mode)
+const getPrice = (ci: CartItem, mode: PriceMode) =>
+  (ci.priceOverride != null && Number.isFinite(ci.priceOverride))
+    ? ci.priceOverride
+    : getUnitPrice(ci.type, ci.item, mode)
 const getCurrency = (ci: CartItem) => ci.item.currency
 
 interface SavedQuote {
@@ -284,7 +291,6 @@ export default function CotizadorPage() {
   const ivaRateFor = (ci: CartItem) => ci.type === 'PRODUCT' ? sanitizeIvaPct((ci.item as Product).ivaPct) : DEFAULT_IVA_PCT
   const quoteLines = cartItems.map(ci => ({ price: getPrice(ci, priceMode), quantity: ci.quantity, ivaPct: ivaRateFor(ci), type: ci.type }))
   const totals     = computeQuoteTotals(quoteLines, discount, ivaDiscriminado)
-  const ivaFd      = ivaDiscriminado ? 2 : 0 // centavos cuando se discrimina IVA (documento fiscal)
   const subtotal   = totals.neto
   const discountAmt = totals.descuentoMonto
   const finalTotal = totals.total
@@ -301,8 +307,8 @@ export default function CotizadorPage() {
   const selectedEmpresa = empresas.find(e => e.id === selectedEmpresaId)
 
   const formatPrice = (usd: number, cur: string) => {
-    if (!showArs || cur !== 'USD' || !arsRate) return formatCurrency(usd, cur)
-    return `${formatCurrency(usd, 'USD')} (${formatCurrency(usd * arsRate, 'ARS')})`
+    if (!showArs || cur !== 'USD' || !arsRate) return formatMoneyExact(usd, cur)
+    return `${formatMoneyExact(usd, 'USD')} (${formatMoneyExact(usd * arsRate, 'ARS')})`
   }
 
   // ── Cart ops ───────────────────────────────────────────────────────────────
@@ -322,6 +328,13 @@ export default function CotizadorPage() {
   const setQty = (key: string, qty: number) => {
     const n = Math.max(1, isNaN(qty) ? 1 : qty)
     setCart(p => p[key] ? { ...p, [key]: { ...p[key], quantity: n } } : p)
+  }
+  // Precio unitario propio de la cotización. '' → vuelve al del catálogo.
+  const setItemPrice = (key: string, raw: string) => {
+    const t = raw.trim()
+    const n = Number(t)
+    const priceOverride = t === '' ? null : (Number.isFinite(n) && n >= 0 ? n : null)
+    setCart(p => (p[key] ? { ...p, [key]: { ...p[key], priceOverride } } : p))
   }
   const clearCart = () => setCart({})
 
@@ -345,11 +358,17 @@ export default function CotizadorPage() {
   const showEmptyCatalogState = activeTab === 'SERVICE' && services.length === 0
 
   // ── Recipient ──────────────────────────────────────────────────────────────
+  // Si la empresa elegida no tiene contactos en el directorio, el form muestra
+  // los inputs manuales igual — hay que leer manualEmail/manualName aunque
+  // manualContactInput siga en false (antes el email tipeado se ignoraba y el
+  // paso "Destinatario" no dejaba avanzar).
+  const usaManualContacto = manualContactInput
+    || (clientMode === 'existing' && !!selectedEmpresaId && contactsData !== undefined && contacts.length === 0)
   const recipientEmail = clientMode === 'existing'
-    ? (manualContactInput ? manualEmail : selectedContactEmail)
+    ? (usaManualContacto ? manualEmail : selectedContactEmail)
     : manualEmail
   const recipientName = clientMode === 'existing'
-    ? (manualContactInput ? manualName : selectedContactName)
+    ? (usaManualContacto ? manualName : selectedContactName)
     : manualName
 
   // ── PDF ────────────────────────────────────────────────────────────────────
@@ -414,7 +433,7 @@ export default function CotizadorPage() {
       const rowH     = 10 + (incluyeLines.length ? incluyeLines.length * 3.2 + 1 : 0)
       if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
       const lineTotal = getPrice(ci, quote.priceMode) * ci.quantity
-      const priceStr  = new Intl.NumberFormat('es-AR', { style: 'currency', currency: quote.currency, minimumFractionDigits: 0 }).format(lineTotal)
+      const priceStr  = formatMoneyExact(lineTotal, quote.currency)
       const typeLabel = ci.type === 'SERVICE'
         ? (BILLING_LABELS[((ci.item as Service).billingCycle ?? 'MONTHLY')] ?? 'mes')
         : `× ${(ci.item as Product).unit}`
@@ -583,21 +602,20 @@ export default function CotizadorPage() {
       if (ci.quantity > 1) l += ` ×${ci.quantity}`
       if (ci.type === 'SERVICE') {
         const bl = BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'
-        l += ` — ${formatCurrency(lt, ci.item.currency)}/${bl}`
+        l += ` — ${formatMoneyExact(lt, ci.item.currency)}/${bl}`
       } else {
-        l += ` — ${formatCurrency(lt, ci.item.currency)} (${(ci.item as Product).unit})`
+        l += ` — ${formatMoneyExact(lt, ci.item.currency)} (${(ci.item as Product).unit})`
       }
-      if (showArs && arsRate && ci.item.currency === 'USD') l += ` (${formatCurrency(lt * arsRate, 'ARS')})`
+      if (showArs && arsRate && ci.item.currency === 'USD') l += ` (${formatMoneyExact(lt * arsRate, 'ARS')})`
       t += l + '\n'
     })
-    const wfd = tt.discriminado ? 2 : 0
-    t += `\nSubtotal (neto): ${formatCurrency(tt.neto, src.currency, wfd)}`
-    if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatCurrency(tt.descuentoMonto, src.currency, wfd)}`
+    t += `\nSubtotal (neto): ${formatMoneyExact(tt.neto, src.currency)}`
+    if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatMoneyExact(tt.descuentoMonto, src.currency)}`
     if (tt.discriminado && tt.iva.length > 0) {
-      for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatCurrency(b.monto, src.currency, wfd)}`
+      for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatMoneyExact(b.monto, src.currency)}`
     }
-    t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatCurrency(tt.total, src.currency, wfd)}*`
-    if (showArs && arsRate && src.currency === 'USD') t += ` (ARS ${formatCurrency(tt.total * arsRate, 'ARS')})`
+    t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatMoneyExact(tt.total, src.currency)}*`
+    if (showArs && arsRate && src.currency === 'USD') t += ` (ARS ${formatMoneyExact(tt.total * arsRate, 'ARS')})`
     if (src.notes) t += `\n\n📝 ${src.notes}`
     t += `\n\nCualquier consulta, estamos a disposición.`
     return `https://wa.me/?text=${encodeURIComponent(t)}`
@@ -678,8 +696,8 @@ export default function CotizadorPage() {
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               {savedQuote.ref} · {savedQuote.recipientName} ·{' '}
               {savedQuote.discount > 0
-                ? <><s className="opacity-60">{formatCurrency(savedQuote.subtotal, savedQuote.currency)}</s>{' '}<strong>{formatCurrency(savedQuote.finalTotal, savedQuote.currency)}</strong></>
-                : formatCurrency(savedQuote.finalTotal, savedQuote.currency)
+                ? <><s className="opacity-60">{formatMoneyExact(savedQuote.subtotal, savedQuote.currency)}</s>{' '}<strong>{formatMoneyExact(savedQuote.finalTotal, savedQuote.currency)}</strong></>
+                : formatMoneyExact(savedQuote.finalTotal, savedQuote.currency)
               }
               {savedQuote.empresaName && ` · ${savedQuote.empresaName}`}
             </p>
@@ -1069,10 +1087,12 @@ export default function CotizadorPage() {
               {cartItems.map(ci => {
                 const k = itemKey(ci.type, ci.item.id)
                 const isService = ci.type === 'SERVICE'
-                const lineTotal = getPrice(ci, priceMode) * ci.quantity
-                const priceLabel = isService
-                  ? `${formatPrice(lineTotal, ci.item.currency)}/${BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'}`
-                  : `${formatPrice(lineTotal, ci.item.currency)}/${(ci.item as Product).unit}`
+                const unitPrice = getPrice(ci, priceMode)
+                const lineTotal = unitPrice * ci.quantity
+                const per = isService
+                  ? BILLING_LABELS[(ci.item as Service).billingCycle] ?? 'mes'
+                  : (ci.item as Product).unit
+                const priceLabel = `${formatPrice(lineTotal, ci.item.currency)}/${per}`
                 return (
                   <motion.div key={k}
                     initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }}
@@ -1098,7 +1118,22 @@ export default function CotizadorPage() {
                           Incluye: {(ci.item as Product).kitComponents!.map(c => `${c.quantity}× ${c.component.name}`).join(', ')}
                         </p>
                       )}
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{priceLabel}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className="text-[10px] shrink-0" style={{ color: 'var(--color-text-subtle)' }}>Precio unit.</span>
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={unitPrice}
+                          onChange={e => setItemPrice(k, e.target.value)}
+                          className="w-24 text-xs rounded border px-1.5 py-0.5 outline-none"
+                          style={{ background: 'var(--color-surface)', border: `1px solid ${ci.priceOverride != null ? 'var(--color-primary)' : 'var(--color-border-strong)'}`, color: 'var(--color-text)' }}
+                        />
+                        {ci.priceOverride != null && (
+                          <button onClick={() => setItemPrice(k, '')} className="text-[10px] underline shrink-0" style={{ color: 'var(--color-text-subtle)' }}>
+                            usar el de catálogo
+                          </button>
+                        )}
+                        <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>· {priceLabel}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button onClick={() => removeItem(k)}
@@ -1153,10 +1188,10 @@ export default function CotizadorPage() {
             {discount > 0 && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-right">
                 <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  Ahorro: <span className="font-semibold text-emerald-400">{formatCurrency(discountAmt, currency)}</span>
+                  Ahorro: <span className="font-semibold text-emerald-400">{formatMoneyExact(discountAmt, currency)}</span>
                 </p>
                 <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                  Total: {formatCurrency(finalTotal, currency)}
+                  Total: {formatMoneyExact(finalTotal, currency)}
                 </p>
               </motion.div>
             )}
@@ -1244,35 +1279,35 @@ export default function CotizadorPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className={priceMode === 'PUBLICO' ? 'opacity-100' : 'opacity-50'}>
                     <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Público</p>
-                    <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(subtotalPublico, currency)}</p>
+                    <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatMoneyExact(subtotalPublico, currency)}</p>
                   </div>
                   <div className={priceMode === 'GREMIO' ? 'opacity-100' : 'opacity-50'}>
                     <p className="text-[10px] uppercase tracking-wide text-emerald-500">Gremio</p>
-                    <p className="text-lg font-bold text-emerald-500">{formatCurrency(subtotalGremio, currency)}</p>
+                    <p className="text-lg font-bold text-emerald-500">{formatMoneyExact(subtotalGremio, currency)}</p>
                   </div>
                 </div>
               ) : (
                 <div>
                   <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>Subtotal</p>
-                  <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatCurrency(subtotal, currency)}</p>
+                  <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{formatMoneyExact(subtotal, currency)}</p>
                 </div>
               )}
               <div className="pt-2 border-t space-y-0.5" style={{ borderColor: 'var(--color-border)' }}>
                 {discount > 0 && (
-                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Descuento {discount}%: -{formatCurrency(totals.descuentoMonto, currency, ivaFd)}</p>
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Descuento {discount}%: -{formatMoneyExact(totals.descuentoMonto, currency)}</p>
                 )}
                 {ivaDiscriminado && totals.iva.length > 0 && (
                   <>
-                    {discount > 0 && <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Neto gravado: {formatCurrency(totals.netoGravado, currency, ivaFd)}</p>}
+                    {discount > 0 && <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Neto gravado: {formatMoneyExact(totals.netoGravado, currency)}</p>}
                     {totals.iva.map(b => (
                       <p key={b.pct} className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        IVA {String(b.pct).replace('.', ',')}%: {formatCurrency(b.monto, currency, ivaFd)}
+                        IVA {String(b.pct).replace('.', ',')}%: {formatMoneyExact(b.monto, currency)}
                       </p>
                     ))}
                   </>
                 )}
                 <p className="text-base font-bold pt-0.5" style={{ color: 'var(--color-text)' }}>
-                  Total{ivaDiscriminado ? ' (IVA incl.)' : ''}: {formatCurrency(totals.total, currency, ivaFd)}
+                  Total{ivaDiscriminado ? ' (IVA incl.)' : ''}: {formatMoneyExact(totals.total, currency)}
                 </p>
               </div>
             </div>

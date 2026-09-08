@@ -10,7 +10,7 @@ import { ModalFooter } from '@/components/ui/modal'
 import { UserPlus, ChevronDown, ChevronUp } from 'lucide-react'
 import { ARGENTINA_PROVINCES, CITIES_BY_PROVINCE } from '@/lib/argentina-geo'
 import { COUNTRIES } from '@/lib/utils'
-import { CONDICIONES_IVA, OTRA_CONDICION_IVA, FORMAS_PAGO, OTRA_FORMA_PAGO } from '@/lib/fiscal'
+import { TIPOS_CLIENTE, CONDICIONES_IVA, OTRA_CONDICION_IVA, FORMAS_PAGO, OTRA_FORMA_PAGO } from '@/lib/fiscal'
 import { useAuthStore } from '@/store/auth-store'
 import type { Empresa, User } from '@/types'
 import toast from 'react-hot-toast'
@@ -24,6 +24,7 @@ interface FormData {
   city:     string
   province: string
   website:  string
+  tipoCliente:       string
   cuit:              string
   condicionIva:      string
   otherCondicionIva: string
@@ -107,6 +108,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
       city:        empresa?.city     ?? '',
       province:    empresa?.province ?? '',
       website:     empresa?.website  ?? '',
+      tipoCliente:       empresa?.tipoCliente ?? '',
       cuit:              empresa?.cuit ?? '',
       condicionIva:      empresa?.condicionIva && !CONDICIONES_IVA.includes(empresa.condicionIva) ? OTRA_CONDICION_IVA : (empresa?.condicionIva ?? ''),
       otherCondicionIva: empresa?.condicionIva && !CONDICIONES_IVA.includes(empresa.condicionIva) ? empresa.condicionIva : '',
@@ -163,6 +165,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         city:     data.city,
         province: data.province,
         website:  data.website,
+        tipoCliente:       data.tipoCliente || null,
         cuit:              data.cuit,
         condicionIva:      finalCondicionIva,
         formaPagoHabitual: finalFormaPago,
@@ -284,6 +287,10 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
       </div>
 
       {/* Datos fiscales */}
+      <div>
+        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Tipo de cliente</label>
+        <Select {...register('tipoCliente')} options={[{ value: '', label: '— Sin especificar —' }, ...TIPOS_CLIENTE]} />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>CUIT</label>

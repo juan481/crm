@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
 
@@ -20,15 +21,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
-    const stage   = searchParams.get('stage')
-    const ownerId = searchParams.get('ownerId')
-    const page    = Math.max(1, Number(searchParams.get('page')  ?? 1))
-    const limit   = Math.min(2000, Number(searchParams.get('limit') ?? 50))
-    const skip    = (page - 1) * limit
+    const stage     = searchParams.get('stage')
+    const ownerId   = searchParams.get('ownerId')
+    const empresaId = searchParams.get('empresaId')
+    const page      = Math.max(1, Number(searchParams.get('page')  ?? 1))
+    const limit     = Math.min(2000, Number(searchParams.get('limit') ?? 50))
+    const skip      = (page - 1) * limit
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
-    if (stage)   where.stage   = stage
-    if (ownerId) where.ownerId = ownerId
+    if (stage)     where.stage     = stage
+    if (ownerId)   where.ownerId   = ownerId
+    // La ficha de cliente (/clientes/[id]) pide ?empresaId= — sin esto el
+    // endpoint devolvía TODOS los deals de la org como si fueran del cliente.
+    if (empresaId) where.empresaId = empresaId
     if (payload.role === 'SELLER') where.ownerId = payload.userId
 
     const db = prisma as any
@@ -48,7 +53,9 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER'))
+    // SELLER+ o un rol al que le habilitaron el Cotizador (así la cotización
+    // que arma se puede enganchar sola a una oportunidad del Pipeline).
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'cotizador')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, contactoId, ownerId } = await req.json()

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
 import { useThemeStore } from '@/store/theme-store'
 import toast from 'react-hot-toast'
 
@@ -90,7 +91,8 @@ export function ServicesManager() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editService, setEditService] = useState<Service | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  const canGestionCatalogo = useModuleAccess('catalogo-gestion') === true
+  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || canGestionCatalogo
 
   const { data, isLoading, isError } = useQuery<Service[]>({
     queryKey: ['services'],

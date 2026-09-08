@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
 import type { Product } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -182,7 +183,8 @@ export function SimpleProductsManager() {
   }
   const closeModal = () => { setShowModal(false); setEditing(null); setForm(EMPTY_FORM) }
 
-  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+  const canGestionCatalogo = useModuleAccess('catalogo-gestion') === true
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || canGestionCatalogo
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

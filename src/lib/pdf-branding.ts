@@ -12,10 +12,14 @@ export function drawQuoteTotalsBox(
   opts: { x: number; y: number; w: number; totals: QuoteTotals; currency: string; pr: number; pg: number; pb: number },
 ): number {
   const { x, y, w, totals: tt, currency, pr, pg, pb } = opts
-  // Con IVA discriminado se muestran centavos (documento fiscal); sin IVA se
-  // mantiene el redondeo a entero de siempre.
-  const fd = tt.discriminado ? 2 : 0
-  const money = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: fd, maximumFractionDigits: fd }).format(n)
+  // Siempre con centavos — el cliente pidió que no se redondee nada a entero.
+  const money = (n: number) => {
+    try {
+      return new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+    } catch {
+      return `${currency || '?'} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`
+    }
+  }
 
   type Row = { label: string; value: string; kind: 'normal' | 'discount' | 'muted' }
   const rows: Row[] = [{ label: 'Subtotal (neto)', value: money(tt.neto), kind: 'normal' }]

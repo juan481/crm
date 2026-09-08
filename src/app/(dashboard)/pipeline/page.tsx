@@ -74,6 +74,10 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
   const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string } | null>(null)
+  const [closing, setClosing] = useState<null | 'GANADO' | 'PERDIDO'>(null)
+  // Al ganar: paso "¿qué sigue?" — el usuario elige qué crear para la instalación.
+  const [followUp, setFollowUp] = useState<{ empresaId: string | null; nombre: string } | null>(null)
+  const [followUpBusy, setFollowUpBusy] = useState<string | null>(null)
 
   const { data, isLoading, isError } = useQuery<Deal>({
     queryKey: ['deal', dealId],
@@ -114,6 +118,140 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
       qc.invalidateQueries({ queryKey: ['deals'] })
       setDraft(null)
     } catch { toast.error('Error de conexión') } finally { setSaving(false) }
+  }
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ['deal', dealId] })
+    qc.invalidateQueries({ queryKey: ['deals'] })
+    qc.invalidateQueries({ queryKey: ['empresa-deals'] })
+    qc.invalidateQueries({ queryKey: ['empresas-clientes'] })
+  }
+
+  const closeDeal = async (stage: 'GANADO' | 'PERDIDO') => {
+    setClosing(stage)
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage, probability: stage === 'GANADO' ? 100 : 0, closedAt: new Date().toISOString() }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al cerrar'); return }
+      invalidateAll()
+      if (stage === 'PERDIDO') { toast.success('Marcada como perdida'); onClose(); return }
+      toast.success(json.cliente?.nuevoCliente
+        ? `¡Venta ganada! ${json.cliente.nombre} quedó como cliente.`
+        : '¡Venta ganada!')
+      setFollowUp({
+        empresaId: json.cliente?.empresaId ?? data?.empresa?.id ?? null,
+        nombre: json.cliente?.nombre ?? data?.empresa?.name ?? data?.title ?? 'el cliente',
+      })
+    } catch { toast.error('Error de conexión') } finally { setClosing(null) }
+  }
+
+  const reopenDeal = async () => {
+    setClosing('GANADO')
+    try {
+      const res = await fetch(`/api/deals/${dealId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: 'NEGOCIACION', probability: 75, closedAt: null }),
+      })
+      if (!res.ok) { toast.error('No se pudo reabrir'); return }
+      invalidateAll()
+      toast.success('Oportunidad reabierta')
+    } catch { toast.error('Error de conexión') } finally { setClosing(null) }
+  }
+
+  const runFollowUp = async (kind: 'tarea' | 'ticket' | 'evento') => {
+    if (!followUp) return
+    setFollowUpBusy(kind)
+    try {
+      const cli = followUp.nombre
+      const ref = data?.title ? ` (oportunidad "${data.title}")` : ''
+      if (kind === 'tarea') {
+        const due = new Date(); due.setDate(due.getDate() + 3)
+        const r = await fetch('/api/tareas', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Coordinar instalación — ${cli}`,
+            description: `Generada al ganar la venta${ref}.`,
+            priority: 'ALTA',
+            dueDate: due.toISOString().slice(0, 10),
+            assignedToId: data?.owner?.id,
+            empresaId: followUp.empresaId,
+            dealId,
+          }),
+        })
+        if (!r.ok) throw new Error()
+        qc.invalidateQueries({ queryKey: ['tasks'] })
+        toast.success('Tarea de instalación creada')
+      } else if (kind === 'ticket') {
+        const r = await fetch('/api/tickets', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `Instalación — ${cli}`,
+            description: `Coordinar visita e instalación. Generado al ganar la venta${ref}.`,
+            category: 'SOPORTE',
+            priority: 'MEDIA',
+            empresaId: followUp.empresaId,
+            recipientName: data?.contacto ? `${data.contacto.firstName} ${data.contacto.lastName}` : null,
+          }),
+        })
+        if (!r.ok) throw new Error()
+        qc.invalidateQueries({ queryKey: ['tickets'] })
+        toast.success('Ticket de instalación abierto')
+      } else {
+        const ev = new Date(); ev.setDate(ev.getDate() + 5)
+        const r = await fetch('/api/eventos', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `Instalación — ${cli}`,
+            description: `Venta ganada${ref}.`,
+            eventDate: ev.toISOString().slice(0, 10),
+          }),
+        })
+        if (!r.ok) throw new Error()
+        qc.invalidateQueries({ queryKey: ['eventos'] })
+        toast.success('Visita agendada')
+      }
+      onClose()
+    } catch { toast.error('No se pudo crear — probá desde el módulo correspondiente') }
+    finally { setFollowUpBusy(null) }
+  }
+
+  if (followUp) {
+    const opts: { kind: 'tarea' | 'ticket' | 'evento'; label: string; desc: string }[] = [
+      { kind: 'tarea',  label: 'Crear tarea de instalación', desc: `Se asigna a ${data?.owner?.name ?? 'vos'}, vence en 3 días.` },
+      { kind: 'ticket', label: 'Abrir ticket de instalación', desc: 'Va al módulo de Tickets del equipo técnico.' },
+      { kind: 'evento', label: 'Agendar la visita',           desc: 'Crea un evento en 5 días para coordinar.' },
+    ]
+    return (
+      <Modal open onClose={onClose} title="¡Venta ganada! ¿Qué sigue?" size="md">
+        <div className="space-y-3">
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Elegí qué crear para arrancar la instalación de <strong style={{ color: 'var(--color-text)' }}>{followUp.nombre}</strong>. Podés hacer más de una.
+          </p>
+          {opts.map(o => (
+            <button
+              key={o.kind}
+              onClick={() => runFollowUp(o.kind)}
+              disabled={!!followUpBusy}
+              className="w-full text-left rounded-xl border px-4 py-3 transition-colors hover:border-[var(--color-primary)] disabled:opacity-50"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            >
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {followUpBusy === o.kind ? 'Creando…' : o.label}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-subtle)' }}>{o.desc}</p>
+            </button>
+          ))}
+          <div className="flex justify-end pt-1">
+            <Button variant="ghost" onClick={onClose} disabled={!!followUpBusy}>Nada por ahora</Button>
+          </div>
+        </div>
+      </Modal>
+    )
   }
 
   return (
@@ -218,6 +356,29 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               ))}
             </div>
           )}
+
+          {/* Cerrar la venta desde acá mismo (antes había que ir al tablero) */}
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            {data.stage === 'GANADO' || data.stage === 'PERDIDO' ? (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium px-2 py-1 rounded-full"
+                  style={{ background: data.stage === 'GANADO' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.1)', color: data.stage === 'GANADO' ? '#10b981' : '#ef4444' }}>
+                  {data.stage === 'GANADO' ? 'Ganada' : 'Perdida'}
+                </span>
+                <Button variant="outline" onClick={reopenDeal} loading={closing === 'GANADO'}>Reabrir</Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button className="flex-1" onClick={() => closeDeal('GANADO')} loading={closing === 'GANADO'}
+                  style={{ background: '#10b981', borderColor: '#10b981', color: '#fff' }}>
+                  Marcar Ganado
+                </Button>
+                <Button variant="outline" onClick={() => closeDeal('PERDIDO')} loading={closing === 'PERDIDO'}>
+                  Perdido
+                </Button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
             <Link

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { sendEmail, resolveOrgSmtpConfig } from '@/lib/email'
 import { computeQuoteTotals, type QuoteTotals } from '@/lib/quote-totals'
@@ -13,8 +14,14 @@ const BILLING_LABELS: Record<string, string> = {
   ONE_TIME: 'único',
 }
 
+// El cliente pidió que no se redondee a entero: 2 decimales siempre, hasta 4
+// para ítems fraccionados baratos (ej. cable por metro a $0,45).
 function formatMoney(amount: number, currency: string) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 0 }).format(amount)
+  try {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(amount)
+  } catch {
+    return `${currency || '?'} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(amount)}`
+  }
 }
 
 function buildQuoteHtml(opts: {
@@ -24,8 +31,7 @@ function buildQuoteHtml(opts: {
 }): string {
   const { orgName, primaryColor, recipientName, items, totals: tt, currency, notes, quoteRef, agentName } = opts
   const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
-  const fd = tt.discriminado ? 2 : 0
-  const money = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency, minimumFractionDigits: fd, maximumFractionDigits: fd }).format(n)
+  const money = (n: number) => formatMoney(n, currency)
   const footRow = (label: string, value: string, color: string, bold = false) =>
     `<tr><td colspan="2" style="padding:4px 0;font-size:13px;color:${color}${bold ? ';font-weight:700' : ''}">${label}</td>
      <td style="padding:4px 0;font-size:13px;color:${color};text-align:right${bold ? ';font-weight:700' : ''}">${value}</td></tr>`
@@ -104,7 +110,10 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN', 'SELLER'].includes(payload.role)) {
+    if (
+      !['SUPER_ADMIN', 'ADMIN', 'SELLER'].includes(payload.role) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'cotizador'))
+    ) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

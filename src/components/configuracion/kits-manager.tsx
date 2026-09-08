@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
 import type { Kit, Product } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -50,7 +51,8 @@ const EMPTY_FORM: KitForm = { name: '', description: '', price: '', currency: 'A
 export function KitsManager() {
   const qc = useQueryClient()
   const { user } = useAuthStore()
-  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
+  const canGestionCatalogo = useModuleAccess('catalogo-gestion') === true
+  const canManage = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || canGestionCatalogo
 
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Kit | null>(null)

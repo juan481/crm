@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Search, FileText, Building2, Calendar, DollarSign, CheckCircle2, Clock, Send, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/table'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 
 interface CotizacionItem {
   id:            string
@@ -168,7 +168,7 @@ export default function CotizacionesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                        {formatCurrency(c.finalTotal, c.currency, c.ivaDiscriminado ? 2 : 0)}
+                        {formatMoneyExact(c.finalTotal, c.currency)}
                       </span>
                       {c.ivaDiscriminado && (
                         <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>IVA incl.</p>

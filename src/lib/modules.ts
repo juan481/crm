@@ -23,9 +23,17 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'clientes',       label: 'Clientes',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'pipeline',       label: 'Pipeline',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'tareas',         label: 'Tareas',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
-  { id: 'cotizador',      label: 'Cotizador',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'cotizaciones',   label: 'Cotizaciones',    defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'catalogo',       label: 'Catálogo',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
+  // Técnico puede ganar Cotizador / Cotizaciones / Catálogo desde el panel de
+  // permisos (piso bajado a TECHNICIAN). El default sigue siendo SELLER+, así
+  // que ninguna org existente cambia hasta que un Super Admin prenda el toggle.
+  // Las APIs de estos módulos chequean roleHasModule() (ver src/lib/module-access.ts).
+  { id: 'cotizador',      label: 'Cotizador',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
+  { id: 'cotizaciones',   label: 'Cotizaciones',    defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
+  { id: 'catalogo',       label: 'Catálogo',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
+  // "Catálogo · cargar productos y stock" — permiso separado de sólo ver el
+  // catálogo. Habilita /catalogo/gestion + las APIs de alta/edición de
+  // productos y ajuste de stock. Default ADMIN+.
+  { id: 'catalogo-gestion', label: 'Catálogo · cargar productos y stock', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],              minRole: 'TECHNICIAN' },
   { id: 'tickets',        label: 'Tickets',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'],            minRole: 'TECHNICIAN' },
   // Técnico gana Eventos por default a partir de este sistema — requiere el
   // piso ampliado en src/app/api/eventos/route.ts y [id]/route.ts (GET) para
@@ -44,6 +52,17 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
 
 export function getModule(id: string): ModuleDefinition | undefined {
   return MODULE_DEFINITIONS.find((m) => m.id === id)
+}
+
+// Prefijo de ruta de cada módulo — para que app-shell.tsx pueda dejar entrar
+// a un TECHNICIAN a las rutas de los módulos que un Super Admin le habilitó
+// (por default TECHNICIAN sólo puede /mi-dia, /tareas, /tickets, /eventos…).
+// Sólo se listan los módulos que un rol restringido puede llegar a ganar.
+export const MODULE_ROUTES: Record<string, string> = {
+  catalogo: '/catalogo',
+  'catalogo-gestion': '/catalogo/gestion',
+  cotizador: '/cotizador',
+  cotizaciones: '/cotizaciones',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

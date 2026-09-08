@@ -9,8 +9,11 @@ import { SkeletonCard } from '@/components/ui/skeleton'
 import { CatalogFilters } from '@/components/catalogo/catalog-filters'
 import { ProductCard } from '@/components/catalogo/product-card'
 import { ProductDetailModal } from '@/components/catalogo/product-detail-modal'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 import { useThemeStore } from '@/store/theme-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
+import Link from 'next/link'
+import { Settings2 } from 'lucide-react'
 import type { Product, ProductCategory, ProductBrand } from '@/types'
 
 const LIMIT = 36
@@ -36,6 +39,7 @@ export default function CatalogoPage() {
   const [detailProduct, setDetailProduct] = useState<Product | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const logoUrl = useThemeStore((s) => s.logoUrl)
+  const canGestionCatalogo = useModuleAccess('catalogo-gestion') === true
 
   useEffect(() => {
     debounceRef.current = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
@@ -104,11 +108,20 @@ export default function CatalogoPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Catálogo</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-          Todo lo que se puede vender: productos del proveedor y servicios propios
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Catálogo</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+            Todo lo que se puede vender: productos del proveedor y servicios propios
+          </p>
+        </div>
+        {canGestionCatalogo && (
+          <Link href="/catalogo/gestion"
+            className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-xl surface hover:border-[var(--color-border-strong)] transition-colors shrink-0"
+            style={{ color: 'var(--color-text-muted)' }}>
+            <Settings2 size={14} /> Gestionar catálogo
+          </Link>
+        )}
       </div>
 
       {/* Selector Productos / Servicios */}
@@ -213,7 +226,7 @@ export default function CatalogoPage() {
                     <p className="text-xs line-clamp-2" style={{ color: 'var(--color-text-subtle)' }}>{s.description}</p>
                   )}
                   <p className="text-sm font-bold mt-auto pt-1" style={{ color: 'var(--color-text)' }}>
-                    {formatCurrency(s.price, s.currency)}
+                    {formatMoneyExact(s.price, s.currency)}
                     <span className="text-xs font-normal" style={{ color: 'var(--color-text-subtle)' }}> / {BILLING_LABELS[s.billingCycle] ?? s.billingCycle}</span>
                   </p>
                 </div>

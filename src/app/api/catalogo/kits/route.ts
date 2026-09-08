@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { KIT_SELECT, withKitMetrics, resolveComponents, type ComponentInput } from '@/lib/kits'
 
@@ -12,7 +13,7 @@ export async function GET(_req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'catalogo'))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const kits = await db.product.findMany({
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'catalogo-gestion'))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
     const { name, description, price, currency = 'ARS', unit = 'kit', components } = body as {

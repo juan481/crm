@@ -57,6 +57,7 @@ export async function marcarClienteAlGanar(
         ownerId: deal.ownerId, // queda en la cartera del vendedor que la ganó
         isCliente: true,
         clienteDesde: new Date(),
+        tipoCliente: 'CONSUMIDOR_FINAL', // se creó a nombre de una persona
       },
       select: { id: true, name: true },
     })

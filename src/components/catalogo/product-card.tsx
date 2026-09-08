@@ -1,7 +1,7 @@
 'use client'
 
 import { Boxes, Tag } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { formatMoneyExact } from '@/lib/utils'
 import type { Product } from '@/types'
 
 interface ProductCardProps {
@@ -49,12 +49,12 @@ export function ProductCard({ product: p, onClick, actionSlot }: ProductCardProp
         )}
         <div className="mt-auto pt-1 flex items-baseline justify-between gap-1">
           <span className="text-xs font-bold truncate" style={{ color: 'var(--color-text)' }}>
-            {formatCurrency(p.price, p.currency)}
+            {formatMoneyExact(p.price, p.currency)}
             <span className="text-[9px] font-normal ml-1" style={{ color: 'var(--color-text-subtle)' }}>+ IVA</span>
           </span>
           {p.precioGremio != null && (
             <span className="text-[10px] font-medium text-emerald-500 shrink-0">
-              Gremio {formatCurrency(p.precioGremio, p.currency)}
+              Gremio {formatMoneyExact(p.precioGremio, p.currency)}
             </span>
           )}
         </div>

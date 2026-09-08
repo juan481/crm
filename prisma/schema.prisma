@@ -1243,6 +1243,9 @@ model Empresa {
   // formas de pago) puede cambiar sin pedir una migración de schema. Ver
   // src/lib/fiscal.ts para las listas curadas que alimentan el <select> del
   // formulario.
+  // 'EMPRESA' | 'CONSUMIDOR_FINAL' — persona jurídica vs individuo. Independiente
+  // de condicionIva (un Consumidor Final igual puede ser Monotributista).
+  tipoCliente       String?
   cuit              String?
   condicionIva      String?
   formaPagoHabitual String?

@@ -34,6 +34,31 @@ export function formatCurrency(amount: number, currency = 'USD', fractionDigits 
   }
 }
 
+// Precio "exacto" — muestra los decimales que trae la lista de precios, sin
+// redondear a entero. Usado en el cotizador y el catálogo: un producto a
+// $23,68 se ve $23,68 (no $24), y un ítem fraccionado a $0,45/metro se ve
+// $0,45 (no $0). Regla: mínimo 2 decimales; hasta 4 cuando el valor es
+// chico (< 1) para no perder precisión de un cable/metro; sin ceros de más.
+// `formatCurrency` (default 0 decimales) queda para dashboard/facturas, donde
+// el entero es lo que se quiere.
+export function formatMoneyExact(amount: number, currency = 'USD'): string {
+  // Redondeo a 4 decimales primero — evita que basura de punto flotante
+  // (0.1*3 = 0.30000000000000004) infle la cantidad de decimales a mostrar.
+  const n = Math.round((Number(amount) || 0) * 10000) / 10000
+  const abs = Math.abs(n)
+  const decimals = (String(n).split('.')[1] ?? '').length
+  const max = abs > 0 && abs < 1 ? Math.max(2, decimals) : Math.min(4, Math.max(2, decimals))
+  try {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: max,
+    }).format(n)
+  } catch {
+    return `${currency || '?'} ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: max }).format(n)}`
+  }
+}
+
 // Un monto en USD y otro en ARS no son la misma unidad — nunca se suman
 // entre sí. Estos helpers formatean/escalan un total agrupado por moneda
 // (ej. { USD: 1200, ARS: 50000 }) para mostrarlo en el dashboard.

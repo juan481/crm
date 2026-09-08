@@ -638,6 +638,7 @@ export interface Empresa {
   website: string | null
   monthlyAmount: number | null
   billingCurrency: string
+  tipoCliente: 'EMPRESA' | 'CONSUMIDOR_FINAL' | null
   cuit: string | null
   condicionIva: string | null
   formaPagoHabitual: string | null
