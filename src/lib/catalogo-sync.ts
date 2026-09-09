@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { normalizeCatalogRow, type CatalogRawRow } from '@/lib/catalogo-import'
 import { resolveCategoryId, preloadCategoryCache, type CategoryCache } from '@/lib/catalogo-categories'
 import { mapWithConcurrency } from '@/lib/concurrency'
+import { esCambioDeCostoRelevante, variacionPct } from '@/lib/compras'
 
 // Upserts en paralelo — con ~2296 SKUs (tamaño real del catálogo de Abba)
 // un upsert por vez tardaba varios minutos contra el pooler remoto (~200-
@@ -170,7 +171,7 @@ export async function syncCatalogFromGoogleSheet(
   const db = prisma as any
   const existingProducts = await db.product.findMany({
     where: { organizationId: orgId, sku: { in: normalizedRows.map((r) => r.sku) } },
-    select: { sku: true, catalogSource: true, ...Object.fromEntries(COMPARABLE_FIELDS.map((f) => [f, true])) },
+    select: { id: true, sku: true, catalogSource: true, ...Object.fromEntries(COMPARABLE_FIELDS.map((f) => [f, true])) },
   })
   const existingBySku = new Map<string, any>(existingProducts.map((p: any) => [p.sku as string, p]))
 
@@ -215,6 +216,36 @@ export async function syncCatalogFromGoogleSheet(
     })
     processed++
     written++
+
+    // Alerta de cambio de costo (origen SYNC) — sólo si ya existía el
+    // producto y el costo se movió >= 1%. Dedupe: no crear otra si ya hay
+    // una PENDIENTE para ese producto. El costo del Product ya quedó
+    // actualizado arriba; la alerta es para que un ADMIN lo revise (el costo
+    // alimenta el margen de las cotizaciones).
+    if (existing?.id && esCambioDeCostoRelevante(existing.costo as number | null, normalized.costo, 0.01)) {
+      try {
+        const yaHay = await db.alertaCosto.findFirst({
+          where: { organizationId: orgId, productId: existing.id, estado: 'PENDIENTE' },
+          select: { id: true },
+        })
+        if (!yaHay) {
+          await db.alertaCosto.create({
+            data: {
+              organizationId: orgId,
+              productId: existing.id,
+              costoAnterior: existing.costo as number,
+              costoNuevo: normalized.costo as number,
+              precioAnterior: (existing.price as number) ?? null,
+              precioNuevo: normalized.price ?? null,
+              variacionPct: variacionPct(existing.costo as number, normalized.costo as number),
+              origen: 'SYNC',
+            },
+          })
+        }
+      } catch (err) {
+        console.error('[CATALOGO SYNC] no se pudo crear la alerta de costo', normalized.sku, err)
+      }
+    }
   })
 
   const existingSkus = await prisma.product.findMany({

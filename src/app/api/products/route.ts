@@ -30,6 +30,33 @@ export async function GET(req: NextRequest) {
       scope === 'catalog' ? { sku: { not: null } } :
       {}
 
+    // ?search= — búsqueda liviana por nombre/sku/mpn en TODO el catálogo
+    // (propio + proveedor), top 25, sin includes. Para pickers de producto
+    // (ej. matchear un renglón de una factura de compra). Sin el parámetro,
+    // comportamiento idéntico a siempre.
+    const search = (req.nextUrl.searchParams.get('search') ?? '').trim()
+    if (search.length >= 2) {
+      const db = prisma as any
+      const rows = await db.product.findMany({
+        where: {
+          organizationId: payload.orgId,
+          ...scopeWhere,
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { sku:  { contains: search, mode: 'insensitive' } },
+            { mpn:  { contains: search, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { name: 'asc' },
+        take: 25,
+        select: {
+          id: true, name: true, sku: true, mpn: true, brand: true, unit: true,
+          price: true, currency: true, costo: true, trackStock: true, stock: true,
+        },
+      })
+      return NextResponse.json({ data: rows })
+    }
+
     const db = prisma as any
     const products = await db.product.findMany({
       where:   { organizationId: payload.orgId, ...scopeWhere },

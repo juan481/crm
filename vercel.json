@@ -21,6 +21,10 @@
       "schedule": "45 12 * * 1-5"
     },
     {
+      "path": "/api/cron/alertas-costo",
+      "schedule": "50 12 * * 1-5"
+    },
+    {
       "path": "/api/cron/invoice-automation",
       "schedule": "0 13 1 * *"
     },

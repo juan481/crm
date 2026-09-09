@@ -105,10 +105,13 @@ export async function GET(req: NextRequest) {
 
     // Tarjetas del encabezado — SIEMPRE sobre el universo completo de
     // productos trackeados, sin importar los filtros de la tabla.
-    const universo = await db.product.findMany({
-      where: baseWhere,
-      select: { stock: true, stockMinimo: true, costo: true, currency: true },
-    })
+    const [universo, alertasPendientes] = await Promise.all([
+      db.product.findMany({
+        where: baseWhere,
+        select: { stock: true, stockMinimo: true, costo: true, currency: true },
+      }),
+      db.alertaCosto.count({ where: { organizationId: payload.orgId, estado: 'PENDIENTE' } }),
+    ])
     const bajoMinimo = universo.filter((r: any) => r.stockMinimo != null && r.stock <= r.stockMinimo).length
     const sinStock   = universo.filter((r: any) => r.stock <= 0).length
     const valorInventario: Record<string, number> = {}
@@ -129,6 +132,7 @@ export async function GET(req: NextRequest) {
         bajoMinimo,
         sinStock,
         valorInventario,
+        alertasPendientes,
       },
     })
   } catch (error) {

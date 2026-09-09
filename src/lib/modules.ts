@@ -48,6 +48,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // pueda tenerlo desde el panel de Permisos; el default sigue siendo ADMIN+.
   // Las APIs de /api/stock/* chequean canAccess('ADMIN') || roleHasModule(...).
   { id: 'stock',          label: 'Depósito · Stock', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                   minRole: 'TECHNICIAN' },
+  // Compras a proveedores + OCR de facturas + cuentas por pagar. Toca datos
+  // de costo y pago → default y piso más altos que Stock.
+  { id: 'compras',        label: 'Depósito · Compras', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                 minRole: 'ADMIN' },
   { id: 'documentos',     label: 'Documentos',      defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
@@ -69,6 +72,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   cotizador: '/cotizador',
   cotizaciones: '/cotizaciones',
   stock: '/stock',
+  compras: '/compras',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

@@ -8,6 +8,7 @@ import { useModuleAccess } from '@/hooks/use-module-access'
 import { formatMoneyExact } from '@/lib/utils'
 import { StockActualTab } from '@/components/stock/stock-actual-tab'
 import { MovimientosTab } from '@/components/stock/movimientos-tab'
+import { AlertasTab } from '@/components/stock/alertas-tab'
 
 type Tab = 'STOCK' | 'MOVIMIENTOS' | 'ALERTAS'
 
@@ -16,6 +17,7 @@ interface Resumen {
   bajoMinimo: number
   sinStock: number
   valorInventario: Record<string, number>
+  alertasPendientes: number
 }
 
 export default function StockPage() {
@@ -79,31 +81,28 @@ export default function StockPage() {
       <div className="flex rounded-xl overflow-hidden p-0.5 w-fit"
         style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
         {([
-          { type: 'STOCK' as Tab,       label: 'Stock actual', icon: <Boxes size={14} /> },
-          { type: 'MOVIMIENTOS' as Tab, label: 'Movimientos',  icon: <History size={14} /> },
-          { type: 'ALERTAS' as Tab,     label: 'Alertas',      icon: <AlertTriangle size={14} /> },
+          { type: 'STOCK' as Tab,       label: 'Stock actual', icon: <Boxes size={14} />, badge: 0 },
+          { type: 'MOVIMIENTOS' as Tab, label: 'Movimientos',  icon: <History size={14} />, badge: 0 },
+          { type: 'ALERTAS' as Tab,     label: 'Alertas',      icon: <AlertTriangle size={14} />, badge: resumen?.alertasPendientes ?? 0 },
         ]).map((t) => (
           <button key={t.type} onClick={() => setTab(t.type)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
               tab === t.type ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}>
             {t.icon} {t.label}
+            {t.badge > 0 && (
+              <span className="ml-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+                style={{ background: tab === t.type ? 'rgba(255,255,255,0.25)' : '#ef4444', color: '#fff' }}>
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       {tab === 'STOCK' && <StockActualTab />}
       {tab === 'MOVIMIENTOS' && <MovimientosTab />}
-      {tab === 'ALERTAS' && (
-        <div className="surface rounded-2xl p-10 text-center">
-          <AlertTriangle size={32} className="mx-auto mb-3 opacity-25" />
-          <p className="font-medium" style={{ color: 'var(--color-text)' }}>Todavía no hay alertas de costo</p>
-          <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: 'var(--color-text-muted)' }}>
-            Cuando cargues una factura de compra o el catálogo del proveedor cambie un costo,
-            las diferencias van a aparecer acá para revisar y aplicar.
-          </p>
-        </div>
-      )}
+      {tab === 'ALERTAS' && <AlertasTab />}
     </div>
   )
 }

@@ -9,3 +9,8 @@ import type { Role } from '@/types'
 export async function puedeVerStock(orgId: string, role: Role): Promise<boolean> {
   return canAccess(role, 'ADMIN') || roleHasModule(orgId, role, 'stock')
 }
+
+// Acceso a Compras — mismo criterio, módulo `compras` (piso ADMIN).
+export async function puedeVerCompras(orgId: string, role: Role): Promise<boolean> {
+  return canAccess(role, 'ADMIN') || roleHasModule(orgId, role, 'compras')
+}

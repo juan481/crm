@@ -8,7 +8,7 @@ import {
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
   Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug, MessageCircle, RefreshCw,
-  Warehouse, Truck,
+  Warehouse, Truck, ShoppingCart,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -98,8 +98,9 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // TECHNICIAN en `roles` a propósito: NO lo ve por default (módulo en
       // ADMIN+), sólo si un Super Admin le habilita "Depósito · Stock" en
       // Configuración → Permisos. Ver isModuleAllowed.
-      { label: 'Stock',       href: '/stock',       icon: <Warehouse size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'TECHNICIAN'], moduleId: 'stock' },
-      { label: 'Proveedores', href: '/proveedores', icon: <Truck size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],     moduleId: 'empresas' },
+      { label: 'Stock',       href: '/stock',       icon: <Warehouse size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'TECHNICIAN'], moduleId: 'stock' },
+      { label: 'Compras',     href: '/compras',     icon: <ShoppingCart size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN'],               moduleId: 'compras' },
+      { label: 'Proveedores', href: '/proveedores', icon: <Truck size={17} />,         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],     moduleId: 'empresas' },
     ],
   },
   {

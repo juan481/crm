@@ -282,6 +282,8 @@ model Organization {
   memberships             OrganizationMembership[]
   notificationSettings    NotificationSetting[]
   serviciosRecurrentes    ServicioRecurrente[]
+  compras                 Compra[]
+  alertasCosto            AlertaCosto[]
 }
 
 // ─── Ruteo de avisos automáticos ───────────────────────────────────────────
@@ -1271,6 +1273,7 @@ model Empresa {
   tickets      Ticket[]
   invoices     Invoice[]
   serviciosRecurrentes ServicioRecurrente[]
+  compras      Compra[]
 
   @@index([organizationId])
   @@index([organizationId, name])
@@ -1397,6 +1400,8 @@ model Product {
   supplierStock  Int?
   movimientos    StockMovimiento[]
   pedidoItems    PedidoItem[]
+  compraItems    CompraItem[]
+  alertasCosto   AlertaCosto[]
 
   // ── Producto KIT / compuesto ──────────────────────────────────────────
   // isKit=true → este Product es un combo armado con otros productos del
@@ -1504,6 +1509,121 @@ model StockMovimiento {
   @@index([organizationId, dealId])
   @@index([organizationId, compraId])
   @@index([organizationId, entregaId])
+}
+
+// ─── Compras a proveedores (Fase 2) ────────────────────────────────────────
+// Una factura/remito de compra = un ingreso de stock. Se puede cargar
+// sacándole una foto a la factura (OCR con Gemini, ver src/lib/ai.ts) o a
+// mano. Mientras está en BORRADOR no toca nada; al CONFIRMAR se generan los
+// StockMovimiento de Entrada (origen COMPRA) y, si cambió algún costo, las
+// AlertaCosto. Reemplazo progresivo de la carga de compras en Bejerman.
+model Compra {
+  id                String        @id @default(cuid())
+  // Correlativo por organización — se asigna recién al confirmar (un
+  // BORRADOR abandonado no quema un número). null mientras es BORRADOR;
+  // Postgres no colisiona múltiples NULL en el unique de abajo.
+  numero            Int?
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Proveedor (Empresa con esProveedor=true). null = todavía sin matchear.
+  proveedorId       String?
+  proveedor         Empresa?      @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  // Datos del comprobante del proveedor
+  numeroComprobante String?
+  tipoComprobante   String?       // 'FACTURA_A' | 'FACTURA_B' | 'FACTURA_C' | 'REMITO' | 'TICKET' | 'OTRO'
+  fecha             DateTime      @default(now())
+  moneda            String        @default("ARS")
+  subtotal          Float         @default(0)
+  iva               Float         @default(0)
+  total             Float         @default(0)
+  // Vínculo opcional a la obra (Deal) — para imputar el costo al proyecto.
+  dealId            String?
+  // id del Document con la foto/PDF de la factura (sin FK, mismo criterio que
+  // StockMovimiento.compraId — la foto es opcional y su borrado no debe
+  // arrastrar la compra).
+  documentoId       String?
+  estado            String        @default("BORRADOR") // 'BORRADOR' | 'CONFIRMADA' | 'ANULADA'
+  estadoPago        String        @default("PENDIENTE") // 'PENDIENTE' | 'PARCIAL' | 'PAGADA'
+  vencimiento       DateTime?
+  notas             String?
+  creadoPorId       String?
+  // Respuesta cruda del OCR — para depurar / reprocesar sin re-llamar a la IA.
+  ocrRaw            Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  items             CompraItem[]
+  pagos             CompraPago[]
+
+  @@unique([organizationId, numero])
+  @@index([organizationId, estado])
+  @@index([organizationId, proveedorId])
+  @@index([organizationId, dealId])
+  @@index([organizationId, estadoPago, vencimiento])
+}
+
+model CompraItem {
+  id            String   @id @default(cuid())
+  compraId      String
+  compra        Compra   @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  // Producto matcheado (si se pudo). null = ítem sin vincular → NO ingresa
+  // stock al confirmar (queda registrado en la compra igual, para el total).
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sku           String?  // el código que trae la factura del proveedor
+  nombre        String   // descripción tal cual la factura
+  cantidad      Int      @default(1)
+  costoUnitario Float    @default(0)
+  subtotal      Float    @default(0)
+  // Costo del Product ANTES de esta compra — snapshot para la AlertaCosto.
+  costoAnterior Float?
+  createdAt     DateTime @default(now())
+
+  @@index([compraId])
+  @@index([productId])
+}
+
+// Pagos parciales a una compra — cuentas por pagar (Fase 4 arma el aging).
+model CompraPago {
+  id          String   @id @default(cuid())
+  compraId    String
+  compra      Compra   @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  monto       Float
+  fecha       DateTime @default(now())
+  medio       String?
+  nota        String?
+  creadoPorId String?
+  createdAt   DateTime @default(now())
+
+  @@index([compraId])
+}
+
+// ─── Alertas de cambio de costo (Fase 2) ───────────────────────────────────
+// Se crea cuando el costo de un producto cambia: al confirmar una factura de
+// compra (origen COMPRA) o al sincronizar el catálogo del proveedor desde el
+// Google Sheet (origen SYNC). Un ADMIN decide desde /stock → Alertas si
+// aplicar el costo nuevo al Product o descartarla. Dedupe: no se crea otra
+// mientras haya una PENDIENTE para el mismo producto.
+model AlertaCosto {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  costoAnterior  Float
+  costoNuevo     Float
+  precioAnterior Float?
+  precioNuevo    Float?
+  variacionPct   Float        @default(0) // (nuevo - anterior) / anterior * 100
+  origen         String       // 'COMPRA' | 'SYNC'
+  compraId       String?
+  estado         String       @default("PENDIENTE") // 'PENDIENTE' | 'APLICADA' | 'DESCARTADA'
+  revisadoPorId  String?
+  revisadoEn     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, estado, createdAt])
+  @@index([organizationId, productId])
 }
 
 // Uso real de la Barra Rápida móvil (src/components/layout/mobile-quick-bar.tsx)
