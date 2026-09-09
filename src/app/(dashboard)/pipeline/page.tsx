@@ -15,6 +15,7 @@ import { formatCurrency, formatMultiCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { DealNotas } from '@/components/pipeline/deal-notas'
 import { DealMateriales } from '@/components/pipeline/deal-materiales'
+import { DealRentabilidad } from '@/components/pipeline/deal-rentabilidad'
 import { ForecastPanel } from '@/components/pipeline/forecast-panel'
 import { ContactoPicker } from '@/components/pipeline/contacto-picker'
 import type { Deal, DealStage } from '@/types'
@@ -381,6 +382,15 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             </p>
             <DealMateriales dealId={dealId} />
           </div>
+
+          {(data.stage === 'GANADO' || (data.cotizaciones?.some(c => c.status === 'ACEPTADA'))) && (
+            <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+                Rentabilidad
+              </p>
+              <DealRentabilidad dealId={dealId} />
+            </div>
+          )}
 
           {/* Cerrar la venta desde acá mismo (antes había que ir al tablero) */}
           <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>

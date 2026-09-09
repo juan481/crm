@@ -583,11 +583,23 @@ model Invoice {
   description    String?
   dueDate        DateTime
   paidAt         DateTime?
+  // ── Factura de venta desde una cotización (Fase 4) — 100% aditivo/nullable.
+  // Sin CAE de AFIP: numeroInterno es un correlativo propio, no fiscal.
+  numeroInterno  String?
+  tipo           String?       // 'FACTURA' | 'REMITO' | 'PRESUPUESTO' | 'NC'
+  cotizacionId   String?
+  dealId         String?
+  subtotal       Float?
+  iva            Float?
+  sentAt         DateTime?     // cuándo se mandó el PDF por mail
+  items          InvoiceItem[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  @@unique([organizationId, numeroInterno])
   @@index([organizationId])
   @@index([organizationId, status])
+  @@index([organizationId, dealId])
   // Cubre el where real de "cobrado este mes" (status=PAID + paidAt>=inicio
   // de mes) que emite GET /api/invoices — antes ninguna combinación de
   // índices cubría el filtro por paidAt.
@@ -601,6 +613,24 @@ model Invoice {
   // Idempotencia de la facturación recurrente por abono (¿ya se facturó este
   // abono este mes?).
   @@index([servicioRecurrenteId, createdAt])
+}
+
+// Renglones de una factura de venta (Fase 4). productId sin FK (mismo criterio
+// que Compra.dealId) — la factura es un documento, no debe romperse porque se
+// borró un producto del catálogo.
+model InvoiceItem {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId      String?
+  nombre         String
+  cantidad       Int      @default(1)
+  precioUnitario Float    @default(0)
+  ivaPct         Float?
+  subtotal       Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([invoiceId])
 }
 
 // ─── Timeline Notes ────────────────────────────────────────────────────────

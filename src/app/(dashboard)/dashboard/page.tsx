@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { Users, DollarSign, AlertCircle, Clock, UserPlus, TrendingUp, CheckSquare, Headphones, FileText, MessageCircle, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { MetricCard } from '@/components/dashboard/metric-card'
+import { DepositoKpis } from '@/components/dashboard/deposito-kpis'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { Avatar } from '@/components/ui/avatar'
@@ -113,6 +114,12 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Depósito — sólo aparece si el usuario tiene el módulo (el endpoint
+          decide y el componente se esconde solo). */}
+      <ErrorBoundary>
+        <DepositoKpis />
+      </ErrorBoundary>
 
       {/* Charts — ambos son financieros (ingresos, estado de facturas) */}
       {(isLoading || canSeeFinancials) && (

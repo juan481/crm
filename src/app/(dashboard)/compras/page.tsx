@@ -15,6 +15,7 @@ import { useModuleAccess } from '@/hooks/use-module-access'
 import { formatMoneyExact } from '@/lib/utils'
 import { CompraForm, type OcrSeed } from '@/components/compras/compra-form'
 import { CompraDetail } from '@/components/compras/compra-detail'
+import { CuentasPorPagar } from '@/components/compras/cuentas-por-pagar'
 import toast from 'react-hot-toast'
 
 const ESTADO_OPTS = [
@@ -39,6 +40,7 @@ export default function ComprasPage() {
   const allowed = useModuleAccess('compras')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const [tab, setTab] = useState<'LISTA' | 'PAGAR'>('LISTA')
   const [estado, setEstado] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -144,6 +146,25 @@ export default function ComprasPage() {
         </div>
       </div>
 
+      <div className="flex rounded-xl overflow-hidden p-0.5 w-fit"
+        style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+        {([
+          { t: 'LISTA' as const, label: 'Compras' },
+          { t: 'PAGAR' as const, label: 'Por pagar' },
+        ]).map((x) => (
+          <button key={x.t} onClick={() => setTab(x.t)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+              tab === x.t ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+            }`}>
+            {x.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'PAGAR' ? (
+        <CuentasPorPagar onChanged={refetchList} />
+      ) : (
+      <>
       <div className="flex items-center gap-2 flex-wrap">
         <div className="w-52"><Input placeholder="Buscar por proveedor, N°..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} /></div>
         <div className="w-48"><Select value={estado} onChange={(e) => setEstado(e.target.value)} options={ESTADO_OPTS} /></div>
@@ -211,6 +232,8 @@ export default function ComprasPage() {
       </div>
 
       {totalPages > 1 && <Pagination page={page} totalPages={totalPages} total={total} limit={30} onPageChange={setPage} />}
+      </>
+      )}
 
       <Modal open={formOpen} onClose={() => setFormOpen(false)} title={seed ? 'Revisar factura de compra' : 'Nueva compra'} size="xl">
         {formOpen && <CompraForm seed={seed} onClose={() => setFormOpen(false)} onSaved={() => { setFormOpen(false); setSeed(null); refetchList() }} />}

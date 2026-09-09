@@ -64,6 +64,7 @@ export default function CotizacionDetailPage() {
   const [sendingMail, setSendingMail] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [preparando, setPreparando] = useState(false)
+  const [facturando, setFacturando] = useState(false)
 
   const { data, isLoading, error } = useQuery<CotizacionDetail>({
     queryKey: ['cotizacion', id],
@@ -206,6 +207,21 @@ export default function CotizacionDetailPage() {
       toast.error('Error de conexión')
     } finally {
       setSendingMail(false)
+    }
+  }
+
+  const emitirFactura = async () => {
+    setFacturando(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/emitir-factura`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success(`Factura ${json.data.numeroInterno} emitida`)
+      router.push('/facturas')
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setFacturando(false)
     }
   }
 
@@ -429,6 +445,27 @@ export default function CotizacionDetailPage() {
               Preparar materiales
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Emitir factura — cotización aceptada con cliente asignado */}
+      {data.status === 'ACEPTADA' && data.empresa?.id && (
+        <div className="rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap"
+          style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(99,102,241,0.12)' }}>
+              <DollarSign size={18} style={{ color: 'var(--color-primary)' }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Facturar esta venta</p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Genera la factura (registro + numeración interna, sin CAE de AFIP) con las líneas y el total.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" onClick={emitirFactura} loading={facturando} leftIcon={<DollarSign size={15} />}>
+            Emitir factura
+          </Button>
         </div>
       )}
     </div>

@@ -6,6 +6,52 @@ import { dateOnlyArgentina } from '@/lib/timezone'
 
 interface Params { params: { id: string } }
 
+export async function GET(_req: NextRequest, { params }: Params) {
+  try {
+    const payload = await getCurrentUser()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
+
+    const db = prisma as any
+    const inv = await db.invoice.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      include: {
+        empresa: { select: { id: true, name: true, address: true, city: true, province: true, cuit: true } },
+        client: { select: { id: true, name: true } },
+        items: { orderBy: { createdAt: 'asc' } },
+      },
+    })
+    if (!inv) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
+
+    // Email sugerido — primer contacto de la empresa con mail.
+    let recipientEmail: string | null = null
+    if (inv.empresaId) {
+      const c = await db.directorioContacto.findFirst({
+        where: { organizationId: payload.orgId, empresaId: inv.empresaId, email: { not: null } },
+        select: { email: true },
+      })
+      recipientEmail = c?.email ?? null
+    }
+
+    return NextResponse.json({
+      data: {
+        ...inv,
+        dueDate: inv.dueDate.toISOString(),
+        paidAt: inv.paidAt ? inv.paidAt.toISOString() : null,
+        sentAt: inv.sentAt ? inv.sentAt.toISOString() : null,
+        createdAt: inv.createdAt.toISOString(),
+        updatedAt: inv.updatedAt.toISOString(),
+        recipientEmail,
+      },
+    })
+  } catch (error) {
+    console.error('[INVOICE GET]', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
