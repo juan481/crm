@@ -17,6 +17,10 @@
       "schedule": "30 12 * * *"
     },
     {
+      "path": "/api/cron/stock-bajo",
+      "schedule": "45 12 * * 1-5"
+    },
+    {
       "path": "/api/cron/invoice-automation",
       "schedule": "0 13 1 * *"
     },

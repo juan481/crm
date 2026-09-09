@@ -69,6 +69,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       name, activity, address, codigoPostal, city, province, country, website,
       isCliente, monthlyAmount, billingCurrency,
       tipoCliente, cuit, condicionIva, formaPagoHabitual, ownerId,
+      esProveedor, cbu, alias,
     } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
@@ -106,6 +107,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (cuit              !== undefined) updateData.cuit              = cuit?.trim()              || null
     if (condicionIva      !== undefined) updateData.condicionIva      = condicionIva?.trim()       || null
     if (formaPagoHabitual !== undefined) updateData.formaPagoHabitual = formaPagoHabitual?.trim()  || null
+    if (typeof esProveedor === 'boolean') updateData.esProveedor      = esProveedor
+    if (cbu               !== undefined) updateData.cbu               = cbu?.trim()   || null
+    if (alias             !== undefined) updateData.alias             = alias?.trim() || null
 
     // Asignar/reasignar cartera es cosa de ADMIN+ — un SELLER no se
     // auto-asigna ni le saca clientes a otro vendedor. Re-validar que el id

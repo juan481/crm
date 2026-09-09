@@ -30,6 +30,9 @@ interface FormData {
   otherCondicionIva: string
   formaPagoHabitual:      string
   otherFormaPagoHabitual: string
+  esProveedor: boolean
+  cbu:   string
+  alias: string
   ownerId: string
   tcFirstName: string
   tcLastName:  string
@@ -114,6 +117,9 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
       otherCondicionIva: empresa?.condicionIva && !CONDICIONES_IVA.includes(empresa.condicionIva) ? empresa.condicionIva : '',
       formaPagoHabitual:      empresa?.formaPagoHabitual && !FORMAS_PAGO.includes(empresa.formaPagoHabitual) ? OTRA_FORMA_PAGO : (empresa?.formaPagoHabitual ?? ''),
       otherFormaPagoHabitual: empresa?.formaPagoHabitual && !FORMAS_PAGO.includes(empresa.formaPagoHabitual) ? empresa.formaPagoHabitual : '',
+      esProveedor: empresa?.esProveedor ?? false,
+      cbu:   empresa?.cbu   ?? '',
+      alias: empresa?.alias ?? '',
       ownerId: empresa?.ownerId ?? '',
       tcFirstName: '',
       tcLastName:  '',
@@ -129,6 +135,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
   const isOtherCountry   = selectedCountry === OTHER_COUNTRY
   const selectedCondicionIva = watch('condicionIva')
   const selectedFormaPago    = watch('formaPagoHabitual')
+  const esProveedor          = watch('esProveedor')
 
   // Build city options for the selected province. If editing and city isn't in the list, add it.
   const provinceCities = selectedProvince ? (CITIES_BY_PROVINCE[selectedProvince] ?? []) : []
@@ -169,6 +176,9 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         cuit:              data.cuit,
         condicionIva:      finalCondicionIva,
         formaPagoHabitual: finalFormaPago,
+        esProveedor:       data.esProveedor,
+        cbu:               data.esProveedor ? data.cbu   : '',
+        alias:             data.esProveedor ? data.alias : '',
         ...(canAssignOwner && { ownerId: data.ownerId || null }),
       }),
     })
@@ -319,6 +329,27 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>¿Cuál?</label>
             <Input {...register('otherFormaPagoHabitual')} placeholder="Especificar" />
+          </div>
+        )}
+      </div>
+
+      {/* Proveedor — la misma empresa puede ser cliente y proveedor a la vez.
+          Al marcarlo aparece en /proveedores y en el selector de Compras. */}
+      <div className="rounded-xl p-4 space-y-3" style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
+        <label className="flex items-center gap-2.5 text-sm font-medium cursor-pointer select-none" style={{ color: 'var(--color-text)' }}>
+          <input type="checkbox" className="rounded" {...register('esProveedor')} />
+          Es proveedor (le compramos mercadería / servicios)
+        </label>
+        {esProveedor && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>CBU</label>
+              <Input {...register('cbu')} placeholder="0000000000000000000000" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Alias</label>
+              <Input {...register('alias')} placeholder="mi.proveedor.mp" />
+            </div>
           </div>
         )}
       </div>

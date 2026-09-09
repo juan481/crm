@@ -57,6 +57,7 @@ export default function EmpresasPage() {
   const [filterCiudadInput,   setFilterCiudadInput]   = useState('')
   const [filterCiudad,        setFilterCiudad]        = useState('')
   const [tieneWeb,            setTieneWeb]            = useState('')
+  const [esProveedorFilter,   setEsProveedorFilter]   = useState('')  // '' | 'si' | 'no'
   const [showFilters,         setShowFilters]         = useState(false)
   const [page,                setPage]                = useState(1)
 
@@ -97,16 +98,18 @@ export default function EmpresasPage() {
   const { enabled: exportEnabled } = usePlugin('export-data')
   const [exporting, setExporting] = useState(false)
 
-  const activeFilters = [filterActividadInput, filterCiudadInput, tieneWeb].filter(Boolean).length
+  const activeFilters = [filterActividadInput, filterCiudadInput, tieneWeb, esProveedorFilter].filter(Boolean).length
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['empresas', search, filterActividad, filterCiudad, tieneWeb, page],
+    queryKey: ['empresas', search, filterActividad, filterCiudad, tieneWeb, esProveedorFilter, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
       if (search.length >= 2)          p.set('search',          search)
       if (filterActividad.length >= 2) p.set('filterActividad', filterActividad)
       if (filterCiudad.length >= 2)    p.set('filterCiudad',    filterCiudad)
       if (tieneWeb)                    p.set('tieneWeb',         tieneWeb)
+      if (esProveedorFilter === 'si')  p.set('esProveedor',      'true')
+      if (esProveedorFilter === 'no')  p.set('esProveedor',      'false')
       const res = await fetch(`/api/empresas?${p}`)
       if (!res.ok) throw new Error('Error al cargar empresas')
       return res.json()
@@ -118,7 +121,7 @@ export default function EmpresasPage() {
   // página, los ids seleccionados ya no corresponden a lo que se ve.
   useEffect(() => {
     setSelectedIds(new Set())
-  }, [search, filterActividad, filterCiudad, tieneWeb, page])
+  }, [search, filterActividad, filterCiudad, tieneWeb, esProveedorFilter, page])
 
   // All empresas for merge selects (only loaded when merge modal is open) —
   // endpoint liviano, sólo trae lo que este picker usa (id/name/_count).
@@ -394,6 +397,7 @@ export default function EmpresasPage() {
     setFilterCiudadInput('')
     setFilterCiudad('')
     setTieneWeb('')
+    setEsProveedorFilter('')
     setPage(1)
   }
 
@@ -517,6 +521,19 @@ export default function EmpresasPage() {
                 value={filterActividadInput}
                 onChange={e => setFilterActividadInput(e.target.value)}
               />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>¿Es proveedor?</label>
+              <select
+                value={esProveedorFilter}
+                onChange={e => { setEsProveedorFilter(e.target.value); setPage(1) }}
+                className="w-full appearance-none rounded-xl px-3 py-2 text-sm outline-none transition-all"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+              >
+                <option value="">Todas</option>
+                <option value="si">Sólo proveedores</option>
+                <option value="no">Sin proveedores</option>
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Localidad</label>

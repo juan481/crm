@@ -1249,6 +1249,12 @@ model Empresa {
   cuit              String?
   condicionIva      String?
   formaPagoHabitual String?
+  // La misma Empresa puede ser cliente y/o proveedor (mismo patrón que
+  // isCliente). Los proveedores aparecen en /proveedores y en el selector de
+  // Compras. cbu/alias = datos para pagarle.
+  esProveedor       Boolean @default(false)
+  cbu               String?
+  alias             String?
   // Cartera de Ventas — reparto de trabajo, NO aislamiento de datos (eso
   // sigue siendo organizationId exclusivamente). Nullable: una empresa sin
   // dueño asignado sigue viendo todo el resto del sistema igual que hoy.
@@ -1379,6 +1385,16 @@ model Product {
   // Service (abonos de facturación recurrente — modelo totalmente separado).
   trackStock     Boolean           @default(false)
   stock          Int               @default(0)
+  // Reservado a una cotización aceptada cuyo material todavía no se entregó —
+  // no toca `stock` real, pero `stock - stockReservado` = lo que se puede
+  // comprometer en una venta nueva. Ver EntregaStock (Fase 3).
+  stockReservado Int               @default(0)
+  // Punto de re-compra — dispara el aviso "stock bajo mínimo". null = sin aviso.
+  stockMinimo    Int?
+  // Número parseado de supplierAvailability cuando el Sheet trae una cantidad
+  // (no "Disponible"/"Consultar"). El texto original se conserva en
+  // supplierAvailability. Alimenta la "disponibilidad total unificada".
+  supplierStock  Int?
   movimientos    StockMovimiento[]
   pedidoItems    PedidoItem[]
 
@@ -1451,10 +1467,12 @@ model ProductCategory {
   @@index([organizationId, parentId])
 }
 
-// Ledger de ajustes manuales de stock — cada fila es un movimiento
+// Ledger de movimientos de stock — cada fila es un movimiento
 // (Entrada/Salida/Ajuste) con el stock resultante como snapshot de
 // auditoría, mismo criterio de "guardar el estado post-cambio" que ya usa
 // TurnoAsistencia. cantidad siempre positivo; el signo lo da `tipo`.
+// HISTORIAL INMUTABLE: no hay PATCH ni DELETE sobre esta tabla — para
+// corregir un error se carga un movimiento de Ajuste que lo compensa.
 model StockMovimiento {
   id              String       @id @default(cuid())
   productId       String
@@ -1471,7 +1489,21 @@ model StockMovimiento {
   creadoPorId     String?
   createdAt       DateTime     @default(now())
 
+  // De dónde viene el movimiento — 'MANUAL' | 'INICIAL' (conteo inicial) |
+  // 'COMPRA' | 'VENTA' | 'AJUSTE'. Los siguientes campos linkean al documento
+  // que lo originó (para el "quién/cuándo/para qué obra" del historial).
+  origen             String  @default("MANUAL")
+  compraId           String?
+  entregaId          String?
+  dealId             String?
+  numeroComprobante  String?
+  // Costo unitario al momento del movimiento — para valorizar entradas/salidas.
+  costoUnitario      Float?
+
   @@index([organizationId, productId, createdAt])
+  @@index([organizationId, dealId])
+  @@index([organizationId, compraId])
+  @@index([organizationId, entregaId])
 }
 
 // Uso real de la Barra Rápida móvil (src/components/layout/mobile-quick-bar.tsx)

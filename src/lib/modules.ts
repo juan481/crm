@@ -43,6 +43,11 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'conversaciones', label: 'WhatsApp',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'servicios',      label: 'Servicios',       defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                    minRole: 'ADMIN' },
   { id: 'facturas',       label: 'Facturación',     defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                    minRole: 'ADMIN' },
+  // Depósito — stock físico propio, movimientos y alertas de costo. El piso
+  // baja a TECHNICIAN para que un encargado de depósito (rol Técnico en Abba)
+  // pueda tenerlo desde el panel de Permisos; el default sigue siendo ADMIN+.
+  // Las APIs de /api/stock/* chequean canAccess('ADMIN') || roleHasModule(...).
+  { id: 'stock',          label: 'Depósito · Stock', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                   minRole: 'TECHNICIAN' },
   { id: 'documentos',     label: 'Documentos',      defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
@@ -63,6 +68,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   'catalogo-gestion': '/catalogo/gestion',
   cotizador: '/cotizador',
   cotizaciones: '/cotizaciones',
+  stock: '/stock',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

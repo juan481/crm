@@ -20,6 +20,7 @@ const SELECT = {
   // vuelta el CUIT/condición de IVA/forma de pago recién cargados, aunque
   // sí habían quedado guardados en la DB.
   tipoCliente: true, cuit: true, condicionIva: true, formaPagoHabitual: true,
+  esProveedor: true, cbu: true, alias: true,
   createdAt: true, updatedAt: true,
   _count: { select: { contactos: true } },
 }
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = req.nextUrl
     const search          = searchParams.get('search')          ?? ''
     const isCliente       = searchParams.get('isCliente')
+    const esProveedor     = searchParams.get('esProveedor')
     const filterActividad = searchParams.get('filterActividad') ?? ''
     const filterCiudad    = searchParams.get('filterCiudad')    ?? ''
     const tieneWeb        = searchParams.get('tieneWeb')        // 'si' | 'no' | null
@@ -49,6 +51,8 @@ export async function GET(req: NextRequest) {
 
     if (isCliente === 'true')  where.isCliente = true
     if (isCliente === 'false') where.isCliente = false
+    if (esProveedor === 'true')  where.esProveedor = true
+    if (esProveedor === 'false') where.esProveedor = false
 
     // Dedicated field filters
     if (filterActividad.length >= 2) where.activity = { contains: filterActividad, mode: 'insensitive' }
@@ -103,7 +107,7 @@ export async function POST(req: NextRequest) {
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const body = await req.json()
-    const { name, activity, address, codigoPostal, city, province, country, website, ownerId, tipoCliente, cuit, condicionIva, formaPagoHabitual } = body
+    const { name, activity, address, codigoPostal, city, province, country, website, ownerId, tipoCliente, cuit, condicionIva, formaPagoHabitual, esProveedor, cbu, alias } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
@@ -138,6 +142,9 @@ export async function POST(req: NextRequest) {
         cuit:               cuit?.trim()               || null,
         condicionIva:       condicionIva?.trim()        || null,
         formaPagoHabitual:  formaPagoHabitual?.trim()   || null,
+        esProveedor:        esProveedor === true,
+        cbu:                cbu?.trim()   || null,
+        alias:              alias?.trim() || null,
         ownerId:      validOwnerId,
         organizationId: payload.orgId,
       },

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
-import { isValidTipoMovimiento } from '@/lib/stock'
+import { isValidTipoMovimiento, registrarMovimiento } from '@/lib/stock'
 
 interface Params { params: { id: string } }
 
@@ -49,47 +49,31 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const db = prisma as any
-    const delta = tipo === 'Entrada' ? cantidadNum : tipo === 'Salida' ? -cantidadNum : cantidadNum * (signo === -1 ? -1 : 1)
 
-    // UPDATE atómico condicionado (WHERE ... stock + delta >= 0), no
-    // "leer stock, calcular, después update" — con leer-y-escribir por
-    // separado, dos ajustes simultáneos sobre el mismo producto (bug real
-    // encontrado en revisión: dos admins ajustando el mismo producto a la
-    // vez) pueden leer el mismo stock viejo y el segundo UPDATE pisa el
-    // resultado del primero, perdiendo un movimiento en silencio. El UPDATE
-    // condicionado hace que Postgres serialice ambas escrituras por el lock
-    // de fila y sólo la que efectivamente corresponde pasa el WHERE.
-    const result = await db.$transaction(async (tx: any) => {
-      const rows: { stock: number }[] = await tx.$queryRaw`
-        UPDATE "Product"
-        SET stock = stock + ${delta}
-        WHERE id = ${params.id} AND "organizationId" = ${payload.orgId} AND stock + ${delta} >= 0
-        RETURNING stock
-      `
-      if (rows.length === 0) {
-        // Discrimina "no existe/no es de esta org" de "se quedaría negativo"
-        // — el UPDATE de arriba no distingue por qué no afectó ninguna fila.
-        const existing = await tx.product.findFirst({ where: { id: params.id, organizationId: payload.orgId }, select: { stock: true } })
-        if (!existing) return { error: 'Producto no encontrado', status: 404 }
-        return { error: `No hay stock suficiente — quedarían ${existing.stock + delta} unidades. Stock actual: ${existing.stock}.`, status: 400 }
-      }
+    // El UPDATE atómico condicionado + el alta en el ledger viven en
+    // registrarMovimiento() (src/lib/stock.ts) — mismo criterio de "no leer,
+    // calcular y después escribir" que evita que dos ajustes simultáneos
+    // sobre el mismo producto pierdan un movimiento en silencio. Este
+    // endpoint es el ajuste MANUAL desde la UI; las compras (Fase 2) y las
+    // entregas (Fase 3) llaman al mismo helper con otro `origen`.
+    const result = await db.$transaction((tx: any) =>
+      registrarMovimiento(tx, {
+        productId: params.id,
+        organizationId: payload.orgId,
+        tipo,
+        cantidad: cantidadNum,
+        signoAjuste: tipo === 'Ajuste' ? (signo === -1 ? -1 : 1) : undefined,
+        origen: 'MANUAL',
+        motivo: motivo || null,
+        creadoPorId: payload.userId,
+      }),
+    )
 
-      const nuevoStock = rows[0].stock
-      const movimiento = await tx.stockMovimiento.create({
-        data: {
-          productId: params.id,
-          organizationId: payload.orgId,
-          tipo, cantidad: cantidadNum, stockResultante: nuevoStock,
-          motivo: motivo || null,
-          creadoPorId: payload.userId,
-        },
-      })
-      return { product: { stock: nuevoStock }, movimiento }
-    })
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 
-    if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
-
-    return NextResponse.json({ data: result }, { status: 201 })
+    return NextResponse.json({
+      data: { product: { stock: result.stockResultante }, movimiento: { id: result.movimientoId } },
+    }, { status: 201 })
   } catch (error) {
     console.error('[STOCK POST]', error)
     return NextResponse.json({ error: 'Error al registrar el movimiento' }, { status: 500 })

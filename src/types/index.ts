@@ -251,6 +251,9 @@ export interface Product {
   unit:           string
   trackStock:     boolean
   stock:          number
+  stockReservado?: number
+  stockMinimo?:   number | null
+  supplierStock?: number | null
   organizationId: string
   createdAt:      string
   // ── Catálogo de productos (Módulo 1) — null en productos "simples" ──
@@ -642,6 +645,10 @@ export interface Empresa {
   cuit: string | null
   condicionIva: string | null
   formaPagoHabitual: string | null
+  // Proveedor — la misma Empresa puede ser cliente y/o proveedor.
+  esProveedor?: boolean
+  cbu?: string | null
+  alias?: string | null
   // Cartera de Ventas — reparto de trabajo, no aislamiento (ver schema).
   ownerId: string | null
   owner?: { id: string; name: string } | null
