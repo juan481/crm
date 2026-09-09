@@ -18,11 +18,18 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     }
 
     const db = prisma as any
-    const result = await db.$transaction((tx: any) => confirmarCompra(tx, params.id, payload.orgId, payload.userId))
+    // El helper devuelve {ok:false} en vez de tirar; hay que RE-lanzar dentro
+    // de la transacción para que Prisma haga rollback de los movimientos ya
+    // creados en el loop (si no, commitea a medias y devuelve error).
+    const result = await db.$transaction(async (tx: any) => {
+      const r = await confirmarCompra(tx, params.id, payload.orgId, payload.userId)
+      if (!r.ok) throw Object.assign(new Error(r.error), { status: r.status })
+      return r
+    })
 
-    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
     return NextResponse.json({ data: result })
   } catch (error: any) {
+    if (error?.status) return NextResponse.json({ error: error.message }, { status: error.status })
     // P2002 en el @@unique([organizationId, numero]) = dos confirmaciones
     // simultáneas tomaron el mismo número. Reintento simple.
     if (error?.code === 'P2002') {

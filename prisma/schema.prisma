@@ -284,6 +284,7 @@ model Organization {
   serviciosRecurrentes    ServicioRecurrente[]
   compras                 Compra[]
   alertasCosto            AlertaCosto[]
+  entregasStock           EntregaStock[]
 }
 
 // ─── Ruteo de avisos automáticos ───────────────────────────────────────────
@@ -996,6 +997,11 @@ model Deal {
   owner             User         @relation("DealOwner", fields: [ownerId], references: [id])
   organizationId    String
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Tipo de trabajo — 'INSTALACION' | 'VENTA_EQUIPOS' | 'SOFTWARE' | 'MONITOREO'
+  // | 'MIXTO' | null. String libre (mismo criterio que `origen`). Decide qué
+  // pestañas aplican en el detalle (Materiales sólo si hay equipos) y filtra
+  // el pipeline. null = alta anterior a este campo.
+  tipo              String?
   cotizaciones      Cotizacion[]
   notas             DealNota[]
   tasks             Task[]
@@ -1274,6 +1280,7 @@ model Empresa {
   invoices     Invoice[]
   serviciosRecurrentes ServicioRecurrente[]
   compras      Compra[]
+  entregasStock EntregaStock[]
 
   @@index([organizationId])
   @@index([organizationId, name])
@@ -1402,6 +1409,7 @@ model Product {
   pedidoItems    PedidoItem[]
   compraItems    CompraItem[]
   alertasCosto   AlertaCosto[]
+  entregaItems   EntregaStockItem[]
 
   // ── Producto KIT / compuesto ──────────────────────────────────────────
   // isKit=true → este Product es un combo armado con otros productos del
@@ -1626,6 +1634,61 @@ model AlertaCosto {
   @@index([organizationId, productId])
 }
 
+// ─── Entregas de stock / remitos internos (Fase 3) ─────────────────────────
+// Egreso de material del depósito hacia una venta/obra ("el pedido 345 del
+// presupuesto 64.99") o una venta de mostrador. Mientras está en BORRADOR
+// reserva stock (Product.stockReservado); al ENTREGAR descuenta de verdad
+// (StockMovimiento Salida, origen VENTA) y queda en el historial inmutable
+// contra el deal/cotización/persona.
+model EntregaStock {
+  id             String       @id @default(cuid())
+  // Correlativo por organización — se asigna al entregar (un BORRADOR
+  // abandonado no quema número). Ver @@unique.
+  numero         Int?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Vínculos opcionales — una entrega cuelga de una obra/cotización o es una
+  // venta de mostrador suelta (los tres null).
+  dealId         String?
+  cotizacionId   String?
+  empresaId      String?
+  empresa        Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // Quién retira — texto libre (técnico, flete, gente de la obra). No es un
+  // User a propósito.
+  retiradoPor    String
+  motivo         String?
+  estado         String       @default("BORRADOR") // 'BORRADOR' | 'ENTREGADA' | 'ANULADA'
+  fecha          DateTime     @default(now())
+  creadoPorId    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  items          EntregaStockItem[]
+
+  @@unique([organizationId, numero])
+  @@index([organizationId, estado])
+  @@index([organizationId, dealId])
+  @@index([organizationId, cotizacionId])
+}
+
+model EntregaStockItem {
+  id            String       @id @default(cuid())
+  entregaId     String
+  entrega       EntregaStock @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+  // SetNull + snapshot de nombre/costo: borrar un producto no borra el
+  // renglón del remito (historial), sólo lo desvincula. Mismo criterio que
+  // CompraItem.product.
+  productId     String?
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  nombre        String
+  cantidad      Int          @default(1)
+  costoUnitario Float?       // snapshot al preparar — alimenta la rentabilidad del Deal
+  createdAt     DateTime     @default(now())
+
+  @@index([entregaId])
+  @@index([productId])
+}
+
 // Uso real de la Barra Rápida móvil (src/components/layout/mobile-quick-bar.tsx)
 // — v1 era un set fijo por rol; esto es lo que permite que se ajuste sola a
 // lo que cada persona usa de verdad (src/lib/quick-actions.ts hace el
@@ -1683,6 +1746,10 @@ model Cotizacion {
   // resuelto al momento de cotizar. Default false = toda cotización anterior
   // a esto (se cotizaba neto, sin IVA) sigue significando lo mismo.
   ivaDiscriminado Boolean         @default(false)
+  // Ya se generó una EntregaStock a partir de esta cotización (botón "Preparar
+  // materiales" en cotizaciones/[id]). Evita preparar dos veces el mismo
+  // material. Default false = toda cotización anterior a Fase 3.
+  entregaGenerada Boolean         @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

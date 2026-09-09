@@ -47,6 +47,21 @@ export function ProductCard({ product: p, onClick, actionSlot }: ProductCardProp
             <Tag size={9} /> {p.category.name}
           </span>
         )}
+        {(p.trackStock || p.supplierStock != null || p.supplierAvailability) && (
+          <div className="flex flex-wrap items-center gap-1 text-[9px]">
+            {p.trackStock && (
+              <span className="px-1 py-0.5 rounded font-semibold"
+                style={{ background: (p.stock ?? 0) - (p.stockReservado ?? 0) > 0 ? 'rgba(16,185,129,0.14)' : 'rgba(239,68,68,0.14)', color: (p.stock ?? 0) - (p.stockReservado ?? 0) > 0 ? '#10b981' : '#ef4444' }}>
+                Dep. {(p.stock ?? 0) - (p.stockReservado ?? 0)}
+              </span>
+            )}
+            {(p.supplierStock != null || p.supplierAvailability) && (
+              <span className="px-1 py-0.5 rounded" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-subtle)' }}>
+                Prov. {p.supplierStock != null ? p.supplierStock : String(p.supplierAvailability).slice(0, 12)}
+              </span>
+            )}
+          </div>
+        )}
         <div className="mt-auto pt-1 flex items-baseline justify-between gap-1">
           <span className="text-xs font-bold truncate" style={{ color: 'var(--color-text)' }}>
             {formatMoneyExact(p.price, p.currency)}

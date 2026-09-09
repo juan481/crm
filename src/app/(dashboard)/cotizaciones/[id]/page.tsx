@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Download, Mail, MessageCircle, CheckCircle2,
-  Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle,
+  Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle, PackageCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoneyExact } from '@/lib/utils'
@@ -42,7 +42,9 @@ interface CotizacionDetail {
   validityDays:   number
   ivaDiscriminado: boolean | null
   priceMode:      string | null
-  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null }>
+  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null; productId?: string }>
+  entregaGenerada?: boolean
+  dealId?:        string | null
   empresa:        { id: string; name: string } | null
   user:           { id: string; name: string } | null
   orgName:        string
@@ -61,6 +63,7 @@ export default function CotizacionDetailPage() {
   const [pdfBase64,   setPdfBase64]   = useState<string | null>(null)
   const [sendingMail, setSendingMail] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [preparando, setPreparando] = useState(false)
 
   const { data, isLoading, error } = useQuery<CotizacionDetail>({
     queryKey: ['cotizacion', id],
@@ -203,6 +206,22 @@ export default function CotizacionDetailPage() {
       toast.error('Error de conexión')
     } finally {
       setSendingMail(false)
+    }
+  }
+
+  const prepararMateriales = async () => {
+    setPreparando(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/preparar-materiales`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success('Material preparado — stock reservado. Revisá y confirmá la entrega.')
+      qc.invalidateQueries({ queryKey: ['cotizacion', id] })
+      router.push(`/entregas?id=${json.data.entregaId}`)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setPreparando(false)
     }
   }
 
@@ -385,6 +404,33 @@ export default function CotizacionDetailPage() {
           </div>
         </a>
       </div>
+
+      {/* Preparar materiales — sólo con la cotización aceptada y productos físicos */}
+      {data.status === 'ACEPTADA' && data.items.some(it => it.type === 'PRODUCT' && it.productId) && (
+        <div className="rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap"
+          style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(16,185,129,0.12)' }}>
+              <PackageCheck size={18} style={{ color: '#10b981' }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Materiales de esta cotización</p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {data.entregaGenerada
+                  ? 'Ya se preparó el material — buscá el remito en Entregas.'
+                  : 'Generá el remito interno con los productos (los KITs se abren a sus componentes) y reservá el stock.'}
+              </p>
+            </div>
+          </div>
+          {data.entregaGenerada ? (
+            <Button variant="outline" onClick={() => router.push('/entregas')}>Ver en Entregas</Button>
+          ) : (
+            <Button onClick={prepararMateriales} loading={preparando} leftIcon={<PackageCheck size={15} />}>
+              Preparar materiales
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

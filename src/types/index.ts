@@ -515,6 +515,8 @@ export interface Deal {
   expectedCloseDate: string | null
   closedAt: string | null
   notes: string | null
+  // 'INSTALACION' | 'VENTA_EQUIPOS' | 'SOFTWARE' | 'MONITOREO' | 'MIXTO' | null
+  tipo?: string | null
   origen: string | null
   leadReason: string | null
   empresaId: string | null

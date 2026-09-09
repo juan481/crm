@@ -62,11 +62,21 @@ export function ProductDetailModal({ product: p, onClose, onAdd, addLabel = 'Agr
           <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{p.description}</p>
         )}
 
-        {p.supplierAvailability && (
-          <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
-            Disponibilidad del proveedor: {p.supplierAvailability}
-          </p>
-        )}
+        {/* Disponibilidad total unificada — depósito propio + proveedor */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {p.trackStock && (
+            <span className="px-2 py-1 rounded-full font-medium"
+              style={{ background: (p.stock ?? 0) - (p.stockReservado ?? 0) > 0 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)', color: (p.stock ?? 0) - (p.stockReservado ?? 0) > 0 ? '#10b981' : '#ef4444' }}>
+              Depósito: {(p.stock ?? 0) - (p.stockReservado ?? 0)}
+              {(p.stockReservado ?? 0) > 0 ? ` (${p.stockReservado} reservado)` : ''}
+            </span>
+          )}
+          {(p.supplierStock != null || p.supplierAvailability) && (
+            <span className="px-2 py-1 rounded-full" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+              Proveedor: {p.supplierStock != null ? p.supplierStock : p.supplierAvailability}
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <div>

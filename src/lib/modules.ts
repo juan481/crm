@@ -51,6 +51,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // Compras a proveedores + OCR de facturas + cuentas por pagar. Toca datos
   // de costo y pago → default y piso más altos que Stock.
   { id: 'compras',        label: 'Depósito · Compras', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                 minRole: 'ADMIN' },
+  // Entregas / remitos internos — egresos de material a obra o mostrador.
+  // Piso TECHNICIAN (el depósito prepara y entrega); default ADMIN+.
+  { id: 'entregas',       label: 'Depósito · Entregas', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                minRole: 'TECHNICIAN' },
   { id: 'documentos',     label: 'Documentos',      defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
@@ -73,6 +76,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   cotizaciones: '/cotizaciones',
   stock: '/stock',
   compras: '/compras',
+  entregas: '/entregas',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

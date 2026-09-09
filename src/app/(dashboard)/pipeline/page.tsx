@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatMultiCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { DealNotas } from '@/components/pipeline/deal-notas'
+import { DealMateriales } from '@/components/pipeline/deal-materiales'
 import { ForecastPanel } from '@/components/pipeline/forecast-panel'
 import { ContactoPicker } from '@/components/pipeline/contacto-picker'
 import type { Deal, DealStage } from '@/types'
@@ -73,7 +74,7 @@ const EMPTY_FORM: DealFormState = {
 function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => void }) {
   const qc = useQueryClient()
   const [saving, setSaving] = useState(false)
-  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string } | null>(null)
+  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string; tipo: string } | null>(null)
   const [closing, setClosing] = useState<null | 'GANADO' | 'PERDIDO'>(null)
   // Al ganar: paso "¿qué sigue?" — el usuario elige qué crear para la instalación.
   const [followUp, setFollowUp] = useState<{ empresaId: string | null; nombre: string } | null>(null)
@@ -95,6 +96,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
     probability: String(data.probability),
     expectedCloseDate: data.expectedCloseDate ? data.expectedCloseDate.slice(0, 10) : '',
     notes: data.notes ?? '',
+    tipo: data.tipo ?? '',
   } : null)
 
   const handleSave = async () => {
@@ -109,6 +111,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
           probability: Number(d.probability) || 0,
           expectedCloseDate: d.expectedCloseDate || null,
           notes: d.notes.trim() || null,
+          tipo: d.tipo || null,
         }),
       })
       const json = await res.json()
@@ -314,13 +317,28 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             />
           </div>
 
-          <Input
-            label="Fecha estimada de cierre"
-            type="date"
-            leftIcon={<CalendarClock size={14} />}
-            value={d.expectedCloseDate}
-            onChange={e => setDraft({ ...d, expectedCloseDate: e.target.value })}
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Fecha estimada de cierre"
+              type="date"
+              leftIcon={<CalendarClock size={14} />}
+              value={d.expectedCloseDate}
+              onChange={e => setDraft({ ...d, expectedCloseDate: e.target.value })}
+            />
+            <Select
+              label="Tipo de trabajo"
+              value={d.tipo}
+              onChange={e => setDraft({ ...d, tipo: e.target.value })}
+              options={[
+                { value: '', label: '— Sin definir —' },
+                { value: 'INSTALACION', label: 'Instalación' },
+                { value: 'VENTA_EQUIPOS', label: 'Venta de equipos' },
+                { value: 'SOFTWARE', label: 'Software / licencia' },
+                { value: 'MONITOREO', label: 'Monitoreo' },
+                { value: 'MIXTO', label: 'Mixto' },
+              ]}
+            />
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Notas</label>
@@ -356,6 +374,13 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               ))}
             </div>
           )}
+
+          <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+              Materiales
+            </p>
+            <DealMateriales dealId={dealId} />
+          </div>
 
           {/* Cerrar la venta desde acá mismo (antes había que ir al tablero) */}
           <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>

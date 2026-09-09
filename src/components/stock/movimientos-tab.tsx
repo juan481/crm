@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, History } from 'lucide-react'
+import { Search, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, History, FileDown } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/table'
+import { exportToExcel } from '@/lib/xlsx-export'
+import toast from 'react-hot-toast'
 
 interface Movimiento {
   id: string
@@ -75,6 +78,40 @@ export function MovimientosTab() {
   const rows: Movimiento[] = data?.data ?? []
   const total: number = data?.total ?? 0
   const totalPages: number = data?.totalPages ?? 1
+  const [exporting, setExporting] = useState(false)
+
+  const exportar = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams({ page: '1', limit: '5000' })
+      if (search.length >= 2) p.set('search', search)
+      if (origen) p.set('origen', origen)
+      if (desde) p.set('desde', desde)
+      if (hasta) p.set('hasta', hasta)
+      const res = await fetch(`/api/stock/movimientos?${p}`)
+      const json = await res.json()
+      const all: Movimiento[] = json.data ?? []
+      if (all.length === 0) { toast.error('No hay movimientos para exportar'); return }
+      await exportToExcel(
+        `movimientos-stock-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        'Movimientos',
+        all.map((m) => ({
+          Fecha: new Date(m.createdAt).toLocaleString('es-AR'),
+          Producto: m.product?.name ?? '',
+          SKU: m.product?.sku ?? '',
+          Tipo: m.tipo,
+          Cantidad: m.cantidad,
+          'Stock resultante': m.stockResultante,
+          Origen: ORIGEN_LABEL[m.origen] ?? m.origen,
+          Comprobante: m.numeroComprobante ?? '',
+          Motivo: m.motivo ?? '',
+          'Costo unitario': m.costoUnitario ?? '',
+          Quién: m.creadoPor ?? '',
+        })),
+      )
+      toast.success(`${all.length} movimiento${all.length !== 1 ? 's' : ''} exportado${all.length !== 1 ? 's' : ''}`)
+    } catch { toast.error('Error al exportar') } finally { setExporting(false) }
+  }
 
   return (
     <div className="space-y-4">
@@ -100,6 +137,9 @@ export function MovimientosTab() {
             Limpiar
           </button>
         )}
+        <Button size="sm" variant="outline" onClick={exportar} loading={exporting} leftIcon={<FileDown size={14} />}>
+          Excel
+        </Button>
       </div>
 
       <div className="rounded-2xl overflow-x-auto" style={{ border: '1px solid var(--color-border)' }}>

@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     })
     if (!existing) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
 
-    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, contactoId, ownerId, closedAt } = await req.json()
+    const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, contactoId, ownerId, closedAt, tipo } = await req.json()
 
     let resolvedOwnerId = ownerId
     if (ownerId) {
@@ -97,6 +97,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(stage !== undefined      && { stage }),
         ...(expectedCloseDate !== undefined && { expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null }),
         ...(notes !== undefined      && { notes: notes || null }),
+        ...(tipo !== undefined       && { tipo: tipo || null }),
         ...(empresaId !== undefined  && { empresaId: empresaId || null }),
         ...(clientId !== undefined   && { clientId: clientId || null }),
         ...(contactoId !== undefined && { contactoId: contactoId || null }),

@@ -35,6 +35,17 @@ export async function GET(req: NextRequest) {
     eq('entregaId',   sp.get('entregaId'))
     eq('creadoPorId', sp.get('creadoPorId'))
 
+    // Filtro "por presupuesto": los movimientos no llevan cotizacionId, pero
+    // sí entregaId — se resuelve a la lista de entregas de esa cotización.
+    const cotizacionId = sp.get('cotizacionId')
+    if (cotizacionId) {
+      const entregas = await db.entregaStock.findMany({
+        where: { organizationId: payload.orgId, cotizacionId },
+        select: { id: true },
+      })
+      where.entregaId = { in: entregas.map((e: any) => e.id) }
+    }
+
     const desde = sp.get('desde')
     const hasta = sp.get('hasta')
     if (desde || hasta) {

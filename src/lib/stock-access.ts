@@ -14,3 +14,8 @@ export async function puedeVerStock(orgId: string, role: Role): Promise<boolean>
 export async function puedeVerCompras(orgId: string, role: Role): Promise<boolean> {
   return canAccess(role, 'ADMIN') || roleHasModule(orgId, role, 'compras')
 }
+
+// Acceso a Entregas — módulo `entregas` (piso TECHNICIAN, como Stock).
+export async function puedeVerEntregas(orgId: string, role: Role): Promise<boolean> {
+  return canAccess(role, 'ADMIN') || roleHasModule(orgId, role, 'entregas')
+}
