@@ -53,6 +53,9 @@ export function AlertasTab() {
       toast.success(accion === 'aplicar' ? 'Costo actualizado' : 'Alerta descartada')
       qc.invalidateQueries({ queryKey: ['alertas-costo'] })
       qc.invalidateQueries({ queryKey: ['stock-actual'] })
+      qc.invalidateQueries({ queryKey: ['stock-resumen-cards'] })
+      qc.invalidateQueries({ queryKey: ['deal-rentabilidad'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-deposito'] })
     } catch { toast.error('Error de conexión') } finally { setBusyId(null) }
   }
 

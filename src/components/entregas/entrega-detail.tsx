@@ -33,7 +33,9 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
     qc.invalidateQueries({ queryKey: ['entregas'] })
     qc.invalidateQueries({ queryKey: ['stock-actual'] })
     qc.invalidateQueries({ queryKey: ['stock-movimientos'] })
+    qc.invalidateQueries({ queryKey: ['stock-resumen-cards'] })
     qc.invalidateQueries({ queryKey: ['deal-materiales'] })
+    qc.invalidateQueries({ queryKey: ['deal-rentabilidad'] })
     onChanged()
   }
 
@@ -129,12 +131,14 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
       y += 8
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
       e.items.forEach((it: any, idx: number) => {
+        if (y > 268) { doc.addPage(); y = 20 }
         if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 8, 'F') }
         doc.setTextColor(30, 41, 59)
         doc.text(String(it.nombre).slice(0, 70), mg + 2, y + 5.5)
         doc.text(String(it.cantidad), mg + cw - 2, y + 5.5, { align: 'right' })
         y += 8
       })
+      if (y > 250) { doc.addPage(); y = 20 }
       y += 12
       doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw * 0.4, y)
       doc.line(mg + cw * 0.6, y, mg + cw, y); y += 5

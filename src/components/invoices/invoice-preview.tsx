@@ -107,6 +107,7 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
       const rows = items.length ? items : [{ nombre: invoice.description || 'Servicio', cantidad: 1, subtotal: invoice.amount }]
       rows.forEach((it: any, idx: number) => {
+        if (y > 262) { doc.addPage(); y = 20 }
         if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 8, 'F') }
         doc.setTextColor(30, 41, 59)
         doc.text(String(it.nombre).slice(0, 60), mg + 2, y + 5.5)
@@ -115,6 +116,7 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
         y += 8
       })
       y += 4
+      if (y > 240) { doc.addPage(); y = 20 }
       doc.setDrawColor(226, 232, 240); doc.line(mg + cw - 70, y, mg + cw, y); y += 6
       if (full?.subtotal != null) {
         doc.setTextColor(100, 116, 139); doc.setFontSize(9)

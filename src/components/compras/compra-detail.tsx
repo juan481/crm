@@ -43,9 +43,14 @@ export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: str
   const invalidate = () => {
     refetch()
     qc.invalidateQueries({ queryKey: ['compras'] })
+    qc.invalidateQueries({ queryKey: ['compras-por-pagar'] })
     qc.invalidateQueries({ queryKey: ['stock-actual'] })
     qc.invalidateQueries({ queryKey: ['stock-movimientos'] })
+    qc.invalidateQueries({ queryKey: ['stock-resumen-cards'] })
     qc.invalidateQueries({ queryKey: ['alertas-costo'] })
+    qc.invalidateQueries({ queryKey: ['deal-materiales'] })
+    qc.invalidateQueries({ queryKey: ['deal-rentabilidad'] })
+    qc.invalidateQueries({ queryKey: ['dashboard-deposito'] })
     onChanged()
   }
 

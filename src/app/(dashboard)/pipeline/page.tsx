@@ -376,12 +376,16 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             </div>
           )}
 
-          <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
-              Materiales
-            </p>
-            <DealMateriales dealId={dealId} />
-          </div>
+          {(data.stage === 'GANADO'
+            || (data.cotizaciones && data.cotizaciones.length > 0)
+            || ['INSTALACION', 'VENTA_EQUIPOS', 'MIXTO'].includes(data.tipo ?? '')) && (
+            <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
+                Materiales
+              </p>
+              <DealMateriales dealId={dealId} />
+            </div>
+          )}
 
           {(data.stage === 'GANADO' || (data.cotizaciones?.some(c => c.status === 'ACEPTADA'))) && (
             <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
