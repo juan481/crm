@@ -33,10 +33,12 @@ type Action =
   | 'hr:manage'
 
 const PERMISSIONS: Record<Role, Action[]> = {
-  // GREMIO (portal B2B, Módulo 3) no tiene ninguna acción del CRM interno
-  // — opera exclusivamente a través de su propio portal ((gremio)/), con
-  // guards explícitos role==='GREMIO' en vez de este sistema de permisos.
+  // GREMIO (portal B2B, Módulo 3) y CLIENTE (portal de clientes, Pagos &
+  // Portal) no tienen ninguna acción del CRM interno — operan exclusivamente
+  // a través de sus propios portales ((gremio)/ y portal/), con guards
+  // explícitos de rol en vez de este sistema de permisos.
   GREMIO: [],
+  CLIENTE: [],
   HR: [
     'tasks:view',
     'hr:view', 'hr:manage',

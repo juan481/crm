@@ -3,7 +3,10 @@
 // jerarquía interna de canAccess()/AppShell, ver comentario en el enum Role
 // del schema. Se agrega igual al union type para que TS lo reconozca en
 // altas/ediciones de usuario y en los guards explícitos del portal.
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN' | 'HR' | 'GREMIO'
+// GREMIO y CLIENTE son carriles laterales (portal B2B / portal de clientes) —
+// no participan de la jerarquía de canAccess(), se resuelven con guards
+// explícitos. Ver comentario en el enum Role del schema y en src/lib/auth.ts.
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN' | 'HR' | 'GREMIO' | 'CLIENTE'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED'
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'PROSPECT'
 export type ClientType = 'B2B' | 'B2C'
@@ -49,6 +52,9 @@ export interface User {
   avatarUrl: string | null
   organizationId: string
   organization?: Organization
+  // Sólo para role === 'CLIENTE' (portal de clientes) — la Empresa a la que
+  // está atado. null para todo usuario de staff.
+  empresaId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -149,6 +155,28 @@ export interface Invoice {
   organizationId: string
   createdAt: string
   updatedAt: string
+  // Cobro online (Pagos & Portal)
+  payToken?: string | null
+  paymentProvider?: string | null
+  checkoutUrl?: string | null
+  payments?: Payment[]
+}
+
+// ─── Payment (Pagos & Portal) ─────────────────────────────────────────────
+export type PaymentProvider = 'WHOP' | 'MERCADOPAGO' | 'MANUAL'
+export type PaymentStatus = 'APPROVED' | 'PENDING' | 'REJECTED' | 'REFUNDED'
+
+export interface Payment {
+  id: string
+  organizationId: string
+  invoiceId: string
+  provider: PaymentProvider
+  externalId: string
+  status: PaymentStatus
+  amount: number
+  currency: string
+  paidAt: string | null
+  createdAt: string
 }
 
 // ─── Cotizacion ───────────────────────────────────────────────────────────
@@ -683,6 +711,11 @@ export interface ServicioRecurrente {
   version: string | null
   puestos: number | null
   notas: string | null
+  // Débito automático (Pagos & Portal, Fase 4)
+  subProvider: PaymentProvider | null
+  subExternalId: string | null
+  subStatus: 'PENDIENTE_AUTORIZACION' | 'ACTIVO' | 'PAUSADO' | 'CANCELADO' | null
+  subAuthUrl: string | null
   createdAt: string
   updatedAt: string
 }

@@ -17,13 +17,14 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
     SELLER: 2,
     HR: 1,         // canAccess(role, 'HR')  → blocks only TECHNICIAN
     TECHNICIAN: 0, // canAccess(role, 'SELLER') → blocks HR and TECHNICIAN
-    // GREMIO no participa de esta jerarquía (portal B2B lateral, ver
-    // comentario en el enum Role del schema) — el -1 es sólo una red de
+    // GREMIO y CLIENTE no participan de esta jerarquía (carriles laterales,
+    // ver comentario en el enum Role del schema) — el -1 es sólo una red de
     // seguridad fail-closed para que TS compile y para que un llamado
-    // legacy a canAccess('GREMIO', cualquierCosa) dé false. El control de
-    // acceso real del portal es el guard explícito role==='GREMIO' en
-    // (gremio)/layout.tsx y en las APIs que consume.
+    // legacy a canAccess('GREMIO' | 'CLIENTE', cualquierCosa) dé false. El
+    // control de acceso real de esos portales es el guard explícito de rol
+    // en (gremio)/layout.tsx, portal/layout.tsx y en las APIs que consumen.
     GREMIO: -1,
+    CLIENTE: -1,
   }
   return hierarchy[userRole] >= hierarchy[requiredRole]
 }
@@ -41,7 +42,7 @@ interface ResolvedSession {
   user: {
     id: string; email: string; name: string; status: string
     onboardingCompleted: boolean; forcePasswordChange: boolean; avatarUrl: string | null
-    organizationId: string; createdAt: Date; updatedAt: Date
+    organizationId: string; empresaId: string | null; createdAt: Date; updatedAt: Date
   }
   orgId: string
   role: Role
@@ -92,7 +93,7 @@ async function resolveSession(): Promise<ResolvedSession | null> {
     select: {
       id: true, email: true, name: true, role: true, status: true,
       onboardingCompleted: true, forcePasswordChange: true, avatarUrl: true,
-      organizationId: true, createdAt: true, updatedAt: true,
+      organizationId: true, empresaId: true, createdAt: true, updatedAt: true,
       organization: { select: ORG_BRANDING_SELECT },
     },
   })
@@ -132,21 +133,54 @@ async function resolveSession(): Promise<ResolvedSession | null> {
 
 // Returns the same AuthPayload shape as before — no changes needed in API routes
 //
-// GREMIO EXCLUIDO A PROPÓSITO (hallazgo de la revisión del Módulo 3): esta
-// función es el único chequeo de auth de ~109 rutas de API internas
-// existentes (empresas, deals, tickets, facturas, tareas...), NINGUNA de
-// las cuales valida el rol más allá de "está logueado". GREMIO es un
-// usuario autenticado real de Supabase — sin este `role === 'GREMIO' →
-// null` acá, una sesión Gremio podía pegarle directo a cualquiera de esas
-// 109 rutas (saltando la UI) y traerse datos de otros clientes de la
-// organización, algo que ninguna de ellas fue diseñada para bloquear.
-// getCurrentUserAny() (abajo) es la salida explícita para los pocos
-// endpoints que SÍ deben servir a GREMIO (api/catalogo/*, api/gremio/*).
+// GREMIO y CLIENTE EXCLUIDOS A PROPÓSITO (hallazgo de la revisión del Módulo 3,
+// extendido en Pagos & Portal): esta función es el único chequeo de auth de
+// ~109 rutas de API internas existentes (empresas, deals, tickets, facturas,
+// tareas...), NINGUNA de las cuales valida el rol más allá de "está logueado".
+// GREMIO y CLIENTE son usuarios autenticados reales de Supabase — sin este
+// `role === 'GREMIO' | 'CLIENTE' → null` acá, una sesión de portal podía
+// pegarle directo a cualquiera de esas 109 rutas (saltando la UI) y traerse
+// datos de otros clientes de la organización, algo que ninguna de ellas fue
+// diseñada para bloquear. getCurrentUserAny() (abajo) es la salida explícita
+// para los pocos endpoints que SÍ deben servir a esos roles (api/catalogo/*,
+// api/gremio/*), y getPortalUser() la envoltura scopeada por empresa para
+// /api/portal/*.
 export async function getCurrentUser(): Promise<AuthPayload | null> {
   try {
     const resolved = await resolveSession()
-    if (!resolved || resolved.homeSuspended || resolved.role === 'GREMIO') return null
+    if (!resolved || resolved.homeSuspended) return null
+    if (resolved.role === 'GREMIO' || resolved.role === 'CLIENTE') return null
     return { userId: resolved.user.id, orgId: resolved.orgId, role: resolved.role, email: resolved.user.email }
+  } catch {
+    return null
+  }
+}
+
+// Sesión de un usuario de PORTAL DE CLIENTE (role === 'CLIENTE'), ya resuelta
+// a su Empresa. Es el único punto que devuelve `empresaId` para el portal —
+// toda ruta /api/portal/* filtra SIEMPRE `{ organizationId, empresaId }` con
+// lo que sale de acá, nunca con un id que venga del body/query del cliente.
+// Devuelve null si no hay sesión, si el rol no es CLIENTE, si la org de
+// origen está suspendida, o si el usuario quedó sin empresaId (estado roto —
+// no se le sirve nada).
+export interface PortalUser {
+  userId: string
+  orgId: string
+  empresaId: string
+  email: string
+}
+
+export async function getPortalUser(): Promise<PortalUser | null> {
+  try {
+    const resolved = await resolveSession()
+    if (!resolved || resolved.homeSuspended) return null
+    if (resolved.role !== 'CLIENTE' || !resolved.user.empresaId) return null
+    return {
+      userId: resolved.user.id,
+      orgId: resolved.orgId,
+      empresaId: resolved.user.empresaId,
+      email: resolved.user.email,
+    }
   } catch {
     return null
   }

@@ -21,6 +21,13 @@ enum Role {
   // guards explícitos (role === 'GREMIO') en (gremio)/layout.tsx y en las
   // APIs que consume ese portal.
   GREMIO
+  // Portal de clientes (Pagos & Portal) — MISMO criterio que GREMIO: carril
+  // lateral, fuera de canAccess(). Un usuario CLIENTE está atado a UNA
+  // Empresa (User.empresaId) y sólo ve lo suyo. Excluido de getCurrentUser()
+  // igual que GREMIO (ver src/lib/auth.ts) para que no pueda pegarle a las
+  // ~109 rutas internas que sólo chequean "logueado". Sólo lo sirve
+  // /api/portal/* con chequeo explícito role === 'CLIENTE'.
+  CLIENTE
 }
 
 enum UserStatus {
@@ -285,6 +292,7 @@ model Organization {
   compras                 Compra[]
   alertasCosto            AlertaCosto[]
   entregasStock           EntregaStock[]
+  payments                Payment[]
 }
 
 // ─── Ruteo de avisos automáticos ───────────────────────────────────────────
@@ -326,38 +334,50 @@ model ServicioRecurrente {
   empresa        Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   nombre           String
-  modoLicencia     ModoLicencia             @default(NINGUNA)
-  incluyeMonitoreo Boolean                  @default(false)
+  modoLicencia     ModoLicencia @default(NINGUNA)
+  incluyeMonitoreo Boolean      @default(false)
 
-  monto            Float                    @default(0)
-  moneda           String                   @default("USD")
-  ciclo            CicloFacturacion         @default(MENSUAL)
+  monto          Float            @default(0)
+  moneda         String           @default("USD")
+  ciclo          CicloFacturacion @default(MENSUAL)
   // Día del mes para el vencimiento de la factura generada (1–28).
-  diaVencimiento   Int                      @default(10)
+  diaVencimiento Int              @default(10)
 
-  contratoInicio   DateTime?
-  contratoFin      DateTime?                // null = sin fecha de fin / renovación automática
+  contratoInicio DateTime?
+  contratoFin    DateTime? // null = sin fecha de fin / renovación automática
 
-  estado           EstadoServicioRecurrente @default(ACTIVO)
+  estado       EstadoServicioRecurrente @default(ACTIVO)
   // Canal / origen del ingreso: "CRM", "Instalación", "Otro".
   // Texto libre a propósito (mismo criterio que país/condición IVA): la lista
   // curada vive en src/lib/servicios-recurrentes.ts y puede crecer sin migración.
-  canalIngreso     String                   @default("CRM")
+  canalIngreso String                   @default("CRM")
 
   // Datos opcionales de licencia (rescatados de la v1).
-  serial           String?
-  version          String?
-  puestos          Int?
-  notas            String?
+  serial  String?
+  version String?
+  puestos Int?
+  notas   String?
 
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
+  // ── Débito automático (Pagos & Portal, Fase 4) — 100% aditivo/nullable ──
+  // Cuando subStatus === 'ACTIVO', este abono lo cobra el proveedor externo
+  // (Whop / Mercado Pago) por su cuenta cada ciclo: el cron invoice-automation
+  // lo SALTEA (mismo criterio que empresasConAbono() saltea monthlyAmount) y
+  // cada cobro entrante crea la Invoice del mes ya PAID vía webhook.
+  // null / 'MANUAL' = flujo normal (factura del cron + link de pago).
+  subProvider   String? // 'WHOP' | 'MERCADOPAGO' | null
+  subExternalId String? // plan_xxx (Whop) | preapproval_id (MP)
+  subStatus     String? // 'PENDIENTE_AUTORIZACION' | 'ACTIVO' | 'PAUSADO' | 'CANCELADO'
+  subAuthUrl    String? // link que se le manda al cliente 1 vez para autorizar el débito
 
-  invoices         Invoice[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices Invoice[]
 
   @@index([organizationId])
   @@index([empresaId])
   @@index([organizationId, estado])
+  @@index([subProvider, subExternalId])
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before
@@ -411,6 +431,13 @@ model User {
   avatarUrl           String?
   organizationId      String
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Portal de clientes (Pagos & Portal) — SÓLO seteado para role === 'CLIENTE'.
+  // Es el scope de TODO lo que ese usuario ve en /portal: cada query del
+  // portal filtra organizationId + empresaId. Un usuario de staff siempre lo
+  // tiene en null. onDelete Cascade: si se borra la Empresa cliente, su
+  // usuario de portal deja de tener sentido y se va con ella.
+  empresaId           String?
+  portalEmpresa       Empresa?     @relation("PortalUser", fields: [empresaId], references: [id], onDelete: Cascade)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -445,6 +472,7 @@ model User {
   whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
 
   @@index([organizationId])
+  @@index([empresaId])
 }
 
 // Session management is now handled by Supabase Auth
@@ -565,36 +593,53 @@ model Contact {
 
 // ─── Invoices ──────────────────────────────────────────────────────────────
 model Invoice {
-  id             String        @id @default(cuid())
+  id                   String              @id @default(cuid())
   // clientId (legacy) kept only for the old, no-longer-navigable /clients pages —
   // every invoice created from the live Facturación screen uses empresaId instead.
-  clientId       String?
-  client         Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  empresaId      String?
-  empresa        Empresa?      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  clientId             String?
+  client               Client?             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  empresaId            String?
+  empresa              Empresa?            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   // Abono que originó esta factura (facturación recurrente por ciclo). null =
   // factura manual o del flujo viejo por Empresa.monthlyAmount.
   servicioRecurrenteId String?
   servicioRecurrente   ServicioRecurrente? @relation(fields: [servicioRecurrenteId], references: [id], onDelete: SetNull)
-  organizationId String
-  amount         Float
-  currency       String        @default("USD")
-  status         InvoiceStatus @default(PENDING)
-  description    String?
-  dueDate        DateTime
-  paidAt         DateTime?
+  organizationId       String
+  amount               Float
+  currency             String              @default("USD")
+  status               InvoiceStatus       @default(PENDING)
+  description          String?
+  dueDate              DateTime
+  paidAt               DateTime?
   // ── Factura de venta desde una cotización (Fase 4) — 100% aditivo/nullable.
   // Sin CAE de AFIP: numeroInterno es un correlativo propio, no fiscal.
-  numeroInterno  String?
-  tipo           String?       // 'FACTURA' | 'REMITO' | 'PRESUPUESTO' | 'NC'
-  cotizacionId   String?
-  dealId         String?
-  subtotal       Float?
-  iva            Float?
-  sentAt         DateTime?     // cuándo se mandó el PDF por mail
-  items          InvoiceItem[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  numeroInterno        String?
+  tipo                 String? // 'FACTURA' | 'REMITO' | 'PRESUPUESTO' | 'NC'
+  cotizacionId         String?
+  dealId               String?
+  subtotal             Float?
+  iva                  Float?
+  sentAt               DateTime? // cuándo se mandó el PDF por mail
+
+  // ── Cobro online (Pagos & Portal, Fase 1) — 100% aditivo/nullable ──
+  // payToken: link de pago público /pagar/<token>, sin login (misma clase que
+  //   Organization.publicSupportToken / Ticket.satisfactionToken). Se genera
+  //   al crear la factura; nullable para no requerir --accept-data-loss en el
+  //   push del @unique — las filas viejas se rellenan con
+  //   scripts/backfill-invoice-paytoken.ts.
+  // paymentProvider: 'WHOP' | 'MERCADOPAGO' — se deriva de `currency` por
+  //   default (USD → Whop, ARS → Mercado Pago) y se cachea al crear el checkout.
+  // checkoutUrl / checkoutRef: URL hosteada del proveedor ya creada + su id
+  //   de sesión/preference (para no recrearla en cada visita y para debug).
+  payToken        String?   @unique
+  paymentProvider String?
+  checkoutUrl     String?
+  checkoutRef     String?
+  payments        Payment[]
+
+  items     InvoiceItem[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@unique([organizationId, numeroInterno])
   @@index([organizationId])
@@ -630,6 +675,45 @@ model InvoiceItem {
   subtotal       Float    @default(0)
   createdAt      DateTime @default(now())
 
+  @@index([invoiceId])
+}
+
+// ─── Pagos online (Pagos & Portal, Fase 1) ─────────────────────────────────
+// Registro inmutable de cada intento/cobro que llega desde Whop o Mercado
+// Pago (o una conciliación MANUAL de una transferencia). No es la fuente de
+// verdad del estado de la factura — eso sigue siendo Invoice.status — pero SÍ
+// es el rastro de auditoría de cada movimiento y guarda `rawPayload` para que
+// Juan pueda conciliar la conversión USD→USDT por fuera.
+//
+// La transición Invoice PENDING→PAID la hace markInvoicePaid() en
+// src/lib/payments/reconcile.ts, dentro de una transacción, y es idempotente:
+// el @@unique([provider, externalId]) hace que un reintento del webhook del
+// proveedor (pasa seguido) no cree un segundo Payment ni vuelva a disparar
+// los avisos.
+model Payment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  // 'WHOP' | 'MERCADOPAGO' | 'MANUAL' — string libre, mismo criterio que el
+  // resto del schema (país, condicionIva, origen de Deal…).
+  provider       String
+  // Id del pago EN EL PROVEEDOR. Para 'MANUAL' se usa 'manual-<cuid>'.
+  externalId     String
+  // 'APPROVED' | 'PENDING' | 'REJECTED' | 'REFUNDED'
+  status         String
+  amount         Float
+  currency       String
+  // Respuesta cruda del proveedor (evento del webhook / fetch a su API) — para
+  // depurar y para la conciliación contable/USDT. Sólo visible a ADMIN/SUPER_ADMIN.
+  rawPayload     Json?
+  paidAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([provider, externalId])
+  @@index([organizationId, createdAt])
   @@index([invoiceId])
 }
 
@@ -728,29 +812,29 @@ enum WhatsAppConversationStatus {
 }
 
 model WhatsAppConversation {
-  id             String                     @id @default(cuid())
-  organizationId String
-  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id              String                     @id @default(cuid())
+  organizationId  String
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // phone_number_id de Meta que recibió el mensaje — el webhook es UNO SOLO
   // compartido por todas las organizaciones (así lo pide la Cloud API), este
   // campo es lo único que permite saber a qué organización pertenece cada
   // mensaje entrante. Ver resolveOrgByPhoneNumberId en src/lib/whatsapp-bot.
-  phoneNumberId  String
+  phoneNumberId   String
   // wa_id del cliente final (E.164 sin "+"), no un id nuestro.
-  customerPhone  String
-  customerName   String?
-  status         WhatsAppConversationStatus @default(ACTIVE)
+  customerPhone   String
+  customerName    String?
+  status          WhatsAppConversationStatus @default(ACTIVE)
   // Todo lo que la IA fue completando durante la charla (nombre, mail,
   // dirección, filtro de ventas/técnico respondido, etc.) — Json en vez de
   // columnas fijas porque el cuestionario de Abba todavía tiene huecos sin
   // cerrar (ver memoria abba-bot-whatsapp-ia-spec) y el set de datos va a
   // seguir cambiando sin pedir una migración cada vez.
-  collectedData  Json?
+  collectedData   Json?
   // A quién se derivó ('VENTAS' | 'SOPORTE' | 'ADMINISTRACION'), sólo texto
   // libre para mostrar en el CRM — no gobierna ninguna lógica por sí solo.
-  handedOffTo    String?
-  ticketId       String?
-  dealId         String?
+  handedOffTo     String?
+  ticketId        String?
+  dealId          String?
   // Toma humana desde el inbox del CRM. null = NISSI al mando. Cuando está
   // seteado, el engine NO invoca al modelo para esta conversación (el humano
   // responde desde /conversaciones). Ortogonal a `status` a propósito: una
@@ -759,7 +843,7 @@ model WhatsAppConversation {
   // HUMAN_TAKEOVER_AUTO_RELEASE_MS (ver engine.ts).
   humanTakeoverAt DateTime?
   assignedUserId  String?
-  assignedUser    User?                     @relation("WhatsAppAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedUser    User?                      @relation("WhatsAppAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
   // Solo se actualiza con mensajes ENTRANTES del cliente (a diferencia de
   // lastMessageAt, que también sube cuando NISSI o un humano responden).
   // Gobierna la ventana de 24hs de Meta y el cálculo de "no leído".
@@ -776,9 +860,9 @@ model WhatsAppConversation {
   // momento del reinicio — el engine sólo le manda al modelo los mensajes
   // desde esta fecha, para no arrastrar el transcript viejo.
   contextResetAt  DateTime?
-  lastMessageAt  DateTime                   @default(now())
-  createdAt      DateTime                   @default(now())
-  messages       WhatsAppMessage[]
+  lastMessageAt   DateTime                   @default(now())
+  createdAt       DateTime                   @default(now())
+  messages        WhatsAppMessage[]
 
   @@unique([organizationId, customerPhone])
   @@index([organizationId, status])
@@ -993,12 +1077,12 @@ model Document {
 
 // ─── Sales Pipeline ────────────────────────────────────────────────────────
 model Deal {
-  id                String       @id @default(cuid())
+  id                String              @id @default(cuid())
   title             String
-  amount            Float        @default(0)
-  currency          String       @default("USD")
-  probability       Int          @default(0)
-  stage             DealStage    @default(LEAD)
+  amount            Float               @default(0)
+  currency          String              @default("USD")
+  probability       Int                 @default(0)
+  stage             DealStage           @default(LEAD)
   expectedCloseDate DateTime?
   closedAt          DateTime?
   notes             String?
@@ -1012,9 +1096,9 @@ model Deal {
   // alta manual o anterior a este campo.
   leadReason        String?
   clientId          String?
-  client            Client?      @relation(fields: [clientId], references: [id])
+  client            Client?             @relation(fields: [clientId], references: [id])
   empresaId         String?
-  empresa           Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa           Empresa?            @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Contacto (persona) detrás de la oportunidad — nullable y aparte de
   // empresaId a propósito: la mayoría de los leads de Abba son consumidor
   // final (vivienda, quinta, campo particular), sin empresa. Un lead B2C es
@@ -1024,9 +1108,9 @@ model Deal {
   contactoId        String?
   contacto          DirectorioContacto? @relation(fields: [contactoId], references: [id], onDelete: SetNull)
   ownerId           String
-  owner             User         @relation("DealOwner", fields: [ownerId], references: [id])
+  owner             User                @relation("DealOwner", fields: [ownerId], references: [id])
   organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // Tipo de trabajo — 'INSTALACION' | 'VENTA_EQUIPOS' | 'SOFTWARE' | 'MONITOREO'
   // | 'MIXTO' | null. String libre (mismo criterio que `origen`). Decide qué
   // pestañas aplican en el detalle (Materiales sólo si hay equipos) y filtra
@@ -1035,8 +1119,8 @@ model Deal {
   cotizaciones      Cotizacion[]
   notas             DealNota[]
   tasks             Task[]
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   // Antes [organizationId, stage] a secas — las queries de leads nuevos
   // (Módulo 4: api/notifications, api/dashboard/metrics) filtran por
@@ -1290,7 +1374,7 @@ model Empresa {
   // La misma Empresa puede ser cliente y/o proveedor (mismo patrón que
   // isCliente). Los proveedores aparecen en /proveedores y en el selector de
   // Compras. cbu/alias = datos para pagarle.
-  esProveedor       Boolean @default(false)
+  esProveedor       Boolean      @default(false)
   cbu               String?
   alias             String?
   // Cartera de Ventas — reparto de trabajo, NO aislamiento de datos (eso
@@ -1301,16 +1385,18 @@ model Empresa {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  contactos    DirectorioContacto[]
-  notas        EmpresaNota[]
-  cotizaciones Cotizacion[]
-  deals        Deal[]
-  tasks        Task[]
-  tickets      Ticket[]
-  invoices     Invoice[]
+  contactos            DirectorioContacto[]
+  notas                EmpresaNota[]
+  cotizaciones         Cotizacion[]
+  deals                Deal[]
+  tasks                Task[]
+  tickets              Ticket[]
+  invoices             Invoice[]
   serviciosRecurrentes ServicioRecurrente[]
-  compras      Compra[]
-  entregasStock EntregaStock[]
+  compras              Compra[]
+  entregasStock        EntregaStock[]
+  // Usuarios de portal de cliente atados a esta Empresa (role === 'CLIENTE').
+  portalUsers          User[]               @relation("PortalUser")
 
   @@index([organizationId])
   @@index([organizationId, name])
@@ -1418,17 +1504,17 @@ model Product {
   lastSyncedAt         DateTime?
 
   organizationId String
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // Stock — opt-in por producto (default false) para que ningún producto ya
   // cargado hoy pase a mostrar "0 en stock" de la nada; sólo tiene sentido
   // activarlo en equipamiento físico (cámaras, sensores, paneles), nunca en
   // Service (abonos de facturación recurrente — modelo totalmente separado).
-  trackStock     Boolean           @default(false)
-  stock          Int               @default(0)
+  trackStock     Boolean            @default(false)
+  stock          Int                @default(0)
   // Reservado a una cotización aceptada cuyo material todavía no se entregó —
   // no toca `stock` real, pero `stock - stockReservado` = lo que se puede
   // comprometer en una venta nueva. Ver EntregaStock (Fase 3).
-  stockReservado Int               @default(0)
+  stockReservado Int                @default(0)
   // Punto de re-compra — dispara el aviso "stock bajo mínimo". null = sin aviso.
   stockMinimo    Int?
   // Número parseado de supplierAvailability cuando el Sheet trae una cantidad
@@ -1450,12 +1536,12 @@ model Product {
   // stock de un KIT no se trackea sobre el KIT (trackStock queda false): al
   // confirmar la venta se descuenta de cada componente. 100% aditivo —
   // isKit=false en todo producto ya cargado.
-  isKit          Boolean           @default(false)
-  kitComponents  ProductComponent[] @relation("KitToComponents")
-  usedInKits     ProductComponent[] @relation("ComponentToKits")
+  isKit         Boolean            @default(false)
+  kitComponents ProductComponent[] @relation("KitToComponents")
+  usedInKits    ProductComponent[] @relation("ComponentToKits")
 
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Postgres no colisiona múltiples NULL en un unique — los productos
   // "simples" (sku null) conviven sin problema entre sí.
@@ -1535,13 +1621,13 @@ model StockMovimiento {
   // De dónde viene el movimiento — 'MANUAL' | 'INICIAL' (conteo inicial) |
   // 'COMPRA' | 'VENTA' | 'AJUSTE'. Los siguientes campos linkean al documento
   // que lo originó (para el "quién/cuándo/para qué obra" del historial).
-  origen             String  @default("MANUAL")
-  compraId           String?
-  entregaId          String?
-  dealId             String?
-  numeroComprobante  String?
+  origen            String  @default("MANUAL")
+  compraId          String?
+  entregaId         String?
+  dealId            String?
+  numeroComprobante String?
   // Costo unitario al momento del movimiento — para valorizar entradas/salidas.
-  costoUnitario      Float?
+  costoUnitario     Float?
 
   @@index([organizationId, productId, createdAt])
   @@index([organizationId, dealId])
@@ -1556,42 +1642,42 @@ model StockMovimiento {
 // StockMovimiento de Entrada (origen COMPRA) y, si cambió algún costo, las
 // AlertaCosto. Reemplazo progresivo de la carga de compras en Bejerman.
 model Compra {
-  id                String        @id @default(cuid())
+  id                String       @id @default(cuid())
   // Correlativo por organización — se asigna recién al confirmar (un
   // BORRADOR abandonado no quema un número). null mientras es BORRADOR;
   // Postgres no colisiona múltiples NULL en el unique de abajo.
   numero            Int?
   organizationId    String
-  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // Proveedor (Empresa con esProveedor=true). null = todavía sin matchear.
   proveedorId       String?
-  proveedor         Empresa?      @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  proveedor         Empresa?     @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
   // Datos del comprobante del proveedor
   numeroComprobante String?
-  tipoComprobante   String?       // 'FACTURA_A' | 'FACTURA_B' | 'FACTURA_C' | 'REMITO' | 'TICKET' | 'OTRO'
-  fecha             DateTime      @default(now())
-  moneda            String        @default("ARS")
-  subtotal          Float         @default(0)
-  iva               Float         @default(0)
-  total             Float         @default(0)
+  tipoComprobante   String? // 'FACTURA_A' | 'FACTURA_B' | 'FACTURA_C' | 'REMITO' | 'TICKET' | 'OTRO'
+  fecha             DateTime     @default(now())
+  moneda            String       @default("ARS")
+  subtotal          Float        @default(0)
+  iva               Float        @default(0)
+  total             Float        @default(0)
   // Vínculo opcional a la obra (Deal) — para imputar el costo al proyecto.
   dealId            String?
   // id del Document con la foto/PDF de la factura (sin FK, mismo criterio que
   // StockMovimiento.compraId — la foto es opcional y su borrado no debe
   // arrastrar la compra).
   documentoId       String?
-  estado            String        @default("BORRADOR") // 'BORRADOR' | 'CONFIRMADA' | 'ANULADA'
-  estadoPago        String        @default("PENDIENTE") // 'PENDIENTE' | 'PARCIAL' | 'PAGADA'
+  estado            String       @default("BORRADOR") // 'BORRADOR' | 'CONFIRMADA' | 'ANULADA'
+  estadoPago        String       @default("PENDIENTE") // 'PENDIENTE' | 'PARCIAL' | 'PAGADA'
   vencimiento       DateTime?
   notas             String?
   creadoPorId       String?
   // Respuesta cruda del OCR — para depurar / reprocesar sin re-llamar a la IA.
   ocrRaw            Json?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
-  items             CompraItem[]
-  pagos             CompraPago[]
+  items CompraItem[]
+  pagos CompraPago[]
 
   @@unique([organizationId, numero])
   @@index([organizationId, estado])
@@ -1608,8 +1694,8 @@ model CompraItem {
   // stock al confirmar (queda registrado en la compra igual, para el total).
   productId     String?
   product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  sku           String?  // el código que trae la factura del proveedor
-  nombre        String   // descripción tal cual la factura
+  sku           String? // el código que trae la factura del proveedor
+  nombre        String // descripción tal cual la factura
   cantidad      Int      @default(1)
   costoUnitario Float    @default(0)
   subtotal      Float    @default(0)
@@ -1653,7 +1739,7 @@ model AlertaCosto {
   precioAnterior Float?
   precioNuevo    Float?
   variacionPct   Float        @default(0) // (nuevo - anterior) / anterior * 100
-  origen         String       // 'COMPRA' | 'SYNC'
+  origen         String // 'COMPRA' | 'SYNC'
   compraId       String?
   estado         String       @default("PENDIENTE") // 'PENDIENTE' | 'APLICADA' | 'DESCARTADA'
   revisadoPorId  String?
@@ -1693,7 +1779,7 @@ model EntregaStock {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  items          EntregaStockItem[]
+  items EntregaStockItem[]
 
   @@unique([organizationId, numero])
   @@index([organizationId, estado])
@@ -1712,7 +1798,7 @@ model EntregaStockItem {
   product       Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
   nombre        String
   cantidad      Int          @default(1)
-  costoUnitario Float?       // snapshot al preparar — alimenta la rentabilidad del Deal
+  costoUnitario Float? // snapshot al preparar — alimenta la rentabilidad del Deal
   createdAt     DateTime     @default(now())
 
   @@index([entregaId])
@@ -1742,46 +1828,46 @@ model QuickActionUsage {
 
 // ─── Historial de Cotizaciones ────────────────────────────────────────────
 model Cotizacion {
-  id             String           @id @default(cuid())
-  ref            String
-  organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String
-  user           User             @relation(fields: [userId], references: [id])
-  empresaId      String?
-  empresa        Empresa?         @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  id              String           @id @default(cuid())
+  ref             String
+  organizationId  String
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User             @relation(fields: [userId], references: [id])
+  empresaId       String?
+  empresa         Empresa?         @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Vínculo estructurado a la oportunidad de Pipeline que originó (o recibió)
   // esta cotización — antes solo existía como texto libre en Deal.notes.
-  dealId         String?
-  deal           Deal?            @relation(fields: [dealId], references: [id], onDelete: SetNull)
-  recipientEmail String
-  recipientName  String
-  items          Json
-  total          Float
-  discount       Float            @default(0)
-  finalTotal     Float            @default(0)
-  currency       String           @default("USD")
-  notes          String?
-  validityDays   Int              @default(30)
-  status         CotizacionStatus @default(ENVIADA)
+  dealId          String?
+  deal            Deal?            @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  recipientEmail  String
+  recipientName   String
+  items           Json
+  total           Float
+  discount        Float            @default(0)
+  finalTotal      Float            @default(0)
+  currency        String           @default("USD")
+  notes           String?
+  validityDays    Int              @default(30)
+  status          CotizacionStatus @default(ENVIADA)
   // 'PUBLICO' | 'GREMIO' — qué lista de precios se aplicó al cotizar
   // (Módulo 2, catálogo Gremio/Público). Los QuoteItem.price dentro de
   // `items` ya son el número resuelto; este campo queda para
   // trazabilidad/auditoría y para mostrar el badge correspondiente en el
   // PDF. Default 'PUBLICO' preserva el significado de toda cotización
   // emitida antes de este campo.
-  priceMode      String           @default("PUBLICO")
+  priceMode       String           @default("PUBLICO")
   // Si true, el IVA se discrimina en el PDF/preview y `finalTotal` YA
   // incluye el IVA. Cada QuoteItem dentro de `items` lleva su `ivaPct`
   // resuelto al momento de cotizar. Default false = toda cotización anterior
   // a esto (se cotizaba neto, sin IVA) sigue significando lo mismo.
-  ivaDiscriminado Boolean         @default(false)
+  ivaDiscriminado Boolean          @default(false)
   // Ya se generó una EntregaStock a partir de esta cotización (botón "Preparar
   // materiales" en cotizaciones/[id]). Evita preparar dos veces el mismo
   // material. Default false = toda cotización anterior a Fase 3.
-  entregaGenerada Boolean         @default(false)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  entregaGenerada Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([organizationId])
   @@index([empresaId])

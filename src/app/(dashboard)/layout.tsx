@@ -37,6 +37,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // hiciera falta) para evitar el flash client-side que hoy sufren
     // HR/TECHNICIAN (ver ROLE_ALLOWED_PREFIXES en app-shell.tsx).
     if (payload.role === 'GREMIO') redirect('/gremio')
+    // Portal de clientes (Pagos & Portal) — CLIENTE nunca monta el AppShell
+    // interno, mismo criterio que GREMIO.
+    if (payload.role === 'CLIENTE') redirect('/portal')
 
     if (!dbUser.onboardingCompleted) redirect('/onboarding')
     // Selector de rubro: es por-organización, no por-usuario — un usuario
