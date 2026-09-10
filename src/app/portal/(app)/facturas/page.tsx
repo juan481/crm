@@ -70,10 +70,17 @@ export default function PortalFacturasPage() {
                     <CreditCard size={14} /> Pagar
                   </a>
                 )}
-                {f.status === 'PAID' && f.paidAt && (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: '#10b981' }}>
-                    <CheckCircle2 size={12} /> Pagada el {new Date(f.paidAt).toLocaleDateString('es-AR')}
-                  </p>
+                {f.status === 'PAID' && (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-xs" style={{ color: '#10b981' }}>
+                      <CheckCircle2 size={12} /> {f.paidAt ? `Pagada el ${new Date(f.paidAt).toLocaleDateString('es-AR')}` : 'Pagada'}
+                    </p>
+                    {f.payToken && (
+                      <a href={`/pagar/${f.payToken}`} className="text-xs font-medium underline" style={{ color: 'var(--color-text-muted)' }}>
+                        Ver comprobante
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
             )

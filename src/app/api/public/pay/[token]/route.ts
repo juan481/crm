@@ -22,7 +22,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   const invoice = await prisma.invoice.findFirst({
     where: { payToken: params.token },
     select: {
-      id: true, amount: true, currency: true, description: true, status: true, dueDate: true, organizationId: true,
+      id: true, amount: true, currency: true, description: true, status: true, dueDate: true,
+      paidAt: true, numeroInterno: true, organizationId: true,
+      payments: { where: { status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { provider: true, paidAt: true, externalId: true } },
     },
   })
   if (!invoice) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
@@ -37,13 +39,18 @@ export async function GET(req: NextRequest, { params }: Params) {
   })
   if (!org) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
 
+  const pago = invoice.payments[0]
   return NextResponse.json({
     data: {
+      numero: invoice.numeroInterno ?? `#${invoice.id.slice(-6).toUpperCase()}`,
       concepto: invoice.description || 'Pago de servicios',
       amount: invoice.amount,
       currency: invoice.currency,
       status: invoice.status,
       dueDate: invoice.dueDate.toISOString(),
+      paidAt: (invoice.paidAt ?? pago?.paidAt ?? null)?.toISOString?.() ?? null,
+      metodoPago: pago?.provider === 'WHOP' ? 'Whop' : pago?.provider === 'MERCADOPAGO' ? 'Mercado Pago' : pago?.provider === 'MANUAL' ? 'Transferencia / efectivo' : null,
+      referenciaPago: pago?.externalId ?? null,
       org: {
         name: org.name || org.crmName,
         logoUrl: org.logoUrl,

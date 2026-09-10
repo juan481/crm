@@ -5,8 +5,9 @@ import { paymentsEnabledForOrg } from '@/lib/payments/config'
 
 export const dynamic = 'force-dynamic'
 
-// Facturas de la Empresa del usuario de portal. Devuelve el payToken sólo de
-// las que se pueden pagar (PENDING/OVERDUE) para armar el link /pagar/<token>.
+// Facturas de la Empresa del usuario de portal.
+//  - payToken: para armar el link /pagar/<token> (pagar si está impaga, ver el
+//    comprobante si está pagada). Sólo si la org tiene cobro online habilitado.
 export async function GET() {
   const portal = await getPortalUser()
   if (!portal) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -33,8 +34,9 @@ export async function GET() {
       status: inv.status,
       dueDate: inv.dueDate.toISOString(),
       paidAt: inv.paidAt ? inv.paidAt.toISOString() : null,
-      // Sólo se expone el token si la factura es pagable Y la org cobra online.
-      payToken: canPayOnline && (inv.status === 'PENDING' || inv.status === 'OVERDUE') ? inv.payToken : null,
+      // Token expuesto si la org cobra online y la factura no está anulada —
+      // sirve tanto para pagar (impaga) como para ver el comprobante (pagada).
+      payToken: canPayOnline && inv.status !== 'CANCELLED' ? inv.payToken : null,
     })),
   })
 }

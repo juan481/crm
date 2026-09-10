@@ -1,23 +1,24 @@
 'use client'
 
-// Página de pago pública — sin login, token-gated (Invoice.payToken). El que
-// llega acá es quien paga (a veces administración/contaduría del cliente, sin
-// usuario del portal). Muestra sólo el monto y el concepto de ESTA factura y
-// redirige al checkout hosteado de Whop / Mercado Pago.
-//
-// Usa los tokens var(--color-*) de globals.css (mismo criterio que
-// soporte/[token]/page.tsx), no depende del layout del dashboard.
+// Página de pago pública — sin login, token-gated (Invoice.payToken).
+//  - Factura impaga → botón "Pagar" → checkout hosteado de Whop / Mercado Pago
+//  - Factura pagada → comprobante de pago imprimible
+// Usa los tokens var(--color-*) de globals.css.
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { CheckCircle2, AlertTriangle, CreditCard, Loader2 } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, CreditCard, Loader2, Printer } from 'lucide-react'
 
 interface PayInfo {
+  numero: string
   concepto: string
   amount: number
   currency: string
   status: 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED'
   dueDate: string
+  paidAt: string | null
+  metodoPago: string | null
+  referenciaPago: string | null
   org: { name: string; logoUrl: string | null; primaryColor: string; secondaryColor: string }
 }
 
@@ -28,6 +29,7 @@ function formatMoney(amount: number, currency: string): string {
     return `${currency} ${amount.toFixed(2)}`
   }
 }
+const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
 
 export default function PagarPage() {
   const { token } = useParams<{ token: string }>()
@@ -77,24 +79,13 @@ export default function PagarPage() {
   const paid = info.status === 'PAID'
   const cancelled = info.status === 'CANCELLED'
 
+  if (paid) return <Comprobante info={info} accent={accent} />
+
   return (
     <Shell>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 24 }}>
-        {info.org.logoUrl
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={info.org.logoUrl} alt={info.org.name} style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', marginBottom: 12 }} />
-          : <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, background: accent, marginBottom: 12 }}>{info.org.name.charAt(0)}</div>}
-        <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{info.org.name}</p>
-      </div>
-
+      <Brand org={info.org} accent={accent} />
       <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 16, padding: 28, width: '100%' }}>
-        {paid ? (
-          <div style={{ textAlign: 'center' }}>
-            <CheckCircle2 size={40} style={{ color: '#10b981', margin: '0 auto 12px' }} />
-            <h1 style={{ color: 'var(--color-text)', fontSize: 18, fontWeight: 600 }}>Esta factura ya fue pagada</h1>
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 14, marginTop: 6 }}>{info.concepto}</p>
-          </div>
-        ) : cancelled ? (
+        {cancelled ? (
           <div style={{ textAlign: 'center' }}>
             <AlertTriangle size={36} style={{ color: 'var(--color-text-subtle)', margin: '0 auto 12px' }} />
             <h1 style={{ color: 'var(--color-text)', fontSize: 18, fontWeight: 600 }}>Esta factura fue anulada</h1>
@@ -106,7 +97,7 @@ export default function PagarPage() {
               {formatMoney(info.amount, info.currency)}
             </p>
             <p style={{ color: 'var(--color-text-subtle)', fontSize: 12, marginBottom: 20 }}>
-              Vencimiento: {new Date(info.dueDate).toLocaleDateString('es-AR')}
+              Factura {info.numero} · vence el {fecha(info.dueDate)}
             </p>
 
             {error && (
@@ -138,10 +129,74 @@ export default function PagarPage() {
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Comprobante({ info, accent }: { info: PayInfo; accent: string }) {
+  return (
+    <Shell wide>
+      <style>{`@media print { .noprint { display: none !important } body { background: #fff } }`}</style>
+      <div id="cbte" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 16, width: '100%', overflow: 'hidden' }}>
+        <div style={{ background: accent, padding: '22px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {info.org.logoUrl
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={info.org.logoUrl} alt={info.org.name} style={{ height: 32, borderRadius: 8, background: '#fff', padding: 4 }} />
+            : <span style={{ color: '#fff', fontWeight: 700, fontSize: 16 }}>{info.org.name}</span>}
+          <span style={{ color: '#fff', fontWeight: 700, fontSize: 12, letterSpacing: 1, opacity: 0.9 }}>COMPROBANTE DE PAGO</span>
+        </div>
+
+        <div style={{ padding: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <CheckCircle2 size={22} style={{ color: '#10b981' }} />
+            <span style={{ color: 'var(--color-text)', fontWeight: 700, fontSize: 17 }}>Pago acreditado</span>
+          </div>
+
+          <Row label="Factura" value={info.numero} />
+          <Row label="Concepto" value={info.concepto} />
+          <Row label="Importe" value={formatMoney(info.amount, info.currency)} strong />
+          {info.paidAt && <Row label="Fecha de pago" value={fecha(info.paidAt)} />}
+          {info.metodoPago && <Row label="Medio" value={info.metodoPago} />}
+          {info.referenciaPago && <Row label="Referencia" value={info.referenciaPago} mono />}
+
+          <button
+            className="noprint"
+            onClick={() => window.print()}
+            style={{ marginTop: 22, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--color-text)', background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '11px 0', cursor: 'pointer' }}
+          >
+            <Printer size={15} /> Imprimir / Guardar PDF
+          </button>
+        </div>
+      </div>
+      <p className="noprint" style={{ color: 'var(--color-text-subtle)', fontSize: 11, marginTop: 14, textAlign: 'center' }}>
+        Emitido por {info.org.name}
+      </p>
+    </Shell>
+  )
+}
+
+function Row({ label, value, strong, mono, hide }: { label: string; value?: string; strong?: boolean; mono?: boolean; hide?: boolean }) {
+  if (hide || value === undefined) return null
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '9px 0', borderBottom: '1px solid var(--color-border)' }}>
+      <span style={{ color: 'var(--color-text-subtle)', fontSize: 13 }}>{label}</span>
+      <span style={{ color: 'var(--color-text)', fontSize: strong ? 15 : 13, fontWeight: strong ? 700 : 500, fontFamily: mono ? 'ui-monospace,monospace' : 'inherit', textAlign: 'right', wordBreak: 'break-all' }}>{value}</span>
+    </div>
+  )
+}
+
+function Brand({ org, accent }: { org: PayInfo['org']; accent: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 24 }}>
+      {org.logoUrl
+        // eslint-disable-next-line @next/next/no-img-element
+        ? <img src={org.logoUrl} alt={org.name} style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', marginBottom: 12 }} />
+        : <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, background: accent, marginBottom: 12 }}>{org.name.charAt(0)}</div>}
+      <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>{org.name}</p>
+    </div>
+  )
+}
+
+function Shell({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 16px' }}>
-      <div style={{ maxWidth: 380, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ maxWidth: wide ? 440 : 380, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {children}
       </div>
     </div>
