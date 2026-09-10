@@ -28,6 +28,18 @@ const PUBLIC_PATHS = [
   // que /valorar-ticket: sin login, token-gated (Organization.publicSupportToken).
   '/soporte',
   '/api/public/tickets',
+  // Link de pago público (Pagos & Portal) — sin login, token-gated
+  // (Invoice.payToken). El que paga suele ser administración/contaduría del
+  // cliente, que no tiene usuario del portal. Misma clase que /soporte.
+  '/pagar',
+  '/api/public/pay',
+  // Portal de clientes: login por magic link (Supabase OTP) — la pantalla de
+  // ingreso y el callback de auth tienen que ser alcanzables sin sesión. El
+  // RESTO de /portal/* sigue protegido (ver más abajo: sin sesión →
+  // /portal/login, no /login).
+  '/portal/login',
+  '/portal/auth',
+  '/api/portal/auth',
 ]
 
 export async function middleware(req: NextRequest) {
@@ -103,7 +115,10 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!user) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    // Portal de clientes: su propia pantalla de ingreso (magic link), no el
+    // /login del CRM interno.
+    const dest = pathname.startsWith('/portal') ? '/portal/login' : '/login'
+    return NextResponse.redirect(new URL(dest, req.url))
   }
 
   return supabaseResponse

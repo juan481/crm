@@ -623,15 +623,17 @@ model Invoice {
 
   // ── Cobro online (Pagos & Portal, Fase 1) — 100% aditivo/nullable ──
   // payToken: link de pago público /pagar/<token>, sin login (misma clase que
-  //   Organization.publicSupportToken / Ticket.satisfactionToken). Se genera
-  //   al crear la factura; nullable para no requerir --accept-data-loss en el
-  //   push del @unique — las filas viejas se rellenan con
+  //   Organization.publicSupportToken / Ticket.satisfactionToken, pero con
+  //   uuid() = 122 bits de aleatoriedad, no enumerable). @default a nivel
+  //   Prisma Client: toda factura NUEVA lo recibe sola; las filas viejas
+  //   quedan NULL (no chocan con el @unique) y se rellenan con
   //   scripts/backfill-invoice-paytoken.ts.
   // paymentProvider: 'WHOP' | 'MERCADOPAGO' — se deriva de `currency` por
   //   default (USD → Whop, ARS → Mercado Pago) y se cachea al crear el checkout.
   // checkoutUrl / checkoutRef: URL hosteada del proveedor ya creada + su id
   //   de sesión/preference (para no recrearla en cada visita y para debug).
-  payToken        String?   @unique
+  //   Se limpian si se edita monto/moneda de la factura (PATCH /api/invoices/[id]).
+  payToken        String?   @unique @default(uuid())
   paymentProvider String?
   checkoutUrl     String?
   checkoutRef     String?
