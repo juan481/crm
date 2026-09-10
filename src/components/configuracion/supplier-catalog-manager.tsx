@@ -179,6 +179,15 @@ export function SupplierCatalogManager() {
       if (result.skusNotSeenThisRun && result.skusNotSeenThisRun.length > 0) {
         toast(`${result.skusNotSeenThisRun.length} SKUs del catálogo no aparecieron en esta corrida del Sheet — revisalos si corresponde darlos de baja.`, { icon: '⚠️', duration: 6000 })
       }
+      const vac = result.preciosVaciosConservados ?? 0
+      const abs = result.preciosAbsurdosConservados ?? 0
+      if (vac > 0 || abs > 0) {
+        toast(
+          `${abs > 0 ? `${abs} producto(s) con un salto de costo absurdo (mezcla USD/ARS o error en la planilla) — NO se actualizaron, mirá Depósito → Alertas. ` : ''}` +
+          `${vac > 0 ? `${vac} producto(s) con el costo/precio vacío en la planilla — se conservó el valor anterior.` : ''}`,
+          { icon: '⚠️', duration: 8000 },
+        )
+      }
       invalidate()
     } catch { toast.error('Error de conexión') } finally { setSyncing(false) }
   }

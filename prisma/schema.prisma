@@ -1742,6 +1742,10 @@ model AlertaCosto {
   precioNuevo    Float?
   variacionPct   Float        @default(0) // (nuevo - anterior) / anterior * 100
   origen         String // 'COMPRA' | 'SYNC'
+  // Contexto cuando la variación parece un error (mezcla de monedas, celda
+  // vacía en la planilla del proveedor) — se muestra en la pestaña Alertas y
+  // frena el auto-aplicar.
+  nota           String?
   compraId       String?
   estado         String       @default("PENDIENTE") // 'PENDIENTE' | 'APLICADA' | 'DESCARTADA'
   revisadoPorId  String?

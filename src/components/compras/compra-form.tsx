@@ -39,6 +39,7 @@ export interface OcrSeed {
       productName: string | null
       productSku: string | null
       costoActual: number | null
+      costoMoneda: string | null
       trackStock: boolean
     }
   }[]
@@ -50,6 +51,7 @@ interface ItemRow {
   productName: string | null
   productSku: string | null
   costoActual: number | null
+  costoMoneda: string | null
   trackStock: boolean
   matchMotivo: string | null
   sku: string
@@ -78,7 +80,7 @@ const newKey = () => `it-${keySeq++}-${Math.random().toString(36).slice(2, 6)}`
 
 function emptyRow(): ItemRow {
   return {
-    key: newKey(), productId: null, productName: null, productSku: null, costoActual: null,
+    key: newKey(), productId: null, productName: null, productSku: null, costoActual: null, costoMoneda: null,
     trackStock: false, matchMotivo: null, sku: '', nombre: '', cantidad: '1', costoUnitario: '',
   }
 }
@@ -108,6 +110,7 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
           productName: it.match.productName,
           productSku: it.match.productSku,
           costoActual: it.match.costoActual,
+          costoMoneda: it.match.costoMoneda,
           trackStock: it.match.trackStock,
           matchMotivo: it.match.productId ? it.match.motivo : null,
           sku: it.codigo ?? '',
@@ -210,6 +213,16 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
           {seed.ocr.proveedorCuit ? ` (CUIT ${seed.ocr.proveedorCuit})` : ''} — elegí o creá el proveedor.
         </div>
       )}
+      {rows.length >= 15 && (
+        <div className="flex items-start gap-2 text-xs px-3 py-2 rounded-lg" style={{ background: 'rgba(99,102,241,0.08)', color: 'var(--color-text-muted)' }}>
+          <AlertTriangle size={13} className="shrink-0 mt-0.5" style={{ color: 'var(--color-primary)' }} />
+          <span>
+            Son muchos ítems. Si esto es <strong>la lista de precios del proveedor</strong> (no una compra puntual),
+            los precios se actualizan solos con el sync del catálogo (Configuración → Catálogo). Confirmar acá
+            <strong> suma stock</strong> y registra un pago por el total.
+          </span>
+        </div>
+      )}
 
       {/* Cabecera */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -273,10 +286,16 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
             </thead>
             <tbody>
               {rows.map((r) => {
-                const costoU = Number(r.costoUnitario) || 0
-                const delta = r.productId && r.costoActual != null && r.costoActual > 0 && Math.abs(costoU - r.costoActual) > 0.01
+                const costoU = Number(r.costoUnitario)
+                const costoCargado = Number.isFinite(costoU) && costoU > 0
+                // La moneda del costo guardado (del catálogo del proveedor,
+                // casi siempre USD) vs la de esta factura. Sin coincidencia,
+                // comparar da porcentajes absurdos (USD 16 vs ARS 25.000).
+                const mismaMoneda = !r.costoMoneda || r.costoMoneda === moneda
+                const delta = r.productId && r.costoActual != null && r.costoActual > 0 && costoCargado && mismaMoneda && Math.abs(costoU - r.costoActual) > 0.01
                   ? (costoU - r.costoActual) / r.costoActual
                   : null
+                const deltaRaro = delta != null && Math.abs(delta) >= 5 // ±500% → casi seguro error de carga / moneda
                 return (
                   <tr key={r.key} style={{ borderTop: '1px solid var(--color-border)' }}>
                     <td className="px-2 py-1.5">
@@ -294,10 +313,20 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
                     <td className="px-2 py-1.5">
                       <input type="number" min="0" step="0.01" value={r.costoUnitario} onChange={(e) => setRow(r.key, { costoUnitario: e.target.value })}
                         className="w-full bg-transparent outline-none py-1 text-right" style={{ color: 'var(--color-text)' }} placeholder="0.00" />
-                      {delta != null && (
+                      {delta != null && !deltaRaro && (
                         <div className="flex items-center justify-end gap-0.5 text-[10px] font-semibold" style={{ color: delta > 0 ? '#ef4444' : '#10b981' }}>
                           {delta > 0 ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
-                          {Math.abs(Math.round(delta * 1000) / 10)}% · antes {formatMoneyExact(r.costoActual!, moneda)}
+                          {Math.abs(Math.round(delta * 1000) / 10)}% · antes {formatMoneyExact(r.costoActual!, r.costoMoneda ?? moneda)}
+                        </div>
+                      )}
+                      {delta != null && deltaRaro && (
+                        <div className="flex items-center justify-end gap-0.5 text-[10px]" style={{ color: '#f59e0b' }}>
+                          <AlertTriangle size={9} /> revisá — antes {formatMoneyExact(r.costoActual!, r.costoMoneda ?? moneda)}
+                        </div>
+                      )}
+                      {r.productId && r.costoActual != null && r.costoActual > 0 && costoCargado && !mismaMoneda && (
+                        <div className="text-[10px] text-right" style={{ color: 'var(--color-text-subtle)' }}>
+                          costo actual {formatMoneyExact(r.costoActual, r.costoMoneda ?? 'USD')} ({r.costoMoneda})
                         </div>
                       )}
                     </td>
@@ -367,11 +396,12 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
       <ProductoPicker
         open={!!pickerRow}
         allowNull
+        allowCreate
         onClose={() => setPickerRow(null)}
         onPick={(p) => {
           if (pickerRow) setRow(pickerRow, {
             productId: p?.id ?? null, productName: p?.name ?? null, productSku: p?.sku ?? null,
-            costoActual: p?.costo ?? null, trackStock: p?.trackStock ?? false,
+            costoActual: p?.costo ?? null, costoMoneda: p?.currency ?? null, trackStock: p?.trackStock ?? false,
             matchMotivo: p ? 'Elegido a mano' : 'Sin vincular',
           })
           setPickerRow(null)

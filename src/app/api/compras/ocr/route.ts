@@ -115,6 +115,9 @@ export async function POST(req: NextRequest) {
           productName: prod?.name ?? null,
           productSku: prod?.sku ?? null,
           costoActual: prod?.costo ?? null,
+          // Moneda en la que está guardado ese costo — para no comparar
+          // peras con manzanas (costo en USD vs factura en ARS).
+          costoMoneda: prod?.currency ?? null,
           trackStock: prod?.trackStock ?? false,
         },
       }
