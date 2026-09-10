@@ -4,6 +4,7 @@ import { normalizeCatalogRow, type CatalogRawRow } from '@/lib/catalogo-import'
 import { resolveCategoryId, preloadCategoryCache, type CategoryCache } from '@/lib/catalogo-categories'
 import { mapWithConcurrency } from '@/lib/concurrency'
 import { esCambioDeCostoRelevante, variacionPct } from '@/lib/compras'
+import { parseSupplierStock } from '@/lib/stock'
 
 // Upserts en paralelo — con ~2296 SKUs (tamaño real del catálogo de Abba)
 // un upsert por vez tardaba varios minutos contra el pooler remoto (~200-
@@ -183,6 +184,11 @@ export async function syncCatalogFromGoogleSheet(
       name: normalized.name, description: normalized.description, brand: normalized.brand, mpn: normalized.mpn,
       categoryId, costo: normalized.costo, ivaPct: normalized.ivaPct, precioGremio: normalized.precioGremio,
       price: normalized.price ?? 0, supplier: normalized.supplier, supplierAvailability: normalized.supplierAvailability,
+      // Número parseado de la disponibilidad del proveedor (si el texto es un
+      // número); alimenta la "disponibilidad total unificada". NO está en
+      // COMPARABLE_FIELDS a propósito — no dispara escrituras por sí solo,
+      // pero se actualiza cada vez que la fila se escribe por otro motivo.
+      supplierStock: parseSupplierStock(normalized.supplierAvailability),
     }
     const existing = existingBySku.get(normalized.sku)
     // Ya existe, ya vino de Sheets antes (no una migración desde

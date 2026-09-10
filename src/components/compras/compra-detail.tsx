@@ -27,7 +27,7 @@ const MEDIO_PAGO = [
   { value: 'Tarjeta', label: 'Tarjeta' },
 ]
 
-export function CompraDetail({ compraId, onChanged }: { compraId: string; onChanged: () => void }) {
+export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: string; onChanged: () => void; onDeleted?: () => void }) {
   const qc = useQueryClient()
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoMedio, setPagoMedio] = useState('')
@@ -58,6 +58,19 @@ export function CompraDetail({ compraId, onChanged }: { compraId: string; onChan
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success(`Confirmada · ${json.data.movimientos} ingreso(s) de stock`)
       invalidate()
+    } catch { toast.error('Error de conexión') } finally { setBusy(false) }
+  }
+
+  const eliminar = async () => {
+    if (!confirm('Eliminar este borrador. No se puede deshacer. ¿Seguir?')) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/compras/${compraId}`, { method: 'DELETE' })
+      if (!res.ok) { const j = await res.json(); toast.error(j.error ?? 'Error'); return }
+      toast.success('Borrador eliminado')
+      qc.invalidateQueries({ queryKey: ['compras'] })
+      onChanged()
+      onDeleted?.()
     } catch { toast.error('Error de conexión') } finally { setBusy(false) }
   }
 
@@ -163,7 +176,13 @@ export function CompraDetail({ compraId, onChanged }: { compraId: string; onChan
 
       {/* Acciones de estado */}
       {c.estado === 'BORRADOR' && (
-        <Button onClick={confirmar} loading={busy} leftIcon={<CheckCircle2 size={15} />}>Confirmar compra (ingresa stock)</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={confirmar} loading={busy} leftIcon={<CheckCircle2 size={15} />}>Confirmar compra (ingresa stock)</Button>
+          <button onClick={eliminar} disabled={busy}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg" style={{ color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+            <Trash2 size={13} /> Eliminar borrador
+          </button>
+        </div>
       )}
       {c.estado === 'CONFIRMADA' && (
         <div className="space-y-4">

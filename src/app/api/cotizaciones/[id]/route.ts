@@ -32,6 +32,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     if (!cotizacion) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
 
+    // ¿Ya se emitió una factura de esta cotización? (Fase 4)
+    const factura = await (prisma as any).invoice.findFirst({
+      where: { organizationId: payload.orgId, cotizacionId: cotizacion.id },
+      select: { id: true, numeroInterno: true },
+    })
+
     const org = await prisma.organization.findUnique({
       where:  { id: payload.orgId },
       select: {
@@ -53,6 +59,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         logoUrl:        org?.logoUrl ?? null,
         agentName:      cotizacion.user?.name || 'El equipo',
         smtpConfigured: isOrgEmailConfigured(org),
+        facturaEmitida: factura ? { id: factura.id, numeroInterno: factura.numeroInterno } : null,
       },
     })
   } catch (error) {

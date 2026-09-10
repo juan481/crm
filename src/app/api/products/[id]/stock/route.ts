@@ -32,7 +32,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'catalogo-gestion'))) {
+    // Ajustar stock: ADMIN+, o el permiso de cargar catálogo, o el módulo
+    // Depósito (un encargado de depósito ajusta stock desde /stock sin
+    // necesitar tocar el catálogo).
+    if (
+      !canAccess(payload.role, 'ADMIN') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'catalogo-gestion')) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'stock'))
+    ) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

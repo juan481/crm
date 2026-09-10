@@ -28,15 +28,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     if (!inv) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
-    let email: string | null = typeof body?.email === 'string' && body.email.includes('@') ? body.email.trim() : null
-    if (!email && inv.empresaId) {
-      const c = await db.directorioContacto.findFirst({
-        where: { organizationId: payload.orgId, empresaId: inv.empresaId, email: { not: null } },
-        select: { email: true },
-      })
-      email = c?.email ?? null
+    // El destino sale SIEMPRE de los contactos de la empresa de la factura —
+    // no se acepta un email libre del body (evita usar el SMTP de la org como
+    // relay). Si el body trae uno, tiene que coincidir con un contacto.
+    const contactos = inv.empresaId
+      ? await db.directorioContacto.findMany({
+          where: { organizationId: payload.orgId, empresaId: inv.empresaId, email: { not: null } },
+          select: { email: true },
+        })
+      : []
+    const mails: string[] = contactos.map((c: any) => String(c.email).trim().toLowerCase()).filter(Boolean)
+    const pedido = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const email = pedido && mails.includes(pedido) ? pedido : mails[0] ?? null
+    if (!email) {
+      return NextResponse.json({ error: 'La empresa de la factura no tiene ningún contacto con email. Cargá uno en su ficha.' }, { status: 400 })
     }
-    if (!email) return NextResponse.json({ error: 'No hay un email de destino. Cargá un contacto con mail en la empresa o indicá uno.' }, { status: 400 })
 
     const org = await prisma.organization.findUnique({
       where: { id: payload.orgId },

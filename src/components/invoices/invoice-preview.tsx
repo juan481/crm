@@ -156,20 +156,20 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
       <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl overflow-hidden"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
 
-        <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 shrink-0 flex-wrap" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <span className="text-sm font-semibold shrink-0" style={{ color: 'var(--color-text)' }}>
             Factura {invoiceNumber}{full?.sentAt ? ' · enviada' : ''}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button onClick={enviarPorMail} disabled={sending}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all disabled:opacity-60"
               style={{ background: 'var(--color-primary)', color: '#fff' }}>
               {sending ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
-              {sending ? 'Enviando...' : 'Enviar por mail'}
+              <span>{sending ? 'Enviando...' : 'Enviar por mail'}</span>
             </button>
-            <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium"
+            <button onClick={handlePrint} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium"
               style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text)' }}>
-              <Printer size={14} /> Imprimir
+              <Printer size={14} /> <span className="hidden sm:inline">Imprimir</span>
             </button>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--color-surface-raised)]" style={{ color: 'var(--color-text-muted)' }}>
               <X size={17} />

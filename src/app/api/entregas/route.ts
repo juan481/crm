@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { puedeVerEntregas } from '@/lib/stock-access'
+import { entregarEntrega } from '@/lib/entregas'
 import type { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -148,7 +149,6 @@ export async function POST(req: NextRequest) {
       }
 
       if (body.entregar === true) {
-        const { entregarEntrega } = await import('@/lib/entregas')
         const r = await entregarEntrega(tx, entrega.id, payload.orgId, payload.userId)
         if (!r.ok) throw Object.assign(new Error(r.error), { status: r.status })
         return { id: entrega.id, ...r }

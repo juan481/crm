@@ -29,6 +29,16 @@ export function DealRentabilidad({ dealId }: { dealId: string }) {
   const margenCotizado = ingresoPrincipal - (r.costoCotizado as number)
   const desvio = margenCotizado !== 0 ? ((margenReal - margenCotizado) / Math.abs(margenCotizado)) * 100 : 0
 
+  if (ingresoPrincipal === 0 && costoRealTotal === 0 && (r.costoCotizado as number) === 0) {
+    return (
+      <p className="text-xs py-2" style={{ color: 'var(--color-text-subtle)' }}>
+        Todavía no hay ingresos ni costos cargados para esta obra.
+      </p>
+    )
+  }
+
+  const otrasMonedas = Object.keys(ingresos).filter((c) => c !== curPrincipal)
+
   return (
     <div className="space-y-2 text-xs">
       <div className="grid grid-cols-2 gap-2">
@@ -51,6 +61,11 @@ export function DealRentabilidad({ dealId }: { dealId: string }) {
           </div>
         )}
       </div>
+      {otrasMonedas.length > 0 && (
+        <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>
+          Hay ingresos/costos en {otrasMonedas.join(', ')} que no se suman en el margen (moneda distinta).
+        </p>
+      )}
     </div>
   )
 }

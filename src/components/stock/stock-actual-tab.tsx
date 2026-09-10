@@ -58,7 +58,7 @@ export function StockActualTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['stock-actual', search, filtro, page],
     queryFn: async () => {
-      const p = new URLSearchParams({ page: String(page), limit: '50' })
+      const p = new URLSearchParams({ page: String(page), limit: '50', resumen: '0' })
       if (search.length >= 2) p.set('search', search)
       if (filtro) p.set('filtro', filtro)
       const res = await fetch(`/api/stock?${p}`)
@@ -82,16 +82,17 @@ export function StockActualTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="w-56">
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          <div className="w-full sm:w-56">
             <Input placeholder="Buscar producto, SKU, marca..." value={searchInput}
               onChange={e => setSearchInput(e.target.value)} leftIcon={<Search size={15} />} />
           </div>
-          <div className="w-52">
+          <div className="w-full sm:w-52">
             <Select options={FILTRO_OPTIONS} value={filtro} onChange={e => setFiltro(e.target.value)} />
           </div>
         </div>
-        <Button size="sm" variant="outline" leftIcon={<ClipboardList size={14} />} onClick={() => setConteoOpen(true)}>
+        <Button size="sm" variant="outline" leftIcon={<ClipboardList size={14} />} onClick={() => setConteoOpen(true)}
+          className="w-full sm:w-auto shrink-0">
           Cargar conteo inicial
         </Button>
       </div>

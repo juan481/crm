@@ -36,14 +36,14 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
 
   const { data: empData } = useQuery({
     queryKey: ['empresas-picker-entrega'],
-    queryFn: async () => (await fetch('/api/empresas?limit=500')).json(),
+    queryFn: async () => (await fetch('/api/empresas?isCliente=true&limit=1000')).json(),
     staleTime: 60_000,
   })
   const empresas: { id: string; name: string }[] = empData?.data ?? []
 
   const { data: dealData } = useQuery({
     queryKey: ['deals-picker-entrega'],
-    queryFn: async () => (await fetch('/api/deals?limit=200')).json(),
+    queryFn: async () => (await fetch('/api/deals?limit=500')).json(),
     staleTime: 60_000,
   })
   const deals: { id: string; title: string }[] = Array.isArray(dealData?.data)
@@ -96,11 +96,13 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
           <Select value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}
             options={[{ value: '', label: '— Ninguna —' }, ...empresas.map((e) => ({ value: e.id, label: e.name }))]} />
         </div>
-        <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Obra / oportunidad (opcional)</label>
-          <Select value={dealId} onChange={(e) => setDealId(e.target.value)}
-            options={[{ value: '', label: '— Ninguna —' }, ...deals.map((d) => ({ value: d.id, label: d.title }))]} />
-        </div>
+        {deals.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Obra / oportunidad (opcional)</label>
+            <Select value={dealId} onChange={(e) => setDealId(e.target.value)}
+              options={[{ value: '', label: '— Ninguna —' }, ...deals.map((d) => ({ value: d.id, label: d.title }))]} />
+          </div>
+        )}
       </div>
 
       <div>
@@ -123,7 +125,7 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
                 const excede = r.productId && r.trackStock && Number(r.cantidad) > r.stock
                 return (
                   <tr key={r.key} style={{ borderTop: '1px solid var(--color-border)' }}>
-                    <td className="px-3 py-1.5" style={{ position: 'relative' }}>
+                    <td className="px-3 py-1.5">
                       {r.productId ? (
                         <button type="button" onClick={() => setPickerRow(r.key)} className="text-left" style={{ color: 'var(--color-text)' }}>
                           {r.nombre} {r.sku && <span className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>{r.sku}</span>}
@@ -132,15 +134,6 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
                         <button type="button" onClick={() => setPickerRow(r.key)} className="flex items-center gap-1" style={{ color: 'var(--color-primary)' }}>
                           <Search size={12} /> Elegir producto
                         </button>
-                      )}
-                      {pickerRow === r.key && (
-                        <ProductoPicker
-                          onClose={() => setPickerRow(null)}
-                          onPick={(p) => {
-                            if (p) setRow(r.key, { productId: p.id, nombre: p.name, sku: p.sku, stock: p.stock, trackStock: p.trackStock })
-                            setPickerRow(null)
-                          }}
-                        />
                       )}
                     </td>
                     <td className="px-3 py-1.5">
@@ -174,6 +167,15 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
         <Button type="button" variant="outline" onClick={() => submit(false)} loading={saving}>Preparar (reservar)</Button>
         <Button type="button" onClick={() => submit(true)} loading={saving} disabled={faltante}>Entregar ahora</Button>
       </ModalFooter>
+
+      <ProductoPicker
+        open={!!pickerRow}
+        onClose={() => setPickerRow(null)}
+        onPick={(p) => {
+          if (p && pickerRow) setRow(pickerRow, { productId: p.id, nombre: p.name, sku: p.sku, stock: p.stock, trackStock: p.trackStock })
+          setPickerRow(null)
+        }}
+      />
     </div>
   )
 }

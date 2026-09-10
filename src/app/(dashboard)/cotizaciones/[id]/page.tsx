@@ -45,6 +45,7 @@ interface CotizacionDetail {
   items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null; productId?: string }>
   entregaGenerada?: boolean
   dealId?:        string | null
+  facturaEmitida?: { id: string; numeroInterno: string | null } | null
   empresa:        { id: string; name: string } | null
   user:           { id: string; name: string } | null
   orgName:        string
@@ -459,13 +460,19 @@ export default function CotizacionDetailPage() {
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Facturar esta venta</p>
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                Genera la factura (registro + numeración interna, sin CAE de AFIP) con las líneas y el total.
+                {data.facturaEmitida
+                  ? `Ya se emitió la factura ${data.facturaEmitida.numeroInterno ?? ''}.`
+                  : 'Genera la factura (registro + numeración interna, sin CAE de AFIP) con las líneas y el total.'}
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={emitirFactura} loading={facturando} leftIcon={<DollarSign size={15} />}>
-            Emitir factura
-          </Button>
+          {data.facturaEmitida ? (
+            <Button variant="outline" onClick={() => router.push('/facturas')}>Ver en Facturación</Button>
+          ) : (
+            <Button variant="outline" onClick={emitirFactura} loading={facturando} leftIcon={<DollarSign size={15} />}>
+              Emitir factura
+            </Button>
+          )}
         </div>
       )}
     </div>

@@ -134,11 +134,11 @@ export default function ComprasPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={handleFile} />
           <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={ocrLoading}
             leftIcon={ocrLoading ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />}>
-            {ocrLoading ? 'Leyendo factura...' : 'Cargar factura (foto/PDF)'}
+            {ocrLoading ? 'Leyendo factura...' : 'Cargar factura'}
           </Button>
           <Button onClick={() => { setSeed(null); setFormOpen(true) }} leftIcon={<Plus size={15} />}>
             Carga manual
@@ -146,14 +146,14 @@ export default function ComprasPage() {
         </div>
       </div>
 
-      <div className="flex rounded-xl overflow-hidden p-0.5 w-fit"
+      <div className="flex rounded-xl p-0.5 w-fit max-w-full overflow-x-auto"
         style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
         {([
           { t: 'LISTA' as const, label: 'Compras' },
           { t: 'PAGAR' as const, label: 'Por pagar' },
         ]).map((x) => (
           <button key={x.t} onClick={() => setTab(x.t)}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0 ${
               tab === x.t ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}>
             {x.label}
@@ -240,7 +240,7 @@ export default function ComprasPage() {
       </Modal>
 
       <Modal open={!!detailId} onClose={() => setDetailId(null)} title="Compra" size="lg">
-        {detailId && <CompraDetail compraId={detailId} onChanged={refetchList} />}
+        {detailId && <CompraDetail compraId={detailId} onChanged={refetchList} onDeleted={() => setDetailId(null)} />}
       </Modal>
     </div>
   )

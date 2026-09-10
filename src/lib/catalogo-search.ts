@@ -115,8 +115,18 @@ export async function searchCatalogo(orgId: string, opts: CatalogoSearchOpts): P
     withCount ? db.product.count({ where }) : Promise.resolve(null),
   ])
 
+  // Portal GREMIO: nunca ve datos internos (costo, márgenes, stock físico
+  // propio y reservado). Ve precioGremio + la disponibilidad del proveedor,
+  // que es lo suyo. Se filtra acá, la única puerta del portal al catálogo.
+  const cleanData = opts.gremio
+    ? data.map((p: any) => {
+        const { costo, stock, stockReservado, stockMinimo, supplierStock, catalogSource, lastSyncedAt, ...rest } = p
+        return rest
+      })
+    : data
+
   const totalCount = total ?? skip + data.length
-  return { data, total: totalCount, page, limit, totalPages: Math.ceil(totalCount / limit) }
+  return { data: cleanData, total: totalCount, page, limit, totalPages: Math.ceil(totalCount / limit) }
 }
 
 // ─── Wrapper para NISSI: SIN precios ──────────────────────────────────────

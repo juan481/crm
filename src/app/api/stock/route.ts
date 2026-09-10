@@ -103,6 +103,13 @@ export async function GET(req: NextRequest) {
     const total = data.length
     const pageData = data.slice(skip, skip + limit)
 
+    // ?resumen=0 → la tabla no necesita las tarjetas (las pide el header aparte).
+    if (sp.get('resumen') === '0') {
+      return NextResponse.json({
+        data: pageData, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)),
+      })
+    }
+
     // Tarjetas del encabezado — SIEMPRE sobre el universo completo de
     // productos trackeados, sin importar los filtros de la tabla.
     const [universo, alertasPendientes] = await Promise.all([

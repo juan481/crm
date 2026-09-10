@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, History, FileDown } from 'lucide-react'
+import { Search, ArrowUpCircle, ArrowDownCircle, SlidersHorizontal, History, FileDown, ExternalLink } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -116,18 +117,18 @@ export function MovimientosTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-end gap-2 flex-wrap">
-        <div className="w-56">
+        <div className="w-full sm:w-56">
           <Input placeholder="Producto, motivo, comprobante..." value={searchInput}
             onChange={e => setSearchInput(e.target.value)} leftIcon={<Search size={15} />} />
         </div>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <Select options={ORIGEN_OPTIONS} value={origen} onChange={e => setOrigen(e.target.value)} />
         </div>
-        <div>
+        <div className="flex-1 sm:flex-none min-w-[130px]">
           <label className="block text-[11px] mb-1" style={{ color: 'var(--color-text-muted)' }}>Desde</label>
           <Input type="date" value={desde} onChange={e => setDesde(e.target.value)} />
         </div>
-        <div>
+        <div className="flex-1 sm:flex-none min-w-[130px]">
           <label className="block text-[11px] mb-1" style={{ color: 'var(--color-text-muted)' }}>Hasta</label>
           <Input type="date" value={hasta} onChange={e => setHasta(e.target.value)} />
         </div>
@@ -189,7 +190,17 @@ export function MovimientosTab() {
                     {ORIGEN_LABEL[m.origen] ?? m.origen}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {m.numeroComprobante || m.motivo || '—'}
+                    {m.compraId ? (
+                      <Link href="/compras" className="inline-flex items-center gap-1 hover:underline" style={{ color: 'var(--color-primary)' }}>
+                        {m.numeroComprobante || 'Compra'} <ExternalLink size={10} />
+                      </Link>
+                    ) : m.entregaId ? (
+                      <Link href={`/entregas?id=${m.entregaId}`} className="inline-flex items-center gap-1 hover:underline" style={{ color: 'var(--color-primary)' }}>
+                        {m.motivo || 'Entrega'} <ExternalLink size={10} />
+                      </Link>
+                    ) : (
+                      m.numeroComprobante || m.motivo || '—'
+                    )}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     {m.creadoPor ?? '—'}

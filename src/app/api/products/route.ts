@@ -37,6 +37,13 @@ export async function GET(req: NextRequest) {
     const search = (req.nextUrl.searchParams.get('search') ?? '').trim()
     if (search.length >= 2) {
       const db = prisma as any
+      // El costo (margen interno) sólo se devuelve a ADMIN+ o a quien tenga
+      // Compras/Catálogo — el picker de Entregas (accesible a un rol Técnico)
+      // no lo necesita ni debe verlo.
+      const puedeVerCosto =
+        canAccess(payload.role, 'ADMIN') ||
+        (await roleHasModule(payload.orgId, payload.role, 'compras')) ||
+        (await roleHasModule(payload.orgId, payload.role, 'catalogo-gestion'))
       const rows = await db.product.findMany({
         where: {
           organizationId: payload.orgId,
@@ -51,7 +58,8 @@ export async function GET(req: NextRequest) {
         take: 25,
         select: {
           id: true, name: true, sku: true, mpn: true, brand: true, unit: true,
-          price: true, currency: true, costo: true, trackStock: true, stock: true,
+          price: true, currency: true, trackStock: true, stock: true,
+          ...(puedeVerCosto ? { costo: true } : {}),
         },
       })
       return NextResponse.json({ data: rows })

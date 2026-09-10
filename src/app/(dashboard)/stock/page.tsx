@@ -78,7 +78,7 @@ export default function StockPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex rounded-xl overflow-hidden p-0.5 w-fit"
+      <div className="flex rounded-xl p-0.5 w-fit max-w-full overflow-x-auto"
         style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
         {([
           { type: 'STOCK' as Tab,       label: 'Stock actual', icon: <Boxes size={14} />, badge: 0 },
@@ -86,7 +86,7 @@ export default function StockPage() {
           { type: 'ALERTAS' as Tab,     label: 'Alertas',      icon: <AlertTriangle size={14} />, badge: resumen?.alertasPendientes ?? 0 },
         ]).map((t) => (
           <button key={t.type} onClick={() => setTab(t.type)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0 ${
               tab === t.type ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}>
             {t.icon} {t.label}
