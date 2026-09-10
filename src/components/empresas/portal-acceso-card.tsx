@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { KeyRound, Plus, Trash2, Loader2, Mail } from 'lucide-react'
+import Link from 'next/link'
+import { KeyRound, Plus, Trash2, Loader2, Mail, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface PortalUser { id: string; name: string; email: string; status: string; createdAt: string }
@@ -56,14 +57,22 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
             Portal de clientes
           </p>
         </div>
-        {canManage && !adding && (
-          <button
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/empresas/${empresaId}/portal`}
+            className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-raised)]"
           >
-            <Plus size={13} /> Dar acceso
-          </button>
-        )}
+            <Eye size={13} /> Ver el portal
+          </Link>
+          {canManage && !adding && (
+            <button
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+            >
+              <Plus size={13} /> Dar acceso
+            </button>
+          )}
+        </div>
       </div>
 
       {adding && (

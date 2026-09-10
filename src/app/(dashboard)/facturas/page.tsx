@@ -293,7 +293,10 @@ export default function FacturasPage() {
         columns={[
           { key: 'empresa', header: 'Cliente', render: (row) => {
             const clientName = row.empresa?.name ?? row.client?.name ?? 'Sin cliente'
-            return <div className="flex items-center gap-3"><Avatar name={clientName} size="sm" /><p className="font-medium text-[var(--color-text)]">{clientName}</p></div>
+            const inner = <><Avatar name={clientName} size="sm" /><p className="font-medium text-[var(--color-text)] group-hover:text-[var(--color-primary)] transition-colors">{clientName}</p></>
+            return row.empresa?.id
+              ? <a href={`/empresas/${row.empresa.id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-3 group">{inner}</a>
+              : <div className="flex items-center gap-3">{inner}</div>
           } },
           // hideOnMobileCard: en la tarjeta de mobile ya se ve Cliente +
           // Monto + Vencimiento + Estado de entrada — la descripción
