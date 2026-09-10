@@ -13,6 +13,13 @@ import type { ServicioRecurrente } from '@/types'
 import toast from 'react-hot-toast'
 
 interface EmpresaOption { id: string; name: string }
+interface CatalogoServicio { id: string; name: string; price: number; currency: string; billingCycle: string }
+
+// Catálogo de Servicios (para el Cotizador) → ciclo de abono. El abono queda
+// independiente: esto sólo pre-llena para no re-tipear.
+const BILLING_CYCLE_A_CICLO: Record<string, string> = {
+  MONTHLY: 'MENSUAL', QUARTERLY: 'TRIMESTRAL', ANNUAL: 'ANUAL', ONE_TIME: 'UNICO',
+}
 
 interface Props {
   open: boolean
@@ -69,6 +76,31 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
     enabled: open && !editing && !empresaId,
     staleTime: 60_000,
   })
+
+  // Catálogo de Servicios (el mismo que usa el Cotizador) — para pre-llenar
+  // el abono y no re-tipear nombre/monto/moneda/ciclo.
+  const { data: catalogo } = useQuery<CatalogoServicio[]>({
+    queryKey: ['servicios-catalogo'],
+    queryFn: async () => {
+      const r = await fetch('/api/services')
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as CatalogoServicio[]
+    },
+    enabled: open && !editing,
+    staleTime: 60_000,
+  })
+
+  const aplicarDelCatalogo = (id: string) => {
+    const s = (catalogo ?? []).find((x) => x.id === id)
+    if (!s) return
+    setForm((f) => ({
+      ...f,
+      nombre: s.name,
+      monto: String(s.price ?? ''),
+      moneda: MONEDAS_VALIDAS.includes(s.currency) ? s.currency : f.moneda,
+      ciclo: BILLING_CYCLE_A_CICLO[s.billingCycle] ?? f.ciclo,
+    }))
+  }
 
   useEffect(() => {
     if (!open) return
@@ -160,6 +192,23 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
           </div>
         ) : (
           <Select label="Empresa" value={form.empresaId} onChange={e => set('empresaId', e.target.value)} options={empresaOptions} />
+        )}
+
+        {!editing && (catalogo?.length ?? 0) > 0 && (
+          <div>
+            <Select
+              label="Partir de un servicio del catálogo (opcional)"
+              value=""
+              onChange={e => { if (e.target.value) aplicarDelCatalogo(e.target.value) }}
+              options={[
+                { value: '', label: '— cargar los datos a mano —' },
+                ...(catalogo ?? []).map(s => ({ value: s.id, label: `${s.name} — ${s.currency} ${s.price}` })),
+              ]}
+            />
+            <p className="text-xs mt-1 text-[var(--color-text-subtle)]">
+              Copia nombre, monto, moneda y ciclo. Después lo podés ajustar — el abono queda independiente del catálogo.
+            </p>
+          </div>
         )}
 
         <Input
