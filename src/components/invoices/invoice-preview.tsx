@@ -136,12 +136,21 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
       drawBrandedFooter(doc, { pw, mg, y, pr, pg, pb, leftText: org?.name || org?.crmName || '' })
 
       const pdfBase64 = doc.output('datauristring') as unknown as string
+      // Vercel corta el request body en ~4.5 MB (413, "Request Entity Too
+      // Large") — que además vuelve como HTML, no JSON, así que el catch de
+      // abajo sólo mostraría "No se pudo enviar". Chequeo acá con un mensaje
+      // claro. Con el downscale del logo (pdf-branding.ts) esto no debería
+      // pasar nunca, pero por las dudas.
+      if (pdfBase64.length > 4_000_000) {
+        toast.error('El PDF quedó muy pesado (logo muy grande). Cambiá el logo por uno más chico en Configuración → Marca.')
+        return
+      }
       const res = await fetch(`/api/invoices/${invoice.id}/enviar`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pdfBase64, email: full?.recipientEmail ?? undefined }),
       })
-      const json = await res.json()
-      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(json.error ?? `No se pudo enviar (${res.status})`); return }
       toast.success(json.message)
       qc.invalidateQueries({ queryKey: ['invoice-full', invoice.id] })
       qc.invalidateQueries({ queryKey: ['invoices'] })

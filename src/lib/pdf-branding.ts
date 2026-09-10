@@ -79,13 +79,24 @@ export async function loadLogoForPdf(logoUrl: string | null | undefined): Promis
         img.onerror = () => reject(new Error('logo load failed'))
       })
 
-      const width  = img.naturalWidth  || 1
-      const height = img.naturalHeight || 1
+      const natW = img.naturalWidth  || 1
+      const natH = img.naturalHeight || 1
+      // Downscale: en el header del PDF el logo se dibuja a ~40mm (~150px).
+      // Cap a 400px de lado mayor — 2.5x de sobremuestreo, de sobra para
+      // impresión. Sin esto, `canvas.toDataURL('image/png')` de un logo con
+      // dimensiones grandes genera un data URL de varios MB (el PNG
+      // re-codificado del canvas pesa mucho más que el archivo original), el
+      // PDF se infla y el POST a /api/invoices/[id]/enviar daba 413.
+      const MAX = 400
+      const scale = Math.min(1, MAX / Math.max(natW, natH))
+      const width  = Math.max(1, Math.round(natW * scale))
+      const height = Math.max(1, Math.round(natH * scale))
       const canvas = document.createElement('canvas')
       canvas.width  = width
       canvas.height = height
       const ctx = canvas.getContext('2d')
       if (!ctx) return null
+      ctx.imageSmoothingQuality = 'high'
       ctx.drawImage(img, 0, 0, width, height)
 
       return { dataUrl: canvas.toDataURL('image/png'), width, height }
