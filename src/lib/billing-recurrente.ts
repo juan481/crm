@@ -1,6 +1,27 @@
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 import { abonoFacturaEsteMes, clampDiaVencimiento } from '@/lib/servicios-recurrentes'
+import { getPluginConfig } from '@/lib/plugins'
+
+function cfgTrue(v: unknown): boolean {
+  return v === true || v === 'true' || v === 'on' || v === '1'
+}
+
+/** Config de facturación recurrente por organización (plugin invoice-automation). */
+export async function getBillingConfig(orgId: string): Promise<{
+  dueSameMonth: boolean
+  autoSend: boolean
+  remindersEnabled: boolean
+  reminderDays: string | undefined
+}> {
+  const cfg = (await getPluginConfig(orgId, 'invoice-automation')) as Record<string, unknown> | null
+  return {
+    dueSameMonth: cfgTrue(cfg?.dueSameMonth),
+    autoSend: cfgTrue(cfg?.autoSend),
+    remindersEnabled: cfgTrue(cfg?.remindersEnabled),
+    reminderDays: typeof cfg?.reminderDays === 'string' ? cfg.reminderDays : undefined,
+  }
+}
 
 // Facturación recurrente por abono (ServicioRecurrente). Lo usan el cron
 // invoice-automation y el botón manual de /servicios. Es idempotente por sí

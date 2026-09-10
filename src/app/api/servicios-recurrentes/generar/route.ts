@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
-import { billAbonosForOrg } from '@/lib/billing-recurrente'
+import { billAbonosForOrg, getBillingConfig } from '@/lib/billing-recurrente'
+import { sendInvoiceEmail } from '@/lib/invoice-email'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,8 @@ export async function GET() {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const preview = await billAbonosForOrg(payload.orgId, { dryRun: true })
+    const { dueSameMonth } = await getBillingConfig(payload.orgId)
+    const preview = await billAbonosForOrg(payload.orgId, { dryRun: true, dueSameMonth })
     return NextResponse.json({ data: preview })
   } catch (error) {
     console.error('[SERVICIOS-RECURRENTES GENERAR GET]', error)
@@ -27,11 +29,22 @@ export async function POST(_req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const res = await billAbonosForOrg(payload.orgId, {})
+    const { dueSameMonth, autoSend } = await getBillingConfig(payload.orgId)
+    const res = await billAbonosForOrg(payload.orgId, { dueSameMonth })
+
+    // Si la org tiene autoSend, las manda al cliente también desde el botón manual.
+    let sent = 0
+    if (autoSend) {
+      for (const id of res.createdInvoiceIds) {
+        try { if ((await sendInvoiceEmail({ invoiceId: id, organizationId: payload.orgId, req: _req })).ok) sent++ }
+        catch (err) { console.error('[SERVICIOS-RECURRENTES GENERAR] auto-envío falló:', id, err) }
+      }
+    }
+
     return NextResponse.json({
       data: res,
       message: res.created > 0
-        ? `${res.created} factura${res.created !== 1 ? 's' : ''} generada${res.created !== 1 ? 's' : ''}`
+        ? `${res.created} factura${res.created !== 1 ? 's' : ''} generada${res.created !== 1 ? 's' : ''}${autoSend ? ` · ${sent} enviada${sent !== 1 ? 's' : ''} al cliente` : ''}`
         : 'No había abonos pendientes de facturar este mes',
     })
   } catch (error) {

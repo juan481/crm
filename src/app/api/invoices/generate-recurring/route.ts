@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
-import { empresasConAbono } from '@/lib/billing-recurrente'
+import { empresasConAbono, getBillingConfig } from '@/lib/billing-recurrente'
 
 // Botón "Generar Facturas del Mes" en Facturación. Factura el monto plano
 // Empresa.monthlyAmount de las empresas cliente que NO tienen ningún abono
@@ -73,7 +73,13 @@ export async function POST(req: NextRequest) {
     // dateOnlyArgentina, no new Date(y, m, 5) — ese constructor arma
     // medianoche UTC, que renderizada en el navegador (timezone Argentina)
     // se mostraba como "día 4" en vez de "5". Ver src/lib/timezone.ts.
-    const dueDate = dateOnlyArgentina(argToday.getUTCFullYear(), argToday.getUTCMonth() + 1, 5)
+    // dueSameMonth (config del plugin): vence el 5 de ESTE mes en vez del que viene.
+    const { dueSameMonth } = await getBillingConfig(payload.orgId)
+    const dueDate = dateOnlyArgentina(
+      argToday.getUTCFullYear(),
+      argToday.getUTCMonth() + (dueSameMonth ? 0 : 1),
+      5,
+    )
 
     // Defensa: aunque una empresa con abono no aparece en el preview, un
     // request viejo/manual podría mandarla igual — nunca la facturamos por
