@@ -58,7 +58,17 @@ SMTP_HOST="smtp.ejemplo.com"
 SMTP_PORT="587"
 SMTP_USER="..."
 SMTP_PASS="..."
+
+# Pagos & Portal (opcional — sin esto no se cobra online, nada más rompe)
+WHOP_API_KEY="..."           # cobros en USD
+WHOP_PRODUCT_ID="prod_..."   # product de Whop bajo el que se crean los planes
+WHOP_WEBHOOK_SECRET="ws_..."
+MP_ACCESS_TOKEN="APP_USR-..."  # cobros en ARS (Mercado Pago)
+MP_WEBHOOK_SECRET="..."        # clave secreta de Webhooks del panel de MP
 ```
+
+> Detalle completo de Pagos & Portal (setup de Whop/MP, webhooks, portal de
+> clientes, seguridad): **`docs/PAGOS-Y-PORTAL.md`**.
 
 ### 3. Inicializar la base de datos
 
