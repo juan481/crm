@@ -111,6 +111,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'comunicaciones' },
       { label: 'Servicios',      href: '/servicios',      icon: <RefreshCw size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN'], moduleId: 'servicios' },
       { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], badgeKey: 'invoices', moduleId: 'facturas' },
+      { label: 'Portal clientes', href: '/portal-clientes', icon: <UserCircle2 size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], moduleId: 'facturas' },
       { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'], moduleId: 'documentos' },
     ],
   },

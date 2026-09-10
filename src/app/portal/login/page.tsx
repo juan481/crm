@@ -1,12 +1,10 @@
 'use client'
 
-// Ingreso al Portal de Clientes — magic link (Supabase OTP), sin contraseña.
-// shouldCreateUser: false → si el email no tiene un usuario CLIENTE creado por
-// el admin, no se crea nada (y Supabase igual responde ok para no filtrar qué
-// emails existen). Página pública (middleware).
+// Ingreso al Portal de Clientes — enlace de acceso sin contraseña. El mail lo
+// arma y lo manda NUESTRO backend (branded, desde el correo de la org), NO el
+// template genérico de Supabase. Ver src/lib/portal-magic-link.ts.
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Mail, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react'
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -37,15 +35,14 @@ export default function PortalLoginPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) { setError('Ingresá un email válido.'); return }
     setSending(true)
     try {
-      const supabase = createClient()
-      const { error: err } = await supabase.auth.signInWithOtp({
-        email: value,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: `${window.location.origin}/portal/auth/callback`,
-        },
+      const res = await fetch('/api/portal/auth/request-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: value }),
       })
-      if (err) { setError('No pudimos enviar el enlace. Probá de nuevo en un rato.'); return }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setError(j.error ?? 'No pudimos enviar el enlace. Probá de nuevo en un rato.')
+        return
+      }
       setSent(true)
     } catch {
       setError('Error de conexión — probá de nuevo.')

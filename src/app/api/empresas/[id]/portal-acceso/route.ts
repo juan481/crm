@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
-import { appBaseUrl } from '@/lib/app-url'
+import { sendPortalMagicLink } from '@/lib/portal-magic-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,30 +91,12 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'No se pudo crear el usuario' }, { status: 500 })
   }
 
-  // Aviso al cliente con el link de ingreso.
+  // Le mandamos el enlace de acceso directo (branded, desde el correo de la
+  // org — NO el mail genérico de Supabase). Un clic y adentro.
   try {
-    const org = await prisma.organization.findUnique({
-      where: { id: payload.orgId },
-      select: {
-        name: true, crmName: true, primaryColor: true, secondaryColor: true,
-        smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
-        smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
-      },
-    })
-    const appUrl = appBaseUrl(req)
-    if (org && isOrgEmailConfigured(org) && appUrl) {
-      const orgName = org.name || org.crmName || 'CRM'
-      const loginUrl = `${appUrl}/portal/login`
-      const accent = org.primaryColor || '#6366f1'
-      const html = buildEmailHtml(
-        `Acceso al portal de ${orgName}`,
-        `Te dimos acceso al portal de clientes de ${orgName}, donde vas a poder ver y pagar tus facturas y pedir soporte.\n\nEntrás con este mismo email (sin contraseña — te llega un enlace cada vez):\n\n<a href="${loginUrl}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;margin:8px 0">Ir al portal</a>\n\n${loginUrl}`,
-        orgName, accent, org.secondaryColor || '#8b5cf6',
-      )
-      await sendEmail({ to: email, subject: `Acceso al portal — ${orgName}`, html, smtpConfig: resolveOrgSmtpConfig(org) })
-    }
+    await sendPortalMagicLink(email, req)
   } catch (err) {
-    console.error('[PORTAL ACCESO] aviso al cliente falló:', err)
+    console.error('[PORTAL ACCESO] envío del enlace falló:', err)
   }
 
   return NextResponse.json({ data: user }, { status: 201 })
