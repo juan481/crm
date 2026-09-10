@@ -6,6 +6,7 @@ import { isPluginEnabled, getPluginConfig } from '@/lib/plugins'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { formatMoneyExact } from '@/lib/utils'
 import { argentinaDayStart } from '@/lib/timezone'
+import { paymentsEnabledForOrg } from '@/lib/payments/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,8 @@ export async function GET(req: NextRequest) {
     const wouldSend: { org: string; empresa: string; concepto: string; diasVencida: number }[] = []
 
     for (const org of orgs) {
+      // Candado multi-tenant: sólo orgs habilitadas para cobrar online.
+      if (!paymentsEnabledForOrg(org.id)) continue
       if (!(await isPluginEnabled(org.id, 'invoice-automation'))) continue
 
       const cfg = (await getPluginConfig(org.id, 'invoice-automation')) as

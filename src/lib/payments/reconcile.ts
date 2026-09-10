@@ -7,6 +7,7 @@ import {
 import { formatMoneyExact } from '@/lib/utils'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 import { clampDiaVencimiento } from '@/lib/servicios-recurrentes'
+import { paymentsEnabledForOrg } from './config'
 import type { NormalizedPaymentEvent } from './types'
 
 // Conciliación de pagos — el ÚNICO lugar que pasa una Invoice a PAID desde un
@@ -83,6 +84,12 @@ export async function reconcileInvoicePayment(event: NormalizedPaymentEvent): Pr
     },
   })
   if (!invoice) return { ok: false, reason: 'factura inexistente' }
+  // Candado multi-tenant (defensa en profundidad): si esta org no cobra
+  // online, no debería haber llegado un pago — no se toca la factura.
+  if (!paymentsEnabledForOrg(invoice.organizationId)) {
+    console.warn('[RECONCILE] pago para org sin cobro habilitado, ignorado:', invoice.organizationId, event.externalId)
+    return { ok: false, reason: 'org sin cobro habilitado' }
+  }
 
   return applyPaymentToInvoice(event, invoice)
 }
@@ -183,6 +190,10 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
     },
   })
   if (!abono) return { ok: false, reason: 'abono inexistente' }
+  if (!paymentsEnabledForOrg(abono.organizationId)) {
+    console.warn('[RECONCILE] cobro de abono para org sin cobro habilitado, ignorado:', abono.organizationId)
+    return { ok: false, reason: 'org sin cobro habilitado' }
+  }
 
   // El primer cobro recurrente confirma la autorización del débito.
   if (event.status === 'APPROVED' && abono.subStatus && abono.subStatus !== 'ACTIVO') {

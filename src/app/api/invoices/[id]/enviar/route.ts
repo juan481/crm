@@ -5,6 +5,7 @@ import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured }
 import { formatMoneyExact } from '@/lib/utils'
 import { providerForCurrency } from '@/lib/payments/types'
 import { checkoutProviderConfigured } from '@/lib/payments/checkout'
+import { paymentsEnabledForOrg } from '@/lib/payments/config'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -30,14 +31,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     if (!inv) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
-    // Link de pago (Pagos & Portal) — se incluye en el mail SÓLO si: la factura
-    // tiene payToken, no está pagada, y el proveedor de pago que le
-    // correspondería por su moneda (Whop USD / MP ARS) está realmente
-    // configurado. Así, si el CRM se deploya sin las env vars de pago, el mail
-    // de factura sale igual que siempre, sin un botón que llevaría a un error.
+    // Link de pago (Pagos & Portal) — se incluye en el mail SÓLO si: esta
+    // organización está habilitada para cobrar (PAYMENTS_ORG_IDS), la factura
+    // tiene payToken, no está pagada, y el proveedor de pago de su moneda
+    // (Whop USD / MP ARS) está configurado. Sin todo eso, el mail sale igual
+    // que siempre. El candado por organización evita que un tenant como Abba
+    // termine mandando la plata de sus clientes a la cuenta de Just Create.
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
     const provider = (inv.paymentProvider as 'WHOP' | 'MERCADOPAGO' | null) ?? providerForCurrency(inv.currency)
-    const payUrl = inv.payToken && inv.status !== 'PAID' && appUrl && checkoutProviderConfigured(provider)
+    const payUrl = paymentsEnabledForOrg(payload.orgId)
+      && inv.payToken && inv.status !== 'PAID' && appUrl && checkoutProviderConfigured(provider)
       ? `${appUrl}/pagar/${inv.payToken}`
       : null
 

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { providerForCurrency, type PayProvider } from './types'
+import { paymentsEnabledForOrg } from './config'
 import { createWhopAbonoSubscription, whopConfigured } from './whop'
 import { createMpAbonoPreapproval, mercadoPagoConfigured } from './mercadopago'
 
@@ -33,6 +34,9 @@ export async function createAbonoSubscription(
   organizationId: string,
   forcedProvider?: PayProvider,
 ): Promise<{ authUrl: string; provider: PayProvider }> {
+  if (!paymentsEnabledForOrg(organizationId)) {
+    throw new Error('El cobro online no está habilitado para esta organización')
+  }
   const meses = CICLO_MESES[abono.ciclo]
   if (!meses) throw new Error(`El ciclo "${abono.ciclo}" no admite débito automático (sólo mensual/trimestral/semestral/anual)`)
   if (!(abono.monto > 0)) throw new Error('El abono no tiene monto')

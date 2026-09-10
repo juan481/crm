@@ -31,11 +31,18 @@ Campos nuevos (todos nullable / con default → sin `--accept-data-loss`):
 
 | Var | De dónde sale |
 |---|---|
+| **`PAYMENTS_ORG_IDS`** | **Candado multi-tenant.** El id de la organización Just Create: `cmske462000008ahb29n2427g`. Sólo las orgs de esta lista pueden cobrar online — Abba y cualquier otro tenant quedan afuera aunque activen la facturación automática. Fail-safe: vacío = nadie cobra. |
 | `WHOP_API_KEY` | Whop dashboard → Developer → API keys |
 | `WHOP_PRODUCT_ID` | Whop → un "product" bajo el cual se crean los planes (`prod_…`) |
 | `WHOP_WEBHOOK_SECRET` | Whop → Developer → Webhooks (empieza con `ws_…`) |
 | `MP_ACCESS_TOKEN` | Mercado Pago → Tus integraciones → Credenciales de producción (`APP_USR-…`) |
 | `MP_WEBHOOK_SECRET` | Mercado Pago → Webhooks → "Clave secreta" |
+
+> **Nivel 2 (multi-tenant real)** — cuando un 2º cliente quiera cobrar por el
+> CRM: convertir esto en un plugin `payments` con credenciales por organización
+> (como NISSI carga las de WhatsApp) + webhook ruteado por token de org
+> (`/api/webhooks/mercadopago/<token>`). Hasta entonces, `PAYMENTS_ORG_IDS` es
+> el candado.
 
 `NEXT_PUBLIC_APP_URL` ya existe = `https://crm.justcreate.com.ar`.
 

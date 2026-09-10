@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { providerForCurrency } from './types'
+import { paymentsEnabledForOrg } from './config'
 import { createWhopInvoiceCheckout, whopConfigured } from './whop'
 import { createMpInvoicePreference, mercadoPagoConfigured } from './mercadopago'
 
@@ -45,6 +46,12 @@ export async function ensureInvoiceCheckout(
   invoice: InvoiceForCheckout,
   organizationId: string,
 ): Promise<CheckoutInfo> {
+  // Candado multi-tenant: sólo las organizaciones habilitadas en
+  // PAYMENTS_ORG_IDS pueden cobrar online.
+  if (!paymentsEnabledForOrg(organizationId)) {
+    throw new Error('El cobro online no está habilitado para esta organización')
+  }
+
   const provider = (invoice.paymentProvider as 'WHOP' | 'MERCADOPAGO' | null)
     ?? providerForCurrency(invoice.currency)
 

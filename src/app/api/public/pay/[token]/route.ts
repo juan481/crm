@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 import { ensureInvoiceCheckout } from '@/lib/payments/checkout'
+import { paymentsEnabledForOrg } from '@/lib/payments/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     },
   })
   if (!invoice) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
+  // Candado multi-tenant: si esta org no cobra online, el link "no existe".
+  if (!paymentsEnabledForOrg(invoice.organizationId)) {
+    return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
+  }
 
   const org = await prisma.organization.findUnique({
     where: { id: invoice.organizationId },
@@ -64,6 +69,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     },
   })
   if (!invoice) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
+  if (!paymentsEnabledForOrg(invoice.organizationId)) {
+    return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
+  }
   if (invoice.status === 'PAID') return NextResponse.json({ error: 'Esta factura ya fue pagada' }, { status: 409 })
   if (invoice.status === 'CANCELLED') return NextResponse.json({ error: 'Esta factura fue anulada' }, { status: 409 })
 
