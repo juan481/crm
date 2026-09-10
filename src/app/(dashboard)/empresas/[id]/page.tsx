@@ -20,6 +20,7 @@ import { ContactoForm } from '@/components/directorio/contacto-form'
 import { EmpresaNotas, type EmpresaNotasHandle } from '@/components/directorio/empresa-notas'
 import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
 import { ServicioForm } from '@/components/servicios/servicio-form'
+import { PortalAccesoCard } from '@/components/empresas/portal-acceso-card'
 import { ESTADO_LABEL } from '@/lib/servicios-recurrentes'
 import { useAuthStore } from '@/store/auth-store'
 import type { DirectorioContacto, Empresa, ServicioRecurrente } from '@/types'
@@ -427,6 +428,8 @@ export default function EmpresaDetailPage() {
           </div>
         )
       })()}
+
+      {empresa.isCliente && <PortalAccesoCard empresaId={empresa.id} canManage={canManage} />}
 
       {/* Activity / Notas section */}
       <div className="flex justify-end -mb-2">
