@@ -6,6 +6,7 @@ import { isPluginEnabled, getPluginConfig } from '@/lib/plugins'
 import { billAbonosForOrg, empresasConAbono } from '@/lib/billing-recurrente'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { sendInvoiceEmail } from '@/lib/invoice-email'
+import { notifyOrgStaff } from '@/lib/staff-notify'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 
 function cfgTrue(v: unknown): boolean {
@@ -167,6 +168,15 @@ export async function GET(req: NextRequest) {
             autoSendFails.push('excepción')
           }
         }
+      }
+
+      // Aviso INMEDIATO al staff si algún envío automático falló.
+      if (autoSendFails.length > 0) {
+        await notifyOrgStaff(
+          org.id,
+          `⚠️ ${autoSendFails.length} factura${autoSendFails.length !== 1 ? 's' : ''} no se pudo enviar`,
+          `La facturación automática de ${monthName} generó las facturas pero ${autoSendFails.length} no llegaron al cliente:\n\n${autoSendFails.map((e) => `• ${e}`).join('\n')}\n\nEntrá a Facturación — las que digan "sin enviar" son estas. Mandalas a mano desde el detalle.`,
+        )
       }
 
       const totalCreated = abonoRes.created + legacyCreated

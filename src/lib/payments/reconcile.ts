@@ -1,9 +1,8 @@
 import crypto from 'crypto'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
-import {
-  sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured,
-} from '@/lib/email'
+import { notifyOrgStaff } from '@/lib/staff-notify'
+import { getOrgActorUserId } from '@/lib/org-actor'
 import { formatMoneyExact } from '@/lib/utils'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 import { clampDiaVencimiento } from '@/lib/servicios-recurrentes'
@@ -34,40 +33,8 @@ function amountMatches(expected: number, got: number): boolean {
   return diff <= Math.max(AMOUNT_TOLERANCE_ABS, expected * AMOUNT_TOLERANCE_PCT)
 }
 
-async function oldestAdminId(orgId: string): Promise<string | null> {
-  const u = await prisma.user.findFirst({
-    where: { organizationId: orgId, role: { in: ['SUPER_ADMIN', 'ADMIN'] }, status: 'ACTIVE' },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  })
-  return u?.id ?? null
-}
-
-async function notifyStaff(orgId: string, subject: string, body: string): Promise<void> {
-  try {
-    const org = await prisma.organization.findUnique({
-      where: { id: orgId },
-      select: {
-        name: true, crmName: true, primaryColor: true, secondaryColor: true,
-        smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
-        smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
-      },
-    })
-    if (!org || !isOrgEmailConfigured(org)) return
-    const staff = await prisma.user.findMany({
-      where: { organizationId: orgId, status: 'ACTIVE', role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
-      select: { email: true },
-    })
-    const orgName = org.name || org.crmName || 'CRM'
-    const html = buildEmailHtml(subject, body, orgName, org.primaryColor || '#6366f1', org.secondaryColor || '#8b5cf6')
-    for (const s of staff) {
-      if (!s.email) continue
-      await sendEmail({ to: s.email, subject: `${subject} — ${orgName}`, html, smtpConfig: resolveOrgSmtpConfig(org) })
-    }
-  } catch (err) {
-    console.error('[RECONCILE] notifyStaff falló:', err)
-  }
-}
+const oldestAdminId = getOrgActorUserId
+const notifyStaff = notifyOrgStaff
 
 /**
  * Concilia el pago de una factura PUNTUAL (event.invoiceId presente).

@@ -71,7 +71,7 @@ export async function createAbonoSubscription(
     if (abono.empresaId) {
       const c = await prisma.directorioContacto.findFirst({
         where: { organizationId, empresaId: abono.empresaId, email: { not: null } },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ recibeFacturas: 'desc' }, { createdAt: 'asc' }],
         select: { email: true },
       })
       payerEmail = c?.email ?? null

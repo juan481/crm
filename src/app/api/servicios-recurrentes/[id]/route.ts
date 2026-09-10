@@ -51,6 +51,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if ('diaVencimiento' in b) data.diaVencimiento = clampDiaVencimiento(b.diaVencimiento)
     if ('estado' in b) data.estado = ESTADOS.includes(b.estado) ? b.estado : 'ACTIVO'
     if ('canalIngreso' in b) data.canalIngreso = str(b.canalIngreso) || 'CRM'
+    if ('medioCobro' in b) data.medioCobro = ['MERCADOPAGO', 'WHOP', 'MANUAL'].includes(b.medioCobro) ? b.medioCobro : null
     if ('serial' in b) data.serial = str(b.serial) || null
     if ('version' in b) data.version = str(b.version) || null
     if ('puestos' in b) data.puestos = b.puestos === '' || b.puestos == null ? null : Math.max(0, Math.round(Number(b.puestos) || 0))

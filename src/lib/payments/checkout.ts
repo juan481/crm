@@ -37,7 +37,7 @@ async function payerEmailForEmpresa(orgId: string, empresaId: string | null): Pr
   if (!empresaId) return null
   const c = await prisma.directorioContacto.findFirst({
     where: { organizationId: orgId, empresaId, email: { not: null } },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ recibeFacturas: 'desc' }, { createdAt: 'asc' }],
     select: { email: true },
   })
   return c?.email ?? null
@@ -54,6 +54,9 @@ export async function ensureInvoiceCheckout(
     throw new Error('El cobro online no está habilitado para esta organización')
   }
 
+  if (invoice.paymentProvider === 'MANUAL') {
+    throw new Error('Esta factura se paga por transferencia, no tiene link de pago online')
+  }
   const provider = (invoice.paymentProvider as 'WHOP' | 'MERCADOPAGO' | null)
     ?? providerForCurrency(invoice.currency)
 

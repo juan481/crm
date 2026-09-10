@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
       for (const inv of due) {
         const contacto = await prisma.directorioContacto.findFirst({
           where: { organizationId: org.id, empresaId: inv.empresaId!, email: { not: null } },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ recibeFacturas: 'desc' }, { createdAt: 'asc' }],
           select: { email: true },
         })
         if (!contacto?.email) continue

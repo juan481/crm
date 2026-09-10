@@ -39,6 +39,7 @@ type FormState = {
   moneda: string
   ciclo: string
   diaVencimiento: string
+  medioCobro: string
   modoLicencia: string
   incluyeMonitoreo: boolean
   canalIngreso: string
@@ -53,10 +54,18 @@ type FormState = {
 
 const EMPTY: FormState = {
   empresaId: '', nombre: '', monto: '', moneda: 'USD', ciclo: 'MENSUAL', diaVencimiento: '10',
+  medioCobro: '',
   modoLicencia: 'NINGUNA', incluyeMonitoreo: false, canalIngreso: 'CRM',
   contratoInicio: '', contratoFin: '', estado: 'ACTIVO',
   serial: '', version: '', puestos: '', notas: '',
 }
+
+const MEDIO_COBRO_OPTIONS = [
+  { value: '', label: 'Automático (según la moneda)' },
+  { value: 'MERCADOPAGO', label: 'Mercado Pago' },
+  { value: 'WHOP', label: 'Whop' },
+  { value: 'MANUAL', label: 'Transferencia / manual (sin link de pago)' },
+]
 
 const isoToDateInput = (v: string | null) => (v ? v.slice(0, 10) : '')
 
@@ -112,6 +121,7 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
         moneda: servicio.moneda || 'USD',
         ciclo: servicio.ciclo,
         diaVencimiento: String(servicio.diaVencimiento ?? 10),
+        medioCobro: servicio.medioCobro ?? '',
         modoLicencia: servicio.modoLicencia,
         incluyeMonitoreo: servicio.incluyeMonitoreo,
         canalIngreso: servicio.canalIngreso || 'CRM',
@@ -150,6 +160,7 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
         moneda: form.moneda,
         ciclo: form.ciclo,
         diaVencimiento: Number(form.diaVencimiento) || 10,
+        medioCobro: form.medioCobro || null,
         modoLicencia: form.modoLicencia,
         incluyeMonitoreo: form.incluyeMonitoreo,
         canalIngreso: form.canalIngreso,
@@ -226,8 +237,19 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
           <Select label="Ciclo" value={form.ciclo} onChange={e => set('ciclo', e.target.value)} options={CICLO_OPTIONS} />
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Input label="Día de vencimiento" type="number" min="1" max="28" value={form.diaVencimiento} onChange={e => set('diaVencimiento', e.target.value)} hint="Día del mes siguiente en que vence la factura (1–28)" />
+          <Input label="Día de vencimiento" type="number" min="1" max="28" value={form.diaVencimiento} onChange={e => set('diaVencimiento', e.target.value)} hint="Día en que vence la factura (1–28)" />
           <Select label="Estado" value={form.estado} onChange={e => set('estado', e.target.value)} options={ESTADO_OPTIONS} />
+        </div>
+        <div>
+          <Select
+            label="Medio de cobro"
+            value={form.medioCobro}
+            onChange={e => set('medioCobro', e.target.value)}
+            options={MEDIO_COBRO_OPTIONS}
+          />
+          <p className="text-xs mt-1 text-[var(--color-text-subtle)]">
+            Por dónde se le cobra al cliente. Queda registrado en cada factura y en las notas de la empresa.
+          </p>
         </div>
 
         {/* ── Contrato / clasificación ── */}

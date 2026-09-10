@@ -707,6 +707,7 @@ export interface ServicioRecurrente {
   diasHastaFin?: number | null
   estado: 'ACTIVO' | 'PAUSADO' | 'BAJA'
   canalIngreso: string
+  medioCobro: 'MERCADOPAGO' | 'WHOP' | 'MANUAL' | null
   serial: string | null
   version: string | null
   puestos: number | null

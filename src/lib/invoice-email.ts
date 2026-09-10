@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 import { sendEmail, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { getOrgActorUserId } from '@/lib/org-actor'
 import { formatMoneyExact } from '@/lib/utils'
 import { appBaseUrl } from '@/lib/app-url'
 import { providerForCurrency } from '@/lib/payments/types'
@@ -38,9 +39,11 @@ export async function sendInvoiceEmail(opts: {
   if (!inv) return { ok: false, error: 'Factura no encontrada' }
 
   // Destino: siempre de los contactos de la empresa. Nunca un email libre.
+  // Orden: primero el marcado "recibe facturas", después el más antiguo.
   const contactos = inv.empresaId
     ? await db.directorioContacto.findMany({
         where: { organizationId: opts.organizationId, empresaId: inv.empresaId, email: { not: null } },
+        orderBy: [{ recibeFacturas: 'desc' }, { createdAt: 'asc' }],
         select: { email: true },
       })
     : []
@@ -61,11 +64,13 @@ export async function sendInvoiceEmail(opts: {
     return { ok: false, error: 'El email de la organización no está configurado (Configuración → Correo).' }
   }
 
-  // Link de pago — sólo si la org cobra online, la factura tiene payToken, no
-  // está pagada, y el proveedor de su moneda está configurado.
+  // Link de pago — sólo si: el medio de cobro no es MANUAL (transferencia), la
+  // org cobra online, la factura tiene payToken, no está pagada, y el proveedor
+  // está configurado. Si es MANUAL, el mail muestra las instrucciones de pago.
   const appUrl = appBaseUrl(opts.req)
-  const provider = (inv.paymentProvider as 'WHOP' | 'MERCADOPAGO' | null) ?? providerForCurrency(inv.currency)
-  const payUrl = paymentsEnabledForOrg(opts.organizationId)
+  const manual = inv.paymentProvider === 'MANUAL'
+  const provider = manual ? 'MERCADOPAGO' : ((inv.paymentProvider as 'WHOP' | 'MERCADOPAGO' | null) ?? providerForCurrency(inv.currency))
+  const payUrl = !manual && paymentsEnabledForOrg(opts.organizationId)
     && inv.payToken && inv.status !== 'PAID' && appUrl && checkoutProviderConfigured(provider)
     ? `${appUrl}/pagar/${inv.payToken}`
     : null
@@ -112,21 +117,17 @@ export async function sendInvoiceEmail(opts: {
 
   // Comprobante en la timeline de la empresa.
   if (inv.empresaId) {
-    const admin = await db.user.findFirst({
-      where: { organizationId: opts.organizationId, role: { in: ['SUPER_ADMIN', 'ADMIN'] }, status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    })
-    if (admin) {
+    const actorId = await getOrgActorUserId(opts.organizationId)
+    if (actorId) {
       await db.empresaNota.create({
         data: {
           empresaId: inv.empresaId,
           organizationId: opts.organizationId,
-          userId: admin.id,
+          userId: actorId,
           tipo: 'NOTA',
           content: `📧 Factura ${numero} (${money(inv.amount, inv.currency)}) enviada a ${email}.`,
         },
-      }).catch(() => {})
+      }).catch((err: unknown) => console.error('[INVOICE-EMAIL] nota falló:', err))
     }
   }
 

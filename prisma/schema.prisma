@@ -369,6 +369,13 @@ model ServicioRecurrente {
   subStatus     String? // 'PENDIENTE_AUTORIZACION' | 'ACTIVO' | 'PAUSADO' | 'CANCELADO'
   subAuthUrl    String? // link que se le manda al cliente 1 vez para autorizar el débito
 
+  // Medio de cobro del abono. null = automático por moneda (USD→Whop, ARS→MP).
+  // 'MANUAL' = factura sin link, se paga por transferencia (usa
+  // Organization.paymentInstructions). String libre (mismo criterio que
+  // país/condicionIva) — sumar "otra billetera" no pide migración. Se copia a
+  // Invoice.paymentProvider al generar cada factura del abono.
+  medioCobro String? // 'MERCADOPAGO' | 'WHOP' | 'MANUAL' | null
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1415,6 +1422,11 @@ model DirectorioContacto {
   role           String?
   email          String?
   phone          String?
+  // Contacto que recibe las facturas y avisos de cobro de la empresa. Si una
+  // empresa tiene varios contactos, `sendInvoiceEmail` (y el link de pago, y
+  // los recordatorios) le mandan a éste; si ninguno está marcado, cae al
+  // contacto más antiguo. 100% aditivo — false en todo contacto existente.
+  recibeFacturas Boolean      @default(false)
   empresaId      String?
   empresa        Empresa?     @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())

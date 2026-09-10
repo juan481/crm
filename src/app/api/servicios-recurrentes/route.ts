@@ -48,8 +48,9 @@ export async function GET(req: NextRequest) {
       orderBy: [{ estado: 'asc' }, { createdAt: 'desc' }],
       select: {
         id: true, nombre: true, modoLicencia: true, incluyeMonitoreo: true,
-        monto: true, moneda: true, ciclo: true, diaVencimiento: true,
+        monto: true, moneda: true, ciclo: true, diaVencimiento: true, medioCobro: true,
         contratoInicio: true, contratoFin: true, estado: true, canalIngreso: true,
+        subProvider: true, subStatus: true, subAuthUrl: true,
         serial: true, version: true, puestos: true, notas: true,
         createdAt: true, updatedAt: true,
         empresa: { select: { id: true, name: true, isCliente: true } },
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest) {
         contratoFin,
         estado: ESTADOS.includes(b.estado) ? b.estado : 'ACTIVO',
         canalIngreso: str(b.canalIngreso) || 'CRM',
+        medioCobro: ['MERCADOPAGO', 'WHOP', 'MANUAL'].includes(b.medioCobro) ? b.medioCobro : null,
         serial: str(b.serial) || null,
         version: str(b.version) || null,
         puestos,

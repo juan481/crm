@@ -75,7 +75,7 @@ export async function billAbonosForOrg(
     where: { organizationId: orgId, estado: 'ACTIVO', monto: { gt: 0 }, ciclo: { not: 'UNICO' } },
     select: {
       id: true, nombre: true, monto: true, moneda: true, ciclo: true, estado: true,
-      diaVencimiento: true, contratoInicio: true, contratoFin: true, createdAt: true, subStatus: true,
+      diaVencimiento: true, contratoInicio: true, contratoFin: true, createdAt: true, subStatus: true, medioCobro: true,
       empresa: { select: { id: true, name: true, isCliente: true } },
     },
   })
@@ -103,6 +103,7 @@ export async function billAbonosForOrg(
   const toCreate: {
     empresaId: string; organizationId: string; servicioRecurrenteId: string
     amount: number; currency: string; description: string; dueDate: Date; status: 'PENDING'
+    paymentProvider?: string | null
   }[] = []
 
   for (const a of due) {
@@ -120,6 +121,8 @@ export async function billAbonosForOrg(
       description: concepto,
       dueDate,
       status: 'PENDING',
+      // Medio de cobro elegido en el abono (null = automático por moneda).
+      paymentProvider: a.medioCobro || null,
     })
     result.items.push({
       abonoId: a.id, empresa: a.empresa.name, concepto, amount: a.monto, currency: a.moneda || 'USD',
