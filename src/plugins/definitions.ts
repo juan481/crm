@@ -38,10 +38,10 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
     id: 'invoice-automation',
     name: 'Facturación Automática',
-    description: 'El día 1 de cada mes genera solas las facturas de los clientes con monto mensual cargado (mismo criterio que "Generar del Mes", pero automático) y te avisa por mail lo que se generó. No las envía al cliente — quedan como Pendiente para que las revises antes de avisarle a cada uno.',
+    description: 'El día 1 de cada mes genera solas las facturas de los clientes con monto mensual cargado (mismo criterio que "Generar del Mes", pero automático) y te avisa por mail lo que se generó. No las envía al cliente — quedan como Pendiente para que las revises antes de avisarle a cada uno. Además, una vez que enviaste una factura, si sigue impaga te reenvía sola el link de pago al cliente a los 3 y 7 días del vencimiento (recordatorios).',
     icon: 'FileText',
     category: 'productivity',
-    version: '1.0.0',
+    version: '1.1.0',
     author: 'CRM Core',
     requiresConfig: false,
     implemented: true,
