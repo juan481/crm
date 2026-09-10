@@ -43,7 +43,14 @@ export async function billAbonosForOrg(
   }
 
   const abonos = await prisma.servicioRecurrente.findMany({
-    where: { organizationId: orgId, estado: 'ACTIVO', monto: { gt: 0 }, ciclo: { not: 'UNICO' } },
+    where: {
+      organizationId: orgId, estado: 'ACTIVO', monto: { gt: 0 }, ciclo: { not: 'UNICO' },
+      // Débito automático (Pagos & Portal, Fase 4): si el abono tiene una
+      // suscripción externa ACTIVA, lo cobra el proveedor (Whop/MP) por su
+      // cuenta cada ciclo y la factura se crea ya PAID vía webhook — este cron
+      // no lo toca, mismo criterio que saltear monthlyAmount cuando hay abono.
+      subStatus: { not: 'ACTIVO' },
+    },
     select: {
       id: true, nombre: true, monto: true, moneda: true, ciclo: true, estado: true,
       diaVencimiento: true, contratoInicio: true, contratoFin: true, createdAt: true,

@@ -178,11 +178,16 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
     where: { id: event.abonoId },
     select: {
       id: true, organizationId: true, nombre: true, monto: true, moneda: true,
-      diaVencimiento: true, empresaId: true,
+      diaVencimiento: true, empresaId: true, subStatus: true,
       empresa: { select: { id: true, name: true, isCliente: true } },
     },
   })
   if (!abono) return { ok: false, reason: 'abono inexistente' }
+
+  // El primer cobro recurrente confirma la autorización del débito.
+  if (event.status === 'APPROVED' && abono.subStatus && abono.subStatus !== 'ACTIVO') {
+    await prisma.servicioRecurrente.update({ where: { id: abono.id }, data: { subStatus: 'ACTIVO' } })
+  }
 
   // Reembolso de un cobro recurrente — sólo se registra + alerta (no hay una
   // factura "abierta" que revertir necesariamente).

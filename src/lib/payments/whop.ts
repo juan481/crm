@@ -163,13 +163,11 @@ interface WhopEventEnvelope {
 }
 
 /**
- * Verifica la firma y normaliza el evento. Devuelve null si:
- *  - falta el secreto (fail-closed) o headers de firma
- *  - la firma no valida
- *  - el timestamp está fuera de la ventana de tolerancia
- *  - el evento no es un pago que nos interese
+ * Verifica la firma del webhook. Devuelve el evento parseado si valida, o
+ * null si: falta el secreto (fail-closed), faltan headers de firma, la firma
+ * no valida, o el timestamp está fuera de la ventana de tolerancia.
  */
-export function verifyWhopWebhook(rawBody: string, headers: Headers): NormalizedPaymentEvent | null {
+export function verifyWhopSignature(rawBody: string, headers: Headers): WhopEventEnvelope | null {
   const env = whopEnv()
   if (!env) return null
 
@@ -200,14 +198,35 @@ export function verifyWhopWebhook(rawBody: string, headers: Headers): Normalized
   })
   if (!ok) return null
 
-  let evt: WhopEventEnvelope
   try {
-    evt = JSON.parse(rawBody) as WhopEventEnvelope
+    return JSON.parse(rawBody) as WhopEventEnvelope
   } catch {
     return null
   }
+}
 
-  return normalizeWhopEvent(evt)
+/** Verifica firma + normaliza un evento de PAGO. null si no es un pago que movamos. */
+export function verifyWhopWebhook(rawBody: string, headers: Headers): NormalizedPaymentEvent | null {
+  const evt = verifyWhopSignature(rawBody, headers)
+  return evt ? normalizeWhopEvent(evt) : null
+}
+
+/**
+ * Estado de suscripción de un abono a partir de un evento de membership de
+ * Whop YA verificado (verifyWhopSignature). null si el evento no cambia el
+ * estado de una suscripción de abono.
+ */
+export function parseWhopSubStatusEvent(evt: WhopEventEnvelope): { abonoId: string; status: 'ACTIVO' | 'CANCELADO' | 'PAUSADO' } | null {
+  const type = (evt.type || evt.action || '').toLowerCase()
+  const data = evt.data ?? {}
+  const meta = pickMetadata(data)
+  const abonoId = typeof meta.abonoId === 'string' ? meta.abonoId : undefined
+  if (!abonoId) return null
+
+  if (type.includes('went_valid') || type === 'membership.activated') return { abonoId, status: 'ACTIVO' }
+  if (type.includes('cancel') || type.includes('went_invalid') || type.includes('expired')) return { abonoId, status: 'CANCELADO' }
+  if (type.includes('paus')) return { abonoId, status: 'PAUSADO' }
+  return null
 }
 
 function normalizeWhopEvent(evt: WhopEventEnvelope): NormalizedPaymentEvent | null {

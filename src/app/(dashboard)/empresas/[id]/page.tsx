@@ -20,6 +20,7 @@ import { ContactoForm } from '@/components/directorio/contacto-form'
 import { EmpresaNotas, type EmpresaNotasHandle } from '@/components/directorio/empresa-notas'
 import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
 import { ServicioForm } from '@/components/servicios/servicio-form'
+import { AbonoDebitoBoton } from '@/components/servicios/abono-debito-boton'
 import { PortalAccesoCard } from '@/components/empresas/portal-acceso-card'
 import { ESTADO_LABEL } from '@/lib/servicios-recurrentes'
 import { useAuthStore } from '@/store/auth-store'
@@ -375,6 +376,16 @@ export default function EmpresaDetailPage() {
                         {s.contratoFin ? ` · hasta ${new Date(s.contratoFin).toLocaleDateString('es-AR')}` : ''}
                         {s.canalIngreso && s.canalIngreso !== 'CRM' ? ` · ${s.canalIngreso}` : ''}
                       </p>
+                      {s.estado !== 'BAJA' && (
+                        <AbonoDebitoBoton
+                          abonoId={s.id}
+                          subStatus={s.subStatus ?? null}
+                          subAuthUrl={s.subAuthUrl ?? null}
+                          ciclo={s.ciclo}
+                          canManage={canManage}
+                          onChange={() => qc.invalidateQueries({ queryKey: ['empresa', id] })}
+                        />
+                      )}
                     </div>
                     {canManage && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
