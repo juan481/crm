@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle, Download } from 'lucide-react'
+import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle, Download, Link as LinkIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -91,6 +91,10 @@ interface InvoiceRow {
   // recurring billing flow — always fall back to client in the UI.
   empresa: { id: string; name: string; address?: string | null; city?: string | null; province?: string | null } | null
   client:  { id: string; name: string } | null
+  // Cobro online (Pagos & Portal)
+  payToken?: string | null
+  paymentProvider?: string | null
+  payments?: { provider: string; status: string; createdAt: string }[]
 }
 interface InvoicesResponse {
   data: InvoiceRow[]; total: number; totalPages: number
@@ -160,6 +164,16 @@ export default function FacturasPage() {
       toast.success('Factura marcada como pagada')
       qc.invalidateQueries({ queryKey: ['invoices'] })
     } catch { toast.error('Error al actualizar') }
+  }
+
+  const copyPayLink = async (token: string) => {
+    const url = `${window.location.origin}/pagar/${token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Link de pago copiado')
+    } catch {
+      toast.error(url)
+    }
   }
 
   const handleExport = async () => {
@@ -294,6 +308,11 @@ export default function FacturasPage() {
               <button onClick={(e) => { e.stopPropagation(); setPreviewInvoice(row) }} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
                 <Eye size={11} /> Ver
               </button>
+              {canManage && row.status !== 'PAID' && row.status !== 'CANCELLED' && row.payToken && (
+                <button onClick={(e) => { e.stopPropagation(); copyPayLink(row.payToken!) }} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-all flex items-center gap-1">
+                  <LinkIcon size={11} /> Link de pago
+                </button>
+              )}
               {canManage && row.status !== 'PAID' && row.status !== 'CANCELLED' && (
                 <button onClick={(e) => { e.stopPropagation(); markAsPaid(row.id) }} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all">Marcar pagada</button>
               )}

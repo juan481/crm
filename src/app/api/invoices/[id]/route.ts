@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
 import { dateOnlyArgentina } from '@/lib/timezone'
+import { recordManualPayment } from '@/lib/payments/reconcile'
 
 interface Params { params: { id: string } }
 
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // si hay que setear/limpiar paidAt) — antes traía la fila completa.
     const existing = await prisma.invoice.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { paidAt: true, status: true },
+      select: { paidAt: true, status: true, amount: true, currency: true },
     })
     if (!existing) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
@@ -77,6 +78,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (amount !== undefined && !(Number(amount) > 0))
       return NextResponse.json({ error: 'El monto debe ser mayor a cero' }, { status: 400 })
 
+    // Si cambia el monto o la moneda, la URL de checkout cacheada (Whop/MP)
+    // apunta a un cobro con el valor viejo — se invalida para que se recree
+    // con el nuevo la próxima vez que alguien abra el link de pago.
+    const amountChanged = amount !== undefined && Number(amount) !== existing.amount
+    const currencyChanged = !!currency && currency !== existing.currency
+    const invalidateCheckout = amountChanged || currencyChanged
+
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
       data: {
@@ -86,6 +94,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(amount !== undefined && { amount: Number(amount) }),
         ...(currency && { currency }),
         ...(description !== undefined && { description }),
+        ...(invalidateCheckout && { checkoutUrl: null, checkoutRef: null }),
         // dateOnlyArgentina, no `new Date(dueDate)` — mismo fix que en el
         // POST de creación (src/app/api/invoices/route.ts), mismo motivo.
         ...(dueDate && (() => {
@@ -100,6 +109,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     })
 
     if (status === 'PAID' && existing.status !== 'PAID') {
+      // Conciliación MANUAL — deja rastro de Payment (provider MANUAL) igual
+      // que un cobro por pasarela, para que el detalle de la factura y los
+      // reportes de cobros no tengan un "agujero" cuando se paga por
+      // transferencia (Abba) o efectivo.
+      try {
+        await recordManualPayment({
+          invoiceId: invoice.id,
+          organizationId: payload.orgId,
+          amount: invoice.amount,
+          currency: invoice.currency,
+          note: 'Marcada como pagada manualmente desde Facturación',
+        })
+      } catch (err) {
+        console.error('[INVOICE PATCH] recordManualPayment falló:', err)
+      }
+
       fireWebhook(payload.orgId, 'invoice.paid', {
         id: invoice.id, amount: invoice.amount, currency: invoice.currency,
         description: invoice.description, empresa: invoice.empresa?.name ?? null, client: invoice.client?.name ?? null,

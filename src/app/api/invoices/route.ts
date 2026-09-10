@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
           // select y invoice-preview.tsx).
           empresa: { select: { id: true, name: true, address: true, city: true, province: true } },
           client:  { select: { id: true, name: true } },
+          // Último movimiento de pago (para el badge "Pago" de la lista).
+          payments: { orderBy: { createdAt: 'desc' }, take: 1, select: { provider: true, status: true, createdAt: true } },
         },
       }),
       prisma.invoice.count({ where }),

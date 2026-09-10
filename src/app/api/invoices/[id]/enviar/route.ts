@@ -28,6 +28,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     if (!inv) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
+    // Link de pago (Pagos & Portal) — se incluye en el mail sólo si la
+    // factura tiene payToken y todavía no está pagada.
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+    const payUrl = inv.payToken && inv.status !== 'PAID' && appUrl
+      ? `${appUrl}/pagar/${inv.payToken}`
+      : null
+
     // El destino sale SIEMPRE de los contactos de la empresa de la factura —
     // no se acepta un email libre del body (evita usar el SMTP de la org como
     // relay). Si el body trae uno, tiene que coincidir con un contacto.
@@ -58,11 +65,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const orgName = org.name || org.crmName || 'CRM'
     const numero = inv.numeroInterno ?? inv.id.slice(-8).toUpperCase()
+    const accent = org.primaryColor || '#6366f1'
+    const payButton = payUrl
+      ? `\n\n<a href="${payUrl}" style="display:inline-block;background:${accent};color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:10px;margin:8px 0">Pagar ahora</a>\n\nO copiá este link en el navegador:\n${payUrl}`
+      : ''
     const html = buildEmailHtml(
       `Factura ${numero}`,
-      `Adjuntamos la factura ${numero} por ${formatMoneyExact(inv.amount, inv.currency)}.\n\nVencimiento: ${new Date(inv.dueDate).toLocaleDateString('es-AR')}.\n\nGracias,\n${orgName}`,
+      `Adjuntamos la factura ${numero} por ${formatMoneyExact(inv.amount, inv.currency)}.\n\nVencimiento: ${new Date(inv.dueDate).toLocaleDateString('es-AR')}.${payButton}\n\nGracias,\n${orgName}`,
       orgName,
-      org.primaryColor || '#6366f1',
+      accent,
       org.secondaryColor || '#8b5cf6',
     )
     const base64Data = pdfBase64.includes(',') ? pdfBase64.split(',')[1] : pdfBase64
