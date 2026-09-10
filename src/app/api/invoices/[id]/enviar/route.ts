@@ -3,6 +3,8 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { formatMoneyExact } from '@/lib/utils'
+import { providerForCurrency } from '@/lib/payments/types'
+import { checkoutProviderConfigured } from '@/lib/payments/checkout'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -28,10 +30,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     if (!inv) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
 
-    // Link de pago (Pagos & Portal) — se incluye en el mail sólo si la
-    // factura tiene payToken y todavía no está pagada.
+    // Link de pago (Pagos & Portal) — se incluye en el mail SÓLO si: la factura
+    // tiene payToken, no está pagada, y el proveedor de pago que le
+    // correspondería por su moneda (Whop USD / MP ARS) está realmente
+    // configurado. Así, si el CRM se deploya sin las env vars de pago, el mail
+    // de factura sale igual que siempre, sin un botón que llevaría a un error.
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
-    const payUrl = inv.payToken && inv.status !== 'PAID' && appUrl
+    const provider = (inv.paymentProvider as 'WHOP' | 'MERCADOPAGO' | null) ?? providerForCurrency(inv.currency)
+    const payUrl = inv.payToken && inv.status !== 'PAID' && appUrl && checkoutProviderConfigured(provider)
       ? `${appUrl}/pagar/${inv.payToken}`
       : null
 

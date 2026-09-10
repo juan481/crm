@@ -96,7 +96,11 @@ con el deploy.
 4. El webhook del proveedor marca la factura **PAID**, deja nota en la empresa
    y te avisa por mail. (El redirect del browser NO es lo que confirma el pago.)
 5. Si sigue impaga: `payment-reminders` reenvía el link a los **3 y 7 días**
-   del vencimiento (sólo a facturas ya enviadas).
+   del vencimiento (sólo a facturas ya enviadas). **Opt-in por organización**:
+   sólo corre si el plugin `invoice-automation` tiene `remindersEnabled="true"`
+   en su config — el `seed-justcreate-billing.ts` lo deja seteado para Just
+   Create; ninguna otra organización (Abba, etc.) manda recordatorios sin
+   pedirlo.
 
 Transferencia (Abba): mismo mail; cuando llega la plata, **"Marcar pagada"** a
 mano — eso ahora también deja un `Payment` (provider `MANUAL`).

@@ -50,13 +50,16 @@ export async function GET(req: NextRequest) {
 
       const cfg = (await getPluginConfig(org.id, 'invoice-automation')) as
         | { remindersEnabled?: boolean | string; reminderDays?: string } | null
-      // Default: recordatorios ACTIVOS a los 3 y 7 días. Se apagan poniendo
-      // remindersEnabled en "false"/"off" (o false) en la config del plugin
-      // (PluginConfig.config guarda strings — ver ConfigModal).
-      const disabled = cfg?.remindersEnabled === false
-        || cfg?.remindersEnabled === 'false'
-        || cfg?.remindersEnabled === 'off'
-      if (disabled) continue
+      // OPT-IN a propósito: los recordatorios le mandan un mail AL CLIENTE
+      // final, así que ninguna organización que ya tiene el plugin
+      // invoice-automation prendido (ej. Abba) empieza a mandarlos sin
+      // pedirlo. Se activan poniendo remindersEnabled = "true" en la config
+      // del plugin (el seed de Just Create lo hace). PluginConfig.config
+      // guarda strings — ver ConfigModal.
+      const enabled = cfg?.remindersEnabled === true
+        || cfg?.remindersEnabled === 'true'
+        || cfg?.remindersEnabled === 'on'
+      if (!enabled) continue
       const reminderDays = parseDays(cfg?.reminderDays) ?? [3, 7]
 
       // 1) PENDING vencidas → OVERDUE

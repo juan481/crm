@@ -43,22 +43,23 @@ export async function billAbonosForOrg(
   }
 
   const abonos = await prisma.servicioRecurrente.findMany({
-    where: {
-      organizationId: orgId, estado: 'ACTIVO', monto: { gt: 0 }, ciclo: { not: 'UNICO' },
-      // Débito automático (Pagos & Portal, Fase 4): si el abono tiene una
-      // suscripción externa ACTIVA, lo cobra el proveedor (Whop/MP) por su
-      // cuenta cada ciclo y la factura se crea ya PAID vía webhook — este cron
-      // no lo toca, mismo criterio que saltear monthlyAmount cuando hay abono.
-      subStatus: { not: 'ACTIVO' },
-    },
+    where: { organizationId: orgId, estado: 'ACTIVO', monto: { gt: 0 }, ciclo: { not: 'UNICO' } },
     select: {
       id: true, nombre: true, monto: true, moneda: true, ciclo: true, estado: true,
-      diaVencimiento: true, contratoInicio: true, contratoFin: true, createdAt: true,
+      diaVencimiento: true, contratoInicio: true, contratoFin: true, createdAt: true, subStatus: true,
       empresa: { select: { id: true, name: true, isCliente: true } },
     },
   })
 
-  const due = abonos.filter((a) => abonoFacturaEsteMes(a as any, argToday))
+  const due = abonos.filter((a) =>
+    // Débito automático (Pagos & Portal, Fase 4): si el abono tiene una
+    // suscripción externa ACTIVA, lo cobra el proveedor (Whop/MP) por su cuenta
+    // cada ciclo y la factura se crea ya PAID vía webhook — este cron no lo
+    // toca. Filtro en JS (no en el where) a propósito: `subStatus` es null en
+    // todo abono anterior a Fase 4, y así no dependemos de cómo Prisma maneja
+    // `{ not }` sobre nulls.
+    a.subStatus !== 'ACTIVO' && abonoFacturaEsteMes(a as any, argToday),
+  )
   if (due.length === 0) return result
 
   const existing = await prisma.invoice.findMany({

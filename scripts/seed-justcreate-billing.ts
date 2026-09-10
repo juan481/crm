@@ -114,16 +114,17 @@ async function main() {
     }
   }
 
-  // Plugin invoice-automation
+  // Plugin invoice-automation + recordatorios de pago (opt-in por org).
+  const pluginConfig = JSON.stringify({ remindersEnabled: 'true', reminderDays: '3,7' })
   if (apply) {
     await db.pluginConfig.upsert({
       where: { pluginId_organizationId: { pluginId: 'invoice-automation', organizationId: org.id } },
-      update: { enabled: true },
-      create: { pluginId: 'invoice-automation', organizationId: org.id, enabled: true },
+      update: { enabled: true, config: pluginConfig },
+      create: { pluginId: 'invoice-automation', organizationId: org.id, enabled: true, config: pluginConfig },
     })
-    console.log('\nPlugin invoice-automation activado para', org.name)
+    console.log('\nPlugin invoice-automation + recordatorios activados para', org.name)
   } else {
-    console.log('\n(activaría el plugin invoice-automation)')
+    console.log('\n(activaría el plugin invoice-automation + recordatorios de pago)')
   }
 
   console.log(apply ? '\n✅ Listo.' : '\nDry-run. Corré con --apply.')
