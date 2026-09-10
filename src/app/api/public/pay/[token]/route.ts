@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (invoice.status === 'CANCELLED') return NextResponse.json({ error: 'Esta factura fue anulada' }, { status: 409 })
 
   try {
-    const { url } = await ensureInvoiceCheckout(invoice, invoice.organizationId)
+    const { url } = await ensureInvoiceCheckout(invoice, invoice.organizationId, req)
     return NextResponse.json({ data: { url } })
   } catch (err) {
     console.error('[PAY PUBLIC POST]', err)

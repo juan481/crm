@@ -6,6 +6,7 @@ import { isPluginEnabled, getPluginConfig } from '@/lib/plugins'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { formatMoneyExact } from '@/lib/utils'
 import { argentinaDayStart } from '@/lib/timezone'
+import { appBaseUrl } from '@/lib/app-url'
 import { paymentsEnabledForOrg } from '@/lib/payments/config'
 
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   const dryRun = req.nextUrl.searchParams.get('dryRun') === '1'
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const appUrl = appBaseUrl(req)
 
   try {
     const argToday = argentinaDayStart(new Date())

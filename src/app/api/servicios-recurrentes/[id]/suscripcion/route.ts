@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     : undefined
 
   try {
-    const { authUrl, provider } = await createAbonoSubscription(abono, payload.orgId, forced)
+    const { authUrl, provider } = await createAbonoSubscription(abono, payload.orgId, forced, req)
     return NextResponse.json({ data: { authUrl, provider } })
   } catch (err) {
     console.error('[ABONO SUSCRIPCION POST]', err)

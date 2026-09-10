@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { appBaseUrl } from '@/lib/app-url'
 import { providerForCurrency } from './types'
 import { paymentsEnabledForOrg } from './config'
 import { createWhopInvoiceCheckout, whopConfigured } from './whop'
@@ -45,6 +46,7 @@ async function payerEmailForEmpresa(orgId: string, empresaId: string | null): Pr
 export async function ensureInvoiceCheckout(
   invoice: InvoiceForCheckout,
   organizationId: string,
+  req?: { headers: Headers },
 ): Promise<CheckoutInfo> {
   // Candado multi-tenant: sólo las organizaciones habilitadas en
   // PAYMENTS_ORG_IDS pueden cobrar online.
@@ -62,7 +64,7 @@ export async function ensureInvoiceCheckout(
     throw new Error(`El proveedor de pago (${provider}) no está configurado`)
   }
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const appUrl = appBaseUrl(req)
   const concepto = invoice.description || 'Pago de servicios'
   const redirectUrl = `${appUrl}/pagar/${invoice.payToken}/gracias`
 

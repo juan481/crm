@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { appBaseUrl } from '@/lib/app-url'
 import { providerForCurrency, type PayProvider } from './types'
 import { paymentsEnabledForOrg } from './config'
 import { createWhopAbonoSubscription, whopConfigured } from './whop'
@@ -33,6 +34,7 @@ export async function createAbonoSubscription(
   abono: AbonoForSub,
   organizationId: string,
   forcedProvider?: PayProvider,
+  req?: { headers: Headers },
 ): Promise<{ authUrl: string; provider: PayProvider }> {
   if (!paymentsEnabledForOrg(organizationId)) {
     throw new Error('El cobro online no está habilitado para esta organización')
@@ -46,7 +48,7 @@ export async function createAbonoSubscription(
     throw new Error(`El proveedor (${provider}) no está configurado`)
   }
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const appUrl = appBaseUrl(req)
   const concepto = `${abono.nombre}`
   const backUrl = `${appUrl}/portal`
 

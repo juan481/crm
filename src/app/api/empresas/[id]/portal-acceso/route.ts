@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { appBaseUrl } from '@/lib/app-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
       },
     })
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+    const appUrl = appBaseUrl(req)
     if (org && isOrgEmailConfigured(org) && appUrl) {
       const orgName = org.name || org.crmName || 'CRM'
       const loginUrl = `${appUrl}/portal/login`
