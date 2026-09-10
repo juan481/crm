@@ -15,6 +15,17 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Oscurece un hex (#rrggbb) por un factor — para el degradé del header.
+function darken(hex: string, factor = 0.72): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return '#4338ca'
+  const n = parseInt(m[1], 16)
+  const r = Math.round(((n >> 16) & 255) * factor)
+  const g = Math.round(((n >> 8) & 255) * factor)
+  const b = Math.round((n & 255) * factor)
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`
+}
+
 // Muestra el monto con el código de moneda adelante para que no haya
 // ambigüedad (ARS y USD comparten el símbolo "$" en formato es-AR).
 function money(amount: number, currency: string): string {
@@ -89,7 +100,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const html = renderInvoiceEmail({
       orgName,
       logoUrl: org.logoUrl,
-      accent: org.primaryColor || '#16a34a',
+      accent: org.primaryColor || '#6366f1',
       numero,
       empresaName: inv.empresa?.name ?? null,
       concepto: inv.description ?? null,
@@ -138,64 +149,93 @@ interface InvoiceEmailData {
 }
 
 function renderInvoiceEmail(d: InvoiceEmailData): string {
-  const itemRows = d.items.length
-    ? d.items.map((it, i) => `
-      <tr style="background:${i % 2 ? '#f8fafc' : '#ffffff'}">
-        <td style="padding:10px 14px;font-size:13px;color:#1e293b">${esc(it.nombre)}${it.cantidad > 1 ? ` <span style="color:#94a3b8">×${it.cantidad}</span>` : ''}</td>
-        <td style="padding:10px 14px;font-size:13px;color:#1e293b;text-align:right;white-space:nowrap">${esc(money(it.subtotal, d.currency))}</td>
+  const FONT = "'Poppins',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+  // Color 100% de la organización (org.primaryColor). Fallback al default del
+  // sistema (#6366f1), nunca a un color de una marca concreta.
+  const accent = /^#[0-9a-f]{6}$/i.test(d.accent) ? d.accent : '#6366f1'
+  const accentDark = darken(accent, 0.68)
+  const rows = d.items.length ? d.items : [{ nombre: d.concepto || 'Servicios', cantidad: 1, subtotal: d.amount }]
+
+  const itemRows = rows.map((it, i) => `
+      <tr>
+        <td style="padding:12px 18px;font-size:13px;color:#1e293b;font-family:${FONT};border-top:${i ? '1px solid #eef2f6' : 'none'}">${esc(it.nombre)}${it.cantidad > 1 ? ` <span style="color:#94a3b8">× ${it.cantidad}</span>` : ''}</td>
+        <td style="padding:12px 18px;font-size:13px;color:#1e293b;font-family:${FONT};text-align:right;white-space:nowrap;border-top:${i ? '1px solid #eef2f6' : 'none'}">${esc(money(it.subtotal, d.currency))}</td>
       </tr>`).join('')
-    : `<tr><td style="padding:10px 14px;font-size:13px;color:#1e293b">${esc(d.concepto || 'Servicios')}</td>
-        <td style="padding:10px 14px;font-size:13px;color:#1e293b;text-align:right;white-space:nowrap">${esc(money(d.amount, d.currency))}</td></tr>`
 
   const totalsRows = (d.subtotal != null ? `
-      <tr><td style="padding:4px 14px;font-size:12px;color:#64748b;text-align:right">Subtotal</td>
-          <td style="padding:4px 14px;font-size:12px;color:#64748b;text-align:right;white-space:nowrap">${esc(money(d.subtotal, d.currency))}</td></tr>` : '')
+      <tr><td style="padding:5px 18px;font-size:12px;color:#64748b;font-family:${FONT};text-align:right;border-top:1px solid #eef2f6">Subtotal</td>
+          <td style="padding:5px 18px;font-size:12px;color:#64748b;font-family:${FONT};text-align:right;white-space:nowrap;border-top:1px solid #eef2f6">${esc(money(d.subtotal, d.currency))}</td></tr>` : '')
     + (d.iva ? `
-      <tr><td style="padding:4px 14px;font-size:12px;color:#64748b;text-align:right">IVA</td>
-          <td style="padding:4px 14px;font-size:12px;color:#64748b;text-align:right;white-space:nowrap">${esc(money(d.iva, d.currency))}</td></tr>` : '')
+      <tr><td style="padding:5px 18px;font-size:12px;color:#64748b;font-family:${FONT};text-align:right">IVA</td>
+          <td style="padding:5px 18px;font-size:12px;color:#64748b;font-family:${FONT};text-align:right;white-space:nowrap">${esc(money(d.iva, d.currency))}</td></tr>` : '')
+    + `
+      <tr><td style="padding:11px 18px;font-size:14px;font-weight:700;color:#0f172a;font-family:${FONT};text-align:right;border-top:2px solid #e2e8f0">Total</td>
+          <td style="padding:11px 18px;font-size:15px;font-weight:700;color:#0f172a;font-family:${FONT};text-align:right;white-space:nowrap;border-top:2px solid #e2e8f0">${esc(money(d.amount, d.currency))}</td></tr>`
 
   const payBlock = d.payUrl ? `
-    <tr><td style="padding:8px 28px 4px">
-      <a href="${d.payUrl}" style="display:block;background:${d.accent};color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;text-align:center;padding:14px 0;border-radius:12px">Pagar ahora</a>
+    <tr><td style="padding:26px 28px 6px">
+      <a href="${d.payUrl}" style="display:block;background:${accent};color:#ffffff;text-decoration:none;font-family:${FONT};font-weight:700;font-size:16px;text-align:center;padding:16px 0;border-radius:14px;box-shadow:0 6px 16px ${accent}33">Pagar ahora</a>
     </td></tr>
-    <tr><td style="padding:6px 28px 0;text-align:center;font-size:11px;color:#94a3b8">
-      Pago seguro. Si el botón no funciona, copiá este link:<br/>
+    <tr><td style="padding:8px 28px 0;text-align:center;font-size:11px;color:#94a3b8;font-family:${FONT}">
+      Pago seguro con tarjeta. Si el botón no abre, copiá este link:<br/>
       <a href="${d.payUrl}" style="color:#94a3b8;word-break:break-all">${d.payUrl}</a>
     </td></tr>` : ''
 
   const instrBlock = (!d.payUrl && d.paymentInstructions) ? `
-    <tr><td style="padding:8px 28px 0;font-size:12px;color:#64748b;line-height:1.6">
-      <strong style="color:#334155">Datos de pago:</strong><br/>${esc(d.paymentInstructions).replace(/\n/g, '<br/>')}
+    <tr><td style="padding:20px 28px 0">
+      <div style="background:#f8fafc;border-radius:12px;padding:14px 18px;font-size:12px;color:#475569;font-family:${FONT};line-height:1.7">
+        <strong style="color:#0f172a;display:block;margin-bottom:4px">Datos para el pago</strong>${esc(d.paymentInstructions).replace(/\n/g, '<br/>')}
+      </div>
     </td></tr>` : ''
 
-  const brandHead = d.logoUrl
-    ? `<img src="${d.logoUrl}" alt="${esc(d.orgName)}" style="max-height:36px;max-width:180px;display:block" />`
-    : `<span style="font-size:18px;font-weight:700;color:#0f172a">${esc(d.orgName)}</span>`
+  const logoChip = d.logoUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#ffffff;border-radius:12px;padding:8px 10px;line-height:0">
+         <img src="${d.logoUrl}" alt="${esc(d.orgName)}" width="30" height="30" style="display:block;width:30px;height:30px;object-fit:contain;border-radius:6px" />
+       </td></tr></table>`
+    : ''
 
   return `<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 12px">
+<html lang="es"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  @media only screen and (max-width:480px){
+    .card{border-radius:0 !important}
+    .pad{padding-left:20px !important;padding-right:20px !important}
+    .amount{font-size:30px !important}
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#eef3f0;font-family:${FONT}">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f0;padding:32px 10px">
     <tr><td align="center">
-      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)">
+      <table role="presentation" class="card" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 10px 40px rgba(15,23,42,.10)">
 
-        <tr><td style="padding:22px 28px;border-bottom:1px solid #e2e8f0">${brandHead}</td></tr>
-
-        <tr><td style="padding:24px 28px 4px">
-          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:1.5px;color:${d.accent};text-transform:uppercase">Factura ${esc(d.numero)}</p>
-          ${d.empresaName ? `<p style="margin:4px 0 0;font-size:13px;color:#64748b">Facturado a ${esc(d.empresaName)}</p>` : ''}
+        <tr><td style="background:linear-gradient(135deg,${accent},${accentDark});padding:26px 28px" class="pad">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td style="vertical-align:middle">${logoChip}</td>
+            <td style="vertical-align:middle;text-align:right;color:#ffffff;font-family:${FONT};font-weight:700;font-size:17px;letter-spacing:.2px">${esc(d.orgName)}</td>
+          </tr></table>
         </td></tr>
 
-        <tr><td style="padding:12px 28px 4px">
-          <p style="margin:0;font-size:13px;color:#64748b">Total a pagar</p>
-          <p style="margin:2px 0 0;font-size:32px;font-weight:800;color:#0f172a;letter-spacing:-.5px">${esc(money(d.amount, d.currency))}</p>
-          <p style="margin:4px 0 0;font-size:12px;color:#94a3b8">Vencimiento: ${esc(d.vence)}</p>
+        <tr><td style="padding:28px 28px 0" class="pad">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:2px;color:${accent};text-transform:uppercase;font-family:${FONT}">Factura ${esc(d.numero)}</p>
+          ${d.empresaName ? `<p style="margin:6px 0 0;font-size:13px;color:#64748b;font-family:${FONT}">Para ${esc(d.empresaName)}</p>` : ''}
         </td></tr>
 
-        <tr><td style="padding:16px 28px 4px">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
-            <tr style="background:#f1f5f9"><td style="padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.5px;color:#94a3b8;text-transform:uppercase">Concepto</td>
-              <td style="padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.5px;color:#94a3b8;text-transform:uppercase;text-align:right">Importe</td></tr>
+        <tr><td style="padding:18px 28px 0" class="pad">
+          <p style="margin:0;font-size:12px;color:#94a3b8;font-family:${FONT};text-transform:uppercase;letter-spacing:1px">Total a pagar</p>
+          <p class="amount" style="margin:4px 0 0;font-size:38px;font-weight:800;color:#0f172a;letter-spacing:-1px;font-family:${FONT}">${esc(money(d.amount, d.currency))}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#94a3b8;font-family:${FONT}">Vence el ${esc(d.vence)}</p>
+        </td></tr>
+
+        <tr><td style="padding:22px 28px 0" class="pad">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e6ebf0;border-radius:14px;overflow:hidden">
+            <tr style="background:#f7f9fb">
+              <td style="padding:10px 18px;font-size:10px;font-weight:700;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;font-family:${FONT}">Concepto</td>
+              <td style="padding:10px 18px;font-size:10px;font-weight:700;letter-spacing:1px;color:#94a3b8;text-transform:uppercase;text-align:right;font-family:${FONT}">Importe</td>
+            </tr>
             ${itemRows}
             ${totalsRows}
           </table>
@@ -204,13 +244,13 @@ function renderInvoiceEmail(d: InvoiceEmailData): string {
         ${payBlock}
         ${instrBlock}
 
-        <tr><td style="padding:16px 28px 24px;font-size:12px;color:#94a3b8;line-height:1.6">
-          Adjuntamos la factura en PDF. Cualquier duda respondé a este correo.<br/>
+        <tr><td style="padding:26px 28px 22px;font-size:12px;color:#94a3b8;line-height:1.7;font-family:${FONT}" class="pad">
+          Te adjuntamos la factura en PDF. Cualquier consulta, respondé este correo.<br/>
           — ${esc(d.orgName)}
         </td></tr>
 
-        <tr><td style="padding:14px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">
-          Enviado por ${esc(d.orgName)}
+        <tr><td style="padding:16px 28px;background:#f7f9fb;border-top:1px solid #eef2f6;text-align:center;font-size:11px;color:#b6c1cc;font-family:${FONT}">
+          Enviado por ${esc(d.orgName)} · No responder a este correo
         </td></tr>
       </table>
     </td></tr>

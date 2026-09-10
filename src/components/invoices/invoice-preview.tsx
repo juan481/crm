@@ -61,7 +61,7 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
     queryFn: async () => (await fetch(`/api/invoices/${invoice.id}`)).json().then((j) => j.data ?? null),
   })
 
-  const invoiceNumber = full?.numeroInterno ?? invoice.id.slice(-8).toUpperCase()
+  const invoiceNumber = full?.numeroInterno ?? `#${invoice.id.slice(-6).toUpperCase()}`
   const statusColor = STATUS_COLORS[invoice.status] ?? '#94a3b8'
   const statusLabel = STATUS_LABELS[invoice.status] ?? invoice.status
   const items = full?.items ?? []
@@ -78,16 +78,25 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
   const enviarPorMail = async () => {
     setSending(true)
     try {
+      // El PDF sale con el color / logo / nombre de la organización activa
+      // (Abba, Just Create, cualquiera). Si la query de branding todavía no
+      // resolvió cuando se toca "Enviar", se pide acá — sin esto el PDF salía
+      // con el fallback violeta y "Empresa" (bug real).
+      let orgData = org
+      if (!orgData?.primaryColor || !orgData?.name) {
+        orgData = await fetch('/api/settings/branding').then(r => r.json()).then(j => j.data ?? null).catch(() => null) ?? orgData
+      }
+
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pw = 210, mg = 20, cw = pw - mg * 2
-      const hex = (org?.primaryColor || '#6366f1').replace('#', '')
-      const pr = parseInt(hex.slice(0, 2), 16), pg = parseInt(hex.slice(2, 4), 16), pb = parseInt(hex.slice(4, 6), 16)
-      const logo = await loadLogoForPdf(org?.logoUrl)
+      const hex = ((orgData?.primaryColor || '#6366f1').replace('#', '') + '000000').slice(0, 6)
+      const pr = parseInt(hex.slice(0, 2), 16) || 99, pg = parseInt(hex.slice(2, 4), 16) || 102, pb = parseInt(hex.slice(4, 6), 16) || 241
+      const logo = await loadLogoForPdf(orgData?.logoUrl)
 
       const headerH = drawPdfHeader(doc, {
         pw, mg, pr, pg, pb, logo,
-        orgName: org?.name || org?.crmName || 'Empresa',
+        orgName: orgData?.name || orgData?.crmName || 'Empresa',
         kicker: 'Factura',
         dateLabel: new Date(invoice.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
       })
@@ -128,12 +137,16 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
       doc.text(formatMoneyExact(invoice.amount, invoice.currency), mg + cw - 2, y + 1, { align: 'right' })
       y += 14
 
-      if (org?.paymentInstructions) {
+      if (orgData?.paymentInstructions) {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139)
-        doc.text(doc.splitTextToSize(`Pago: ${org.paymentInstructions}`, cw), mg, y)
+        doc.text(doc.splitTextToSize(`Pago: ${orgData.paymentInstructions}`, cw), mg, y)
         y += 16
       }
-      drawBrandedFooter(doc, { pw, mg, y, pr, pg, pb, leftText: org?.name || org?.crmName || '' })
+      drawBrandedFooter(doc, {
+        pw, mg, y, pr, pg, pb,
+        leftText: orgData?.name || orgData?.crmName || '',
+        brandLabel: `Factura emitida el ${new Date(invoice.createdAt).toLocaleDateString('es-AR')}`,
+      })
 
       const pdfBase64 = doc.output('datauristring') as unknown as string
       // Vercel corta el request body en ~4.5 MB (413, "Request Entity Too
@@ -196,7 +209,7 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={org.logoUrl} alt={org.name} className="h-12 w-auto object-contain" />
                 ) : (
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-xl" style={{ background: org?.primaryColor || '#64748b' }}>
                     {(org?.name ?? org?.crmName ?? 'C').charAt(0)}
                   </div>
                 )}

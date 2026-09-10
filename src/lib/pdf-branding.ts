@@ -240,21 +240,33 @@ export function drawNotesBox(doc: jsPDF, opts: {
 const BRAND_URL   = 'https://justcreate.com.ar'
 const BRAND_LABEL = 'Cotización realizada con JustCRM, by JustCreate'
 
-/** Draws the standard three-column footer with a clickable JustCreate credit. */
+/**
+ * Draws the standard three-column footer.
+ * `brandLabel` reemplaza el crédito del centro (default: "Cotización realizada
+ * con JustCRM…") — las facturas le pasan su propio texto para no decir
+ * "Cotización". Si se pasa un `brandLabel`, se muestra en gris y sin link (no
+ * es el crédito del producto, es una nota del documento).
+ */
 export function drawBrandedFooter(
   doc: jsPDF,
-  opts: { pw: number; mg: number; y: number; leftText: string; pr: number; pg: number; pb: number },
+  opts: { pw: number; mg: number; y: number; leftText: string; pr: number; pg: number; pb: number; brandLabel?: string },
 ) {
-  const { pw, mg, y, leftText, pr, pg, pb } = opts
+  const { pw, mg, y, leftText, pr, pg, pb, brandLabel } = opts
   doc.setDrawColor(226, 232, 240)
   doc.line(mg, y, pw - mg, y)
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184)
   doc.text(leftText, mg, y + 6)
 
-  doc.setFont('helvetica', 'bold'); doc.setTextColor(pr, pg, pb)
-  const labelWidth = doc.getTextWidth(BRAND_LABEL)
-  doc.textWithLink(BRAND_LABEL, pw / 2 - labelWidth / 2, y + 6, { url: BRAND_URL })
+  if (brandLabel) {
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184)
+    const w = doc.getTextWidth(brandLabel)
+    doc.text(brandLabel, pw / 2 - w / 2, y + 6)
+  } else {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(pr, pg, pb)
+    const labelWidth = doc.getTextWidth(BRAND_LABEL)
+    doc.textWithLink(BRAND_LABEL, pw / 2 - labelWidth / 2, y + 6, { url: BRAND_URL })
+  }
 
   doc.setFont('helvetica', 'normal'); doc.setTextColor(148, 163, 184)
   doc.text('Pág. 1 / 1', pw - mg, y + 6, { align: 'right' })
