@@ -18,6 +18,7 @@ interface Alerta {
   origen: string
   compraId: string | null
   estado: string
+  nota: string | null
   createdAt: string
   product: { id: string; name: string; sku: string | null; currency: string }
 }
@@ -84,43 +85,61 @@ export function AlertasTab() {
         <div className="space-y-2">
           {alertas.map((a) => {
             const sube = a.costoNuevo > a.costoAnterior
+            const sospechosa = !!a.nota
             return (
-              <div key={a.id} className="rounded-xl p-3 flex items-center gap-3 flex-wrap" style={{ border: '1px solid var(--color-border)' }}>
-                <div className="flex-1 min-w-[200px]">
-                  <div className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{a.product.name}</div>
-                  <div className="text-[11px] flex items-center gap-1.5" style={{ color: 'var(--color-text-subtle)' }}>
-                    {a.product.sku && <span>{a.product.sku}</span>}
-                    <span className="inline-flex items-center gap-0.5">
-                      {a.origen === 'COMPRA' ? <ShoppingCart size={10} /> : <RefreshCw size={10} />}
-                      {a.origen === 'COMPRA' ? 'compra' : 'catálogo'}
+              <div key={a.id} className="rounded-xl p-3" style={{ border: sospechosa ? '1px solid rgba(245,158,11,0.4)' : '1px solid var(--color-border)', background: sospechosa ? 'rgba(245,158,11,0.06)' : undefined }}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
+                    <div className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{a.product.name}</div>
+                    <div className="text-[11px] flex items-center gap-1.5" style={{ color: 'var(--color-text-subtle)' }}>
+                      {a.product.sku && <span>{a.product.sku}</span>}
+                      <span className="inline-flex items-center gap-0.5">
+                        {a.origen === 'COMPRA' ? <ShoppingCart size={10} /> : <RefreshCw size={10} />}
+                        {a.origen === 'COMPRA' ? 'compra' : 'catálogo'}
+                      </span>
+                      <span>{new Date(a.createdAt).toLocaleDateString('es-AR')}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <span style={{ color: 'var(--color-text-subtle)' }}>{formatMoneyExact(a.costoAnterior, a.product.currency)}</span>
+                    <span className="inline-flex items-center gap-0.5 font-semibold" style={{ color: sube ? '#ef4444' : '#10b981' }}>
+                      {sube ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+                      {formatMoneyExact(a.costoNuevo, a.product.currency)}
                     </span>
-                    <span>{new Date(a.createdAt).toLocaleDateString('es-AR')}</span>
+                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: sospechosa ? 'rgba(245,158,11,0.15)' : sube ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)', color: sospechosa ? '#f59e0b' : sube ? '#ef4444' : '#10b981' }}>
+                      {a.variacionPct > 0 ? '+' : ''}{a.variacionPct}%
+                    </span>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 text-sm">
-                  <span style={{ color: 'var(--color-text-subtle)' }}>{formatMoneyExact(a.costoAnterior, a.product.currency)}</span>
-                  <span className="inline-flex items-center gap-0.5 font-semibold" style={{ color: sube ? '#ef4444' : '#10b981' }}>
-                    {sube ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
-                    {formatMoneyExact(a.costoNuevo, a.product.currency)}
-                  </span>
-                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full" style={{ background: sube ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.12)', color: sube ? '#ef4444' : '#10b981' }}>
-                    {a.variacionPct > 0 ? '+' : ''}{a.variacionPct}%
-                  </span>
+                  {a.estado === 'PENDIENTE' ? (
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => act(a.id, 'descartar')} disabled={busyId === a.id}
+                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium"
+                        style={sospechosa
+                          ? { background: 'var(--color-primary)', color: '#fff' }
+                          : { color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
+                        <X size={13} /> Descartar
+                      </button>
+                      <button onClick={() => { if (!sospechosa || confirm('Esta alerta parece un error de moneda o de carga. ¿Aplicar el costo nuevo igual?')) act(a.id, 'aplicar') }}
+                        disabled={busyId === a.id}
+                        className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg font-medium"
+                        style={sospechosa
+                          ? { color: '#f59e0b', border: '1px solid rgba(245,158,11,0.4)' }
+                          : { background: 'var(--color-primary)', color: '#fff' }}>
+                        <Check size={13} /> Aplicar
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
+                      {a.estado === 'APLICADA' ? 'Aplicada' : 'Descartada'}
+                    </span>
+                  )}
                 </div>
-
-                {a.estado === 'PENDIENTE' ? (
-                  <div className="flex items-center gap-1.5">
-                    <Button size="sm" onClick={() => act(a.id, 'aplicar')} loading={busyId === a.id} leftIcon={<Check size={13} />}>Aplicar</Button>
-                    <button onClick={() => act(a.id, 'descartar')} disabled={busyId === a.id}
-                      className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}>
-                      <X size={13} /> Descartar
-                    </button>
-                  </div>
-                ) : (
-                  <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                    {a.estado === 'APLICADA' ? 'Aplicada' : 'Descartada'}
-                  </span>
+                {a.nota && (
+                  <p className="text-[11px] mt-2 flex items-start gap-1.5" style={{ color: '#b45309' }}>
+                    <AlertTriangle size={12} className="shrink-0 mt-0.5" /> {a.nota}
+                  </p>
                 )}
               </div>
             )

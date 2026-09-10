@@ -2,14 +2,24 @@ import { registrarMovimiento } from '@/lib/stock'
 
 // Umbral para crear una AlertaCosto — abs(Δ) > 1 centavo Y variación >= minPct
 // (default 0,5%). Filtra ruido de redondeo sin dejar pasar un cambio real.
+// `nuevo` <= 0 no cuenta: un costo en 0 casi siempre es una celda vacía / un
+// dato que no se leyó, no "el producto ahora es gratis".
 export function esCambioDeCostoRelevante(
   anterior: number | null | undefined,
   nuevo: number | null | undefined,
   minPct = 0.005,
 ): boolean {
-  if (anterior == null || anterior <= 0 || nuevo == null) return false
+  if (anterior == null || anterior <= 0 || nuevo == null || nuevo <= 0) return false
   if (Math.abs(nuevo - anterior) <= 0.01) return false
   return Math.abs((nuevo - anterior) / anterior) >= minPct
+}
+
+// Variación tan grande que es casi seguro un error de carga o una mezcla de
+// monedas (USD vs ARS) en la planilla del proveedor, no un cambio de precio
+// real. Se sigue avisando, pero marcado como sospechoso y sin auto-aplicar.
+export function esVariacionAbsurda(anterior: number, nuevo: number): boolean {
+  if (!anterior || anterior <= 0) return false
+  return Math.abs((nuevo - anterior) / anterior) >= 5 // ±500%
 }
 
 export function variacionPct(anterior: number, nuevo: number): number {
@@ -130,12 +140,13 @@ export async function confirmarCompra(
   let movimientos = 0
   let alertas = 0
 
-  // Productos referenciados — para leer costo/trackStock actuales.
+  // Productos referenciados — para leer costo/moneda/trackStock actuales.
   const productIds = Array.from(new Set(compra.items.map((i: any) => i.productId).filter(Boolean))) as string[]
   const productos = productIds.length
-    ? await tx.product.findMany({ where: { id: { in: productIds }, organizationId: orgId }, select: { id: true, costo: true, price: true, precioGremio: true, trackStock: true } })
+    ? await tx.product.findMany({ where: { id: { in: productIds }, organizationId: orgId }, select: { id: true, costo: true, currency: true, price: true, precioGremio: true, trackStock: true } })
     : []
   const prodById = new Map<string, any>(productos.map((p: any) => [p.id, p]))
+  const monedaCompra = (compra.moneda || 'ARS').toUpperCase()
 
   for (const it of compra.items) {
     if (!it.productId) continue
@@ -164,12 +175,19 @@ export async function confirmarCompra(
     const costoAnterior = prod.costo as number | null
     await tx.compraItem.update({ where: { id: it.id }, data: { costoAnterior } })
 
-    if (esCambioDeCostoRelevante(costoAnterior, it.costoUnitario)) {
+    // Sólo se compara si el costo guardado está en la MISMA moneda que la
+    // factura — comparar USD 16 contra ARS 25.000 da "subió 156.000%", que
+    // es ruido, no una alerta útil.
+    const monedaProd = (prod.currency || 'USD').toUpperCase()
+    const mismaMoneda = monedaProd === monedaCompra
+
+    if (mismaMoneda && esCambioDeCostoRelevante(costoAnterior, it.costoUnitario)) {
       const yaHay = await tx.alertaCosto.findFirst({
         where: { organizationId: orgId, productId: it.productId, estado: 'PENDIENTE' },
         select: { id: true },
       })
       if (!yaHay) {
+        const raro = esVariacionAbsurda(costoAnterior as number, it.costoUnitario)
         await tx.alertaCosto.create({
           data: {
             organizationId: orgId,
@@ -178,6 +196,7 @@ export async function confirmarCompra(
             costoNuevo: it.costoUnitario,
             variacionPct: variacionPct(costoAnterior as number, it.costoUnitario),
             origen: 'COMPRA',
+            nota: raro ? 'Variación muy grande — revisá que la factura y el costo del catálogo estén en la misma moneda antes de aplicar.' : null,
             compraId: compra.id,
           },
         })

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
         where: { organizationId: org.id, estado: 'PENDIENTE' },
         orderBy: { createdAt: 'desc' },
         select: {
-          costoAnterior: true, costoNuevo: true, variacionPct: true, origen: true,
+          costoAnterior: true, costoNuevo: true, variacionPct: true, origen: true, nota: true,
           product: { select: { name: true, sku: true, currency: true } },
         },
       })
@@ -58,18 +58,23 @@ export async function GET(req: NextRequest) {
 
       if (!dryRun && !(await claimCronRun(JOB_NAME, org.id, today))) { orgsSkippedAlreadySent++; continue }
 
+      const sospechosas = alertas.filter((a: any) => a.nota).length
       const lines = alertas.slice(0, 40).map((a: any) => {
         const cur = a.product?.currency || 'ARS'
         const flecha = a.costoNuevo > a.costoAnterior ? '▲' : '▼'
         const origen = a.origen === 'COMPRA' ? 'compra' : 'catálogo'
-        return `• ${a.product?.name ?? 'Producto'} — ${formatMoneyExact(a.costoAnterior, cur)} → ${formatMoneyExact(a.costoNuevo, cur)} ${flecha} ${a.variacionPct > 0 ? '+' : ''}${a.variacionPct}% (${origen})`
+        const flag = a.nota ? ' ⚠ revisar (posible error de moneda/carga)' : ''
+        return `• ${a.product?.name ?? 'Producto'} — ${formatMoneyExact(a.costoAnterior, cur)} → ${formatMoneyExact(a.costoNuevo, cur)} ${flecha} ${a.variacionPct > 0 ? '+' : ''}${a.variacionPct}% (${origen})${flag}`
       }).join('\n')
       const extra = alertas.length > 40 ? `\n…y ${alertas.length - 40} más.` : ''
 
       const orgName = org.name || org.crmName || 'CRM'
+      const aviso = sospechosas > 0
+        ? `\n\n${sospechosas} de estas tienen una variación rara (probable mezcla de monedas o error en la planilla del proveedor) — están marcadas con ⚠ y NO se aplicaron.`
+        : ''
       const html = buildEmailHtml(
         `${alertas.length} alerta${alertas.length !== 1 ? 's' : ''} de costo pendiente${alertas.length !== 1 ? 's' : ''}`,
-        `${lines}${extra}\n\nEntrá a Depósito → Stock → Alertas en el CRM para aplicarlas o descartarlas.`,
+        `${lines}${extra}${aviso}\n\nEntrá a Depósito → Stock → Alertas en el CRM para aplicarlas o descartarlas.`,
         orgName,
         org.primaryColor || '#6366f1',
         org.secondaryColor || '#8b5cf6',

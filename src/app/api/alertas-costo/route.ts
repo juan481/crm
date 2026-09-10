@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
         where, orderBy: { createdAt: 'desc' }, skip, take: limit,
         select: {
           id: true, costoAnterior: true, costoNuevo: true, precioAnterior: true, precioNuevo: true,
-          variacionPct: true, origen: true, compraId: true, estado: true, createdAt: true,
+          variacionPct: true, origen: true, compraId: true, estado: true, nota: true, createdAt: true,
           product: { select: { id: true, name: true, sku: true, currency: true } },
         },
       }),

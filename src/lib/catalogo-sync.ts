@@ -42,6 +42,32 @@ export interface CatalogSyncResult {
    * reportan, nunca se desactivan solos (ver decisión de conflictos en el
    * plan: un ADMIN decide a mano si de verdad hay que dar de baja algo). */
   skusNotSeenThisRun?: string[]
+  /** Productos donde el Sheet trajo un costo/precio vacío o 0 y se conservó
+   * el valor anterior (celda en blanco o texto en la planilla del proveedor). */
+  preciosVaciosConservados?: number
+  /** Productos donde el costo cambió >500% (casi seguro mezcla USD/ARS en la
+   * planilla) — se conservó el valor anterior y se generó una alerta. */
+  preciosAbsurdosConservados?: number
+}
+
+// Decide qué valor de costo/precio escribir: si el Sheet trae null/0/negativo
+// o un salto absurdo (>500% respecto de lo que había), se CONSERVA el valor
+// anterior — una celda vacía o una mezcla de monedas en la planilla del
+// proveedor no debe corromper el costo del catálogo (que alimenta el margen
+// de las cotizaciones). Devuelve el valor a persistir + por qué se conservó.
+export function precioSaneado(
+  nuevo: number | null | undefined,
+  anterior: number | null | undefined,
+): { valor: number | null; conservado: 'vacio' | 'absurdo' | null } {
+  const ant = typeof anterior === 'number' && Number.isFinite(anterior) ? anterior : null
+  if (nuevo == null || !Number.isFinite(nuevo) || nuevo <= 0) {
+    // Sólo se "conserva" (y se reporta) si había un valor real que proteger.
+    return { valor: ant, conservado: ant != null && ant > 0 ? 'vacio' : null }
+  }
+  if (ant != null && ant > 0 && Math.abs((nuevo - ant) / ant) >= 5) {
+    return { valor: ant, conservado: 'absurdo' }
+  }
+  return { valor: nuevo, conservado: null }
 }
 
 const COMPARABLE_FIELDS = [
@@ -178,19 +204,72 @@ export async function syncCatalogFromGoogleSheet(
 
   let processed = 0
   let written = 0
+  let preciosVaciosConservados = 0
+  let preciosAbsurdosConservados = 0
   await mapWithConcurrency(normalizedRows, UPSERT_CONCURRENCY, async (normalized, i) => {
     const categoryId = categoryIdByRow[i]
+    const existing = existingBySku.get(normalized.sku)
+
+    // Blindaje de costo/precios: una celda vacía, un 0, o un salto absurdo
+    // (>500%, típicamente USD vs ARS mezclados) en la planilla del proveedor
+    // NO deben pisar lo que ya tenemos — corrompen el margen del cotizador.
+    const costoRes  = precioSaneado(normalized.costo, existing?.costo)
+    const priceRes  = precioSaneado(normalized.price, existing?.price)
+    const gremioRes = precioSaneado(normalized.precioGremio, existing?.precioGremio)
+    if (existing) {
+      if (costoRes.conservado === 'vacio' || priceRes.conservado === 'vacio' || gremioRes.conservado === 'vacio') preciosVaciosConservados++
+      if (costoRes.conservado === 'absurdo' || priceRes.conservado === 'absurdo' || gremioRes.conservado === 'absurdo') preciosAbsurdosConservados++
+    }
+
     const candidate: Record<string, unknown> = {
       name: normalized.name, description: normalized.description, brand: normalized.brand, mpn: normalized.mpn,
-      categoryId, costo: normalized.costo, ivaPct: normalized.ivaPct, precioGremio: normalized.precioGremio,
-      price: normalized.price ?? 0, supplier: normalized.supplier, supplierAvailability: normalized.supplierAvailability,
+      categoryId, costo: costoRes.valor, ivaPct: normalized.ivaPct, precioGremio: gremioRes.valor,
+      price: priceRes.valor ?? 0, supplier: normalized.supplier, supplierAvailability: normalized.supplierAvailability,
       // Número parseado de la disponibilidad del proveedor (si el texto es un
       // número); alimenta la "disponibilidad total unificada". NO está en
       // COMPARABLE_FIELDS a propósito — no dispara escrituras por sí solo,
       // pero se actualiza cada vez que la fila se escribe por otro motivo.
       supplierStock: parseSupplierStock(normalized.supplierAvailability),
     }
-    const existing = existingBySku.get(normalized.sku)
+
+    // Alerta de cambio de costo (origen SYNC) — se evalúa ANTES del posible
+    // skip, porque un salto absurdo que conservamos puede ser el único
+    // "cambio" de la fila y hay que avisarlo igual. Dos casos:
+    //  - el costo cambió de verdad (>= 1%) en moneda coherente → alerta normal.
+    //  - el Sheet trajo un salto absurdo que NO aplicamos → alerta con nota.
+    // Una celda vacía (conservado === 'vacio') NO genera alerta (mucho ruido).
+    const anteriorCosto = existing?.costo as number | null
+    const cambioReal = !!existing?.id && costoRes.conservado == null &&
+      esCambioDeCostoRelevante(anteriorCosto, normalized.costo, 0.01)
+    const cambioAbsurdo = !!existing?.id && costoRes.conservado === 'absurdo'
+    if (cambioReal || cambioAbsurdo) {
+      try {
+        const yaHay = await db.alertaCosto.findFirst({
+          where: { organizationId: orgId, productId: existing.id, estado: 'PENDIENTE' },
+          select: { id: true },
+        })
+        if (!yaHay) {
+          await db.alertaCosto.create({
+            data: {
+              organizationId: orgId,
+              productId: existing.id,
+              costoAnterior: anteriorCosto as number,
+              costoNuevo: normalized.costo as number,
+              precioAnterior: (existing.price as number) ?? null,
+              precioNuevo: normalized.price ?? null,
+              variacionPct: variacionPct(anteriorCosto as number, normalized.costo as number),
+              origen: 'SYNC',
+              nota: cambioAbsurdo
+                ? 'La planilla del proveedor trajo un salto de más de 500% — probable mezcla de monedas (USD/ARS) o error de carga. NO se actualizó el costo; corregí la planilla o aplicá el valor a mano si es correcto.'
+                : null,
+            },
+          })
+        }
+      } catch (err) {
+        console.error('[CATALOGO SYNC] no se pudo crear la alerta de costo', normalized.sku, err)
+      }
+    }
+
     // Ya existe, ya vino de Sheets antes (no una migración desde
     // EXCEL_IMPORT) y ningún campo comparable cambió → nada que escribir.
     if (existing && existing.catalogSource === 'GOOGLE_SHEETS' && !hasRelevantChange(existing as Record<string, unknown>, candidate)) {
@@ -222,36 +301,6 @@ export async function syncCatalogFromGoogleSheet(
     })
     processed++
     written++
-
-    // Alerta de cambio de costo (origen SYNC) — sólo si ya existía el
-    // producto y el costo se movió >= 1%. Dedupe: no crear otra si ya hay
-    // una PENDIENTE para ese producto. El costo del Product ya quedó
-    // actualizado arriba; la alerta es para que un ADMIN lo revise (el costo
-    // alimenta el margen de las cotizaciones).
-    if (existing?.id && esCambioDeCostoRelevante(existing.costo as number | null, normalized.costo, 0.01)) {
-      try {
-        const yaHay = await db.alertaCosto.findFirst({
-          where: { organizationId: orgId, productId: existing.id, estado: 'PENDIENTE' },
-          select: { id: true },
-        })
-        if (!yaHay) {
-          await db.alertaCosto.create({
-            data: {
-              organizationId: orgId,
-              productId: existing.id,
-              costoAnterior: existing.costo as number,
-              costoNuevo: normalized.costo as number,
-              precioAnterior: (existing.price as number) ?? null,
-              precioNuevo: normalized.price ?? null,
-              variacionPct: variacionPct(existing.costo as number, normalized.costo as number),
-              origen: 'SYNC',
-            },
-          })
-        }
-      } catch (err) {
-        console.error('[CATALOGO SYNC] no se pudo crear la alerta de costo', normalized.sku, err)
-      }
-    }
   })
 
   const existingSkus = await prisma.product.findMany({
@@ -271,5 +320,7 @@ export async function syncCatalogFromGoogleSheet(
     skippedNoSku,
     categoriesSeen: seenCategoryPaths.size,
     skusNotSeenThisRun,
+    preciosVaciosConservados,
+    preciosAbsurdosConservados,
   }
 }
