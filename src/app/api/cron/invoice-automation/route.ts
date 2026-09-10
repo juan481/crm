@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { isAuthorizedCronRequest } from '@/lib/cron-auth'
 import { claimCronRun } from '@/lib/idempotency'
-import { isPluginEnabled } from '@/lib/plugins'
+import { isPluginEnabled, getPluginConfig } from '@/lib/plugins'
 import { billAbonosForOrg, empresasConAbono } from '@/lib/billing-recurrente'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
+import { sendInvoiceEmail } from '@/lib/invoice-email'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
+
+function cfgTrue(v: unknown): boolean {
+  return v === true || v === 'true' || v === 'on' || v === '1'
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +74,15 @@ export async function GET(req: NextRequest) {
       if (!(await isPluginEnabled(org.id, 'invoice-automation'))) { orgsSkippedDisabled++; continue }
       const orgName = org.name || org.crmName || 'CRM'
 
+      // Config del plugin (por organización, opt-in):
+      //  - dueSameMonth: vence el día `diaVencimiento` de ESTE mes (default: mes siguiente)
+      //  - autoSend: manda la factura al cliente sola (default: queda Pendiente para revisar)
+      const cfg = (await getPluginConfig(org.id, 'invoice-automation')) as
+        | { dueSameMonth?: unknown; autoSend?: unknown } | null
+      const dueSameMonth = cfgTrue(cfg?.dueSameMonth)
+      const autoSend = cfgTrue(cfg?.autoSend)
+      const legacyDueDate = dueSameMonth ? dateOnlyArgentina(y, m, 5) : dueDate
+
       // 1) Abonos (ServicioRecurrente) por su ciclo — un anual factura una vez
       //    al año, un mensual todos los meses, etc. billAbonosForOrg es
       //    idempotente: no duplica si ya se facturó ese abono este mes.
@@ -112,26 +126,47 @@ export async function GET(req: NextRequest) {
       // nuevo. Ver modelo CronRun.
       if (!(await claimCronRun(JOB_NAME, org.id, startOfMonth))) { orgsSkippedAlreadySent++; continue }
 
-      const abonoRes = await billAbonosForOrg(org.id, {})
+      const abonoRes = await billAbonosForOrg(org.id, { dueSameMonth })
       invoicesCreated += abonoRes.created
+      const createdIds = [...abonoRes.createdInvoiceIds]
 
       let legacyCreated = 0
       if (legacyPending.length > 0) {
-        // createMany en vez de $transaction(array de creates) — este último NO
-        // paraleliza, ejecuta cada create como un INSERT secuencial.
-        const created = await prisma.invoice.createMany({
-          data: legacyPending.map((e) => ({
-            empresaId: e.id,
-            organizationId: org.id,
-            amount: e.monthlyAmount ?? 0,
-            currency: e.billingCurrency || 'USD',
-            description: `Facturación recurrente — ${monthName}`,
-            dueDate,
-            status: 'PENDING' as const,
-          })),
-        })
-        legacyCreated = created.count
+        for (const e of legacyPending) {
+          const inv = await prisma.invoice.create({
+            data: {
+              empresaId: e.id,
+              organizationId: org.id,
+              amount: e.monthlyAmount ?? 0,
+              currency: e.billingCurrency || 'USD',
+              description: `Facturación recurrente — ${monthName}`,
+              dueDate: legacyDueDate,
+              status: 'PENDING' as const,
+            },
+            select: { id: true },
+          })
+          createdIds.push(inv.id)
+          legacyCreated++
+        }
         invoicesCreated += legacyCreated
+      }
+
+      // Auto-envío al cliente (opt-in). Sin PDF adjunto — el mail lleva el
+      // detalle + el botón "Pagar ahora". Best-effort: si un envío falla, no
+      // frena el resto ni la corrida.
+      let autoSent = 0
+      const autoSendFails: string[] = []
+      if (autoSend) {
+        for (const invId of createdIds) {
+          try {
+            const r = await sendInvoiceEmail({ invoiceId: invId, organizationId: org.id, req })
+            if (r.ok) autoSent++
+            else autoSendFails.push(r.error ?? 'error')
+          } catch (err) {
+            console.error('[CRON INVOICE-AUTOMATION] auto-envío falló:', invId, err)
+            autoSendFails.push('excepción')
+          }
+        }
       }
 
       const totalCreated = abonoRes.created + legacyCreated
@@ -145,9 +180,12 @@ export async function GET(req: NextRequest) {
             ...abonoRes.items.map((it) => `• ${it.empresa} — ${it.concepto} — ${it.currency} ${it.amount.toLocaleString('es-AR')}`),
             ...legacyPending.map((e) => `• ${e.name} — ${e.billingCurrency || 'USD'} ${(e.monthlyAmount ?? 0).toLocaleString('es-AR')}`),
           ].join('\n')
+          const cierre = autoSend
+            ? `${autoSent} de ${totalCreated} se enviaron solas al cliente por mail${autoSendFails.length ? ` (${autoSendFails.length} fallaron — revisalas en Facturación)` : ''}.`
+            : 'Quedaron en estado "Pendiente" — entrá a Facturación para revisarlas antes de avisarle a cada cliente.'
           const html = buildEmailHtml(
             `${totalCreated} factura${totalCreated !== 1 ? 's' : ''} generada${totalCreated !== 1 ? 's' : ''} automáticamente`,
-            `Facturación recurrente de ${monthName}:\n\n${lines}\n\nQuedaron en estado "Pendiente" — entrá a Facturación para revisarlas antes de avisarle a cada cliente.`,
+            `Facturación recurrente de ${monthName}:\n\n${lines}\n\n${cierre}`,
             orgName,
             org.primaryColor || '#6366f1',
             org.secondaryColor || '#8b5cf6',

@@ -38,12 +38,18 @@ export const PLUGIN_DEFINITIONS: PluginDefinition[] = [
   {
     id: 'invoice-automation',
     name: 'Facturación Automática',
-    description: 'El día 1 de cada mes genera solas las facturas de los clientes con monto mensual cargado (mismo criterio que "Generar del Mes", pero automático) y te avisa por mail lo que se generó. No las envía al cliente — quedan como Pendiente para que las revises antes de avisarle a cada uno. Opcional: recordatorios de pago (config remindersEnabled="true") — una vez enviada una factura, si sigue impaga le reenvía el link de pago al cliente a los 3 y 7 días del vencimiento.',
+    description: 'El día 1 de cada mes genera solas las facturas de los abonos y de las empresas con monto mensual cargado. Por defecto quedan en Pendiente y te avisa por mail para que las revises. Opciones (config): autoSend="true" → las manda solas al cliente con el link de pago; dueSameMonth="true" → vencen el día del mes en curso (default: mes siguiente); remindersEnabled="true" + reminderDays="3,7" → recordatorios de pago automáticos a los N días del vencimiento.',
     icon: 'FileText',
     category: 'productivity',
-    version: '1.1.0',
+    version: '1.2.0',
     author: 'CRM Core',
-    requiresConfig: false,
+    requiresConfig: true,
+    configSchema: {
+      autoSend: { type: 'string', label: 'Enviar al cliente automáticamente (true/false)', required: false },
+      dueSameMonth: { type: 'string', label: 'Vencimiento en el mes en curso (true/false)', required: false },
+      remindersEnabled: { type: 'string', label: 'Recordatorios de pago automáticos (true/false)', required: false },
+      reminderDays: { type: 'string', label: 'Días de recordatorio tras el vencimiento (ej: 3,7)', required: false },
+    },
     implemented: true,
   },
   {

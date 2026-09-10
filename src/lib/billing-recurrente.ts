@@ -18,6 +18,8 @@ export interface BillAbonosItem {
 export interface BillAbonosResult {
   /** Facturas realmente creadas (0 en dry run). */
   created: number
+  /** IDs de las facturas creadas — para que el caller pueda mandarlas. */
+  createdInvoiceIds: string[]
   /** Detalle de lo facturado (o de lo que se facturaría, en dry run). */
   items: BillAbonosItem[]
   skippedYaFacturado: number
@@ -26,7 +28,12 @@ export interface BillAbonosResult {
 
 export async function billAbonosForOrg(
   orgId: string,
-  opts: { dryRun?: boolean; now?: Date } = {},
+  opts: {
+    dryRun?: boolean
+    now?: Date
+    /** true → vencimiento el día `diaVencimiento` de ESTE mes; default → del mes siguiente. */
+    dueSameMonth?: boolean
+  } = {},
 ): Promise<BillAbonosResult> {
   const now = opts.now ?? new Date()
   const argToday = argentinaDayStart(now)
@@ -39,8 +46,9 @@ export async function billAbonosForOrg(
   })
 
   const result: BillAbonosResult = {
-    created: 0, items: [], skippedYaFacturado: 0, skippedEmpresaNoCliente: 0,
+    created: 0, createdInvoiceIds: [], items: [], skippedYaFacturado: 0, skippedEmpresaNoCliente: 0,
   }
+  const dueMonthIdx = opts.dueSameMonth ? mIdx : mIdx + 1
 
   const abonos = await prisma.servicioRecurrente.findMany({
     where: { organizationId: orgId, estado: 'ACTIVO', monto: { gt: 0 }, ciclo: { not: 'UNICO' } },
@@ -80,7 +88,7 @@ export async function billAbonosForOrg(
     if (yaFacturado.has(a.id)) { result.skippedYaFacturado++; continue }
     if (!a.empresa?.isCliente) { result.skippedEmpresaNoCliente++; continue }
 
-    const dueDate = dateOnlyArgentina(y, mIdx + 1, clampDiaVencimiento(a.diaVencimiento))
+    const dueDate = dateOnlyArgentina(y, dueMonthIdx, clampDiaVencimiento(a.diaVencimiento))
     const concepto = `${a.nombre} — ${monthLabel}`
     toCreate.push({
       empresaId: a.empresa.id,
@@ -98,8 +106,13 @@ export async function billAbonosForOrg(
   }
 
   if (!opts.dryRun && toCreate.length > 0) {
-    const res = await prisma.invoice.createMany({ data: toCreate })
-    result.created = res.count
+    // create de a uno (no createMany) para quedarnos con los IDs — el volumen
+    // por org/mes es de un puñado de abonos.
+    for (const data of toCreate) {
+      const inv = await prisma.invoice.create({ data, select: { id: true } })
+      result.createdInvoiceIds.push(inv.id)
+    }
+    result.created = result.createdInvoiceIds.length
   }
   return result
 }
