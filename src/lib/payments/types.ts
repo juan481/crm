@@ -43,6 +43,12 @@ export interface NormalizedPaymentEvent {
    * webhook resuelve el abono buscando ServicioRecurrente.subExternalId.
    */
   planId?: string
+  /**
+   * Lo que efectivamente acredita el proveedor después de sus comisiones
+   * (Whop: amount_after_fees; MP: net_received_amount). undefined si el
+   * proveedor no lo informa en este evento — no asumir que amount===netAmount.
+   */
+  netAmount?: number
   /** Respuesta cruda del proveedor — se guarda en Payment.rawPayload. */
   raw: unknown
 }

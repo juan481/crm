@@ -714,6 +714,10 @@ model Payment {
   status         String
   amount         Float
   currency       String
+  // Lo que efectivamente acredita el proveedor después de sus comisiones
+  // (Whop: amount_after_fees; MP: transaction_details.net_received_amount).
+  // Null si el proveedor no lo informa o es un pago MANUAL (no hay comisión).
+  netAmount      Float?
   // Respuesta cruda del proveedor (evento del webhook / fetch a su API) — para
   // depurar y para la conciliación contable/USDT. Sólo visible a ADMIN/SUPER_ADMIN.
   rawPayload     Json?

@@ -193,6 +193,9 @@ interface MpPayment {
   transaction_amount: number
   currency_id: string
   external_reference: string | null
+  // Lo que efectivamente acredita MP después de su comisión — undefined en
+  // pagos que MP todavía no liquidó (ej. en mediación).
+  transaction_details?: { net_received_amount?: number }
 }
 
 interface MpAuthorizedPayment {
@@ -221,6 +224,7 @@ export async function fetchMpPaymentEvent(ref: MpWebhookRef): Promise<Normalized
       amount: Number(p.transaction_amount ?? 0),
       currency: String(p.currency_id ?? 'ARS').toUpperCase(),
       invoiceId: p.external_reference ?? undefined,
+      netAmount: typeof p.transaction_details?.net_received_amount === 'number' ? p.transaction_details.net_received_amount : undefined,
       raw: p,
     }
   }

@@ -286,8 +286,12 @@ function normalizeWhopEvent(evt: WhopEventEnvelope): NormalizedPaymentEvent | nu
     data.final_amount ?? data.subtotal ?? data.amount ?? data.settled_amount ?? 0,
   )
   const currency = String(data.currency ?? data.base_currency ?? 'usd').toUpperCase()
+  // Whop descuenta procesamiento + cross-border + orchestration + billing del
+  // monto bruto antes de acreditarlo — esto es lo que realmente entra a la
+  // cuenta, para no confundir a Juan con "recibiste $110" cuando llegaron $103,58.
+  const netAmount = typeof data.amount_after_fees === 'number' ? data.amount_after_fees : undefined
 
-  return { provider: 'WHOP', externalId, status, amount, currency, invoiceId, abonoId, planId, raw: evt }
+  return { provider: 'WHOP', externalId, status, amount, currency, invoiceId, abonoId, planId, netAmount, raw: evt }
 }
 
 function pickMetadata(data: Record<string, unknown>): Record<string, unknown> {

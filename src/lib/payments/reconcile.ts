@@ -33,6 +33,18 @@ function amountMatches(expected: number, got: number): boolean {
   return diff <= Math.max(AMOUNT_TOLERANCE_ABS, expected * AMOUNT_TOLERANCE_PCT)
 }
 
+/**
+ * "US$ 110,00" o, si el proveedor informó lo que efectivamente acreditó
+ * (descontadas sus comisiones) y es distinto del bruto, "US$ 110,00 (neto
+ * US$ 103,58 tras comisión del proveedor)" — para no dar a entender que
+ * entró el monto lleno cuando en realidad se descontó una comisión.
+ */
+function amountWithNet(event: NormalizedPaymentEvent): string {
+  const gross = formatMoneyExact(event.amount, event.currency)
+  if (event.netAmount == null || Math.abs(event.netAmount - event.amount) < 0.01) return gross
+  return `${gross} (neto ${formatMoneyExact(event.netAmount, event.currency)} tras comisión del proveedor)`
+}
+
 const oldestAdminId = getOrgActorUserId
 const notifyStaff = notifyOrgStaff
 
@@ -119,7 +131,7 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
             organizationId: invoice.organizationId,
             userId: adminId,
             tipo: 'NOTA',
-            content: `💰 Pago recibido — ${formatMoneyExact(event.amount, event.currency)} vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'} (${invoice.description ?? 'factura'}).`,
+            content: `💰 Pago recibido — ${amountWithNet(event)} vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'} (${invoice.description ?? 'factura'}).`,
           },
         })
       }
@@ -133,7 +145,7 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
     await notifyStaff(
       invoice.organizationId,
       `✅ Cobro recibido — ${empresaName}`,
-      `${empresaName} pagó ${formatMoneyExact(event.amount, event.currency)} (${invoice.description ?? 'factura'}) vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'}.\n\nLa factura quedó marcada como Pagada.`,
+      `${empresaName} pagó ${amountWithNet(event)} (${invoice.description ?? 'factura'}) vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'}.\n\nLa factura quedó marcada como Pagada.`,
     )
   }
 
@@ -229,7 +241,7 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
             organizationId: abono.organizationId,
             userId: adminId,
             tipo: 'NOTA',
-            content: `💰 Débito automático recibido — ${formatMoneyExact(event.amount, event.currency)} vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'} (${abono.nombre}, ${monthLabel}).`,
+            content: `💰 Débito automático recibido — ${amountWithNet(event)} vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'} (${abono.nombre}, ${monthLabel}).`,
           },
         })
       }
@@ -242,7 +254,7 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
     await notifyStaff(
       abono.organizationId,
       `✅ Débito automático — ${abono.empresa?.name ?? 'Cliente'}`,
-      `Se cobró automáticamente ${formatMoneyExact(event.amount, event.currency)} del abono "${abono.nombre}" (${monthLabel}) vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'}.`,
+      `Se cobró automáticamente ${amountWithNet(event)} del abono "${abono.nombre}" (${monthLabel}) vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'}.`,
     )
   }
 
@@ -281,6 +293,7 @@ async function recordPayment(
         status,
         amount: event.amount,
         currency: event.currency,
+        netAmount: event.netAmount ?? null,
         rawPayload: event.raw as object,
         paidAt: status === 'APPROVED' ? new Date() : null,
       },

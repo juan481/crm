@@ -175,6 +175,8 @@ export interface Payment {
   status: PaymentStatus
   amount: number
   currency: string
+  /** Lo que efectivamente acreditó el proveedor tras su comisión — null si no lo informó o es MANUAL. */
+  netAmount: number | null
   paidAt: string | null
   createdAt: string
 }
