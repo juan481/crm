@@ -3,31 +3,44 @@ import type { CheckoutResult, NormalizedPaymentEvent, NormalizedStatus } from '.
 import { WEBHOOK_MAX_SKEW_MS } from './types'
 
 // ─── Whop (cobros en USD) ─────────────────────────────────────────────────
-// API REST v2. Auth: `Authorization: Bearer <WHOP_API_KEY>`. Todo por `fetch`
-// (mismo criterio que el resto del proyecto: Brevo, Graph API de WhatsApp,
-// etc. — sin SDK). Whop deposita a la cuenta bancaria de Just Create; la
-// conversión a USDT la hace Juan por fuera, para eso guardamos rawPayload.
+// API REST v1 (`api.whop.com/api/v1` — la vieja `/v2/plans` + `/v2/checkout_
+// sessions` en dos pasos quedó deprecada por Whop, ver doc). Auth:
+// `Authorization: Bearer <WHOP_API_KEY>`. Todo por `fetch` (mismo criterio
+// que el resto del proyecto: Brevo, Graph API de WhatsApp, etc. — sin SDK).
+// Whop deposita a la cuenta bancaria de Just Create; la conversión a USDT la
+// hace Juan por fuera, para eso guardamos rawPayload.
 //
-// ⚠️ Los nombres exactos de campos de la API de Whop pueden variar según la
-// versión de la cuenta. Verificar en sandbox contra la cuenta real de Just
-// Create antes de ir a producción (ver crm/docs/PAGOS-Y-PORTAL.md). Los
-// puntos frágiles están marcados con VERIFICAR.
+// Un solo endpoint crea el plan + el link de pago juntos:
+//   POST /checkout_configurations
+//   { account_id: "biz_...", mode: "payment", redirect_url, metadata,
+//     plan: { product_id: "prod_...", plan_type, initial_price, currency, ... } }
+//   → { id: "ch_...", purchase_url: "https://whop.com/checkout/ch_...", plan: { id: "plan_..." } }
+// Fuente: https://docs.whop.com/api-reference/beta/checkout-configurations/create-a-checkout-configuration
+//
+// `WHOP_SANDBOX=true` pega contra `sandbox-api.whop.com` para probar sin
+// cobrar de verdad (ver crm/docs/PAGOS-Y-PORTAL.md).
 
-const WHOP_API = 'https://api.whop.com/api/v2'
+function whopApiBase(): string {
+  return process.env.WHOP_SANDBOX === 'true' || process.env.WHOP_SANDBOX === '1'
+    ? 'https://sandbox-api.whop.com/api/v1'
+    : 'https://api.whop.com/api/v1'
+}
 const WHOP_CHECKOUT_BASE = 'https://whop.com'
 
 interface WhopEnv {
   apiKey: string
   productId: string
+  companyId: string
   webhookSecret: string
 }
 
 function whopEnv(): WhopEnv | null {
   const apiKey = process.env.WHOP_API_KEY
   const productId = process.env.WHOP_PRODUCT_ID
+  const companyId = process.env.WHOP_COMPANY_ID
   const webhookSecret = process.env.WHOP_WEBHOOK_SECRET
-  if (!apiKey || !productId || !webhookSecret) return null
-  return { apiKey, productId, webhookSecret }
+  if (!apiKey || !productId || !companyId || !webhookSecret) return null
+  return { apiKey, productId, companyId, webhookSecret }
 }
 
 export function whopConfigured(): boolean {
@@ -38,7 +51,7 @@ async function whopFetch<T>(env: WhopEnv, path: string, body: unknown): Promise<
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    const res = await fetch(`${WHOP_API}${path}`, {
+    const res = await fetch(`${whopApiBase()}${path}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.apiKey}`,
@@ -63,16 +76,22 @@ function whopCurrency(currency: string): string {
   return currency.trim().toLowerCase()
 }
 
-interface WhopPlan { id: string }
-interface WhopCheckoutSession { id: string; purchase_url: string }
+interface WhopCheckoutConfig {
+  id: string
+  purchase_url: string | null
+  plan?: { id: string } | null
+}
 
 /**
- * Crea un plan one-time con el monto exacto de la factura + una checkout
- * session para pagarlo. Devuelve la URL hosteada.
+ * Crea un plan one-time con el monto exacto de la factura + su checkout ya
+ * armado, en una sola llamada a /checkout_configurations. Devuelve la URL
+ * hosteada.
  *
  * El monto SIEMPRE sale de `amount`/`currency` que le pasa el caller
  * (resueltos server-side desde Invoice.amount) — nunca de nada que venga del
- * navegador del cliente.
+ * navegador del cliente. `force_create_new_plan` evita que Whop reutilice un
+ * plan viejo que matchee el mismo precio pero le falte el metadata de ESTA
+ * factura.
  */
 export async function createWhopInvoiceCheckout(opts: {
   amount: number
@@ -83,29 +102,26 @@ export async function createWhopInvoiceCheckout(opts: {
   redirectUrl: string
 }): Promise<CheckoutResult> {
   const env = whopEnv()
-  if (!env) throw new Error('Whop no está configurado (WHOP_API_KEY / WHOP_PRODUCT_ID / WHOP_WEBHOOK_SECRET)')
+  if (!env) throw new Error('Whop no está configurado (WHOP_API_KEY / WHOP_PRODUCT_ID / WHOP_COMPANY_ID / WHOP_WEBHOOK_SECRET)')
 
-  // VERIFICAR: shape de POST /plans. Campos documentados: plan_type,
-  // initial_price, base_currency, product_id, visibility, metadata.
-  const plan = await whopFetch<WhopPlan>(env, '/plans', {
-    plan_type: 'one_time',
-    initial_price: Number(opts.amount.toFixed(2)),
-    base_currency: whopCurrency(opts.currency),
-    product_id: env.productId,
-    visibility: 'hidden',
-    internal_notes: opts.concepto.slice(0, 200),
-    metadata: { kind: 'invoice', invoiceId: opts.invoiceId, payToken: opts.payToken },
-  })
-
-  // VERIFICAR: POST /checkout_sessions → { id, purchase_url }. purchase_url
-  // suele venir relativo ("/checkout/plan_xxx?session=ch_xxx").
-  const session = await whopFetch<WhopCheckoutSession>(env, '/checkout_sessions', {
-    plan_id: plan.id,
+  const config = await whopFetch<WhopCheckoutConfig>(env, '/checkout_configurations', {
+    account_id: env.companyId,
+    mode: 'payment',
     redirect_url: opts.redirectUrl,
     metadata: { kind: 'invoice', invoiceId: opts.invoiceId, payToken: opts.payToken },
+    plan: {
+      product_id: env.productId,
+      plan_type: 'one_time',
+      initial_price: Number(opts.amount.toFixed(2)),
+      currency: whopCurrency(opts.currency),
+      description: opts.concepto.slice(0, 500),
+      visibility: 'hidden',
+      force_create_new_plan: true,
+    },
   })
+  if (!config.purchase_url) throw new Error('Whop no devolvió purchase_url')
 
-  return { url: absoluteCheckoutUrl(session.purchase_url), ref: session.id }
+  return { url: absoluteCheckoutUrl(config.purchase_url), ref: config.id }
 }
 
 /**
@@ -122,27 +138,28 @@ export async function createWhopAbonoSubscription(opts: {
   redirectUrl: string
 }): Promise<{ authUrl: string; externalId: string }> {
   const env = whopEnv()
-  if (!env) throw new Error('Whop no está configurado')
+  if (!env) throw new Error('Whop no está configurado (WHOP_API_KEY / WHOP_PRODUCT_ID / WHOP_COMPANY_ID / WHOP_WEBHOOK_SECRET)')
 
-  const plan = await whopFetch<WhopPlan>(env, '/plans', {
-    plan_type: 'renewal',
-    renewal_price: Number(opts.amount.toFixed(2)),
-    initial_price: Number(opts.amount.toFixed(2)),
-    base_currency: whopCurrency(opts.currency),
-    billing_period: opts.billingPeriodDays,
-    product_id: env.productId,
-    visibility: 'hidden',
-    internal_notes: opts.concepto.slice(0, 200),
-    metadata: { kind: 'abono', abonoId: opts.abonoId },
-  })
-
-  const session = await whopFetch<WhopCheckoutSession>(env, '/checkout_sessions', {
-    plan_id: plan.id,
+  const config = await whopFetch<WhopCheckoutConfig>(env, '/checkout_configurations', {
+    account_id: env.companyId,
+    mode: 'payment',
     redirect_url: opts.redirectUrl,
     metadata: { kind: 'abono', abonoId: opts.abonoId },
+    plan: {
+      product_id: env.productId,
+      plan_type: 'renewal',
+      initial_price: Number(opts.amount.toFixed(2)),
+      renewal_price: Number(opts.amount.toFixed(2)),
+      billing_period: opts.billingPeriodDays,
+      currency: whopCurrency(opts.currency),
+      description: opts.concepto.slice(0, 500),
+      visibility: 'hidden',
+      force_create_new_plan: true,
+    },
   })
+  if (!config.purchase_url || !config.plan?.id) throw new Error('Whop no devolvió purchase_url/plan.id')
 
-  return { authUrl: absoluteCheckoutUrl(session.purchase_url), externalId: plan.id }
+  return { authUrl: absoluteCheckoutUrl(config.purchase_url), externalId: config.plan.id }
 }
 
 function absoluteCheckoutUrl(purchaseUrl: string): string {

@@ -34,7 +34,9 @@ Campos nuevos (todos nullable / con default → sin `--accept-data-loss`):
 | **`PAYMENTS_ORG_IDS`** | **Candado multi-tenant.** El id de la organización Just Create: `cmske462000008ahb29n2427g`. Sólo las orgs de esta lista pueden cobrar online — Abba y cualquier otro tenant quedan afuera aunque activen la facturación automática. Fail-safe: vacío = nadie cobra. |
 | `WHOP_API_KEY` | Whop dashboard → Developer → API keys |
 | `WHOP_PRODUCT_ID` | Whop → un "product" bajo el cual se crean los planes (`prod_…`) |
+| `WHOP_COMPANY_ID` | Whop dashboard → tu company → Settings (`biz_…`) — **obligatorio**, sin esto Whop devuelve 404 |
 | `WHOP_WEBHOOK_SECRET` | Whop → Developer → Webhooks (empieza con `ws_…`) |
+| `WHOP_SANDBOX` | opcional, `"true"` para pegarle a `sandbox-api.whop.com` (probar sin cobrar de verdad) |
 | `MP_ACCESS_TOKEN` | Mercado Pago → Tus integraciones → Credenciales de producción (`APP_USR-…`) |
 | `MP_WEBHOOK_SECRET` | Mercado Pago → Webhooks → "Clave secreta" |
 
@@ -59,15 +61,19 @@ Sin estas vars, cada proveedor queda "no configurado": los webhooks responden
 
 ### 1.4 Whop — setup de cuenta
 
-1. Crear la company de Just Create.
+1. Crear la company de Just Create → copiar su id (`biz_…`) a `WHOP_COMPANY_ID`.
 2. Crear **un product** (ej. "Servicios Just Create") → copiar su id a `WHOP_PRODUCT_ID`.
    Los planes (uno por factura / uno por abono con débito) los crea el CRM solo,
-   con `visibility: hidden`.
+   con `visibility: hidden`, vía `POST /checkout_configurations` (crea plan +
+   checkout en una sola llamada — no son dos pasos separados).
+3. Habilitar en el API key los permisos `plan:create`, `checkout_configuration:create`
+   (Developer → API keys → editar la key → permisos). Sin esto Whop devuelve
+   401 "no tiene permisos"; con la key sin `WHOP_COMPANY_ID` devuelve 404
+   confuso ("No such AccessPass found") — los dos ya se corrigieron en el código.
 
-> ⚠️ La API de Whop varía un poco por versión de cuenta. Los puntos a verificar
-> en sandbox están marcados con `VERIFICAR` en `src/lib/payments/whop.ts`:
-> shape de `POST /plans` y `POST /checkout_sessions`, y el formato exacto de la
-> firma del webhook. Probar con Whop en test mode antes de producción.
+> API REST v1 (`api.whop.com/api/v1`, no v2). Probar primero con
+> `WHOP_SANDBOX=true` (pega a `sandbox-api.whop.com`, no cobra de verdad) antes
+> de sacarlo a producción.
 
 ### 1.5 Just Create como tenant
 
