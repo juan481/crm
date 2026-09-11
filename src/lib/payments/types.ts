@@ -37,6 +37,12 @@ export interface NormalizedPaymentEvent {
   invoiceId?: string
   /** Cobro recurrente de un abono: metadata.abonoId / external_reference. */
   abonoId?: string
+  /**
+   * Id del plan (Whop `plan_...`) cuando no hay metadata.abonoId — plan
+   * creado a mano desde el dashboard del proveedor en vez de por el CRM. El
+   * webhook resuelve el abono buscando ServicioRecurrente.subExternalId.
+   */
+  planId?: string
   /** Respuesta cruda del proveedor — se guarda en Payment.rawPayload. */
   raw: unknown
 }

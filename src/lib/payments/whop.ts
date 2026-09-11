@@ -233,16 +233,20 @@ export function verifyWhopWebhook(rawBody: string, headers: Headers): Normalized
  * Whop YA verificado (verifyWhopSignature). null si el evento no cambia el
  * estado de una suscripción de abono.
  */
-export function parseWhopSubStatusEvent(evt: WhopEventEnvelope): { abonoId: string; status: 'ACTIVO' | 'CANCELADO' | 'PAUSADO' } | null {
+export function parseWhopSubStatusEvent(evt: WhopEventEnvelope): { abonoId?: string; planId?: string; status: 'ACTIVO' | 'CANCELADO' | 'PAUSADO' } | null {
   const type = (evt.type || evt.action || '').toLowerCase()
   const data = evt.data ?? {}
   const meta = pickMetadata(data)
   const abonoId = typeof meta.abonoId === 'string' ? meta.abonoId : undefined
-  if (!abonoId) return null
+  // Sin metadata (plan creado a mano desde el dashboard de Whop, no por el
+  // CRM) — el caller resuelve el abono buscando ServicioRecurrente.subExternalId
+  // === planId.
+  const planId = extractPlanId(data)
+  if (!abonoId && !planId) return null
 
-  if (type.includes('went_valid') || type === 'membership.activated') return { abonoId, status: 'ACTIVO' }
-  if (type.includes('cancel') || type.includes('went_invalid') || type.includes('expired')) return { abonoId, status: 'CANCELADO' }
-  if (type.includes('paus')) return { abonoId, status: 'PAUSADO' }
+  if (type.includes('went_valid') || type === 'membership.activated') return { abonoId, planId, status: 'ACTIVO' }
+  if (type.includes('cancel') || type.includes('went_invalid') || type.includes('expired')) return { abonoId, planId, status: 'CANCELADO' }
+  if (type.includes('paus')) return { abonoId, planId, status: 'PAUSADO' }
   return null
 }
 
@@ -271,19 +275,25 @@ function normalizeWhopEvent(evt: WhopEventEnvelope): NormalizedPaymentEvent | nu
   const meta = pickMetadata(data)
   const invoiceId = typeof meta.invoiceId === 'string' ? meta.invoiceId : undefined
   const abonoId = typeof meta.abonoId === 'string' ? meta.abonoId : undefined
-  if (!invoiceId && !abonoId) return null
+  // Fallback sin metadata: un plan creado a mano desde el dashboard de Whop
+  // (no vía nuestro /checkout_configurations) no tiene metadata.abonoId. El
+  // caller (route.ts) resuelve el abono buscando
+  // ServicioRecurrente.subExternalId === planId antes de conciliar.
+  const planId = extractPlanId(data)
+  if (!invoiceId && !abonoId && !planId) return null
 
   const amount = Number(
     data.final_amount ?? data.subtotal ?? data.amount ?? data.settled_amount ?? 0,
   )
   const currency = String(data.currency ?? data.base_currency ?? 'usd').toUpperCase()
 
-  return { provider: 'WHOP', externalId, status, amount, currency, invoiceId, abonoId, raw: evt }
+  return { provider: 'WHOP', externalId, status, amount, currency, invoiceId, abonoId, planId, raw: evt }
 }
 
 function pickMetadata(data: Record<string, unknown>): Record<string, unknown> {
   const sources = [
     data.metadata,
+    (data.checkout_configuration as Record<string, unknown> | undefined)?.metadata,
     (data.checkout_session as Record<string, unknown> | undefined)?.metadata,
     (data.membership as Record<string, unknown> | undefined)?.metadata,
     (data.plan as Record<string, unknown> | undefined)?.metadata,
@@ -292,4 +302,24 @@ function pickMetadata(data: Record<string, unknown>): Record<string, unknown> {
     if (s && typeof s === 'object') return s as Record<string, unknown>
   }
   return {}
+}
+
+/**
+ * Id del plan (`plan_...`) de un evento de Whop, buscado en todos los lugares
+ * donde puede venir según el tipo de evento (payment, membership). Sirve
+ * como fallback de matching cuando el plan se creó a mano en el dashboard de
+ * Whop y no tiene metadata.abonoId — ver ServicioRecurrente.subExternalId.
+ */
+function extractPlanId(data: Record<string, unknown>): string | undefined {
+  const membership = data.membership as Record<string, unknown> | undefined
+  const plan = data.plan as Record<string, unknown> | undefined
+  const membershipPlan = membership?.plan as Record<string, unknown> | undefined
+  const candidates = [
+    data.plan_id,
+    plan?.id,
+    membership?.plan_id,
+    membershipPlan?.id,
+  ]
+  const found = candidates.find((c) => typeof c === 'string' && c.length > 0)
+  return found as string | undefined
 }
