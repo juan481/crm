@@ -219,6 +219,22 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
 
   if (invoice.status !== 'PAID') {
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'PAID', paidAt: new Date() } })
+
+    if (abono.empresaId) {
+      const adminId = await oldestAdminId(abono.organizationId)
+      if (adminId) {
+        await prisma.empresaNota.create({
+          data: {
+            empresaId: abono.empresaId,
+            organizationId: abono.organizationId,
+            userId: adminId,
+            tipo: 'NOTA',
+            content: `💰 Débito automático recibido — ${formatMoneyExact(event.amount, event.currency)} vía ${event.provider === 'WHOP' ? 'Whop' : 'Mercado Pago'} (${abono.nombre}, ${monthLabel}).`,
+          },
+        })
+      }
+    }
+
     fireWebhook(abono.organizationId, 'invoice.paid', {
       id: invoice.id, amount: abono.monto, currency: abono.moneda,
       description: invoice.description, empresa: abono.empresa?.name ?? null, provider: event.provider, recurring: true,
