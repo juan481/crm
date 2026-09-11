@@ -101,11 +101,14 @@ interface InvoicesResponse {
   summary: { pendingByCurrency: Record<string, number>; paidByCurrency: Record<string, number>; overdueCount: number }
 }
 
-function formatByCurrency(byCurrency: Record<string, number> | undefined): string {
-  if (!byCurrency) return formatCurrency(0)
+// Devuelve una línea por moneda en vez de un solo string tipo "$28.000 +
+// US$110" — pesos y dólares NO se pueden sumar, y un "+" entre dos montos de
+// distinta moneda se lee (mal) como si fueran una sola cuenta.
+function byCurrencyLines(byCurrency: Record<string, number> | undefined): string[] {
+  if (!byCurrency) return [formatCurrency(0)]
   const entries = Object.entries(byCurrency).filter(([, v]) => v > 0)
-  if (entries.length === 0) return formatCurrency(0)
-  return entries.map(([cur, amt]) => formatCurrency(amt, cur)).join(' + ')
+  if (entries.length === 0) return [formatCurrency(0)]
+  return entries.map(([cur, amt]) => formatCurrency(amt, cur))
 }
 
 const STATUS_OPTIONS = [
@@ -251,13 +254,17 @@ export default function FacturasPage() {
         {isLoading ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />) : (
           <>
             {[
-              { label: 'Por cobrar', value: formatByCurrency(summary?.pendingByCurrency), icon: <DollarSign size={20} />, color: '#f59e0b' },
-              { label: 'Cobrado este mes', value: formatByCurrency(summary?.paidByCurrency), icon: <CheckCircle size={20} />, color: '#22c55e' },
-              { label: 'Facturas vencidas', value: String(summary?.overdueCount ?? 0), icon: <AlertCircle size={20} />, color: '#ef4444' },
+              { label: 'Por cobrar', value: byCurrencyLines(summary?.pendingByCurrency), icon: <DollarSign size={20} />, color: '#f59e0b' },
+              { label: 'Cobrado este mes', value: byCurrencyLines(summary?.paidByCurrency), icon: <CheckCircle size={20} />, color: '#22c55e' },
+              { label: 'Facturas vencidas', value: [String(summary?.overdueCount ?? 0)], icon: <AlertCircle size={20} />, color: '#ef4444' },
             ].map((stat, i) => (
               <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="surface rounded-2xl p-5 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${stat.color}1a`, color: stat.color }}>{stat.icon}</div>
-                <div><p className="text-xl font-bold text-[var(--color-text)]">{stat.value}</p><p className="text-sm text-[var(--color-text-muted)]">{stat.label}</p></div>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${stat.color}1a`, color: stat.color }}>{stat.icon}</div>
+                <div>
+                  {/* Una línea por moneda — nunca un solo string con "+" entre montos de distinta moneda (no se pueden sumar). */}
+                  {stat.value.map((line, idx) => <p key={idx} className="text-xl font-bold leading-tight text-[var(--color-text)]">{line}</p>)}
+                  <p className="text-sm text-[var(--color-text-muted)]">{stat.label}</p>
+                </div>
               </motion.div>
             ))}
           </>
