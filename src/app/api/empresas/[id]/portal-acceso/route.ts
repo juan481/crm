@@ -50,9 +50,22 @@ export async function POST(req: NextRequest, { params }: Params) {
   const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : email.split('@')[0]
   if (!EMAIL_RE.test(email)) return NextResponse.json({ error: 'Email inválido' }, { status: 400 })
 
-  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true, role: true, empresaId: true, organizationId: true, status: true } })
-  if (existing) {
-    // Ya es CLIENTE de esta misma empresa y activo → nada que hacer.
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, role: true, empresaId: true, organizationId: true, status: true, supabaseId: true },
+  })
+
+  // DELETE no borra la fila (deja status=DELETED para no perder el
+  // historial de notas/tickets ligados a ese userId) — si es la MISMA
+  // empresa/org y estaba revocado, esto es un "volver a dar acceso", no un
+  // conflicto: reactivamos la fila en vez de rechazar.
+  const reactivating = !!existing
+    && existing.role === 'CLIENTE'
+    && existing.empresaId === params.id
+    && existing.organizationId === payload.orgId
+    && existing.status !== 'ACTIVE'
+
+  if (existing && !reactivating) {
     if (existing.role === 'CLIENTE' && existing.empresaId === params.id && existing.organizationId === payload.orgId && existing.status === 'ACTIVE') {
       return NextResponse.json({ error: 'Ese email ya tiene acceso al portal de esta empresa' }, { status: 409 })
     }
@@ -60,6 +73,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const supabaseAdmin = createAdminClient()
+
+  // Si estamos reactivando, nos aseguramos de que no quede un usuario de
+  // Supabase Auth viejo colgado (el DELETE ya intentó borrarlo, esto es
+  // sólo defensivo) antes de crear uno nuevo.
+  if (reactivating && existing?.supabaseId) {
+    try { await supabaseAdmin.auth.admin.deleteUser(existing.supabaseId) } catch { /* puede ya no existir */ }
+  }
+
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true, // sin contraseña: entra siempre por magic link
@@ -71,23 +92,36 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   let user
   try {
-    user = await prisma.user.create({
-      data: {
-        supabaseId: authData.user.id,
-        email,
-        name,
-        role: 'CLIENTE',
-        status: 'ACTIVE',
-        onboardingCompleted: true,
-        organizationId: payload.orgId,
-        empresaId: params.id,
-      },
-      select: { id: true, name: true, email: true },
-    })
+    user = reactivating
+      ? await prisma.user.update({
+          where: { id: existing!.id },
+          data: {
+            supabaseId: authData.user.id,
+            name,
+            status: 'ACTIVE',
+            onboardingCompleted: true,
+            organizationId: payload.orgId,
+            empresaId: params.id,
+          },
+          select: { id: true, name: true, email: true },
+        })
+      : await prisma.user.create({
+          data: {
+            supabaseId: authData.user.id,
+            email,
+            name,
+            role: 'CLIENTE',
+            status: 'ACTIVE',
+            onboardingCompleted: true,
+            organizationId: payload.orgId,
+            empresaId: params.id,
+          },
+          select: { id: true, name: true, email: true },
+        })
   } catch (err) {
     // rollback del usuario de Supabase si falla la fila local
     try { await supabaseAdmin.auth.admin.deleteUser(authData.user.id) } catch { /* ignore */ }
-    console.error('[PORTAL ACCESO] user.create falló:', err)
+    console.error('[PORTAL ACCESO] user.create/update falló:', err)
     return NextResponse.json({ error: 'No se pudo crear el usuario' }, { status: 500 })
   }
 
