@@ -79,21 +79,32 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
     // supera ADMIN (no sólo se oculta el resultado después, se ahorra la
     // carga real en la base para el caso más común, SELLER).
     !canSeeFinancials ? Promise.resolve([] as MonthRow[]) :
-    // 6-month real revenue (sum of invoices actually paid that month),
-    // grouped by currency — a USD invoice and an ARS invoice are not the
-    // same unit and must never be summed together. Months/currencies with
-    // no paid invoices simply produce no row (filled in below in JS).
+    // 6-month real revenue (sum de lo que EFECTIVAMENTE entró ese mes),
+    // agrupado por moneda — una factura en USD y otra en ARS no son la
+    // misma unidad y nunca se suman entre sí. Si Whop/MP descontaron su
+    // comisión antes de acreditar, se usa Payment.netAmount (el pago
+    // APPROVED más reciente de esa factura) en vez de Invoice.amount — el
+    // "bruto" es lo que le cobraste al cliente, no lo que entró de verdad.
+    // Sin Payment (pago manual/transferencia) o sin netAmount informado:
+    // COALESCE cae al bruto (no hay comisión que restar). Meses/monedas sin
+    // facturas pagadas simplemente no producen fila (se completan en JS).
     prisma.$queryRaw<MonthRow[]>`
       SELECT
         gs.n,
         i.currency AS currency,
-        COALESCE(SUM(i.amount), 0)::float AS revenue
+        COALESCE(SUM(COALESCE(p."netAmount", i.amount)), 0)::float AS revenue
       FROM generate_series(0, 5) AS gs(n)
       JOIN "Invoice" i ON
         i."organizationId" = ${orgId}
         AND i."status" = 'PAID'
         AND i."paidAt" >= DATE_TRUNC('month', NOW()) - (gs.n * INTERVAL '1 month')
         AND i."paidAt" <  DATE_TRUNC('month', NOW()) - ((gs.n - 1) * INTERVAL '1 month')
+      LEFT JOIN LATERAL (
+        SELECT "netAmount" FROM "Payment"
+        WHERE "invoiceId" = i.id AND status = 'APPROVED'
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+      ) p ON true
       GROUP BY gs.n, i.currency
       ORDER BY gs.n DESC
     `,
@@ -109,14 +120,19 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
       where: { organizationId: orgId },
       _count: { _all: true },
     }),
-    // by empresaId AND currency — una Empresa con facturas en dos monedas
-    // no puede sumarse en un único total.
-    !canSeeFinancials ? Promise.resolve([]) : prisma.invoice.groupBy({
-      by: ['empresaId', 'currency'],
+    // by empresaId AND currency — una Empresa con facturas en dos monedas no
+    // puede sumarse en un único total. findMany + agregación en JS (no
+    // groupBy con _sum(amount)) por el mismo motivo que el revenue mensual:
+    // "lo que pagó el cliente" (Invoice.amount) no es "lo que entró" si el
+    // proveedor descontó su comisión — se usa Payment.netAmount cuando está.
+    !canSeeFinancials ? Promise.resolve([]) : prisma.invoice.findMany({
       where: { organizationId: orgId, status: 'PAID', empresaId: { not: null } },
-      _sum: { amount: true },
-      orderBy: { _sum: { amount: 'desc' } },
-      take: 5,
+      select: {
+        empresaId: true,
+        currency: true,
+        amount: true,
+        payments: { where: { status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { netAmount: true } },
+      },
     }),
 
     prisma.task.count({ where: { organizationId: orgId, status: { not: 'HECHA' } } }),
@@ -185,18 +201,29 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
     count: g._count._all,
   }))
 
-  const empresaIds = topRevenueGroups.map((g) => g.empresaId).filter((id): id is string => !!id)
+  // Agregación por (empresaId, currency) en JS con el neto real (no
+  // Invoice.amount) — ver comentario en la query de arriba.
+  const revenueByEmpresaCurrency = new Map<string, { empresaId: string; currency: string; total: number }>()
+  for (const inv of topRevenueGroups) {
+    if (!inv.empresaId) continue
+    const received = inv.payments[0]?.netAmount ?? inv.amount
+    const key = `${inv.empresaId}:${inv.currency}`
+    const entry = revenueByEmpresaCurrency.get(key)
+    if (entry) entry.total += received
+    else revenueByEmpresaCurrency.set(key, { empresaId: inv.empresaId, currency: inv.currency, total: received })
+  }
+  const top5Revenue = Array.from(revenueByEmpresaCurrency.values()).sort((a, b) => b.total - a.total).slice(0, 5)
+
+  const empresaIds = top5Revenue.map((g) => g.empresaId)
   const topEmpresas = empresaIds.length
     ? await prisma.empresa.findMany({ where: { id: { in: empresaIds } }, select: { id: true, name: true } })
     : []
-  const topClientsByRevenue = topRevenueGroups
-    .filter((g) => g.empresaId)
-    .map((g) => ({
-      id: g.empresaId as string,
-      name: topEmpresas.find((e) => e.id === g.empresaId)?.name ?? '—',
-      total: g._sum.amount ?? 0,
-      currency: g.currency,
-    }))
+  const topClientsByRevenue = top5Revenue.map((g) => ({
+    id: g.empresaId,
+    name: topEmpresas.find((e) => e.id === g.empresaId)?.name ?? '—',
+    total: g.total,
+    currency: g.currency,
+  }))
 
   // Agrupado por moneda — ver comentario en la query de activeDeals.
   const pipelineValueByCurrency = activeDeals.reduce<Record<string, number>>((acc, d) => {

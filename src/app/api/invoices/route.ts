@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       ...(Object.keys(empresaFilter).length > 0 && { empresa: empresaFilter }),
     }
 
-    const [data, total, pendingGroups, paidGroups, overdueCount] = await Promise.all([
+    const [data, total, pendingGroups, paidWithPayments, overdueCount] = await Promise.all([
       prisma.invoice.findMany({
         where,
         skip,
@@ -77,10 +77,17 @@ export async function GET(req: NextRequest) {
         where: { ...baseWhere, status: { in: ['PENDING', 'OVERDUE'] } },
         _sum: { amount: true },
       }) : Promise.resolve([]),
-      includeSummary ? prisma.invoice.groupBy({
-        by: ['currency'],
+      // "Cobrado este mes" tiene que ser lo que efectivamente entró, no la
+      // cara de la factura — si Whop/MP descontaron su comisión antes de
+      // acreditar, sumamos su netAmount, no Invoice.amount (por eso esto es
+      // un findMany con los pagos, no un groupBy sobre Invoice directo).
+      includeSummary ? prisma.invoice.findMany({
         where: { ...baseWhere, status: 'PAID', paidAt: { gte: startOfMonth } },
-        _sum: { amount: true },
+        select: {
+          currency: true,
+          amount: true,
+          payments: { where: { status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { netAmount: true } },
+        },
       }) : Promise.resolve([]),
       // dueDate < todayStart (medianoche Argentina de hoy), no `now` crudo —
       // una factura vencía en el contador hasta casi 24hs antes de que
@@ -97,6 +104,15 @@ export async function GET(req: NextRequest) {
     const toByCurrency = (groups: { currency: string; _sum: { amount: number | null } }[]) =>
       Object.fromEntries(groups.map(g => [g.currency, g._sum.amount ?? 0]))
 
+    // Sin Payment (pago manual/transferencia) o sin netAmount informado por
+    // el proveedor en ese pago puntual: el neto ES el bruto, no hay
+    // comisión que restar — nunca al revés (nunca inflar lo cobrado).
+    const paidByCurrency: Record<string, number> = {}
+    for (const inv of paidWithPayments) {
+      const received = inv.payments[0]?.netAmount ?? inv.amount
+      paidByCurrency[inv.currency] = (paidByCurrency[inv.currency] ?? 0) + received
+    }
+
     return NextResponse.json(
       {
         data,
@@ -107,7 +123,7 @@ export async function GET(req: NextRequest) {
         ...(includeSummary && {
           summary: {
             pendingByCurrency: toByCurrency(pendingGroups),
-            paidByCurrency:    toByCurrency(paidGroups),
+            paidByCurrency,
             overdueCount,
           },
         }),
