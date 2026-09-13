@@ -86,7 +86,8 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
 
   // ── Reembolso / contracargo ──
   if (event.status === 'REFUNDED') {
-    await recordPayment(event, invoice.id, invoice.organizationId, 'REFUNDED')
+    const { changed } = await recordPayment(event, invoice.id, invoice.organizationId, 'REFUNDED')
+    if (!changed) return { ok: true, invoiceId: invoice.id, alreadyProcessed: true }
     if (invoice.status === 'PAID') {
       await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'PENDING', paidAt: null } })
     }
@@ -106,7 +107,8 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
 
   // ── Pago aprobado pero monto/moneda no coinciden — sospechoso ──
   if (!currencyOk || !amountOk) {
-    await recordPayment(event, invoice.id, invoice.organizationId, 'REJECTED')
+    const { changed } = await recordPayment(event, invoice.id, invoice.organizationId, 'REJECTED')
+    if (!changed) return { ok: false, reason: 'monto/moneda no coincide (ya avisado)', invoiceId: invoice.id }
     await notifyStaff(
       invoice.organizationId,
       `⚠️ Pago con monto distinto — ${empresaName}`,
@@ -116,8 +118,8 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
   }
 
   // ── Pago aprobado y todo cierra ──
-  const inserted = await recordPayment(event, invoice.id, invoice.organizationId, 'APPROVED')
-  if (!inserted) return { ok: true, invoiceId: invoice.id, alreadyProcessed: true }
+  const { changed } = await recordPayment(event, invoice.id, invoice.organizationId, 'APPROVED')
+  if (!changed) return { ok: true, invoiceId: invoice.id, alreadyProcessed: true }
 
   if (invoice.status !== 'PAID') {
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'PAID', paidAt: new Date() } })
@@ -184,7 +186,8 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
   if (event.status === 'REFUNDED') {
     const inv = await currentMonthAbonoInvoice(abono.id)
     if (inv) {
-      await recordPayment(event, inv.id, abono.organizationId, 'REFUNDED')
+      const { changed } = await recordPayment(event, inv.id, abono.organizationId, 'REFUNDED')
+      if (!changed) return { ok: true, invoiceId: inv.id, alreadyProcessed: true }
       if (inv.status === 'PAID') {
         await prisma.invoice.update({ where: { id: inv.id }, data: { status: 'PENDING', paidAt: null } })
       }
@@ -226,8 +229,8 @@ export async function reconcileAbonoPayment(event: NormalizedPaymentEvent): Prom
     })
   }
 
-  const inserted = await recordPayment(event, invoice.id, abono.organizationId, 'APPROVED')
-  if (!inserted) return { ok: true, invoiceId: invoice.id, alreadyProcessed: true }
+  const { changed } = await recordPayment(event, invoice.id, abono.organizationId, 'APPROVED')
+  if (!changed) return { ok: true, invoiceId: invoice.id, alreadyProcessed: true }
 
   if (invoice.status !== 'PAID') {
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'PAID', paidAt: new Date() } })
@@ -273,17 +276,38 @@ async function currentMonthAbonoInvoice(abonoId: string) {
   })
 }
 
+// MP (y en algunos casos Whop) reutilizan el MISMO id de pago para notificar
+// TODOS los cambios de estado de su ciclo de vida: pending → approved, o
+// approved → refunded/charged_back son la MISMA `externalId`, no una nueva.
+// Con un INSERT puro (lo que había antes) sólo el PRIMER estado que llega
+// para ese externalId queda grabado — cualquier transición posterior choca
+// contra el @@unique([provider, externalId]) y el caller la trataba como
+// "ya procesado", así que una factura pagada de verdad podía quedar PENDING
+// para siempre si el pago pasó por "pending" antes de "approved" (frecuente
+// en medios de pago no instantáneos de MP). Este ranking define qué
+// transiciones son válidas — nunca se "baja" de rango, para que un webhook
+// viejo/reordenado no pise un estado más definitivo.
+const STATUS_RANK: Record<string, number> = { PENDING: 0, REJECTED: 1, APPROVED: 2, REFUNDED: 3 }
+
 /**
- * Inserta el Payment. Devuelve `true` si lo creó, `false` si ya existía
- * (idempotencia — reintento del webhook del proveedor).
+ * Crea o actualiza el Payment según corresponda. Devuelve `changed: true`
+ * sólo cuando el estado efectivamente avanzó (primera vez que se ve este
+ * externalId, o transición real pending→approved / approved→refunded, etc.)
+ * — así el caller sabe si tiene que correr efectos (marcar factura, avisar)
+ * o si es un reintento del mismo webhook y no hay que repetir nada.
  */
 async function recordPayment(
   event: NormalizedPaymentEvent,
   invoiceId: string,
   organizationId: string,
   status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'REFUNDED',
-): Promise<boolean> {
-  try {
+): Promise<{ changed: boolean }> {
+  const existing = await prisma.payment.findUnique({
+    where: { provider_externalId: { provider: event.provider, externalId: event.externalId } },
+    select: { id: true, status: true },
+  })
+
+  if (!existing) {
     await prisma.payment.create({
       data: {
         organizationId,
@@ -298,13 +322,27 @@ async function recordPayment(
         paidAt: status === 'APPROVED' ? new Date() : null,
       },
     })
-    return true
-  } catch (err: unknown) {
-    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code?: string }).code === 'P2002') {
-      return false
-    }
-    throw err
+    return { changed: true }
   }
+
+  // Mismo estado (reintento exacto) o un estado "menos avanzado" que el que
+  // ya teníamos (webhook viejo reordenado) — no se toca nada.
+  if (STATUS_RANK[status] <= STATUS_RANK[existing.status]) {
+    return { changed: false }
+  }
+
+  await prisma.payment.update({
+    where: { id: existing.id },
+    data: {
+      status,
+      amount: event.amount,
+      currency: event.currency,
+      netAmount: event.netAmount ?? undefined,
+      rawPayload: event.raw as object,
+      paidAt: status === 'APPROVED' ? new Date() : undefined,
+    },
+  })
+  return { changed: true }
 }
 
 /**
