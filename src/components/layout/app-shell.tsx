@@ -53,8 +53,8 @@ const pageVariants = {
 }
 
 export function AppShell({ user, branding, children }: AppShellProps) {
-  const { setUser } = useAuthStore()
-  const { loadBranding } = useThemeStore()
+  const setUser = useAuthStore(s => s.setUser)
+  const loadBranding = useThemeStore(s => s.loadBranding)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router   = useRouter()
@@ -181,9 +181,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
 
         <main className="flex-1 overflow-y-auto">
           <ErrorBoundary>
-            <AnimatePresence mode="wait">
               <motion.div
-                key={pathname}
                 variants={pageVariants}
                 initial="hidden"
                 animate="visible"
@@ -194,7 +192,6 @@ export function AppShell({ user, branding, children }: AppShellProps) {
               >
                 {children}
               </motion.div>
-            </AnimatePresence>
           </ErrorBoundary>
         </main>
 

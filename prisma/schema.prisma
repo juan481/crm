@@ -662,6 +662,8 @@ model Invoice {
   @@index([empresaId])
   // Cubre el filtro por empresa que ya usa la UI de Facturación.
   @@index([organizationId, empresaId])
+  // Cubre las consultas de dashboard y facturas por empresa + estado
+  @@index([organizationId, status, empresaId])
   @@index([status])
   @@index([dueDate])
   // Idempotencia de la facturación recurrente por abono (¿ya se facturó este
@@ -1145,6 +1147,9 @@ model Deal {
   // (regla de prefijo de B-tree), así que mantener ambos sólo duplicaría
   // el costo de escritura en cada INSERT/UPDATE de Deal sin beneficio.
   @@index([organizationId, stage, createdAt])
+  // Cubre las consultas de dashboard para roles restringidos (SELLER) que 
+  // filtran por ownerId + stage
+  @@index([organizationId, stage, ownerId])
   @@index([ownerId])
   @@index([contactoId])
 }

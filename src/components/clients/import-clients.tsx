@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import * as XLSX from 'xlsx'
 import {
   Upload, FileSpreadsheet, X, AlertCircle, CheckCircle2,
   Download, ChevronRight, Users, SkipForward,
@@ -55,7 +54,7 @@ function detectColumn(headers: string[]): Partial<Record<keyof ParsedRow, number
   return map
 }
 
-function parseSheet(workbook: XLSX.WorkBook): { rows: ParsedRow[]; errors: string[] } {
+function parseSheet(XLSX: any, workbook: any): { rows: ParsedRow[]; errors: string[] } {
   const sheetName = workbook.SheetNames[0]
   const sheet = workbook.Sheets[sheetName]
   const raw = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' })
@@ -92,7 +91,8 @@ function parseSheet(workbook: XLSX.WorkBook): { rows: ParsedRow[]; errors: strin
   return { rows, errors }
 }
 
-function downloadTemplate() {
+async function downloadTemplate() {
+  const XLSX = await import('xlsx')
   const ws = XLSX.utils.aoa_to_sheet([
     ['Nombre', 'Email', 'Teléfono', 'Empresa', 'Cargo', 'País', 'Ciudad'],
     ['Juan García', 'juan@empresa.com', '1155667788', 'Empresa SA', 'Gerente', 'Argentina', 'Buenos Aires'],
@@ -117,11 +117,12 @@ export function ImportClients({ onSuccess, onCancel }: ImportClientsProps) {
     setResult(null)
     setFileName(file.name)
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import('xlsx')
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
         const wb   = XLSX.read(data, { type: 'array' })
-        const { rows: parsed, errors } = parseSheet(wb)
+        const { rows: parsed, errors } = parseSheet(XLSX, wb)
         setRows(parsed)
         setParseErrors(errors)
         if (parsed.length === 0 && errors.length === 0) {

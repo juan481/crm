@@ -120,20 +120,25 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
       where: { organizationId: orgId },
       _count: { _all: true },
     }),
-    // by empresaId AND currency — una Empresa con facturas en dos monedas no
-    // puede sumarse en un único total. findMany + agregación en JS (no
-    // groupBy con _sum(amount)) por el mismo motivo que el revenue mensual:
-    // "lo que pagó el cliente" (Invoice.amount) no es "lo que entró" si el
-    // proveedor descontó su comisión — se usa Payment.netAmount cuando está.
-    !canSeeFinancials ? Promise.resolve([]) : prisma.invoice.findMany({
-      where: { organizationId: orgId, status: 'PAID', empresaId: { not: null } },
-      select: {
-        empresaId: true,
-        currency: true,
-        amount: true,
-        payments: { where: { status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { netAmount: true } },
-      },
-    }),
+    !canSeeFinancials ? Promise.resolve([]) : prisma.$queryRaw<{ empresaId: string; currency: string; total: number }[]>`
+      SELECT 
+        i."empresaId", 
+        i.currency, 
+        SUM(COALESCE(p."netAmount", i.amount))::float as total
+      FROM "Invoice" i
+      LEFT JOIN LATERAL (
+        SELECT "netAmount" FROM "Payment"
+        WHERE "invoiceId" = i.id AND status = 'APPROVED'
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+      ) p ON true
+      WHERE i."organizationId" = ${orgId} 
+        AND i.status = 'PAID' 
+        AND i."empresaId" IS NOT NULL
+      GROUP BY i."empresaId", i.currency
+      ORDER BY total DESC
+      LIMIT 5
+    `,
 
     prisma.task.count({ where: { organizationId: orgId, status: { not: 'HECHA' } } }),
     prisma.ticket.count({ where: { organizationId: orgId, status: { in: ['ABIERTO', 'EN_PROCESO'] } } }),
@@ -201,18 +206,7 @@ async function fetchMetrics(orgId: string, canSeeFinancials: boolean, userId: st
     count: g._count._all,
   }))
 
-  // Agregación por (empresaId, currency) en JS con el neto real (no
-  // Invoice.amount) — ver comentario en la query de arriba.
-  const revenueByEmpresaCurrency = new Map<string, { empresaId: string; currency: string; total: number }>()
-  for (const inv of topRevenueGroups) {
-    if (!inv.empresaId) continue
-    const received = inv.payments[0]?.netAmount ?? inv.amount
-    const key = `${inv.empresaId}:${inv.currency}`
-    const entry = revenueByEmpresaCurrency.get(key)
-    if (entry) entry.total += received
-    else revenueByEmpresaCurrency.set(key, { empresaId: inv.empresaId, currency: inv.currency, total: received })
-  }
-  const top5Revenue = Array.from(revenueByEmpresaCurrency.values()).sort((a, b) => b.total - a.total).slice(0, 5)
+  const top5Revenue = (topRevenueGroups as { empresaId: string; currency: string; total: number }[])
 
   const empresaIds = top5Revenue.map((g) => g.empresaId)
   const topEmpresas = empresaIds.length

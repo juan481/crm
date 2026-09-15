@@ -139,24 +139,28 @@ El CRM tiene 5 roles con jerarquía numérica (`canAccess`):
 - Pixel de apertura (`/api/track/open`) + webhooks SNS (`/api/webhooks/ses`)
 - Firma SNS verificada con RSA-SHA1 antes de procesar cualquier evento
 
-### Pipeline (Deals)
-- SELLER solo puede ver y editar sus propios deals
-- ADMIN puede asignar deals a otros usuarios de la misma organización
-- SELLER no puede crear deals a nombre de otro usuario
+### Bot de WhatsApp con IA (NISSI)
+- Integración oficial con WhatsApp Cloud API.
+- Motor de IA avanzado para calificar leads, responder consultas de clientes, y derivar a humanos.
+- Inbox de conversaciones con handover humano, estado de lectura y control de SLA.
 
-### Tickets de soporte
-- Numeración auto-incremental con retry ante colisiones concurrentes (P2002)
-- TECHNICIAN solo puede cambiar el estado de tickets asignados a él
-- Solo ADMIN+ puede reasignar tickets
+### Catálogo Gremio (B2B)
+- Portal lateral exclusivo para clientes `GREMIO`.
+- Doble lista de precios (Público / Gremio) sincronizada opcionalmente vía Excel o Google Sheets.
+- Control de stock y carrito de pedidos B2B integrado al flujo interno del CRM.
 
-### Tareas
-- TECHNICIAN puede marcar como leídas/actualizar estado de tareas asignadas
-- HR no tiene acceso a tareas de clientes
+### Compras y OCR
+- Módulo de proveedores y registro de gastos.
+- Extracción automática de datos desde PDFs/imágenes usando IA (OCR) con fallback manual.
+- Tracking de márgenes reales cruzando ventas vs costos de compras.
 
-### Facturación
-- Generación recurrente masiva (1 clic por mes)
-- Solo ADMIN+ puede ver y generar facturas
-- `organizationId` requerido en todos los registros
+### Facturación y Pagos Online
+- Integraciones nativas con Whop (USD) y MercadoPago (ARS) para cobro de abonos automáticos y pago de facturas sueltas.
+- Generación recurrente masiva inteligente.
+
+### Directorio (Empresas y Contactos)
+- Arquitectura robusta separando Entidades (Empresa) de Personas (Contactos).
+- Historial omnicanal centralizado: cada interacción (nota, mail, whatsapp, reunión) queda en el timeline de la empresa o el contacto.
 
 ---
 
@@ -165,32 +169,24 @@ El CRM tiene 5 roles con jerarquía numérica (`canAccess`):
 ```
 crm/
 ├── prisma/
-│   ├── schema.prisma          # Schema con enums tipados
+│   ├── schema.prisma          # Schema con enums tipados y nueva arquitectura (Empresa/Contacto)
 │   ├── seed.ts                # Datos de prueba
 │   └── migrations/
-│       └── safe_enum_migration.sql   # Migración String→Enum sin pérdida de datos
 ├── src/
 │   ├── app/
 │   │   ├── (auth)/            # Login + Onboarding
-│   │   ├── (dashboard)/       # Páginas del CRM
+│   │   ├── (dashboard)/       # Páginas internas del CRM (Directorio, Pipeline, etc.)
+│   │   ├── (gremio)/          # Portal B2B (Módulo Gremio)
+│   │   ├── (portal)/          # Portal de Clientes (Autogestión y Pagos)
 │   │   └── api/               # API Routes REST
-│   │       ├── clients/
-│   │       ├── deals/
-│   │       ├── tickets/
-│   │       ├── tareas/
-│   │       ├── invoices/
-│   │       ├── communications/
-│   │       ├── track/open/    # Pixel de apertura de emails
+│   │       ├── whatsapp/      # Webhooks y endpoints del Bot IA
 │   │       ├── webhooks/ses/  # Receptor de eventos SNS/SES
-│   │       └── notifications/counts/
+│   │       └── ...
 │   ├── components/
-│   │   ├── ui/                # Componentes base reutilizables
-│   │   ├── layout/            # Sidebar + Header
-│   │   └── ...
 │   ├── lib/
 │   │   ├── auth.ts            # canAccess + getCurrentUser
 │   │   ├── db.ts              # Prisma client singleton
-│   │   └── email.ts           # sendEmail (SES / Brevo / SMTP)
+│   │   └── ...
 │   └── types/index.ts         # Tipos globales y enums TS
 ```
 
@@ -198,22 +194,20 @@ crm/
 
 ## Características
 
-- ✅ Arquitectura White-Label multi-tenant
-- ✅ Temas dinámicos (colores y logo personalizables por organización)
-- ✅ RBAC con 5 roles jerárquicos y scoping por recurso
-- ✅ Amazon SES con tracking completo (delivery, bounce, open, spam)
-- ✅ Webhook SNS con verificación de firma RSA-SHA1
+- ✅ Arquitectura White-Label multi-tenant con temas dinámicos
+- ✅ RBAC jerárquico + portales laterales (`GREMIO`, `CLIENTE`)
+- ✅ Bot de WhatsApp (NISSI) con IA para ventas y soporte
+- ✅ Directorio relacional (Empresas y Contactos) con timeline omnicanal
+- ✅ Pagos Online y Abonos con Whop/MercadoPago
+- ✅ Catálogo B2B Gremio con dual-pricing
+- ✅ Procesamiento OCR de comprobantes de compras
+- ✅ Amazon SES con tracking completo de campañas (delivery, bounce, open, spam)
 - ✅ Onboarding interactivo paso a paso
-- ✅ Dashboard con métricas filtradas por rol
-- ✅ Buscador global predictivo
-- ✅ Pipeline de ventas (Deals)
-- ✅ Sistema de tickets con numeración concurrente segura
-- ✅ Generación recurrente de facturas
-- ✅ Campañas de email masivas con stats por destinatario
-- ✅ Cotizador con PDF (logo proporcional, descuentos)
-- ✅ Exportación XLS / CSV
-- ✅ Mobile-first responsive
-- ✅ Dark mode con toggle
+- ✅ Dashboard con métricas y alertas de rentabilidad
+- ✅ Buscador global predictivo optimizado
+- ✅ Pipeline de ventas (Deals) y cotizador con exportación a PDF
+- ✅ Exportación de grillas a XLS / CSV
+- ✅ Interfaz Mobile-first responsive y Dark Mode nativo
 
 ---
 
@@ -231,3 +225,4 @@ Para deploy manual:
 npm run build
 npm run start
 ```
+

@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
     let skipped = 0
     const omitidas: { fila: number; nombre: string; apellido: string; empresa: string; mail: string; motivo: string }[] = []
 
+    const existingContacts = await db.directorioContacto.findMany({
+      where: { organizationId: orgId },
+      select: { firstName: true, lastName: true, empresaId: true }
+    })
+    const existingSet = new Set(existingContacts.map((c: any) => `${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}|${c.empresaId || ''}`))
+
+    const toCreate = []
+
     for (let idx = 0; idx < rows.length; idx++) {
       const row = rows[idx]
       const filaExcel = baseFila + idx
@@ -77,26 +85,20 @@ export async function POST(req: NextRequest) {
 
         const empresaId = findEmpresaMatch(email, companyRaw, empresas)
 
-        // Dedup SIEMPRE por nombre+empresa, nunca sólo por mail — mismo fix
-        // ya aplicado en /api/directorio/importar/route.ts. Varias personas
-        // de una misma repartición/empresa suelen compartir un mail
-        // genérico ("info@...", "administracion@..."); dedupear sólo por
-        // mail hacía que la 2ª y 3ª persona con ese mail se descartaran
-        // como "ya existe" y se perdieran del lote en silencio.
-        const existing = await db.directorioContacto.findFirst({
-          where: { organizationId: orgId, firstName, lastName, empresaId },
-          select: { id: true },
-        })
-        if (existing) { dupes++; continue }
+        const key = `${firstName.toLowerCase()}|${lastName.toLowerCase()}|${empresaId || ''}`
+        if (existingSet.has(key)) { dupes++; continue }
 
-        await db.directorioContacto.create({
-          data: { organizationId: orgId, firstName, lastName, companyRaw, role, email, phone, empresaId },
-        })
+        toCreate.push({ organizationId: orgId, firstName, lastName, companyRaw, role, email, phone, empresaId })
+        existingSet.add(key)
         created++
       } catch (rowErr) {
         const msg = rowErr instanceof Error ? rowErr.message : 'error desconocido'
         omitir(`Error al procesar la fila: ${msg}`)
       }
+    }
+
+    if (toCreate.length > 0) {
+      await db.directorioContacto.createMany({ data: toCreate })
     }
 
     return NextResponse.json({ created, dupes, skipped, omitidas })

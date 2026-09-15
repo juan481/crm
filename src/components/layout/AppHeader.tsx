@@ -34,14 +34,23 @@ interface AppHeaderProps {
 
 export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
   const router = useRouter()
-  const { logout } = useAuthStore()
-  const { darkMode, toggleDarkMode } = useThemeStore()
+  const logout = useAuthStore(s => s.logout)
+  const darkMode = useThemeStore(s => s.darkMode)
+  const toggleDarkMode = useThemeStore(s => s.toggleDarkMode)
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   // Vive en un store (no useState local) para que el botón "Buscar" de la
   // Barra Rápida móvil (mobile-quick-bar.tsx) pueda abrir este mismo
   // buscador desde afuera, en vez de duplicar la búsqueda de empresas.
-  const { open: searchOpen, setOpen: setSearchOpen } = useSearchStore()
+  const searchOpen = useSearchStore(s => s.open)
+  const setSearchOpen = useSearchStore(s => s.setOpen)
   const [notifOpen, setNotifOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const [suggestOpen, setSuggestOpen] = useState(false)
@@ -89,10 +98,10 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
   }
 
   const { data: searchResults } = useQuery({
-    queryKey: ['search', searchQuery],
+    queryKey: ['search', debouncedSearchQuery],
     queryFn: async () => {
-      if (searchQuery.length < 2) return []
-      const q = encodeURIComponent(searchQuery)
+      if (debouncedSearchQuery.length < 2) return []
+      const q = encodeURIComponent(debouncedSearchQuery)
       // Promise.all, no secuencial — y cada fetch se banca su propio fallo
       // por separado (.catch de abajo): un HR/Técnico sin acceso a
       // Contactos (canAccess mínimo SELLER en /api/contactos) recibe un 403
@@ -111,7 +120,7 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       }))
       return [...empresaResults, ...contactoResults]
     },
-    enabled: searchQuery.length >= 2,
+    enabled: debouncedSearchQuery.length >= 2,
     staleTime: 30 * 1000,
   })
 

@@ -1,8 +1,8 @@
-import * as XLSX from 'xlsx'
 import type { Client } from '@/types'
 import { CLIENT_STATUS_LABELS, formatDate, formatCurrency } from './utils'
 
-export function exportClientsToXLSX(clients: Client[]): void {
+export async function exportClientsToXLSX(clients: Client[]): Promise<void> {
+  const XLSX = await import('xlsx')
   const rows = clients.map((c) => ({
     Nombre: c.name,
     Empresa: c.company ?? '',

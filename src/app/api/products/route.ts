@@ -66,15 +66,18 @@ export async function GET(req: NextRequest) {
     }
 
     const db = prisma as any
+    const page = Math.max(1, Number(req.nextUrl.searchParams.get('page') ?? 1))
+    const limit = Math.min(2000, Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? 200)))
+    const skip = (page - 1) * limit
+
     const products = await db.product.findMany({
       where:   { organizationId: payload.orgId, ...scopeWhere },
       orderBy: { createdAt: 'desc' },
-      // Sólo para la lista corta de productos propios (scope=simple): traer
-      // los componentes de los que son KIT, para que el Cotizador pueda
-      // mostrar "Incluye: …" sin un viaje extra. El catálogo del proveedor
-      // (sku != null) nunca tiene KITs.
-      ...(scope === 'simple' && {
-        include: {
+      take: limit,
+      skip,
+      select: {
+        id: true, name: true, sku: true, mpn: true, price: true, currency: true, trackStock: true, stock: true, brand: true, categoryId: true, isKit: true, unit: true,
+        ...(scope === 'simple' && {
           kitComponents: {
             select: {
               id: true, quantity: true, componentId: true,
@@ -82,8 +85,8 @@ export async function GET(req: NextRequest) {
             },
             orderBy: { createdAt: 'asc' },
           },
-        },
-      }),
+        }),
+      }
     })
 
     return NextResponse.json({ data: products })
