@@ -291,8 +291,8 @@ function ConteoInicialModal({ onClose, onDone }: { onClose: () => void; onDone: 
   const [search, setSearch] = useState('')
 
   const { data, isLoading } = useQuery<{ data: Product[] }>({
-    queryKey: ['products', 'simple'],
-    queryFn: async () => (await fetch('/api/products?scope=simple')).json(),
+    queryKey: ['products', 'all-conteo'],
+    queryFn: async () => (await fetch('/api/products?scope=all&limit=2000')).json(),
     staleTime: 30_000,
   })
   const productos = (data?.data ?? []).filter(p =>
@@ -330,7 +330,6 @@ function ConteoInicialModal({ onClose, onDone }: { onClose: () => void; onDone: 
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Cargá la cantidad física real de cada producto. El sistema registra el movimiento
           que lleva del stock actual al contado (queda en el historial como conteo inicial).
-          Para productos del catálogo del proveedor, usá el botón <strong>Movimiento</strong> en su fila.
         </p>
         <Input placeholder="Filtrar productos..." value={search} onChange={e => setSearch(e.target.value)}
           leftIcon={<Search size={14} />} />
@@ -349,7 +348,7 @@ function ConteoInicialModal({ onClose, onDone }: { onClose: () => void; onDone: 
               {isLoading ? (
                 <tr><td colSpan={4} className="px-3 py-6 text-center" style={{ color: 'var(--color-text-muted)' }}>Cargando...</td></tr>
               ) : productos.length === 0 ? (
-                <tr><td colSpan={4} className="px-3 py-6 text-center" style={{ color: 'var(--color-text-muted)' }}>No hay productos propios cargados.</td></tr>
+                <tr><td colSpan={4} className="px-3 py-6 text-center" style={{ color: 'var(--color-text-muted)' }}>No se encontraron productos.</td></tr>
               ) : productos.map(p => (
                 <tr key={p.id} style={{ borderTop: '1px solid var(--color-border)' }}>
                   <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{p.name}</td>
