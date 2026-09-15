@@ -532,7 +532,7 @@ export default function CotizadorPage() {
           billingCycle: ci.type === 'SERVICE' ? ((ci.item as Service).billingCycle ?? 'MONTHLY') : undefined,
           unit: isProduct ? product.unit : undefined,
           quantity: ci.quantity,
-          ivaPct: ci.ivaPct,
+          ivaPct: ivaRateFor(ci),
         }
       })
 
