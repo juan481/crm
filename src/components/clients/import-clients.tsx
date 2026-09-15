@@ -57,7 +57,7 @@ function detectColumn(headers: string[]): Partial<Record<keyof ParsedRow, number
 function parseSheet(XLSX: any, workbook: any): { rows: ParsedRow[]; errors: string[] } {
   const sheetName = workbook.SheetNames[0]
   const sheet = workbook.Sheets[sheetName]
-  const raw = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '' })
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as string[][]
 
   if (raw.length < 2) return { rows: [], errors: ['El archivo está vacío o no tiene datos'] }
 
