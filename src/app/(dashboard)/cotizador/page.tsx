@@ -412,16 +412,23 @@ export default function CotizadorPage() {
     y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: quote.validityDays, fromDate: today })
 
     // Table header
+    const tableStartY = y
     doc.setFillColor(pr, pg, pb)
-    doc.rect(mg, y, cw, 8.5, 'F')
+    doc.roundedRect(mg, y, cw, 8.5, 3, 3, 'F')
+    doc.rect(mg, y + 4, cw, 4.5, 'F') // quita el redondeo inferior de la cabecera
+    
     doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
     doc.text('ÍTEM',     mg + 3,        y + 5.8)
-    doc.text('TIPO',     mg + cw * 0.52, y + 5.8, { align: 'center' })
-    doc.text('CANT.',    mg + cw * 0.70, y + 5.8, { align: 'center' })
-    doc.text('TOTAL',    mg + cw - 2,   y + 5.8, { align: 'right' })
+    doc.text('TIPO',     mg + cw * 0.54, y + 5.8, { align: 'center' })
+    doc.text('CANT.',    mg + cw * 0.72, y + 5.8, { align: 'center' })
+    doc.text('TOTAL',    mg + cw - 3,   y + 5.8, { align: 'right' })
     y += 8.5
 
     quote.cartItems.forEach((ci, idx) => {
+      if (idx > 0) {
+        doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y)
+      }
+      
       const isProduct = ci.type === 'PRODUCT'
       const kitComps = isProduct && (ci.item as Product).isKit ? ((ci.item as Product).kitComponents ?? []) : []
       const incluyeStr = kitComps.length
@@ -432,15 +439,13 @@ export default function CotizadorPage() {
       const nameStr = itemSku ? `[${itemSku}] ${ci.item.name}` : ci.item.name
 
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
-      const nameLines: string[] = doc.splitTextToSize(nameStr, cw * 0.48)
-      doc.setFontSize(7) // para medir extraLines
+      const nameLines: string[] = doc.splitTextToSize(nameStr, cw * 0.42)
+      doc.setFontSize(7.5) 
       const extraLines: string[] = []
-      if (itemDesc) extraLines.push(...doc.splitTextToSize(itemDesc, cw * 0.48))
-      if (incluyeStr) extraLines.push(...doc.splitTextToSize(incluyeStr, cw * 0.48))
+      if (itemDesc) extraLines.push(...doc.splitTextToSize(itemDesc, cw * 0.42))
+      if (incluyeStr) extraLines.push(...doc.splitTextToSize(incluyeStr, cw * 0.42))
 
-      const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3 + 1 : 0) + 3
-
-      if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
+      const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3.2 + 1 : 0) + 4
 
       const lineTotal = getPrice(ci, quote.priceMode) * ci.quantity
       const priceStr  = formatMoneyExact(lineTotal, quote.currency)
@@ -450,7 +455,7 @@ export default function CotizadorPage() {
 
       // Draw Name
       doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
-      let textY = y + 7
+      let textY = y + 7.5
       nameLines.forEach(line => {
         doc.text(line, mg + 3, textY)
         textY += 4
@@ -458,11 +463,11 @@ export default function CotizadorPage() {
 
       // Draw Extra (Description / Kit)
       if (extraLines.length) {
-        doc.setTextColor(100, 116, 139); doc.setFontSize(7); doc.setFont('helvetica', 'italic')
+        doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.setFont('helvetica', 'italic')
         textY -= 1
         extraLines.forEach(line => {
           doc.text(line, mg + 3, textY)
-          textY += 3
+          textY += 3.2
         })
       }
 
@@ -470,20 +475,24 @@ export default function CotizadorPage() {
       const badgeLabel = ci.type === 'SERVICE' ? 'SERVICIO' : (kitComps.length ? 'KIT' : 'PRODUCTO')
       doc.setFontSize(7); doc.setFont('helvetica', 'bold')
       const badgeW = doc.getTextWidth(badgeLabel) + 6
-      const badgeCx = mg + cw * 0.52
+      const badgeCx = mg + cw * 0.54
       doc.setFillColor(ci.type === 'SERVICE' ? pr : 245, ci.type === 'SERVICE' ? pg : 158, ci.type === 'SERVICE' ? pb : 11)
-      doc.roundedRect(badgeCx - badgeW / 2, y + 2.5, badgeW, 5, 1, 1, 'F')
+      doc.roundedRect(badgeCx - badgeW / 2, y + 3, badgeW, 5, 1, 1, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.text(badgeLabel, badgeCx, y + 6.3, { align: 'center' })
+      doc.text(badgeLabel, badgeCx, y + 6.8, { align: 'center' })
 
       // Draw Quantity & Total
       doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-      doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.70, y + 7, { align: 'center' })
+      doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.72, y + 7.5, { align: 'center' })
       doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
-      doc.text(priceStr, mg + cw - 2, y + 7, { align: 'right' })
+      doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
 
       y += rowH
     })
+
+    // Borde redondeado alrededor de toda la tabla
+    doc.setDrawColor(226, 232, 240)
+    doc.roundedRect(mg, tableStartY, cw, y - tableStartY, 3, 3, 'S')
 
     // Totals — subtotal, descuento, neto gravado, IVA por alícuota, TOTAL.
     y += 4

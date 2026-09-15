@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  basePath: '/demos/justcrm',
   poweredByHeader: false,
   images: {
     remotePatterns: [
