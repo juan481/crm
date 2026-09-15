@@ -422,40 +422,53 @@ export default function CotizadorPage() {
     y += 8.5
 
     quote.cartItems.forEach((ci, idx) => {
-      // Los KITs se cotizan como UNA línea con UN precio — el cliente nunca ve
-      // el desglose ni los precios por componente. Sólo se lista, en gris
-      // chico, qué trae el KIT ("Incluye: 2× cámara, 1× grabador…").
-      const kitComps = ci.type === 'PRODUCT' && (ci.item as Product).isKit ? ((ci.item as Product).kitComponents ?? []) : []
+      const isProduct = ci.type === 'PRODUCT'
+      const kitComps = isProduct && (ci.item as Product).isKit ? ((ci.item as Product).kitComponents ?? []) : []
       const incluyeStr = kitComps.length
         ? 'Incluye: ' + kitComps.map(c => `${c.quantity}× ${c.component.name}`).join(', ')
         : ''
-      const incluyeLines: string[] = incluyeStr ? doc.splitTextToSize(incluyeStr, cw * 0.62) : []
-      const rowH     = 10 + (incluyeLines.length ? incluyeLines.length * 3.2 + 1 : 0)
+      const itemDesc = ci.item.description ? ci.item.description : ''
+      const itemSku = isProduct ? ((ci.item as Product).sku || (ci.item as Product).mpn) : null
+      const nameStr = itemSku ? `[${itemSku}] ${ci.item.name}` : ci.item.name
+
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+      const nameLines: string[] = doc.splitTextToSize(nameStr, cw * 0.48)
+      doc.setFontSize(7) // para medir extraLines
+      const extraLines: string[] = []
+      if (itemDesc) extraLines.push(...doc.splitTextToSize(itemDesc, cw * 0.48))
+      if (incluyeStr) extraLines.push(...doc.splitTextToSize(incluyeStr, cw * 0.48))
+
+      const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3 + 1 : 0) + 3
+
       if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
+
       const lineTotal = getPrice(ci, quote.priceMode) * ci.quantity
       const priceStr  = formatMoneyExact(lineTotal, quote.currency)
       const typeLabel = ci.type === 'SERVICE'
         ? (BILLING_LABELS[((ci.item as Service).billingCycle ?? 'MONTHLY')] ?? 'mes')
         : `× ${(ci.item as Product).unit}`
 
-      doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-      doc.text(ci.item.name, mg + 3, y + 7)
-      if (incluyeLines.length) {
-        doc.setTextColor(120, 130, 145); doc.setFontSize(7); doc.setFont('helvetica', 'italic')
-        doc.text(incluyeLines, mg + 3, y + 11)
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30, 41, 59)
+      // Draw Name
+      doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
+      let textY = y + 7
+      nameLines.forEach(line => {
+        doc.text(line, mg + 3, textY)
+        textY += 4
+      })
+
+      // Draw Extra (Description / Kit)
+      if (extraLines.length) {
+        doc.setTextColor(100, 116, 139); doc.setFontSize(7); doc.setFont('helvetica', 'italic')
+        textY -= 1
+        extraLines.forEach(line => {
+          doc.text(line, mg + 3, textY)
+          textY += 3
+        })
       }
 
-      // Type badge — ancho dinámico según el texto real (doc.getTextWidth),
-      // no un pill fijo de 22mm centrado en un punto (mg+cw*0.55) distinto
-      // al del rect (mg+cw*0.44, ancho 22 → centro real en mg+cw*0.44+11).
-      // Con ese desfase, "SERVICIO" entraba de casualidad (tiene dos "I",
-      // carácter angosto en Helvetica) pero "PRODUCTO" (misma cantidad de
-      // letras, más ancho) se salía del pill por la derecha — y como el
-      // texto es blanco, esa parte quedaba invisible sobre el fondo blanco
-      // de la página: se veía "PRODUC" cortado, no un bug de datos.
+      // Draw Type Badge
       const badgeLabel = ci.type === 'SERVICE' ? 'SERVICIO' : (kitComps.length ? 'KIT' : 'PRODUCTO')
-      doc.setFontSize(7); doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold')
       const badgeW = doc.getTextWidth(badgeLabel) + 6
       const badgeCx = mg + cw * 0.52
       doc.setFillColor(ci.type === 'SERVICE' ? pr : 245, ci.type === 'SERVICE' ? pg : 158, ci.type === 'SERVICE' ? pb : 11)
@@ -463,11 +476,13 @@ export default function CotizadorPage() {
       doc.setTextColor(255, 255, 255)
       doc.text(badgeLabel, badgeCx, y + 6.3, { align: 'center' })
 
-      doc.setTextColor(100, 116, 139); doc.setFontSize(8)
+      // Draw Quantity & Total
+      doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
       doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.70, y + 7, { align: 'center' })
       doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
       doc.text(priceStr, mg + cw - 2, y + 7, { align: 'right' })
-      doc.setFont('helvetica', 'normal'); y += rowH
+
+      y += rowH
     })
 
     // Totals — subtotal, descuento, neto gravado, IVA por alícuota, TOTAL.
@@ -498,20 +513,28 @@ export default function CotizadorPage() {
     setSaving(true)
     try {
       // price acá ya es el número RESUELTO (público o gremio, según
-      // priceMode) — el snapshot congelado de QuoteItem debe guardar lo que
-      // efectivamente se cotizó, no siempre item.price a secas.
-      const items = cartItems.map(ci => ({
-        type:         ci.type,
-        serviceId:    ci.type === 'SERVICE' ? ci.item.id : undefined,
-        productId:    ci.type === 'PRODUCT' ? ci.item.id : undefined,
-        name:         ci.item.name,
-        price:        getPrice(ci, priceMode),
-        currency:     ci.item.currency,
-        billingCycle: ci.type === 'SERVICE' ? (ci.item as Service).billingCycle : undefined,
-        unit:         ci.type === 'PRODUCT' ? (ci.item as Product).unit : undefined,
-        quantity:     ci.quantity,
-        ivaPct:       ivaRateFor(ci),
-      }))
+      // priceMode), validado server-side de todos modos para catálogo.
+      const items = cartItems.map(ci => {
+        const isProduct = ci.type === 'PRODUCT'
+        const product = ci.item as Product
+        return {
+          type: ci.type,
+          serviceId: ci.type === 'SERVICE' ? ci.item.id : undefined,
+          productId: isProduct ? product.id : undefined,
+          name: ci.item.name,
+          description: ci.item.description ?? null,
+          sku: isProduct ? product.sku : null,
+          mpn: isProduct ? product.mpn : null,
+          isKit: isProduct ? product.isKit : false,
+          kitComponents: isProduct && product.isKit ? product.kitComponents : [],
+          price: getPrice(ci, priceMode),
+          currency: ci.item.currency,
+          billingCycle: ci.type === 'SERVICE' ? ((ci.item as Service).billingCycle ?? 'MONTHLY') : undefined,
+          unit: isProduct ? product.unit : undefined,
+          quantity: ci.quantity,
+          ivaPct: ci.ivaPct,
+        }
+      })
 
       const res  = await fetch('/api/cotizador/send', {
         method:  'POST',

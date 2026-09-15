@@ -150,8 +150,16 @@ En la ficha de la Empresa → cada abono tiene **"Activar débito automático"**
 - **Firma de webhook obligatoria y fail-closed** (Whop HMAC-SHA256 sobre
   `{id}.{ts}.{body}`; MP `x-signature` + fetch a la API de MP como fuente de
   verdad). Body leído crudo antes de parsear.
-- **Idempotencia**: `Payment @@unique([provider, externalId])`; PENDING→PAID
-  una sola vez.
+- **Idempotencia**: `Payment @@unique([provider, externalId])`. `recordPayment()`
+  (`src/lib/payments/reconcile.ts`) hace upsert con ranking de estado
+  (`PENDING < REJECTED < APPROVED < REFUNDED`) en vez de un INSERT puro: un
+  mismo `externalId` que llega primero como PENDING y después como APPROVED
+  (comportamiento normal de Mercado Pago, reusa el mismo id de pago al pasar
+  de estado) actualiza la fila y sí dispara la factura a PAID — antes del fix
+  el segundo webhook chocaba con la unique constraint, se descartaba, y la
+  factura quedaba PENDING para siempre aunque el pago ya estuviera aprobado.
+  Un webhook repetido con el mismo estado (reintento) no vuelve a notificar
+  ni a tocar la factura (`{ changed: false }`).
 - `payToken` = `uuid()` (122 bits). `/pagar/<token>` sólo muestra monto +
   concepto + branding. Rate-limit por IP.
 - Magic link con `shouldCreateUser: false`; el callback verifica `role/status/

@@ -119,31 +119,77 @@ export default function CotizacionDetailPage() {
       y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: data.validityDays ?? 30, fromDate: createdAt })
 
       // Table header
-      doc.setFillColor(241, 245, 249); doc.rect(mg, y, cw, 8, 'F')
-      doc.setTextColor(148, 163, 184); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
-      doc.text('SERVICIO', mg + 2, y + 5.5)
-      doc.text('PERÍODO',  mg + cw * 0.6, y + 5.5, { align: 'center' })
-      doc.text('PRECIO',   mg + cw - 2,   y + 5.5, { align: 'right' })
-      y += 8
+      doc.setFillColor(pr, pg, pb)
+      doc.rect(mg, y, cw, 8.5, 'F')
+      doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
+      doc.text('ÍTEM',     mg + 3,        y + 5.8)
+      doc.text('TIPO',     mg + cw * 0.52, y + 5.8, { align: 'center' })
+      doc.text('CANT.',    mg + cw * 0.70, y + 5.8, { align: 'center' })
+      doc.text('TOTAL',    mg + cw - 2,   y + 5.8, { align: 'right' })
+      y += 8.5
 
-      data.items.forEach((item, idx) => {
-        if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 9, 'F') }
+      data.items.forEach((item: any, idx: number) => {
+        const isProduct = item.type === 'PRODUCT'
+        const kitComps = isProduct && item.isKit ? (item.kitComponents ?? []) : []
+        const incluyeStr = kitComps.length
+          ? 'Incluye: ' + kitComps.map((c: any) => `${c.quantity}× ${c.component?.name || 'Componente'}`).join(', ')
+          : ''
+        const itemDesc = item.description ? item.description : ''
+        const itemSku = isProduct ? (item.sku || item.mpn) : null
+        const nameStr = itemSku ? `[${itemSku}] ${item.name}` : item.name
+
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+        const nameLines: string[] = doc.splitTextToSize(nameStr, cw * 0.48)
+        doc.setFontSize(7)
+        const extraLines: string[] = []
+        if (itemDesc) extraLines.push(...doc.splitTextToSize(itemDesc, cw * 0.48))
+        if (incluyeStr) extraLines.push(...doc.splitTextToSize(incluyeStr, cw * 0.48))
+
+        const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3 + 1 : 0) + 3
+
+        if (idx % 2 === 1) { doc.setFillColor(246, 248, 252); doc.rect(mg, y, cw, rowH, 'F') }
+
         const lineTotal = item.price * item.quantity
-        const label     = item.quantity > 1 ? `${item.name}  ×${item.quantity}` : item.name
-        // Un PRODUCTO no tiene ciclo de facturación — mostrarle "mes" (el
-        // default de BILLING_LABELS) es un dato de facturación incorrecto,
-        // no cosmético. Mismo fallback que ya usa correctamente
-        // api/cotizador/enviar-mail/route.ts para esta misma info.
-        const period    = item.type === 'PRODUCT' ? (item.unit || 'unidad') : (BILLING_LABELS[item.billingCycle] ?? 'mes')
-        const price     = new Intl.NumberFormat('es-AR', { style: 'currency', currency: item.currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(lineTotal)
+        const priceStr  = formatMoneyExact(lineTotal, item.currency)
+        const typeLabel = item.type === 'SERVICE'
+          ? (BILLING_LABELS[item.billingCycle] ?? 'mes')
+          : `× ${item.unit || 'unidad'}`
 
-        doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-        doc.text(label, mg + 2, y + 6)
-        doc.setTextColor(100, 116, 139); doc.setFontSize(8.5)
-        doc.text(period, mg + cw * 0.6, y + 6, { align: 'center' })
-        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold')
-        doc.text(price, mg + cw - 2, y + 6, { align: 'right' })
-        doc.setFont('helvetica', 'normal'); y += 9
+        // Draw Name
+        doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
+        let textY = y + 7
+        nameLines.forEach(line => {
+          doc.text(line, mg + 3, textY)
+          textY += 4
+        })
+
+        // Draw Extra (Description / Kit)
+        if (extraLines.length) {
+          doc.setTextColor(100, 116, 139); doc.setFontSize(7); doc.setFont('helvetica', 'italic')
+          textY -= 1
+          extraLines.forEach(line => {
+            doc.text(line, mg + 3, textY)
+            textY += 3
+          })
+        }
+
+        // Draw Type Badge
+        const badgeLabel = item.type === 'SERVICE' ? 'SERVICIO' : (kitComps.length ? 'KIT' : 'PRODUCTO')
+        doc.setFontSize(7); doc.setFont('helvetica', 'bold')
+        const badgeW = doc.getTextWidth(badgeLabel) + 6
+        const badgeCx = mg + cw * 0.52
+        doc.setFillColor(item.type === 'SERVICE' ? pr : 245, item.type === 'SERVICE' ? pg : 158, item.type === 'SERVICE' ? pb : 11)
+        doc.roundedRect(badgeCx - badgeW / 2, y + 2.5, badgeW, 5, 1, 1, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.text(badgeLabel, badgeCx, y + 6.3, { align: 'center' })
+
+        // Draw Quantity & Total
+        doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
+        doc.text(`${item.quantity} ${typeLabel}`, mg + cw * 0.70, y + 7, { align: 'center' })
+        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
+        doc.text(priceStr, mg + cw - 2, y + 7, { align: 'right' })
+
+        y += rowH
       })
 
       // Totales — subtotal, descuento, IVA por alícuota, TOTAL.

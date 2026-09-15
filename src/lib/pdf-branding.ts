@@ -116,12 +116,6 @@ export function fitLogo(width: number, height: number, maxW: number, maxH: numbe
 
 export interface PdfLogo { dataUrl: string; width: number; height: number }
 
-/**
- * Draws the document header band: logo + brand name on the left, a small
- * uppercase "kicker" pill and the date stacked on the right, plus a subtle
- * darker diagonal accent for depth instead of a flat single-color block.
- * Returns the band height so callers know where the body content starts.
- */
 export function drawPdfHeader(doc: jsPDF, opts: {
   pw: number; mg: number
   pr: number; pg: number; pb: number
@@ -131,14 +125,11 @@ export function drawPdfHeader(doc: jsPDF, opts: {
   dateLabel: string
 }): number {
   const { pw, mg, pr, pg, pb, orgName, logo, kicker, dateLabel } = opts
-  const H = 46
+  const H = 40
 
+  // Borde inferior sutil usando el color de la marca
   doc.setFillColor(pr, pg, pb)
-  doc.rect(0, 0, pw, H, 'F')
-
-  const darken = (c: number) => Math.max(0, Math.round(c * 0.82))
-  doc.setFillColor(darken(pr), darken(pg), darken(pb))
-  doc.triangle(pw - 46, H, pw, H - 20, pw, H, 'F')
+  doc.rect(0, H, pw, 1.5, 'F')
 
   let textX = mg
   if (logo) {
@@ -147,29 +138,31 @@ export function drawPdfHeader(doc: jsPDF, opts: {
     doc.addImage(logo.dataUrl, 'PNG', mg, (H - lH) / 2, lW, lH)
     textX = mg + lW + 5
   }
-  doc.setTextColor(255, 255, 255)
+  
+  // Nombre de la empresa (texto oscuro en lugar de blanco para contraste sobre el fondo claro)
+  doc.setTextColor(30, 41, 59)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(19)
   doc.text(orgName, textX, H / 2 + 4)
 
-  // Kicker pill (top-right)
+  // Kicker (Ej: PRESUPUESTO) en color de la marca
   const kickerText = kicker.toUpperCase()
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5)
-  const kw = doc.getTextWidth(kickerText) + 8
+  const kw = doc.getTextWidth(kickerText) + 12
   const pillX = pw - mg - kw, pillY = 10
-  doc.setGState(doc.GState({ opacity: 0.18 }))
-  doc.setFillColor(255, 255, 255)
+  
+  doc.setFillColor(pr, pg, pb)
   doc.roundedRect(pillX, pillY, kw, 7, 3.5, 3.5, 'F')
-  doc.setGState(doc.GState({ opacity: 1 }))
+  
   doc.setTextColor(255, 255, 255)
   doc.text(kickerText, pillX + kw / 2, pillY + 4.9, { align: 'center' })
 
-  // Date (below the pill)
+  // Fecha debajo del kicker
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8)
-  doc.setGState(doc.GState({ opacity: 0.85 }))
-  doc.text(dateLabel, pw - mg, pillY + 15, { align: 'right' })
-  doc.setGState(doc.GState({ opacity: 1 }))
+  doc.setTextColor(100, 116, 139)
+  doc.text(dateLabel, pw - mg, pillY + 14, { align: 'right' })
 
-  return H
+  // Devuelve la Y donde arranca el contenido (mismo espaciado que antes)
+  return H + 6
 }
 
 /**
