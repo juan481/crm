@@ -16,18 +16,25 @@ export async function GET(req: NextRequest) {
     const days = Math.min(180, Math.max(7, Number(req.nextUrl.searchParams.get('days') ?? 30)))
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     const db = prisma as any
-    const convWhere = { organizationId: orgId }
+    // importedAt: null en TODO lo de acá abajo — un chat viejo cargado por
+    // scripts/import-abba-whatsapp-history.ts (CLOSED, humanTakeoverAt null)
+    // calificaba igual que uno resuelto de verdad por NISSI, e inflaba
+    // "Conversaciones" con historial pre-NISSI. El historial sigue completo
+    // en el inbox — esto sólo lo saca de las cuentas de performance. Ver
+    // `importadas` más abajo para no esconderlo del todo.
+    const convWhere = { organizationId: orgId, importedAt: null }
     // organizationId está denormalizado en WhatsAppMessage (índice
     // [organizationId, createdAt]) — se filtra directo, sin join a la
     // conversación. `organizationId: null` = mensajes anteriores al backfill.
     const msgWhere = (extra: Record<string, unknown> = {}) => ({
       organizationId: orgId,
+      importedAt: null,
       createdAt: { gte: since },
       ...extra,
     })
 
     const [
-      total, activasNissi, conHumano, derivadas, cerradas,
+      total, activasNissi, conHumano, derivadas, cerradas, importadas,
       nuevas, derivadasPeriodo, tomadasPeriodo, resueltasNissiPeriodo, conversacionesActivasPeriodo,
       msgEntrantes, msgNissi, msgHumanos, msgFallidos,
       msgContestados, tiempoRespuestaIA, tiempoRespuestaHumano,
@@ -38,6 +45,10 @@ export async function GET(req: NextRequest) {
       db.whatsAppConversation.count({ where: { ...convWhere, humanTakeoverAt: { not: null } } }),
       db.whatsAppConversation.count({ where: { ...convWhere, status: 'HANDED_OFF' } }),
       db.whatsAppConversation.count({ where: { ...convWhere, status: 'CLOSED' } }),
+      // A propósito FUERA de convWhere (que excluye importadas) — esto es
+      // justamente el conteo de cuántas hay, para mostrarlo aparte y no
+      // esconder que existen.
+      db.whatsAppConversation.count({ where: { organizationId: orgId, importedAt: { not: null } } }),
 
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since } } }),
       db.whatsAppConversation.count({ where: { ...convWhere, createdAt: { gte: since }, status: 'HANDED_OFF' } }),
@@ -83,6 +94,7 @@ export async function GET(req: NextRequest) {
       db.$queryRaw`
         SELECT COUNT(*)::int AS count FROM "WhatsAppConversation"
         WHERE "organizationId" = ${orgId}
+          AND "importedAt" IS NULL
           AND "lastInboundAt" IS NOT NULL
           AND ("lastReadAt" IS NULL OR "lastReadAt" < "lastInboundAt")
       `,
@@ -102,13 +114,13 @@ export async function GET(req: NextRequest) {
         LEFT JOIN (
           SELECT ("createdAt" - INTERVAL '3 hours')::date AS day, COUNT(*) AS n
           FROM "WhatsAppConversation"
-          WHERE "organizationId" = ${orgId} AND "createdAt" >= now() - INTERVAL '15 days'
+          WHERE "organizationId" = ${orgId} AND "importedAt" IS NULL AND "createdAt" >= now() - INTERVAL '15 days'
           GROUP BY 1
         ) c ON c.day = d.day::date
         LEFT JOIN (
           SELECT ("createdAt" - INTERVAL '3 hours')::date AS day, COUNT(*) AS n
           FROM "WhatsAppMessage"
-          WHERE "organizationId" = ${orgId} AND "createdAt" >= now() - INTERVAL '15 days'
+          WHERE "organizationId" = ${orgId} AND "importedAt" IS NULL AND "createdAt" >= now() - INTERVAL '15 days'
           GROUP BY 1
         ) m ON m.day = d.day::date
         ORDER BY d.day ASC
@@ -126,7 +138,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       data: {
         days,
-        totales: { total, activasNissi, conHumano, derivadas, cerradas, sinLeer },
+        totales: { total, activasNissi, conHumano, derivadas, cerradas, sinLeer, importadas },
         periodo: {
           nuevas,
           resueltasPorNissi: resueltasNissiPeriodo,

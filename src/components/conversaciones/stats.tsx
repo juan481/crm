@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 
 interface Stats {
   days: number
-  totales: { total: number; activasNissi: number; conHumano: number; derivadas: number; cerradas: number; sinLeer: number }
+  totales: { total: number; activasNissi: number; conHumano: number; derivadas: number; cerradas: number; sinLeer: number; importadas: number }
   periodo: { nuevas: number; resueltasPorNissi: number; derivadas: number; tomadasPorHumano: number; pctNissi: number }
   mensajes: { entrantes: number; deNissi: number; deHumanos: number; fallidos: number; total: number; contestados: number; pctContestados: number; promedioPorConversacion: number }
   tiempoRespuesta: { iaMs: number | null; humanoMs: number | null }
@@ -105,9 +105,11 @@ export function ConversacionesStats() {
 
       {/* Estado actual */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-subtle)] mb-2">Ahora mismo</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-subtle)] mb-2">
+          Ahora mismo <span className="normal-case font-normal">— no cambia con el período de abajo, es la foto actual</span>
+        </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Tile label="Conversaciones" value={s.totales.total} icon={<MessageSquare size={13} />} />
+          <Tile label="Conversaciones" value={s.totales.total} icon={<MessageSquare size={13} />} sub={s.totales.importadas > 0 ? `+ ${s.totales.importadas} históricas importadas` : undefined} />
           <Tile label="Sin leer" value={s.totales.sinLeer} tone={s.totales.sinLeer > 0 ? 'warn' : 'neutral'} icon={<Inbox size={13} />} />
           <Tile label="Las maneja NISSI" value={s.totales.activasNissi} tone="good" icon={<Bot size={13} />} />
           <Tile label="Con un humano" value={s.totales.conHumano} tone="primary" icon={<User size={13} />} />

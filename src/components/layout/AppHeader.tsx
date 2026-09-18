@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Search, Menu, X, Sun, Moon, AlertCircle, AlertTriangle, Info, LogOut, MessageSquarePlus, Send, HelpCircle, UserCog } from 'lucide-react'
 import Link from 'next/link'
 import { Avatar } from '@/components/ui/avatar'
@@ -124,6 +124,9 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
     staleTime: 30 * 1000,
   })
 
+  // 20s: alimenta el sonido de alerta y el badge — antes eran 10 minutos,
+  // demasiado lento para algo que avisa "en el momento". Sigue siendo
+  // polling, no push real (no hay websockets en el proyecto).
   const { data: notifData } = useQuery<{ data: AppNotification[] }>({
     queryKey: ['notifications'],
     queryFn: async () => {
@@ -131,12 +134,40 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       if (!res.ok) return { data: [] }
       return res.json()
     },
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 10 * 60 * 1000,
+    staleTime: 15 * 1000,
+    refetchInterval: 20 * 1000,
   })
+  const qc = useQueryClient()
 
   const notifications = notifData?.data ?? []
-  const unreadCount = notifications.length
+  const unreadCount = notifications.filter((n) => n.unread).length
+
+  // Sonido de alerta: sólo cuando el número de no-leídos SUBE respecto al
+  // último fetch (evita sonar al abrir la app con notificaciones viejas
+  // pendientes, o en cada poll si no cambió nada). El audio se crea una
+  // sola vez; los navegadores bloquean el primer play() hasta alguna
+  // interacción del usuario en la página — con eso ya alcanza acá (no hace
+  // falta un gesto EN este botón puntual).
+  const prevUnreadRef = useRef<number | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => {
+    if (!audioRef.current) audioRef.current = new Audio('/sounds/notification.mp3')
+  }, [])
+  useEffect(() => {
+    if (prevUnreadRef.current !== null && unreadCount > prevUnreadRef.current) {
+      audioRef.current?.play().catch(() => {}) // autoplay bloqueado = se ignora, no rompe nada
+    }
+    prevUnreadRef.current = unreadCount
+  }, [unreadCount])
+
+  const markAllRead = async () => {
+    try {
+      await fetch('/api/notifications', { method: 'POST' })
+      qc.setQueryData<{ data: AppNotification[] } | undefined>(['notifications'], (old) =>
+        old ? { data: old.data.map((n) => ({ ...n, unread: false })) } : old,
+      )
+    } catch { /* silencioso — el próximo poll (20s) lo corrige solo si falló */ }
+  }
 
   const severityIcon = (s: string) => {
     if (s === 'danger') return <AlertCircle size={14} className="text-red-500 shrink-0" />
@@ -370,16 +401,25 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
               }}
             >
               <div
-                className="flex items-center justify-between px-4 py-3"
+                className="flex items-center justify-between px-4 py-3 gap-2"
                 style={{ borderBottom: '1px solid var(--color-border)' }}
               >
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                <p className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
                   Notificaciones
+                  {unreadCount > 0 && (
+                    <span className="text-xs bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full font-medium">
+                      {unreadCount}
+                    </span>
+                  )}
                 </p>
                 {unreadCount > 0 && (
-                  <span className="text-xs bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-full font-medium">
-                    {unreadCount}
-                  </span>
+                  <button
+                    onClick={markAllRead}
+                    className="text-xs font-medium shrink-0 hover:underline"
+                    style={{ color: 'var(--color-primary)' }}
+                  >
+                    Marcar todo leído
+                  </button>
                 )}
               </div>
               {notifications.length === 0 ? (
@@ -397,10 +437,12 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
                         href={n.href}
                         onClick={() => setNotifOpen(false)}
                         className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[var(--color-surface-raised)]"
+                        style={n.unread ? { background: 'var(--color-primary-light)' } : undefined}
                       >
                         {severityIcon(n.severity)}
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                          <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--color-text)' }}>
+                            {n.unread && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] shrink-0" />}
                             {n.title}
                           </p>
                           <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>

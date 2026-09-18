@@ -8,6 +8,7 @@ import { useThemeStore } from '@/store/theme-store'
 import { Sidebar } from '@/components/layout/sidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { MobileQuickBar } from '@/components/layout/mobile-quick-bar'
+import { WhatsAppFloatingButton } from '@/components/layout/whatsapp-floating-button'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { actionKeyForPath } from '@/lib/quick-actions'
 import { MODULE_ROUTES } from '@/lib/modules'
@@ -211,6 +212,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
         </main>
 
         <MobileQuickBar userId={user.id} role={user.role} onMore={() => setSidebarOpen(true)} />
+        <WhatsAppFloatingButton role={user.role} />
       </div>
     </div>
   )

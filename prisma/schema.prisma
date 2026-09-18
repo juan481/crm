@@ -445,6 +445,10 @@ model User {
   // usuario de portal deja de tener sentido y se va con ella.
   empresaId           String?
   portalEmpresa       Empresa?     @relation("PortalUser", fields: [empresaId], references: [id], onDelete: Cascade)
+  // "Marcar todo como leído" del centro de notificaciones (campanita del
+  // header) — un ítem del feed (/api/notifications) cuenta como no-leído si
+  // su fecha es POSTERIOR a esto. null = nunca lo tocó, todo se ve no-leído.
+  notificationsReadAt DateTime?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -876,6 +880,16 @@ model WhatsAppConversation {
   // el inbox no dependa de un join extra para mostrar la empresa.
   empresaId       String?
   empresa         Empresa?                   @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  // null = conversación real, vivida con NISSI. No-null = vino de un import
+  // masivo de historial viejo (scripts/import-abba-whatsapp-history.ts),
+  // valor = cuándo se corrió ese import. Existe pura y exclusivamente para
+  // que las ESTADÍSTICAS de "período" (Conversaciones → Estadísticas) no
+  // cuenten historial pre-NISSI como si fuera actividad real de la IA — un
+  // chat CLOSED importado con humanTakeoverAt null calificaba igual que uno
+  // resuelto por NISSI de verdad. NO se usa para ocultar nada del inbox: el
+  // historial sigue ahí, completo, sólo se excluye del cálculo de
+  // performance. Ver conversaciones/stats/route.ts.
+  importedAt      DateTime?
   // Solo se actualiza con mensajes ENTRANTES del cliente (a diferencia de
   // lastMessageAt, que también sube cuando NISSI o un humano responden).
   // Gobierna la ventana de 24hs de Meta y el cálculo de "no leído".
@@ -903,6 +917,7 @@ model WhatsAppConversation {
   @@index([phoneNumberId])
   @@index([contactoId])
   @@index([empresaId])
+  @@index([organizationId, importedAt])
 }
 
 model WhatsAppMessage {
@@ -915,6 +930,11 @@ model WhatsAppMessage {
   // multi-tenant terminaba escaneando mensajes de todas las orgs). Se setea
   // al crear el mensaje; nunca cambia (un mensaje no cambia de org).
   organizationId String?
+  // Denormalizado igual que organizationId (mismo motivo: evitar el join a
+  // WhatsAppConversation en las queries de estadísticas). Mensajes que
+  // llegaron con el import masivo de historial viejo, no tráfico real de
+  // NISSI — ver WhatsAppConversation.importedAt.
+  importedAt     DateTime?
   // 'user' | 'assistant' — mismo vocabulario que la Messages API (histórico).
   // El historial que ve el modelo se reconstruye mapeando assistant -> 'model'.
   role           String

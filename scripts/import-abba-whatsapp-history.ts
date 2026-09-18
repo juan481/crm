@@ -113,6 +113,11 @@ function classifyFilename(filename: string): { kind: 'group' | 'phone' | 'name';
 async function main() {
   const { apply, dir, orgName } = parseArgs(process.argv.slice(2))
   const db = prisma as any
+  // Un solo timestamp para toda la corrida — marca qué filas vinieron de
+  // ESTE import (WhatsAppConversation/Message.importedAt), para que las
+  // estadísticas de "período" (Conversaciones → Estadísticas) no cuenten
+  // historial viejo como actividad real de NISSI.
+  const runImportedAt = new Date()
 
   const org = await prisma.organization.findFirst({ where: { name: orgName } })
   if (!org) { console.error(`✗ No existe la organización "${orgName}"`); process.exit(1) }
@@ -250,8 +255,16 @@ async function main() {
             organizationId: org.id, phoneNumberId, customerPhone: customerPhoneDigits,
             customerName: customerName || null, status: 'CLOSED',
             lastMessageAt: lastMsgAt, lastInboundAt,
+            // lastReadAt = ya está "leída": nadie tiene que atender un chat
+            // que terminó antes de que existiera NISSI — sin esto, el badge
+            // de no-leídos (sidebar + Estadísticas) las cuenta todas para
+            // siempre (lastReadAt null nunca "alcanza" a lastInboundAt). Si
+            // el mismo cliente vuelve a escribir en el futuro, lastInboundAt
+            // se actualiza y SÍ va a aparecer como no-leída, correctamente.
+            lastReadAt: lastMsgAt,
             contactoId: match?.contactoId ?? null, empresaId: match?.empresaId ?? null,
             createdAt: rows[0].createdAt,
+            importedAt: runImportedAt,
           },
           select: { id: true },
         })
@@ -265,10 +278,11 @@ async function main() {
           processedAt: r.role === 'user' ? r.createdAt : null,
           answeredAt: r.answeredAt,
           responseTimeMs: r.responseTimeMs,
+          importedAt: runImportedAt,
         })),
       })
       await txdb.whatsAppMessage.create({
-        data: { conversationId, organizationId: org.id, role: 'system', content: DIVIDER_TEXT, createdAt: dividerAt },
+        data: { conversationId, organizationId: org.id, role: 'system', content: DIVIDER_TEXT, createdAt: dividerAt, importedAt: runImportedAt },
       })
     })
 

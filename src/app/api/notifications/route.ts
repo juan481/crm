@@ -10,29 +10,72 @@ export interface AppNotification {
   body: string
   href: string
   severity: 'danger' | 'warning' | 'info'
+  // Fecha del evento — determina si es "no leída" contra
+  // User.notificationsReadAt. Los ítems sin una fecha de evento real
+  // (factura vencida: es un estado, no un evento puntual) no se cuentan
+  // como no-leídos — ver `countsTowardUnread` más abajo.
+  createdAt: string
+  countsTowardUnread: boolean
+  // Sólo presente en la respuesta final al cliente (se calcula en el GET,
+  // contra User.notificationsReadAt) — ausente en lo que arma fetchNotifications.
+  unread?: boolean
+  // Presentes sólo en los tipos que necesitan filtrarse por usuario DESPUÉS
+  // de la caché compartida (ver GET) — nunca llegan al cliente.
+  assigneeId?: string | null
+  collaboratorIds?: string[]
 }
 
 async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const now = new Date()
+  const since72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
+  const db = prisma as any
 
-  const overdueInvoices = await prisma.invoice.findMany({
-    where: {
-      organizationId: orgId,          // direct column — no JOIN
-      OR: [
-        { status: 'OVERDUE' },
-        { status: 'PENDING', dueDate: { lt: now } },
-      ],
-    },
-    select: {
-      id: true,
-      amount: true,
-      currency: true,
-      status: true,
-      empresa: { select: { id: true, name: true } },
-    },
-    orderBy: { dueDate: 'asc' },
-    take: 8,
-  })
+  const [overdueInvoices, newLeads, pendingTasks, newTickets, unreadConvsRaw] = await Promise.all([
+    db.invoice.findMany({
+      where: {
+        organizationId: orgId,
+        OR: [{ status: 'OVERDUE' }, { status: 'PENDING', dueDate: { lt: now } }],
+      },
+      select: { id: true, amount: true, currency: true, status: true, empresa: { select: { id: true, name: true } } },
+      orderBy: { dueDate: 'asc' },
+      take: 8,
+    }),
+    // Leads nuevos — hoy sólo entran vía NISSI (WhatsApp), preparado para
+    // sumar más fuentes (Facebook Ads, formulario web, etc.) sin tocar este
+    // bloque, sólo el string libre Deal.origen.
+    db.deal.findMany({
+      where: { organizationId: orgId, stage: 'LEAD', createdAt: { gte: since72h } },
+      select: { id: true, title: true, origen: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+    }),
+    // Tareas pendientes/en curso — de TODA la org (se filtra "es mía o soy
+    // colaborador" en el GET, después de la caché compartida).
+    db.task.findMany({
+      where: { organizationId: orgId, status: { in: ['PENDIENTE', 'EN_CURSO'] } },
+      select: { id: true, title: true, dueDate: true, createdAt: true, assignedToId: true, collaborators: { select: { userId: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+    // Tickets nuevos (últimas 72h) — mismo criterio de ventana que los leads.
+    db.ticket.findMany({
+      where: { organizationId: orgId, status: { in: ['ABIERTO', 'EN_PROCESO'] }, createdAt: { gte: since72h } },
+      select: { id: true, number: true, title: true, createdAt: true, assignedToId: true, collaborators: { select: { userId: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
+    }),
+    // Conversaciones de WhatsApp con mensajes entrantes sin leer — mismo
+    // criterio que /api/notifications/counts, pero acá trae los ítems, no
+    // sólo el número. importedAt IS NULL: el historial migrado no es "nuevo".
+    db.$queryRaw<{ id: string; customerName: string | null; customerPhone: string; lastInboundAt: Date }[]>`
+      SELECT id, "customerName", "customerPhone", "lastInboundAt" FROM "WhatsAppConversation"
+      WHERE "organizationId" = ${orgId} AND "importedAt" IS NULL
+        AND "lastInboundAt" IS NOT NULL
+        AND ("lastReadAt" IS NULL OR "lastReadAt" < "lastInboundAt")
+      ORDER BY "lastInboundAt" DESC
+      LIMIT 10
+    `,
+  ])
 
   const notifications: AppNotification[] = []
 
@@ -44,22 +87,10 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       body: `${inv.empresa?.name ?? 'Cliente'} — ${inv.amount.toLocaleString('es')} ${inv.currency}`,
       href: '/facturas',
       severity: 'danger',
+      createdAt: now.toISOString(), // es un estado, no un evento — se muestra siempre, nunca "leído"
+      countsTowardUnread: false,
     })
   }
-
-  // Leads nuevos — hoy sólo entran vía NISSI (WhatsApp), preparado para
-  // sumar más fuentes (Facebook Ads, formulario web, etc.) sin tocar este
-  // bloque, sólo el string libre Deal.origen.
-  const newLeads = await prisma.deal.findMany({
-    where: {
-      organizationId: orgId,
-      stage: 'LEAD',
-      createdAt: { gte: new Date(now.getTime() - 72 * 60 * 60 * 1000) },
-    },
-    select: { id: true, title: true, origen: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
-    take: 8,
-  })
 
   for (const deal of newLeads) {
     notifications.push({
@@ -69,17 +100,66 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       body: deal.title,
       href: `/pipeline?dealId=${deal.id}`,
       severity: 'info',
+      createdAt: deal.createdAt.toISOString(),
+      countsTowardUnread: true,
     })
   }
 
-  return notifications.slice(0, 15)
+  for (const t of pendingTasks) {
+    notifications.push({
+      id: `task-${t.id}`,
+      type: 'pending_task',
+      title: 'Tarea pendiente',
+      body: t.title,
+      href: `/tareas/${t.id}`,
+      severity: t.dueDate && t.dueDate < now ? 'warning' : 'info',
+      createdAt: t.createdAt.toISOString(),
+      countsTowardUnread: true,
+      assigneeId: t.assignedToId,
+      collaboratorIds: t.collaborators.map((c: { userId: string }) => c.userId),
+    })
+  }
+
+  for (const t of newTickets) {
+    notifications.push({
+      id: `ticket-${t.id}`,
+      type: 'new_ticket',
+      title: `Nuevo ticket #${t.number}`,
+      body: t.title,
+      href: `/tickets/${t.id}`,
+      severity: 'warning',
+      createdAt: t.createdAt.toISOString(),
+      countsTowardUnread: true,
+      assigneeId: t.assignedToId,
+      collaboratorIds: t.collaborators.map((c: { userId: string }) => c.userId),
+    })
+  }
+
+  for (const c of unreadConvsRaw) {
+    notifications.push({
+      id: `wa-${c.id}`,
+      type: 'whatsapp_unread',
+      title: 'Nueva conversación de WhatsApp',
+      body: c.customerName || `+${c.customerPhone}`,
+      href: `/conversaciones?c=${c.id}`,
+      severity: 'info',
+      createdAt: new Date(c.lastInboundAt).toISOString(),
+      countsTowardUnread: true,
+    })
+  }
+
+  return notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
-// Cache per-org for 60s — notifications don't need real-time precision
+// Cache per-org for 20s — corto a propósito: alimenta la campanita del
+// header (polling) y el sonido de alerta; antes eran 10 min, invisible para
+// algo que se supone avisa "en el momento". No es tiempo real de verdad (no
+// hay websockets en el proyecto) pero es lo más cerca que se puede llegar
+// sin sumar esa infraestructura.
 const getCachedNotifications = unstable_cache(
   fetchNotifications,
   ['notifications'],
-  { revalidate: 60 }
+  { revalidate: 20 }
 )
 
 export async function GET() {
@@ -87,28 +167,59 @@ export async function GET() {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const all = await getCachedNotifications(payload.orgId)
-    // Facturación es ADMIN+ (GET /api/invoices ya lo exige, y
-    // /api/notifications/counts ya oculta este mismo conteo a otros
-    // roles) — la caché es por organización, no por rol, así que el
-    // filtro va acá, después de leerla, para no fragmentar la caché por
-    // rol y sin arriesgar que quede alguna respuesta cacheada
-    // "abierta". Antes esto llegaba a TECHNICIAN/SELLER vía la campanita
-    // del header sin ningún chequeo de rol.
+    const [all, me] = await Promise.all([
+      getCachedNotifications(payload.orgId),
+      prisma.user.findUnique({ where: { id: payload.userId }, select: { notificationsReadAt: true } }),
+    ])
+
+    // Facturación es ADMIN+, leads/WhatsApp son SELLER+ (mismo umbral que el
+    // ítem "WhatsApp" del sidebar — ver sidebar.tsx) — la caché es por
+    // organización, no por rol/usuario, así que el filtro va acá, después de
+    // leerla. Tareas/tickets: todos + "involucra a este usuario" (asignado o
+    // colaborador) salvo ADMIN+, que ve las de toda la org (necesita
+    // panorama completo, no sólo lo propio).
     const canSeeFinancials = canAccess(payload.role, 'ADMIN')
-    const canSeeLeads = canAccess(payload.role, 'SELLER') // TECHNICIAN no tiene Pipeline en su whitelist de rutas
-    const data = all.filter(n => {
-      if (n.type === 'overdue_invoice') return canSeeFinancials
-      if (n.type === 'new_lead') return canSeeLeads
-      return true
-    })
+    const canSeeLeads = canAccess(payload.role, 'SELLER')
+    const canSeeWhatsapp = canAccess(payload.role, 'SELLER')
+    const isAdmin = canAccess(payload.role, 'ADMIN')
+    const involvesMe = (n: AppNotification) =>
+      isAdmin || n.assigneeId === payload.userId || !!n.collaboratorIds?.includes(payload.userId)
+
+    const readAt = me?.notificationsReadAt ?? null
+    const data = all
+      .filter((n) => {
+        if (n.type === 'overdue_invoice') return canSeeFinancials
+        if (n.type === 'new_lead') return canSeeLeads
+        if (n.type === 'whatsapp_unread') return canSeeWhatsapp
+        if (n.type === 'pending_task' || n.type === 'new_ticket') return involvesMe(n)
+        return true
+      })
+      .map(({ assigneeId: _assigneeId, collaboratorIds: _collaboratorIds, ...n }) => ({
+        ...n,
+        unread: n.countsTowardUnread && (!readAt || new Date(n.createdAt) > readAt),
+      }))
 
     return NextResponse.json(
       { data },
-      { headers: { 'Cache-Control': 'private, s-maxage=60, stale-while-revalidate=300' } }
+      { headers: { 'Cache-Control': 'private, no-store' } }, // por-usuario (unread) — no cachear en el edge
     )
   } catch (error) {
     console.error('[NOTIFICATIONS GET]', error)
+    return NextResponse.json({ error: 'Error interno' }, { status: 500 })
+  }
+}
+
+export async function POST() {
+  // "Marcar todo como leído" — un solo timestamp por usuario, no hace falta
+  // trackear ítem por ítem (el feed es de corto plazo, 72hs de ventana en
+  // leads/tickets, tareas pendientes reales).
+  try {
+    const payload = await getCurrentUser()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    await prisma.user.update({ where: { id: payload.userId }, data: { notificationsReadAt: new Date() } })
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('[NOTIFICATIONS MARK READ]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
