@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { Bot, User, ArrowRightLeft, AlertTriangle, MessageSquare, Inbox } from 'lucide-react'
+import { Bot, User, ArrowRightLeft, AlertTriangle, MessageSquare, Inbox, Timer, CheckCheck } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -12,10 +12,20 @@ interface Stats {
   days: number
   totales: { total: number; activasNissi: number; conHumano: number; derivadas: number; cerradas: number; sinLeer: number }
   periodo: { nuevas: number; resueltasPorNissi: number; derivadas: number; tomadasPorHumano: number; pctNissi: number }
-  mensajes: { entrantes: number; deNissi: number; deHumanos: number; fallidos: number; total: number; promedioPorConversacion: number }
+  mensajes: { entrantes: number; deNissi: number; deHumanos: number; fallidos: number; total: number; contestados: number; pctContestados: number; promedioPorConversacion: number }
+  tiempoRespuesta: { iaMs: number | null; humanoMs: number | null }
   derivacionesPorArea: Record<string, number>
   leads: Record<string, number>
   porDia: { date: string; nuevas: number; mensajes: number }[]
+}
+
+function formatMs(ms: number | null): string {
+  if (ms == null) return '—'
+  const s = ms / 1000
+  if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`
+  const m = Math.floor(s / 60)
+  const rem = Math.round(s % 60)
+  return `${m}m ${rem}s`
 }
 
 const AREA_LABEL: Record<string, string> = { VENTAS: 'Ventas', SOPORTE: 'Soporte', ADMINISTRACION: 'Administración', OTRO: 'Otro' }
@@ -112,6 +122,19 @@ export function ConversacionesStats() {
           <Tile label="Sólo NISSI (sin humano)" value={`${s.periodo.pctNissi}%`} sub={`${s.periodo.resueltasPorNissi} de ${s.periodo.nuevas}`} tone="good" />
           <Tile label="Derivadas a un área" value={s.periodo.derivadas} icon={<ArrowRightLeft size={13} />} />
           <Tile label="Tomó un humano" value={s.periodo.tomadasPorHumano} icon={<User size={13} />} />
+          <Tile
+            label="Tiempo de respuesta · NISSI"
+            value={formatMs(s.tiempoRespuesta.iaMs)}
+            icon={<Timer size={13} />}
+            sub={s.tiempoRespuesta.humanoMs != null ? `Humano: ${formatMs(s.tiempoRespuesta.humanoMs)}` : undefined}
+          />
+          <Tile
+            label="Mensajes contestados"
+            value={`${s.mensajes.pctContestados}%`}
+            sub={`${s.mensajes.contestados} de ${s.mensajes.entrantes} recibidos`}
+            tone={s.mensajes.pctContestados >= 90 ? 'good' : s.mensajes.pctContestados >= 70 ? 'warn' : 'danger'}
+            icon={<CheckCheck size={13} />}
+          />
         </div>
       </div>
 

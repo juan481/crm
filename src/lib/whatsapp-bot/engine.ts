@@ -15,6 +15,7 @@ import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool } from '@/lib/whatsapp-bot/tools
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 import { looksAbusive, ABUSE_MAX_REPLIES_PER_HOUR, ABUSE_MAX_REPLIES_PER_DAY } from '@/lib/whatsapp-bot/abuse-guard'
+import { findContactoIdByPhone } from '@/lib/whatsapp-bot/contacto'
 
 // NISSI corre sobre Gemini Flash-Lite — un flujo guiado por herramientas como
 // este no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
@@ -240,7 +241,7 @@ async function abuseGuardTripped(
     // Contenido de relleno = basura, se marca leída (no molesta a nadie).
     // Tope de volumen = puede ser un cliente real trabado / abuso sostenido —
     // se deja SIN leer y se avisa a un humano una vez.
-    await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, NUDGE_TEXT, {
+    await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, NUDGE_TEXT, conversation.lastInboundAt, {
       markConversationRead: !overLimit,
     })
     if (overLimit) {
@@ -268,20 +269,34 @@ async function persistAndSendOutbound(
   botConfig: WhatsAppBotConfig,
   customerPhone: string,
   text: string,
+  // lastInboundAt: timestamp del último mensaje del cliente ANTES de esta
+  // respuesta — se usa para calcular "tiempo de respuesta de la IA" (ver
+  // WhatsAppMessage.responseTimeMs). null si por algún motivo no hay
+  // mensaje entrante todavía (no debería pasar en el flujo normal).
+  lastInboundAt: Date | null,
   // markConversationRead: NISSI resolvió el turno por sí sola → adelantar
   // lastReadAt para que la conversación NO quede marcada como no-leída en el
   // inbox. Se pasa false cuando la respuesta es el fallback de "en un rato te
   // contesta un asesor" (ahí SÍ queremos que una persona la vea).
   opts?: { markConversationRead?: boolean },
 ): Promise<void> {
+  const now = new Date()
+  const responseTimeMs = lastInboundAt ? now.getTime() - lastInboundAt.getTime() : null
   const [row] = await Promise.all([
     db.whatsAppMessage.create({
-      data: { conversationId, organizationId: orgId, role: 'assistant', content: text },
+      data: { conversationId, organizationId: orgId, role: 'assistant', content: text, responseTimeMs },
       select: { id: true },
     }),
     db.whatsAppConversation.update({
       where: { id: conversationId },
-      data: { lastMessageAt: new Date(), ...(opts?.markConversationRead ? { lastReadAt: new Date() } : {}) },
+      data: { lastMessageAt: now, ...(opts?.markConversationRead ? { lastReadAt: now } : {}) },
+    }),
+    // "Mensajes contestados": todo entrante todavía sin marca de respuesta en
+    // este hilo queda atendido con esta respuesta (el debounce puede haber
+    // agrupado varios mensajes del cliente en un solo turno).
+    db.whatsAppMessage.updateMany({
+      where: { conversationId, role: 'user', answeredAt: null },
+      data: { answeredAt: now },
     }),
   ])
   const sent = await sendWhatsAppBotMessage(botConfig.apiToken, botConfig.phoneNumberId, customerPhone, text)
@@ -314,12 +329,16 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   let conversation = existingConv
   const originLabel = msg.adReferral ? buildOriginLabel(msg.adReferral) : null
   if (!conversation) {
+    // Si el teléfono ya está en el directorio (cliente conocido por otro
+    // canal), la conversación nace vinculada — evita mostrar un +549 pelado
+    // en el inbox hasta que NISSI o un humano lo identifiquen.
+    const contactoId = await findContactoIdByPhone(msg.orgId, msg.customerPhone)
     try {
       conversation = await db.whatsAppConversation.create({
         data: {
           organizationId: msg.orgId, phoneNumberId: msg.phoneNumberId,
           customerPhone: msg.customerPhone, customerName: msg.customerName,
-          status: 'ACTIVE',
+          status: 'ACTIVE', contactoId,
           ...(originLabel && { collectedData: { origen: originLabel } }),
         },
       })
@@ -427,6 +446,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       // badge del inbox no tiene que volver a saltar por este mensaje.
       await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone,
         'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.',
+        conversation.lastInboundAt,
         { markConversationRead: true })
       return
     }
@@ -448,9 +468,13 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // HISTORY_LIMIT mensajes: una charla de NISSI antes de derivar rara vez pasa
   // de ~20 turnos, y un hilo patológicamente largo no debe inflar el costo ni
   // la latencia de cada llamada.
+  // role: user/assistant únicamente — deja afuera los divisores 'system'
+  // (marca de "acá termina el historial importado", ver scripts de import)
+  // que no son diálogo real y romperían la alternancia que espera Gemini.
   const historyDesc = await db.whatsAppMessage.findMany({
     where: {
       conversationId: conversation.id,
+      role: { in: ['user', 'assistant'] },
       ...(conversation.contextResetAt ? { createdAt: { gte: conversation.contextResetAt } } : {}),
     },
     orderBy: { createdAt: 'desc' },
@@ -463,7 +487,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // más contexto que un array vacío que rompe la llamada a Gemini.
   if (history.length === 0) {
     const fallbackDesc = await db.whatsAppMessage.findMany({
-      where: { conversationId: conversation.id },
+      where: { conversationId: conversation.id, role: { in: ['user', 'assistant'] } },
       orderBy: { createdAt: 'desc' },
       take: HISTORY_LIMIT,
       select: { role: true, content: true },
@@ -653,7 +677,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // Si NISSI contestó de verdad, la conversación queda "atendida" (no aparece
   // como no-leída). Si cayó al fallback genérico (couldNotAnswer), se deja
   // sin leer a propósito para que una persona entre al inbox.
-  await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, finalText, {
+  await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone, finalText, conversation.lastInboundAt, {
     markConversationRead: !couldNotAnswer,
   })
 }

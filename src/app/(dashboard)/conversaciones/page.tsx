@@ -7,11 +7,12 @@ import dynamic from 'next/dynamic'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageCircle, Search, Send, Bot, User as UserIcon, ArrowLeft, Hand, RotateCcw,
-  AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon,
+  AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Modal } from '@/components/ui/modal'
 import { cn, timeAgo, formatDateTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -25,6 +26,9 @@ interface ConvListItem {
   id: string
   customerPhone: string
   customerName: string | null
+  displayName: string | null
+  empresaNombre: string | null
+  noAgendado: boolean
   status: 'ACTIVE' | 'HANDED_OFF' | 'CLOSED'
   humanHandling: boolean
   assignedUser: { id: string; name: string } | null
@@ -59,8 +63,17 @@ interface ConvThread {
   windowExpiresAt: string | null
   deal: { id: string; title: string; stage: string } | null
   ticket: { id: string; number: number; title: string; status: string } | null
-  contacto: { id: string; firstName: string; lastName: string } | null
+  contacto: { id: string; firstName: string; lastName: string; empresa: { id: string; name: string } | null } | null
   messages: Msg[]
+}
+
+interface ContactoOption {
+  id: string
+  firstName: string
+  lastName: string
+  companyRaw: string | null
+  phone: string | null
+  empresa: { id: string; name: string } | null
 }
 
 const FILTERS = [
@@ -146,6 +159,8 @@ function Inbox() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignQuery, setAssignQuery] = useState('')
   const [optimistic, setOptimistic] = useState<Msg[]>([])
   const endRef = useRef<HTMLDivElement>(null)
   const markedRef = useRef<string>('')
@@ -224,6 +239,31 @@ function Inbox() {
     if (id) p.set('c', id)
     else p.delete('c')
     router.replace(`/conversaciones?${p}`)
+  }
+
+  const assignSearchQuery = useQuery<{ data: ContactoOption[] }>({
+    queryKey: ['contactos-search-assign', assignQuery],
+    queryFn: async () => {
+      const r = await fetch(`/api/contactos?search=${encodeURIComponent(assignQuery)}&limit=15`)
+      if (!r.ok) throw new Error()
+      return r.json()
+    },
+    enabled: assignOpen && assignQuery.trim().length >= 2,
+    staleTime: 10000,
+  })
+
+  const assignContacto = async (contactoId: string | null) => {
+    if (!selectedId) return
+    try {
+      const r = await fetch(`/api/conversaciones/${selectedId}/contacto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactoId }),
+      })
+      if (!r.ok) throw new Error()
+      toast.success(contactoId ? 'Contacto vinculado' : 'Contacto desvinculado')
+      setAssignOpen(false); setAssignQuery('')
+      threadQuery.refetch(); listQuery.refetch()
+    } catch { toast.error('No se pudo vincular el contacto') }
   }
 
   const doTakeover = async (active: boolean) => {
@@ -343,10 +383,15 @@ function Inbox() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-sm text-[var(--color-text)] truncate">
-                    {c.customerName || `+${c.customerPhone}`}
+                    {c.noAgendado
+                      ? <span className="text-[var(--color-text-subtle)] font-normal italic">No agendado · +{c.customerPhone}</span>
+                      : c.displayName}
                   </span>
                   <span className="text-[11px] text-[var(--color-text-subtle)] shrink-0">{timeAgo(c.lastMessageAt)}</span>
                 </div>
+                {c.empresaNombre && (
+                  <div className="text-[11px] text-[var(--color-text-subtle)] truncate -mt-0.5">{c.empresaNombre}</div>
+                )}
                 <div className="flex items-center gap-2 mt-1">
                   {c.unread && <span className="w-2 h-2 rounded-full bg-[var(--color-primary)] shrink-0" />}
                   {c.lastFailed && <AlertTriangle size={12} className="text-red-500 shrink-0" />}
@@ -407,16 +452,29 @@ function Inbox() {
                     <ArrowLeft size={18} />
                   </button>
                   <span className="font-semibold text-[var(--color-text)] truncate">
-                    {thread.customerName || `+${thread.customerPhone}`}
+                    {thread.contacto
+                      ? `${thread.contacto.firstName} ${thread.contacto.lastName}`
+                      : thread.customerName || <span className="italic text-[var(--color-text-subtle)] font-normal">No agendado</span>}
                   </span>
                   {estadoBadge(thread)}
                 </div>
                 <div className="flex items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-[var(--color-text-subtle)] flex-wrap">
                   <span>+{thread.customerPhone}</span>
-                  {thread.contacto && (
-                    <Link href={`/contactos/${thread.contacto.id}`} className="text-[var(--color-primary)] hover:underline">
-                      {thread.contacto.firstName} {thread.contacto.lastName}
-                    </Link>
+                  {thread.contacto ? (
+                    <>
+                      <Link href={`/contactos/${thread.contacto.id}`} className="text-[var(--color-primary)] hover:underline">
+                        Ver contacto
+                      </Link>
+                      {thread.contacto.empresa && <span>· {thread.contacto.empresa.name}</span>}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAssignOpen(true)}
+                      className="flex items-center gap-1 text-[var(--color-primary)] hover:underline"
+                    >
+                      <UserPlus size={11} /> Asignar a empresa/contacto
+                    </button>
                   )}
                   {thread.deal && (
                     <Link href={`/pipeline?dealId=${thread.deal.id}`} className="text-[var(--color-primary)] hover:underline truncate max-w-[160px]">
@@ -462,6 +520,15 @@ function Inbox() {
               }}
             >
               {messages.map((m) => {
+                if (m.role === 'system') {
+                  return (
+                    <div key={m.id} className="flex items-center gap-2 py-2 text-[10px] text-[var(--color-text-subtle)]">
+                      <div className="flex-1 h-px" style={{ background: 'var(--color-border)' }} />
+                      {m.content}
+                      <div className="flex-1 h-px" style={{ background: 'var(--color-border)' }} />
+                    </div>
+                  )
+                }
                 const isCustomer = m.role === 'user'
                 const failed = m.deliveryStatus === 'failed'
                 return (
@@ -504,7 +571,7 @@ function Inbox() {
               ) : !thread.windowOpen ? (
                 <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 rounded-xl p-3 border border-amber-200">
                   <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                  Fuera de la ventana de 24&nbsp;h de WhatsApp — el cliente tiene que volver a escribir para poder mandarle un mensaje de texto libre.
+                  Fuera de la ventana de 24&nbsp;h de WhatsApp — el cliente tiene que volver a escribir primero para poder mandarle un mensaje de texto libre. Escribirle sin que te haya escrito antes puede hacer que te reporte como spam.
                 </div>
               ) : (
                 <div className="flex items-end gap-2">
@@ -534,6 +601,53 @@ function Inbox() {
           </>
         )}
       </div>
+
+      <Modal
+        open={assignOpen}
+        onClose={() => { setAssignOpen(false); setAssignQuery('') }}
+        title="Asignar a empresa/contacto"
+        description="Buscá por nombre, empresa o mail — si el dato ya existe en el directorio, se vincula acá."
+        size="sm"
+      >
+        <div className="space-y-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)]" />
+            <input
+              autoFocus
+              value={assignQuery}
+              onChange={(e) => setAssignQuery(e.target.value)}
+              placeholder="Nombre, empresa o mail…"
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
+              style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+            />
+          </div>
+          {assignQuery.trim().length < 2 ? (
+            <p className="text-xs text-[var(--color-text-muted)] py-4 text-center">Escribí al menos 2 caracteres para buscar.</p>
+          ) : assignSearchQuery.isLoading ? (
+            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
+          ) : !assignSearchQuery.data?.data.length ? (
+            <p className="text-xs text-[var(--color-text-muted)] py-4 text-center">
+              No encontré nada. Podés crear el contacto en <Link href="/contactos" className="text-[var(--color-primary)] hover:underline">Contactos</Link> y volver acá.
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-80 overflow-y-auto">
+              {assignSearchQuery.data.data.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => assignContacto(c.id)}
+                  className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
+                  style={{ border: '1px solid var(--color-border)' }}
+                >
+                  <div className="font-medium text-[var(--color-text)]">{c.firstName} {c.lastName}</div>
+                  <div className="text-[11px] text-[var(--color-text-subtle)]">
+                    {[c.empresa?.name ?? c.companyRaw, c.phone].filter(Boolean).join(' · ') || '—'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

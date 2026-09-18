@@ -859,6 +859,16 @@ model WhatsAppConversation {
   humanTakeoverAt DateTime?
   assignedUserId  String?
   assignedUser    User?                      @relation("WhatsAppAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  // Contacto del directorio detrás de este número — se resuelve solo (por
+  // teléfono al crear la conversación, o por nombre apenas NISSI lo junta
+  // con save_customer_info) o se asigna a mano desde el inbox ("Asignar a
+  // empresa/contacto"). null = número todavía sin identificar ("no
+  // agendado" en el inbox). Independiente de Deal.contactoId/Ticket.contactoId
+  // (que se resuelven en el momento de derivar) — éste vive en la
+  // conversación desde antes, así el inbox nunca muestra un +549 pelado si
+  // ya sabemos quién es.
+  contactoId      String?
+  contacto        DirectorioContacto?        @relation(fields: [contactoId], references: [id], onDelete: SetNull)
   // Solo se actualiza con mensajes ENTRANTES del cliente (a diferencia de
   // lastMessageAt, que también sube cuando NISSI o un humano responden).
   // Gobierna la ventana de 24hs de Meta y el cálculo de "no leído".
@@ -884,6 +894,7 @@ model WhatsAppConversation {
   @@index([organizationId, lastMessageAt])
   @@index([organizationId, createdAt])
   @@index([phoneNumberId])
+  @@index([contactoId])
 }
 
 model WhatsAppMessage {
@@ -911,6 +922,21 @@ model WhatsAppMessage {
   // pendiente. El debounce en sí NO depende de este campo (usa el orden de
   // createdAt, ver handleIncomingWhatsAppMessage).
   processedAt    DateTime?
+  // Sólo en ENTRANTES (role='user'): se marca en el momento en que sale una
+  // respuesta real para este turno (de NISSI o de un humano desde el
+  // inbox) — no cuando el turno se frena en silencio (anti-abuso ya
+  // avisado, toma humana activa). Alimenta "mensajes contestados" en
+  // /conversaciones → Estadísticas. Independiente de `processedAt`, que se
+  // marca SIEMPRE (incluso en silencio) y es sólo un metadato de debounce.
+  answeredAt     DateTime?
+  // Sólo en SALIENTES (role='assistant'): milisegundos entre el último
+  // mensaje entrante del cliente (WhatsAppConversation.lastInboundAt en el
+  // momento del envío) y este mensaje. Se calcula en persistAndSendOutbound
+  // (engine.ts) y en el POST de respuesta humana — filtrando por
+  // senderUserId null/not-null se separa el tiempo de respuesta de NISSI
+  // del de un humano. Incluye a propósito el debounce de 1800ms (es demora
+  // real desde la perspectiva del cliente).
+  responseTimeMs Int?
   // Humano que mandó este mensaje desde el inbox del CRM. null = lo generó
   // NISSI (o es un mensaje entrante del cliente, role='user'). El role sigue
   // siendo 'assistant' para no romper la reconstrucción del historial.
@@ -1441,9 +1467,10 @@ model DirectorioContacto {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  notas   DirectorioContactoNota[]
-  deals   Deal[]
-  tickets Ticket[]
+  notas                 DirectorioContactoNota[]
+  deals                 Deal[]
+  tickets               Ticket[]
+  whatsAppConversations WhatsAppConversation[]
 
   @@index([organizationId])
   @@index([empresaId])

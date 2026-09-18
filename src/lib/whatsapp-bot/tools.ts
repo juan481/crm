@@ -166,9 +166,21 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
       if (typeof v === 'string' && v.trim()) patch[k] = v.trim()
     }
     if (Object.keys(patch).length === 0) return { resultText: 'No había datos nuevos para guardar.' }
-    const conv = await db.whatsAppConversation.findUnique({ where: { id: ctx.conversationId }, select: { collectedData: true } })
+    const conv = await db.whatsAppConversation.findUnique({ where: { id: ctx.conversationId }, select: { collectedData: true, contactoId: true } })
     const merged = { ...(conv?.collectedData as Record<string, unknown> | null ?? {}), ...patch }
     await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { collectedData: merged } })
+
+    // Vinculación automática apenas hay nombre, sin esperar a que NISSI
+    // derive (Deal/Ticket) — así el inbox deja de mostrar el número pelado
+    // desde temprano en la charla. No pisa un contacto ya asignado (a mano
+    // o por teléfono al crear la conversación).
+    if (!conv?.contactoId && (patch.nombre || patch.apellido)) {
+      const contactoId = await resolveContactoForConversation(ctx.orgId, {
+        conversationId: ctx.conversationId, customerPhone: ctx.customerPhone,
+      })
+      if (contactoId) await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { contactoId } })
+    }
+
     return { resultText: 'Datos guardados.' }
   }
 

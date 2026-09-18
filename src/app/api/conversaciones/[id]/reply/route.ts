@@ -58,19 +58,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // el transcript y la conversación ya está tomada → NISSI no habla encima
     // aunque el cliente conteste. El estado de entrega se ajusta después.
     const now = new Date()
-    const created = await db.whatsAppMessage.create({
-      data: {
-        conversationId: conv.id, organizationId: payload.orgId, role: 'assistant', content: message,
-        senderUserId: payload.userId, processedAt: now, deliveryStatus: 'pending',
-      },
-      select: { id: true, createdAt: true },
-    })
-    // humanTakeoverAt se refresca en CADA respuesta humana — la
-    // auto-liberación del engine (24hs) cuenta desde la última actividad.
-    await db.whatsAppConversation.update({
-      where: { id: conv.id },
-      data: { lastMessageAt: now, humanTakeoverAt: now, assignedUserId: payload.userId },
-    })
+    const responseTimeMs = conv.lastInboundAt ? now.getTime() - new Date(conv.lastInboundAt).getTime() : null
+    const [created] = await Promise.all([
+      db.whatsAppMessage.create({
+        data: {
+          conversationId: conv.id, organizationId: payload.orgId, role: 'assistant', content: message,
+          senderUserId: payload.userId, processedAt: now, deliveryStatus: 'pending', responseTimeMs,
+        },
+        select: { id: true, createdAt: true },
+      }),
+      // humanTakeoverAt se refresca en CADA respuesta humana — la
+      // auto-liberación del engine (24hs) cuenta desde la última actividad.
+      db.whatsAppConversation.update({
+        where: { id: conv.id },
+        data: { lastMessageAt: now, humanTakeoverAt: now, assignedUserId: payload.userId },
+      }),
+      // "Mensajes contestados": mismo criterio que persistAndSendOutbound
+      // (engine.ts) — un humano respondiendo desde el inbox también cuenta.
+      db.whatsAppMessage.updateMany({
+        where: { conversationId: conv.id, role: 'user', answeredAt: null },
+        data: { answeredAt: now },
+      }),
+    ])
 
     const sent = await sendWhatsAppBotMessage(apiToken, phoneNumberId, conv.customerPhone, message)
     await db.whatsAppMessage.update({

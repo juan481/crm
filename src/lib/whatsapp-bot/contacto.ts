@@ -12,6 +12,28 @@ import { prisma } from '@/lib/db'
 
 const digitsOnly = (s: string): string => (s || '').replace(/\D/g, '')
 
+// Match por teléfono solo (últimos 8 dígitos) — sin crear nada. Se usa apenas
+// llega el primer mensaje de un número nuevo, ANTES de que NISSI le pregunte
+// nada: si Abba ya tiene este teléfono cargado en el directorio (caso muy
+// común, la mayoría son clientes que ya escribieron antes por otro canal),
+// el inbox lo muestra con nombre/empresa desde el primer mensaje en vez de
+// mostrar el número pelado hasta que alguien lo vincule.
+export async function findContactoIdByPhone(orgId: string, waIdDigits: string): Promise<string | null> {
+  const tail = digitsOnly(waIdDigits).slice(-8)
+  if (tail.length < 8) return null
+  try {
+    const db = prisma as any
+    const match = await db.directorioContacto.findFirst({
+      where: { organizationId: orgId, phone: { contains: tail } },
+      select: { id: true },
+    })
+    return match?.id ?? null
+  } catch (err) {
+    console.error('[NISSI] findContactoIdByPhone falló', err)
+    return null
+  }
+}
+
 // ¿Parece un nombre de persona real y no un placeholder / un mail / puro número?
 function looksLikeRealName(s: string): boolean {
   const t = (s || '').trim()

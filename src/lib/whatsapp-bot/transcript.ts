@@ -11,7 +11,9 @@ const MAX_TRANSCRIPT_CHARS = 15000
 export async function buildConversationTranscript(conversationId: string): Promise<string> {
   const db = prisma as any
   const msgs = await db.whatsAppMessage.findMany({
-    where: { conversationId },
+    // role: user/assistant únicamente — deja afuera los divisores 'system'
+    // (marca de "acá termina el historial importado", ver scripts de import).
+    where: { conversationId, role: { in: ['user', 'assistant'] } },
     orderBy: { createdAt: 'asc' },
     select: {
       role: true,

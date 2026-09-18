@@ -34,6 +34,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         humanTakeoverAt: true, handedOffTo: true, ticketId: true, dealId: true,
         collectedData: true, lastInboundAt: true,
         assignedUser: { select: { id: true, name: true } },
+        contacto: { select: { id: true, firstName: true, lastName: true, empresa: { select: { id: true, name: true } } } },
         // Acotado a los últimos 500 mensajes (desc + reverse) — una charla
         // normal tiene decenas; esto sólo frena un caso patológico.
         messages: {
@@ -58,7 +59,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         ? db.ticket.findFirst({ where: { id: conv.ticketId, organizationId: payload.orgId }, select: { id: true, number: true, title: true, status: true, contacto: { select: { id: true, firstName: true, lastName: true } } } })
         : Promise.resolve(null),
     ])
-    const contacto = deal?.contacto ?? ticket?.contacto ?? null
+    // conv.contactoId es la fuente principal (se resuelve solo desde antes
+    // de derivar, o se asigna a mano) — el de Deal/Ticket queda de respaldo
+    // para conversaciones viejas que derivaron antes de que existiera este
+    // campo en WhatsAppConversation.
+    const contacto = conv.contacto ?? deal?.contacto ?? ticket?.contacto ?? null
 
     const windowExpiresAt = conv.lastInboundAt ? new Date(new Date(conv.lastInboundAt).getTime() + WINDOW_MS) : null
     const windowOpen = !!windowExpiresAt && windowExpiresAt.getTime() > Date.now()
@@ -85,11 +90,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           role: m.role,
           content: m.content,
           createdAt: m.createdAt,
-          author: m.role === 'user'
-            ? 'cliente'
-            : m.senderUserId
-              ? (m.senderUserId === payload.userId ? 'vos' : m.sender?.name || 'un asesor')
-              : 'NISSI',
+          author: m.role === 'system'
+            ? 'sistema'
+            : m.role === 'user'
+              ? 'cliente'
+              : m.senderUserId
+                ? (m.senderUserId === payload.userId ? 'vos' : m.sender?.name || 'un asesor')
+                : 'NISSI',
           fromHuman: !!m.senderUserId,
           deliveryStatus: m.role === 'user' ? null : m.deliveryStatus ?? null,
         })),

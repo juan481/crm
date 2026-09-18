@@ -48,7 +48,12 @@ export async function GET(req: NextRequest) {
           humanTakeoverAt: true, handedOffTo: true, ticketId: true, dealId: true,
           lastMessageAt: true, lastInboundAt: true, lastReadAt: true,
           assignedUser: { select: { id: true, name: true } },
-          messages: { orderBy: { createdAt: 'desc' }, take: 1, select: { content: true, role: true, senderUserId: true, deliveryStatus: true } },
+          contacto: { select: { id: true, firstName: true, lastName: true, empresa: { select: { id: true, name: true } } } },
+          messages: {
+            orderBy: { createdAt: 'desc' }, take: 1,
+            where: { role: { in: ['user', 'assistant'] } }, // el divisor 'system' no cuenta como "último mensaje"
+            select: { content: true, role: true, senderUserId: true, deliveryStatus: true },
+          },
         },
       }),
       db.whatsAppConversation.count({ where }),
@@ -58,10 +63,17 @@ export async function GET(req: NextRequest) {
       .map((c: any) => {
         const unread = !!c.lastInboundAt && (!c.lastReadAt || new Date(c.lastReadAt) < new Date(c.lastInboundAt))
         const last = c.messages[0]
+        const contactoNombre = c.contacto ? `${c.contacto.firstName} ${c.contacto.lastName}`.trim() : null
         return {
           id: c.id,
           customerPhone: c.customerPhone,
           customerName: c.customerName,
+          // Prioridad para mostrar en la lista: contacto vinculado (+ empresa
+          // si tiene) > nombre de WhatsApp > "No agendado" — nunca el número
+          // pelado, salvo que de verdad no haya nada mejor.
+          displayName: contactoNombre || c.customerName || null,
+          empresaNombre: c.contacto?.empresa?.name ?? null,
+          noAgendado: !contactoNombre && !c.customerName,
           status: c.status,
           humanHandling: !!c.humanTakeoverAt,
           assignedUser: c.assignedUser,

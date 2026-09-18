@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
       total, activasNissi, conHumano, derivadas, cerradas,
       nuevas, derivadasPeriodo, tomadasPeriodo, resueltasNissiPeriodo, conversacionesActivasPeriodo,
       msgEntrantes, msgNissi, msgHumanos, msgFallidos,
+      msgContestados, tiempoRespuestaIA, tiempoRespuestaHumano,
       handoffGroups, leadGroups, sinLeerRaw, porDia,
     ] = await Promise.all([
       db.whatsAppConversation.count({ where: convWhere }),
@@ -51,6 +52,23 @@ export async function GET(req: NextRequest) {
       db.whatsAppMessage.count({ where: msgWhere({ role: 'assistant', senderUserId: null }) }),
       db.whatsAppMessage.count({ where: msgWhere({ role: 'assistant', senderUserId: { not: null } }) }),
       db.whatsAppMessage.count({ where: msgWhere({ deliveryStatus: 'failed' }) }),
+      // "Contestados": entrantes que tuvieron una respuesta real después (de
+      // NISSI o de un humano) — ver answeredAt en persistAndSendOutbound
+      // (engine.ts) y en el POST de respuesta humana. Distinto de "salieron
+      // X mensajes": esto mide si el CLIENTE recibió respuesta, no cuántos
+      // mensajes salientes hubo.
+      db.whatsAppMessage.count({ where: msgWhere({ role: 'user', answeredAt: { not: null } }) }),
+      // Tiempo de respuesta: promedio de responseTimeMs, separado NISSI vs.
+      // humano (mismo filtro senderUserId que arriba). Incluye a propósito
+      // el debounce de 1800ms del engine — es demora real para el cliente.
+      db.whatsAppMessage.aggregate({
+        where: msgWhere({ role: 'assistant', senderUserId: null, responseTimeMs: { not: null } }),
+        _avg: { responseTimeMs: true },
+      }),
+      db.whatsAppMessage.aggregate({
+        where: msgWhere({ role: 'assistant', senderUserId: { not: null }, responseTimeMs: { not: null } }),
+        _avg: { responseTimeMs: true },
+      }),
 
       db.whatsAppConversation.groupBy({
         by: ['handedOffTo'],
@@ -122,12 +140,18 @@ export async function GET(req: NextRequest) {
           deHumanos: msgHumanos,
           fallidos: msgFallidos,
           total: totalMsg,
+          contestados: msgContestados,
+          pctContestados: msgEntrantes ? Math.round((msgContestados / msgEntrantes) * 100) : 0,
           // Sobre las conversaciones que tuvieron actividad en el período, no
           // sólo las creadas en él (evita inflar el promedio con charlas
           // viejas que siguen activas).
           promedioPorConversacion: conversacionesActivasPeriodo
             ? Math.round((totalMsg / conversacionesActivasPeriodo) * 10) / 10
             : 0,
+        },
+        tiempoRespuesta: {
+          iaMs: tiempoRespuestaIA._avg.responseTimeMs != null ? Math.round(tiempoRespuestaIA._avg.responseTimeMs) : null,
+          humanoMs: tiempoRespuestaHumano._avg.responseTimeMs != null ? Math.round(tiempoRespuestaHumano._avg.responseTimeMs) : null,
         },
         derivacionesPorArea: areaMap,
         leads: leadMap,

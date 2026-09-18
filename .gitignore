@@ -39,3 +39,8 @@ crm-just-create-*.json
 
 # vercel
 .vercel
+
+# historial de WhatsApp de clientes (datos reales, sólo para el import
+# one-off — nunca al repo)
+/Chats viejos/
+scripts/whatsapp-import-sin-telefono.json
