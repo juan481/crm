@@ -88,9 +88,12 @@ const MEDIA_LABEL: Record<string, string> = {
 
 function messageContent(m: RawMsg): string {
   if (m['Message Type'] === 'chat') return (m.Message || '').trim() || '(mensaje vacío)'
-  const label = MEDIA_LABEL[m['Message Type']] ?? '[envió un adjunto]'
-  const caption = (m.Caption || '').trim()
-  return caption ? `${label} ${caption}` : label
+  // OJO: en este export, "Caption" de un mensaje multimedia NO es un texto
+  // de caption — es el archivo entero codificado en base64 (verificado: de
+  // 389 mensajes con Caption no vacío en los 513 chats, los 389 son blobs
+  // base64, ninguno un texto real). Se ignora a propósito; usar ese campo
+  // como si fuera texto es el bug que mostraba la imagen entera en el chat.
+  return MEDIA_LABEL[m['Message Type']] ?? '[envió un adjunto]'
 }
 
 // Nombre "de fantasía" que WhatsApp usa cuando exporta un chat sin contacto
