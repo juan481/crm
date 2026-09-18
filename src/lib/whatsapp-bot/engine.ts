@@ -28,10 +28,14 @@ import { findContactoIdByPhone } from '@/lib/whatsapp-bot/contacto'
 // (se activa solo cuando el prefijo systemInstruction+tools se repite — no
 // requiere código; se puede sumar caché explícito si
 // usageMetadata.cachedContentTokenCount muestra baja tasa de acierto).
-// Respuestas de WhatsApp son cortas — 600 alcanza de sobra. Más bajo = el
-// modelo tiende a ser más conciso y genera más rápido (y no se paga texto
-// de más si iba a divagar). Si algo se corta por MAX_TOKENS, hay reintento.
-const MAX_OUTPUT_TOKENS = 600
+// Respuestas de WhatsApp son cortas, pero en Gemini 3.x el "thinking" (aun
+// con thinkingLevel LOW, ver thinkingConfigFor) se paga del MISMO budget
+// que el texto visible — con 600 se vio cortar respuestas a mitad de frase
+// bien antes de llegar al largo real de una respuesta de WhatsApp. 1024 le
+// da margen al thinking sin dejar de frenar una respuesta que se fue larga.
+// Si aun así se corta por MAX_TOKENS, hay reintento (ver más abajo) — nunca
+// se manda al cliente un texto a medias.
+const MAX_OUTPUT_TOKENS = 1024
 // Tope de vueltas de tool-calling dentro de UN SOLO turno del cliente — un
 // turno realista necesita como mucho buscar_catalogo + save_customer_info +
 // una herramienta de handoff. Freno de seguridad contra un loop.
@@ -555,14 +559,18 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
 
     const calls = res.functionCalls ?? []
     const text = extractText(cand)
-    // Sólo pisamos finalText con texto de una vuelta SIN herramientas — el
-    // texto que acompaña a un functionCall suele ser un preámbulo ("dejame
-    // que busco eso") que no sirve como respuesta final.
-    if (text && calls.length === 0) finalText = text
+    const truncated = finish === 'MAX_TOKENS'
+    // Sólo pisamos finalText con texto de una vuelta SIN herramientas Y que
+    // terminó de verdad — un corte por MAX_TOKENS puede traer texto parcial
+    // (a mitad de frase, como "...para poder registrar tu solicitud y")
+    // que NO es una respuesta válida aunque no esté vacío. El texto que
+    // acompaña a un functionCall tampoco cuenta: suele ser un preámbulo
+    // ("dejame que busco eso"), no una respuesta final.
+    if (text && calls.length === 0 && !truncated) finalText = text
 
     if (calls.length === 0) {
-      if (!text && finish === 'MAX_TOKENS') {
-        console.error('[NISSI ENGINE] respuesta truncada por MAX_TOKENS sin texto', { orgId: msg.orgId, conversationId: conversation.id })
+      if (truncated) {
+        console.error('[NISSI ENGINE] respuesta truncada por MAX_TOKENS', { hadText: !!text, orgId: msg.orgId, conversationId: conversation.id })
         couldNotAnswer = 'la respuesta se cortó por límite de tokens'
       }
       break
@@ -619,8 +627,15 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
           ...thinkingConfigFor(model),
         },
       })
-      const t = extractText(res.candidates?.[0])
-      if (t) finalText = t
+      const cand = res.candidates?.[0]
+      const t = extractText(cand)
+      // Misma protección que en el loop de arriba: un segundo corte por
+      // MAX_TOKENS no se manda tal cual — mejor el fallback genérico de
+      // abajo que otro mensaje a medias.
+      if (t && cand?.finishReason !== 'MAX_TOKENS') finalText = t
+      else if (cand?.finishReason === 'MAX_TOKENS') {
+        console.error('[NISSI ENGINE] la vuelta final sin tools TAMBIÉN se cortó por MAX_TOKENS', { orgId: msg.orgId, conversationId: conversation.id })
+      }
     } catch (err) {
       console.error('[NISSI ENGINE] Gemini error en la vuelta final sin tools', err)
     }
