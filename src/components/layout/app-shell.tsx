@@ -212,7 +212,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
         </main>
 
         <MobileQuickBar userId={user.id} role={user.role} onMore={() => setSidebarOpen(true)} />
-        <WhatsAppFloatingButton role={user.role} />
+        <WhatsAppFloatingButton />
       </div>
     </div>
   )

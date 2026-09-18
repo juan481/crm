@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { roleHasModule } from '@/lib/module-access'
 import { unstable_cache } from 'next/cache'
 
 export interface AppNotification {
@@ -176,15 +177,17 @@ export async function GET() {
       prisma.user.findUnique({ where: { id: payload.userId }, select: { notificationsReadAt: true } }),
     ])
 
-    // Facturación es ADMIN+, leads/WhatsApp son SELLER+ (mismo umbral que el
-    // ítem "WhatsApp" del sidebar — ver sidebar.tsx) — la caché es por
+    // Facturación es ADMIN+, leads son SELLER+ — la caché es por
     // organización, no por rol/usuario, así que el filtro va acá, después de
-    // leerla. Tareas/tickets: todos + "involucra a este usuario" (asignado o
-    // colaborador) salvo ADMIN+, que ve las de toda la org (necesita
-    // panorama completo, no sólo lo propio).
+    // leerla. WhatsApp: SELLER+ por default, pero RRHH/Técnicos pueden ganar
+    // el módulo desde Configuración → Permisos (mismo criterio que el ítem
+    // del sidebar y las APIs de /api/conversaciones/*). Tareas/tickets:
+    // todos + "involucra a este usuario" (asignado o colaborador) salvo
+    // ADMIN+, que ve las de toda la org (necesita panorama completo, no
+    // sólo lo propio).
     const canSeeFinancials = canAccess(payload.role, 'ADMIN')
     const canSeeLeads = canAccess(payload.role, 'SELLER')
-    const canSeeWhatsapp = canAccess(payload.role, 'SELLER')
+    const canSeeWhatsapp = canAccess(payload.role, 'SELLER') || (await roleHasModule(payload.orgId, payload.role, 'conversaciones'))
     const isAdmin = canAccess(payload.role, 'ADMIN')
     const involvesMe = (n: AppNotification) =>
       isAdmin || n.assigneeId === payload.userId || !!n.collaboratorIds?.includes(payload.userId)

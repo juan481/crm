@@ -40,7 +40,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // que este default sea real y no sólo cosmético (ver comentario ahí).
   { id: 'eventos',        label: 'Eventos',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'],            minRole: 'TECHNICIAN' },
   { id: 'comunicaciones', label: 'Comunicaciones',  defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'conversaciones', label: 'WhatsApp',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
+  // Piso bajado a TECHNICIAN para que RRHH y Técnicos puedan ganar la
+  // bandeja de WhatsApp desde el panel de Permisos — mismo criterio que
+  // Cotizador/Depósito más arriba. El default sigue siendo SELLER+, así que
+  // ninguna org existente cambia hasta que un Super Admin prenda el toggle.
+  // Las APIs de /api/conversaciones/* chequean roleHasModule() (ver
+  // src/lib/module-access.ts) — sin eso, el toggle sería sólo cosmético.
+  { id: 'conversaciones', label: 'WhatsApp',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
   { id: 'servicios',      label: 'Servicios',       defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                    minRole: 'ADMIN' },
   { id: 'facturas',       label: 'Facturación',     defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                    minRole: 'ADMIN' },
   // Depósito — stock físico propio, movimientos y alertas de costo. El piso
@@ -77,6 +83,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   stock: '/stock',
   compras: '/compras',
   entregas: '/entregas',
+  conversaciones: '/conversaciones',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

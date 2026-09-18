@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { taskInvolvesUser, ticketInvolvesUser } from '@/lib/assignment-scope'
+import { roleHasModule } from '@/lib/module-access'
 
 export interface NotificationCounts {
   tasks: number
@@ -18,7 +19,10 @@ export async function GET() {
     const now = new Date()
     const { orgId, userId, role } = payload
     const isAdmin = canAccess(role, 'ADMIN')
-    const canSeeInbox = canAccess(role, 'SELLER') // el ítem "WhatsApp" es SELLER+
+    // "WhatsApp" es SELLER+ por default, pero RRHH/Técnicos pueden ganar el
+    // módulo desde Configuración → Permisos (mismo criterio que sidebar.tsx
+    // y /api/conversaciones/*).
+    const canSeeInbox = canAccess(role, 'SELLER') || (await roleHasModule(orgId, role, 'conversaciones'))
 
     const [tasks, tickets, invoices, whatsapp] = await Promise.all([
       // Tareas asignadas a mí O donde soy colaborador, pendientes o en curso.

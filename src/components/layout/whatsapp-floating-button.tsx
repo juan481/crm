@@ -1,25 +1,23 @@
 'use client'
 
 // Acceso rápido a NISSI (WhatsApp) — flotante, visible en cualquier
-// pantalla del CRM, sólo para quien realmente puede ver esa bandeja: mismo
-// criterio que el ítem "WhatsApp" del sidebar (roles + plugin activo), NO
-// se importa canAccess() de @/lib/auth acá a propósito — ese archivo tira
-// de next/headers (server-only) y rompería el bundle de un client
-// component; se replica la jerarquía mínima que hace falta (SELLER+) con
-// una lista estática, igual que ya hace sidebar.tsx con sus `roles: [...]`.
+// pantalla del CRM, sólo para quien realmente puede ver esa bandeja.
+// useModuleAccess ya resuelve TODO el criterio real (SUPER_ADMIN siempre,
+// el resto según lo que el panel de Permisos tenga guardado para su rol,
+// con fallback al default del módulo si no hay fila) — no hace falta
+// replicar la jerarquía de roles ni el chequeo de plugin acá a mano.
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { MessageCircle } from 'lucide-react'
 import { usePlugin } from '@/hooks/use-plugin'
-import type { Role } from '@/types'
+import { useModuleAccess } from '@/hooks/use-module-access'
 
-const ALLOWED_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'SELLER']
-
-export function WhatsAppFloatingButton({ role }: { role: Role }) {
+export function WhatsAppFloatingButton() {
   const pathname = usePathname()
   const { enabled } = usePlugin('whatsapp-ai-bot')
+  const hasAccess = useModuleAccess('conversaciones')
 
-  if (!ALLOWED_ROLES.includes(role)) return null
+  if (hasAccess !== true) return null // false o "todavía no resolvió" → no mostrar
   if (!enabled) return null
   if (pathname.startsWith('/conversaciones')) return null // ya estás ahí
 

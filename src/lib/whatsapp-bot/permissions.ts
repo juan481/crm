@@ -4,10 +4,14 @@ import { DEFAULT_REPLY_ROLE } from '@/lib/whatsapp-bot/nissi-shared'
 import type { Role } from '@/types'
 
 // VER la bandeja de WhatsApp se controla con el módulo "conversaciones"
-// (Configuración → Permisos, minRole SELLER). RESPONDER / TOMAR / DEVOLVER se
-// controla acá, con config.replyRoleMin (default SELLER). Nunca por debajo de
-// SELLER — por debajo ni se ve la bandeja.
-const FLOOR: Role = 'SELLER'
+// (Configuración → Permisos, minRole TECHNICIAN — RRHH y Técnicos pueden
+// ganarlo ahí). RESPONDER / TOMAR / DEVOLVER se controla acá, con
+// config.replyRoleMin (default SELLER, configurable en Configuración →
+// NISSI). El piso bajó a TECHNICIAN en simultáneo con el de VER — antes
+// nunca podía ser menor a SELLER porque por debajo de eso ni se veía la
+// bandeja; ahora que sí se puede ver, no tiene sentido que responder siga
+// más restringido por una regla que ya no aplica.
+const FLOOR: Role = 'TECHNICIAN'
 const VALID: Role[] = ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN']
 
 export async function getReplyRoleMin(orgId: string): Promise<Role> {
