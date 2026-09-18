@@ -30,7 +30,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const since72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
   const db = prisma as any
 
-  const [overdueInvoices, newLeads, pendingTasks, newTickets, unreadConvsRaw] = await Promise.all([
+  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs] = await Promise.all([
     db.invoice.findMany({
       where: {
         organizationId: orgId,
@@ -64,17 +64,21 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       orderBy: { createdAt: 'desc' },
       take: 15,
     }),
-    // Conversaciones de WhatsApp con mensajes entrantes sin leer — mismo
-    // criterio que /api/notifications/counts, pero acá trae los ítems, no
-    // sólo el número. importedAt IS NULL: el historial migrado no es "nuevo".
-    db.$queryRaw<{ id: string; customerName: string | null; customerPhone: string; lastInboundAt: Date }[]>`
-      SELECT id, "customerName", "customerPhone", "lastInboundAt" FROM "WhatsAppConversation"
-      WHERE "organizationId" = ${orgId} AND "importedAt" IS NULL
-        AND "lastInboundAt" IS NOT NULL
-        AND ("lastReadAt" IS NULL OR "lastReadAt" < "lastInboundAt")
-      ORDER BY "lastInboundAt" DESC
-      LIMIT 10
-    `,
+    // Conversaciones de WhatsApp con actividad reciente (últimas 72hs) — a
+    // propósito NO es el mismo criterio que /api/notifications/counts (que
+    // filtra lastReadAt < lastInboundAt: "esto necesita un HUMANO"). Ese
+    // criterio queda vacío apenas NISSI contesta bien sola — que es el caso
+    // normal, no la excepción — y esta campanita dejaba de avisar de
+    // CUALQUIER mensaje nuevo, aunque NISSI lo haya manejado perfecto. Acá
+    // el objetivo es otro: "avisame que llegó algo", separado de "esto
+    // necesita que alguien entre". importedAt IS NULL: el historial migrado
+    // no es actividad nueva.
+    db.whatsAppConversation.findMany({
+      where: { organizationId: orgId, importedAt: null, lastInboundAt: { gte: since72h } },
+      select: { id: true, customerName: true, customerPhone: true, lastInboundAt: true },
+      orderBy: { lastInboundAt: 'desc' },
+      take: 10,
+    }),
   ])
 
   const notifications: AppNotification[] = []
@@ -135,11 +139,11 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
     })
   }
 
-  for (const c of unreadConvsRaw) {
+  for (const c of recentConvs) {
     notifications.push({
       id: `wa-${c.id}`,
       type: 'whatsapp_unread',
-      title: 'Nueva conversación de WhatsApp',
+      title: 'Mensaje de WhatsApp',
       body: c.customerName || `+${c.customerPhone}`,
       href: `/conversaciones?c=${c.id}`,
       severity: 'info',
