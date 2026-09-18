@@ -35,6 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         collectedData: true, lastInboundAt: true,
         assignedUser: { select: { id: true, name: true } },
         contacto: { select: { id: true, firstName: true, lastName: true, empresa: { select: { id: true, name: true } } } },
+        empresa: { select: { id: true, name: true } },
         // Acotado a los últimos 500 mensajes (desc + reverse) — una charla
         // normal tiene decenas; esto sólo frena un caso patológico.
         messages: {
@@ -64,6 +65,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // para conversaciones viejas que derivaron antes de que existiera este
     // campo en WhatsAppConversation.
     const contacto = conv.contacto ?? deal?.contacto ?? ticket?.contacto ?? null
+    // empresa "sola" (sin contacto puntual) — cuando SÍ hay contacto, su
+    // propia empresa ya viaja adentro de `contacto`, no hace falta acá.
+    const empresa = !contacto ? (conv.empresa ?? null) : null
 
     const windowExpiresAt = conv.lastInboundAt ? new Date(new Date(conv.lastInboundAt).getTime() + WINDOW_MS) : null
     const windowOpen = !!windowExpiresAt && windowExpiresAt.getTime() > Date.now()
@@ -85,6 +89,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         deal: deal ? { id: deal.id, title: deal.title, stage: deal.stage } : null,
         ticket: ticket ? { id: ticket.id, number: ticket.number, title: ticket.title, status: ticket.status } : null,
         contacto,
+        empresa,
         messages: conv.messages.map((m: any) => ({
           id: m.id,
           role: m.role,

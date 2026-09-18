@@ -332,13 +332,13 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     // Si el teléfono ya está en el directorio (cliente conocido por otro
     // canal), la conversación nace vinculada — evita mostrar un +549 pelado
     // en el inbox hasta que NISSI o un humano lo identifiquen.
-    const contactoId = await findContactoIdByPhone(msg.orgId, msg.customerPhone)
+    const match = await findContactoIdByPhone(msg.orgId, msg.customerPhone)
     try {
       conversation = await db.whatsAppConversation.create({
         data: {
           organizationId: msg.orgId, phoneNumberId: msg.phoneNumberId,
           customerPhone: msg.customerPhone, customerName: msg.customerName,
-          status: 'ACTIVE', contactoId,
+          status: 'ACTIVE', contactoId: match?.contactoId ?? null, empresaId: match?.empresaId ?? null,
           ...(originLabel && { collectedData: { origen: originLabel } }),
         },
       })

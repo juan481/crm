@@ -34,6 +34,15 @@ import { findContactoIdByPhone } from '../src/lib/whatsapp-bot/contacto'
 
 const DEFAULT_DIR = 'D:/JustCreate/Clientes/Claude Proyectos/crm/Chats viejos'
 const DEFAULT_ORG = 'Abba Seguridad'
+// El historial viejo puede tener huecos de días/semanas entre un mensaje y
+// su respuesta (nadie respondió en el momento) — a diferencia del chat en
+// vivo, donde WhatsApp ya no deja mandar texto libre pasadas 24hs (ver
+// WINDOW_MS en reply/route.ts), así que responseTimeMs ahí nunca supera ese
+// techo. Acá si no se capa, un hueco real desborda el Int32 de Postgres
+// (ocurrió con un gap de ~25 días). Mismo techo que esa ventana: pasado ese
+// punto no es un "tiempo de respuesta" real, es simplemente que se retomó
+// la charla otro día — se guarda null en vez de un número engañoso.
+const MAX_RESPONSE_MS = 24 * 60 * 60 * 1000
 const DIVIDER_PREFIX = '── Historial importado'
 const DIVIDER_TEXT = `${DIVIDER_PREFIX} de WhatsApp Business · a partir de acá, NISSI ──`
 
@@ -138,6 +147,19 @@ async function main() {
     }
     if (!Array.isArray(raw) || raw.length === 0) { emptySkipped++; continue }
 
+    // Grupo disfrazado de contacto: el nombre del archivo puede ser un
+    // nombre guardado normal ("ABBA IT") aunque el chat sea en realidad un
+    // grupo interno — WhatsApp lo delata con "@g.us" en el Message Id de
+    // CADA mensaje (a diferencia de un 1:1, que nunca lo tiene). Sin este
+    // chequeo, "ABBA IT" (2859 mensajes del equipo) se hubiera importado
+    // como si fuera un cliente, con el teléfono de cualquiera de los
+    // participantes que haya escrito primero.
+    if (raw.some((m) => (m['Message Id'] || '').includes('@g.us'))) {
+      groupSkipped++
+      console.log(`  · [grupo interno, se excluye] ${file}`)
+      continue
+    }
+
     // Ascendente por fecha — el resto del script asume orden cronológico.
     const msgs = [...raw].sort((a, b) => new Date(a['Message Time']).getTime() - new Date(b['Message Time']).getTime())
 
@@ -187,7 +209,8 @@ async function main() {
       const createdAt = new Date(m['Message Time'])
       const content = messageContent(m)
       if (m['Message Id'].startsWith('true_')) {
-        const responseTimeMs = lastInboundAt ? createdAt.getTime() - lastInboundAt.getTime() : null
+        const gapMs = lastInboundAt ? createdAt.getTime() - lastInboundAt.getTime() : null
+        const responseTimeMs = gapMs != null && gapMs <= MAX_RESPONSE_MS ? gapMs : null
         for (const p of pendingInboundRows) p.answeredAt = createdAt
         pendingInboundRows = []
         rows.push({ role: 'assistant', content, createdAt, responseTimeMs, answeredAt: null })
@@ -209,7 +232,7 @@ async function main() {
 
     // Fuera de la transacción a propósito — es sólo una lectura, y no tiene
     // sentido tener la transacción abierta mientras se resuelve el match.
-    const contactoId = existingConv ? null : await findContactoIdByPhone(org.id, customerPhoneDigits)
+    const match = existingConv ? null : await findContactoIdByPhone(org.id, customerPhoneDigits)
 
     await prisma.$transaction(async (tx) => {
       const txdb = tx as any
@@ -224,7 +247,7 @@ async function main() {
             organizationId: org.id, phoneNumberId, customerPhone: customerPhoneDigits,
             customerName: customerName || null, status: 'CLOSED',
             lastMessageAt: lastMsgAt, lastInboundAt,
-            contactoId,
+            contactoId: match?.contactoId ?? null, empresaId: match?.empresaId ?? null,
             createdAt: rows[0].createdAt,
           },
           select: { id: true },

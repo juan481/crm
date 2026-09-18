@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import {
   MessageCircle, Search, Send, Bot, User as UserIcon, ArrowLeft, Hand, RotateCcw,
-  AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus,
+  AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus, Building2, Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -64,6 +64,7 @@ interface ConvThread {
   deal: { id: string; title: string; stage: string } | null
   ticket: { id: string; number: number; title: string; status: string } | null
   contacto: { id: string; firstName: string; lastName: string; empresa: { id: string; name: string } | null } | null
+  empresa: { id: string; name: string } | null
   messages: Msg[]
 }
 
@@ -74,6 +75,12 @@ interface ContactoOption {
   companyRaw: string | null
   phone: string | null
   empresa: { id: string; name: string } | null
+}
+
+interface EmpresaOption {
+  id: string
+  name: string
+  city: string | null
 }
 
 const FILTERS = [
@@ -114,8 +121,11 @@ export default function ConversacionesPage() {
   }
 
   return (
-    <div className="lg:h-[calc(100vh-11rem)] lg:flex lg:flex-col">
-      <div className="flex items-start justify-between gap-3 mb-4">
+    // 9.5rem = h-14 del AppHeader (3.5rem) + padding del wrapper full-bleed en
+    // desktop (lg:p-3 lg:pb-3 = 1.5rem) + el bloque de título de acá abajo
+    // (~4.5rem con su mb-3). Si se achica el header de arriba, recalcular.
+    <div className="lg:h-[calc(100vh-9.5rem)] lg:flex lg:flex-col">
+      <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center shrink-0">
             <MessageCircle size={20} className="text-white" />
@@ -161,10 +171,12 @@ function Inbox() {
   const [sending, setSending] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignQuery, setAssignQuery] = useState('')
+  const [assignBusy, setAssignBusy] = useState('') // '' | 'crear-contacto' | 'crear-empresa'
   const [optimistic, setOptimistic] = useState<Msg[]>([])
   const endRef = useRef<HTMLDivElement>(null)
   const markedRef = useRef<string>('')
   const replyRef = useRef<HTMLTextAreaElement>(null)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
 
   // Reset del alto del textarea cuando se vacía (tras enviar).
   useEffect(() => { if (!reply && replyRef.current) replyRef.current.style.height = 'auto' }, [reply])
@@ -174,15 +186,17 @@ function Inbox() {
     return () => clearTimeout(t)
   }, [search])
 
-  const listQuery = useQuery<{ data: ConvListItem[] }>({
+  const listQuery = useInfiniteQuery<{ data: ConvListItem[]; page: number; totalPages: number }>({
     queryKey: ['conversaciones', filter, debouncedSearch],
-    queryFn: async () => {
-      const p = new URLSearchParams({ filter })
+    queryFn: async ({ pageParam }) => {
+      const p = new URLSearchParams({ filter, page: String(pageParam) })
       if (debouncedSearch.length >= 2) p.set('q', debouncedSearch)
       const r = await fetch(`/api/conversaciones?${p}`)
       if (!r.ok) throw new Error('Error al cargar')
       return r.json()
     },
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
     staleTime: 5000,
@@ -241,29 +255,81 @@ function Inbox() {
     router.replace(`/conversaciones?${p}`)
   }
 
-  const assignSearchQuery = useQuery<{ data: ContactoOption[] }>({
+  const assignActive = assignOpen && assignQuery.trim().length >= 2
+  const assignContactosQuery = useQuery<{ data: ContactoOption[] }>({
     queryKey: ['contactos-search-assign', assignQuery],
     queryFn: async () => {
-      const r = await fetch(`/api/contactos?search=${encodeURIComponent(assignQuery)}&limit=15`)
+      const r = await fetch(`/api/contactos?search=${encodeURIComponent(assignQuery)}&limit=10`)
       if (!r.ok) throw new Error()
       return r.json()
     },
-    enabled: assignOpen && assignQuery.trim().length >= 2,
+    enabled: assignActive,
     staleTime: 10000,
   })
+  const assignEmpresasQuery = useQuery<{ data: EmpresaOption[] }>({
+    queryKey: ['empresas-search-assign', assignQuery],
+    queryFn: async () => {
+      const r = await fetch(`/api/empresas?search=${encodeURIComponent(assignQuery)}&limit=10`)
+      if (!r.ok) throw new Error()
+      return r.json()
+    },
+    enabled: assignActive,
+    staleTime: 10000,
+  })
+  const assignLoading = assignContactosQuery.isLoading || assignEmpresasQuery.isLoading
+  const assignCreating = ['crear-contacto', 'crear-empresa'].includes(assignBusy)
 
-  const assignContacto = async (contactoId: string | null) => {
+  const assignExisting = async (body: { contactoId?: string; empresaId?: string }) => {
     if (!selectedId) return
     try {
       const r = await fetch(`/api/conversaciones/${selectedId}/contacto`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactoId }),
+        body: JSON.stringify(body),
       })
       if (!r.ok) throw new Error()
-      toast.success(contactoId ? 'Contacto vinculado' : 'Contacto desvinculado')
+      toast.success('Vinculado')
       setAssignOpen(false); setAssignQuery('')
       threadQuery.refetch(); listQuery.refetch()
-    } catch { toast.error('No se pudo vincular el contacto') }
+    } catch { toast.error('No se pudo vincular') }
+  }
+
+  const desvincular = () => assignExisting({})
+
+  // Alta rápida: sólo el nombre (lo que se escribió en el buscador). El
+  // resto de los datos (mail, teléfono, dirección...) se completan después
+  // desde la ficha — esto es para no perder el hilo del WhatsApp, no un
+  // formulario de alta completo.
+  const crearContacto = async () => {
+    const texto = assignQuery.trim()
+    if (!texto) return
+    const parts = texto.split(/\s+/)
+    const firstName = parts[0]
+    const lastName = parts.slice(1).join(' ') || '(sin apellido)'
+    setAssignBusy('crear-contacto')
+    try {
+      const r = await fetch('/api/contactos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(json.error)
+      await assignExisting({ contactoId: json.data.id })
+    } catch { toast.error('No se pudo crear el contacto') } finally { setAssignBusy('') }
+  }
+
+  const crearEmpresa = async () => {
+    const texto = assignQuery.trim()
+    if (!texto) return
+    setAssignBusy('crear-empresa')
+    try {
+      const r = await fetch('/api/empresas', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: texto }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(json.error)
+      await assignExisting({ empresaId: json.data.id })
+    } catch { toast.error('No se pudo crear la empresa') } finally { setAssignBusy('') }
   }
 
   const doTakeover = async (active: boolean) => {
@@ -321,7 +387,25 @@ function Inbox() {
     }
   }
 
-  const list = listQuery.data?.data ?? []
+  const list = useMemo(() => listQuery.data?.pages.flatMap((p) => p.data) ?? [], [listQuery.data])
+
+  // Scroll infinito: cuando el centinela del final de la lista entra en
+  // pantalla, se pide la próxima página. rootMargin adelanta el pedido antes
+  // de que se vea el fondo real, así no hay un salto visible esperando la red.
+  useEffect(() => {
+    const el = loadMoreRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && listQuery.hasNextPage && !listQuery.isFetchingNextPage) {
+          listQuery.fetchNextPage()
+        }
+      },
+      { rootMargin: '300px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [listQuery.hasNextPage, listQuery.isFetchingNextPage, listQuery.fetchNextPage])
   const collected = useMemo(
     () => Object.entries(thread?.collectedData ?? {}).filter(([k]) => k !== 'origen'),
     [thread?.collectedData],
@@ -406,6 +490,15 @@ function Inbox() {
               </button>
             ))
           )}
+          {list.length > 0 && (
+            <div ref={loadMoreRef} className="p-3">
+              {listQuery.isFetchingNextPage && (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -454,7 +547,9 @@ function Inbox() {
                   <span className="font-semibold text-[var(--color-text)] truncate">
                     {thread.contacto
                       ? `${thread.contacto.firstName} ${thread.contacto.lastName}`
-                      : thread.customerName || <span className="italic text-[var(--color-text-subtle)] font-normal">No agendado</span>}
+                      : thread.empresa
+                        ? thread.empresa.name
+                        : thread.customerName || <span className="italic text-[var(--color-text-subtle)] font-normal">No agendado</span>}
                   </span>
                   {estadoBadge(thread)}
                 </div>
@@ -466,6 +561,17 @@ function Inbox() {
                         Ver contacto
                       </Link>
                       {thread.contacto.empresa && <span>· {thread.contacto.empresa.name}</span>}
+                      <button type="button" onClick={desvincular} className="text-[var(--color-text-subtle)] hover:underline">Desvincular</button>
+                    </>
+                  ) : thread.empresa ? (
+                    <>
+                      <Link href={`/empresas/${thread.empresa.id}`} className="text-[var(--color-primary)] hover:underline">
+                        Ver empresa
+                      </Link>
+                      <button type="button" onClick={() => setAssignOpen(true)} className="text-[var(--color-primary)] hover:underline">
+                        Asignar contacto
+                      </button>
+                      <button type="button" onClick={desvincular} className="text-[var(--color-text-subtle)] hover:underline">Desvincular</button>
                     </>
                   ) : (
                     <button
@@ -623,18 +729,28 @@ function Inbox() {
           </div>
           {assignQuery.trim().length < 2 ? (
             <p className="text-xs text-[var(--color-text-muted)] py-4 text-center">Escribí al menos 2 caracteres para buscar.</p>
-          ) : assignSearchQuery.isLoading ? (
+          ) : assignLoading ? (
             <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
-          ) : !assignSearchQuery.data?.data.length ? (
-            <p className="text-xs text-[var(--color-text-muted)] py-4 text-center">
-              No encontré nada. Podés crear el contacto en <Link href="/contactos" className="text-[var(--color-primary)] hover:underline">Contactos</Link> y volver acá.
-            </p>
           ) : (
             <div className="space-y-1.5 max-h-80 overflow-y-auto">
-              {assignSearchQuery.data.data.map((c) => (
+              {assignEmpresasQuery.data?.data.map((e) => (
                 <button
-                  key={c.id}
-                  onClick={() => assignContacto(c.id)}
+                  key={`e-${e.id}`}
+                  onClick={() => assignExisting({ empresaId: e.id })}
+                  className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-[var(--color-surface-raised)] transition-colors flex items-center gap-2"
+                  style={{ border: '1px solid var(--color-border)' }}
+                >
+                  <Building2 size={14} className="shrink-0 text-[var(--color-text-subtle)]" />
+                  <div className="min-w-0">
+                    <div className="font-medium text-[var(--color-text)] truncate">{e.name}</div>
+                    {e.city && <div className="text-[11px] text-[var(--color-text-subtle)] truncate">{e.city}</div>}
+                  </div>
+                </button>
+              ))}
+              {assignContactosQuery.data?.data.map((c) => (
+                <button
+                  key={`c-${c.id}`}
+                  onClick={() => assignExisting({ contactoId: c.id })}
                   className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
                   style={{ border: '1px solid var(--color-border)' }}
                 >
@@ -644,6 +760,32 @@ function Inbox() {
                   </div>
                 </button>
               ))}
+              {!assignContactosQuery.data?.data.length && !assignEmpresasQuery.data?.data.length && (
+                <p className="text-xs text-[var(--color-text-muted)] py-2 text-center">No encontré nada con ese nombre.</p>
+              )}
+
+              {/* Alta rápida — cubre "es un cliente/empresa nueva" cuando la
+                  búsqueda no encontró nada que vincular. */}
+              <div className="pt-1.5 mt-1.5 border-t space-y-1.5" style={{ borderColor: 'var(--color-border)' }}>
+                <button
+                  onClick={crearContacto}
+                  disabled={assignCreating}
+                  className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-[var(--color-surface-raised)] transition-colors flex items-center gap-2 text-[var(--color-primary)] disabled:opacity-60"
+                  style={{ border: '1px dashed var(--color-border-strong)' }}
+                >
+                  <Plus size={14} className="shrink-0" />
+                  {assignBusy === 'crear-contacto' ? 'Creando…' : <>Crear contacto nuevo: <b>&quot;{assignQuery.trim()}&quot;</b></>}
+                </button>
+                <button
+                  onClick={crearEmpresa}
+                  disabled={assignCreating}
+                  className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-[var(--color-surface-raised)] transition-colors flex items-center gap-2 text-[var(--color-primary)] disabled:opacity-60"
+                  style={{ border: '1px dashed var(--color-border-strong)' }}
+                >
+                  <Plus size={14} className="shrink-0" />
+                  {assignBusy === 'crear-empresa' ? 'Creando…' : <>Crear empresa nueva: <b>&quot;{assignQuery.trim()}&quot;</b></>}
+                </button>
+              </div>
             </div>
           )}
         </div>

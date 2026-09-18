@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { actionKeyForPath } from '@/lib/quick-actions'
 import { MODULE_ROUTES } from '@/lib/modules'
 import { useModulePermissions } from '@/hooks/use-module-access'
+import { cn } from '@/lib/utils'
 import type { User } from '@/types'
 
 // Routes each restricted role may access. Everything else redirects to their
@@ -58,6 +59,10 @@ export function AppShell({ user, branding, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router   = useRouter()
+  // El inbox de NISSI es una pantalla de chat de alto fijo, no contenido de
+  // página — necesita el ancho/alto completos en vez del max-w-7xl centrado
+  // que usa el resto del dashboard (ver el <main> más abajo).
+  const isFullBleed = pathname.startsWith('/conversaciones')
 
   useEffect(() => {
     setUser(user)
@@ -188,7 +193,17 @@ export function AppShell({ user, branding, children }: AppShellProps) {
                 // pb-20 (no sólo lg:p-6) — deja lugar para la Barra Rápida
                 // fija de abajo en mobile; en desktop (lg:hidden en la
                 // barra) no hace falta, así que se anula con lg:pb-6.
-                className="p-4 pb-20 lg:p-6 lg:pb-6 max-w-7xl mx-auto w-full"
+                // El inbox de NISSI (isFullBleed) es una pantalla de chat, no
+                // una página de contenido — el max-w-7xl centrado y el
+                // padding grande de acá le comían la mitad de la pantalla en
+                // desktop; ese layout va sin el límite de ancho y con
+                // márgenes chicos (la altura la sigue calculando la propia
+                // página con el nuevo padding — ver ConversacionesPage).
+                className={cn(
+                  isFullBleed
+                    ? 'p-2 pb-20 lg:p-3 lg:pb-3 w-full'
+                    : 'p-4 pb-20 lg:p-6 lg:pb-6 max-w-7xl mx-auto w-full',
+                )}
               >
                 {children}
               </motion.div>

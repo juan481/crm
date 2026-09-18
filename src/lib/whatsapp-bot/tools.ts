@@ -178,7 +178,13 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
       const contactoId = await resolveContactoForConversation(ctx.orgId, {
         conversationId: ctx.conversationId, customerPhone: ctx.customerPhone,
       })
-      if (contactoId) await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { contactoId } })
+      if (contactoId) {
+        // Denormaliza empresaId también — mismo criterio que el endpoint de
+        // asignación manual (conversaciones/[id]/contacto), así el inbox
+        // muestra la empresa sin un join extra.
+        const contacto = await db.directorioContacto.findUnique({ where: { id: contactoId }, select: { empresaId: true } })
+        await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { contactoId, empresaId: contacto?.empresaId ?? null } })
+      }
     }
 
     return { resultText: 'Datos guardados.' }

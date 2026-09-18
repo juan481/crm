@@ -869,6 +869,13 @@ model WhatsAppConversation {
   // ya sabemos quién es.
   contactoId      String?
   contacto        DirectorioContacto?        @relation(fields: [contactoId], references: [id], onDelete: SetNull)
+  // Empresa vinculada — independiente de contactoId (mismo patrón que
+  // Deal/Ticket: una charla B2B puede ser "de la empresa" sin tener todavía
+  // una persona puntual cargada). Al asignar un contacto que SÍ tiene
+  // empresa, el endpoint de asignación copia este campo también, para que
+  // el inbox no dependa de un join extra para mostrar la empresa.
+  empresaId       String?
+  empresa         Empresa?                   @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   // Solo se actualiza con mensajes ENTRANTES del cliente (a diferencia de
   // lastMessageAt, que también sube cuando NISSI o un humano responden).
   // Gobierna la ventana de 24hs de Meta y el cálculo de "no leído".
@@ -895,6 +902,7 @@ model WhatsAppConversation {
   @@index([organizationId, createdAt])
   @@index([phoneNumberId])
   @@index([contactoId])
+  @@index([empresaId])
 }
 
 model WhatsAppMessage {
@@ -1429,18 +1437,19 @@ model Empresa {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  contactos            DirectorioContacto[]
-  notas                EmpresaNota[]
-  cotizaciones         Cotizacion[]
-  deals                Deal[]
-  tasks                Task[]
-  tickets              Ticket[]
-  invoices             Invoice[]
-  serviciosRecurrentes ServicioRecurrente[]
-  compras              Compra[]
-  entregasStock        EntregaStock[]
+  contactos             DirectorioContacto[]
+  notas                 EmpresaNota[]
+  cotizaciones          Cotizacion[]
+  deals                 Deal[]
+  tasks                 Task[]
+  tickets               Ticket[]
+  invoices              Invoice[]
+  serviciosRecurrentes  ServicioRecurrente[]
+  compras               Compra[]
+  entregasStock         EntregaStock[]
   // Usuarios de portal de cliente atados a esta Empresa (role === 'CLIENTE').
-  portalUsers          User[]               @relation("PortalUser")
+  portalUsers           User[]                 @relation("PortalUser")
+  whatsAppConversations WhatsAppConversation[]
 
   @@index([organizationId])
   @@index([organizationId, name])

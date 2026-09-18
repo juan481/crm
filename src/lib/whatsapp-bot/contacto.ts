@@ -18,16 +18,19 @@ const digitsOnly = (s: string): string => (s || '').replace(/\D/g, '')
 // común, la mayoría son clientes que ya escribieron antes por otro canal),
 // el inbox lo muestra con nombre/empresa desde el primer mensaje en vez de
 // mostrar el número pelado hasta que alguien lo vincule.
-export async function findContactoIdByPhone(orgId: string, waIdDigits: string): Promise<string | null> {
+export async function findContactoIdByPhone(
+  orgId: string,
+  waIdDigits: string,
+): Promise<{ contactoId: string; empresaId: string | null } | null> {
   const tail = digitsOnly(waIdDigits).slice(-8)
   if (tail.length < 8) return null
   try {
     const db = prisma as any
     const match = await db.directorioContacto.findFirst({
       where: { organizationId: orgId, phone: { contains: tail } },
-      select: { id: true },
+      select: { id: true, empresaId: true },
     })
-    return match?.id ?? null
+    return match ? { contactoId: match.id, empresaId: match.empresaId ?? null } : null
   } catch (err) {
     console.error('[NISSI] findContactoIdByPhone falló', err)
     return null

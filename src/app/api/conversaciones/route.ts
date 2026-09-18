@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
           lastMessageAt: true, lastInboundAt: true, lastReadAt: true,
           assignedUser: { select: { id: true, name: true } },
           contacto: { select: { id: true, firstName: true, lastName: true, empresa: { select: { id: true, name: true } } } },
+          empresa: { select: { id: true, name: true } },
           messages: {
             orderBy: { createdAt: 'desc' }, take: 1,
             where: { role: { in: ['user', 'assistant'] } }, // el divisor 'system' no cuenta como "último mensaje"
@@ -64,16 +65,24 @@ export async function GET(req: NextRequest) {
         const unread = !!c.lastInboundAt && (!c.lastReadAt || new Date(c.lastReadAt) < new Date(c.lastInboundAt))
         const last = c.messages[0]
         const contactoNombre = c.contacto ? `${c.contacto.firstName} ${c.contacto.lastName}`.trim() : null
+        // c.empresa es la fuente directa (asignación manual de sólo-empresa,
+        // o denormalizada al vincular un contacto que tiene empresa); el
+        // fallback a c.contacto.empresa cubre conversaciones vinculadas
+        // antes de que existiera esa denormalización.
+        const empresaNombre = c.empresa?.name ?? c.contacto?.empresa?.name ?? null
         return {
           id: c.id,
           customerPhone: c.customerPhone,
           customerName: c.customerName,
-          // Prioridad para mostrar en la lista: contacto vinculado (+ empresa
-          // si tiene) > nombre de WhatsApp > "No agendado" — nunca el número
-          // pelado, salvo que de verdad no haya nada mejor.
-          displayName: contactoNombre || c.customerName || null,
-          empresaNombre: c.contacto?.empresa?.name ?? null,
-          noAgendado: !contactoNombre && !c.customerName,
+          // Prioridad para mostrar en la lista: persona vinculada > empresa
+          // vinculada sola (charla B2B sin contacto puntual) > nombre de
+          // WhatsApp > "No agendado" — nunca el número pelado si hay algo
+          // mejor.
+          displayName: contactoNombre || empresaNombre || c.customerName || null,
+          // Subtítulo de empresa: sólo tiene sentido si el nombre principal
+          // ya es una persona (si es la empresa sola, ya es el título).
+          empresaNombre: contactoNombre ? empresaNombre : null,
+          noAgendado: !contactoNombre && !empresaNombre && !c.customerName,
           status: c.status,
           humanHandling: !!c.humanTakeoverAt,
           assignedUser: c.assignedUser,
