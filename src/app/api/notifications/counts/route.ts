@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db'
 import { taskInvolvesUser, ticketInvolvesUser } from '@/lib/assignment-scope'
 import { roleHasModule } from '@/lib/module-access'
 
+export const dynamic = 'force-dynamic'
+
 export interface NotificationCounts {
   tasks: number
   tickets: number
@@ -69,9 +71,15 @@ export async function GET() {
         : Promise.resolve(0),
     ])
 
+    // 'private': esto es por-organización y por-rol (tasks/tickets/whatsapp
+    // varían con orgId y con TECHNICIAN/HR viendo sólo lo suyo) — sin
+    // 'private', "s-maxage" cachea en la red compartida de Vercel sin
+    // "Vary", y cualquiera que pida esta URL en la ventana de 30s recibe la
+    // respuesta de OTRO usuario/organización. Mismo bug que se encontró en
+    // /api/module-permissions.
     return NextResponse.json(
       { data: { tasks, tickets, invoices, whatsapp } as NotificationCounts },
-      { headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' } },
+      { headers: { 'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60' } },
     )
   } catch (error) {
     console.error('[NOTIFICATION COUNTS]', error)

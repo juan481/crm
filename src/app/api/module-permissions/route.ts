@@ -5,6 +5,8 @@ import { MODULE_DEFINITIONS, ROLES, roleAtLeast, getModule } from '@/lib/modules
 import { unstable_cache, revalidateTag } from 'next/cache'
 import type { Role } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 interface ModulePermissionRow {
   id: string
   label: string
@@ -43,9 +45,17 @@ export async function GET() {
 
     const data = await getCachedModulePermissions(payload.orgId)
 
+    // 'private' es lo que faltaba acá (sí lo tiene /api/plugins, mismo
+    // patrón): sin eso, "s-maxage=300" es una instrucción para caches
+    // COMPARTIDOS (la red de Vercel), sin "Vary" por organización — así que
+    // servía la MISMA respuesta cacheada a cualquiera que pidiera esta URL
+    // durante 5 minutos, sin importar quién fuera ni qué acababa de cambiar.
+    // revalidateTag() en el POST sólo invalida el data cache interno de
+    // unstable_cache, nunca ese cache de borde — por eso el toggle quedaba
+    // bien guardado en la base pero el GET siguiente traía la versión vieja.
     return NextResponse.json(
       { data },
-      { headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' } }
+      { headers: { 'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=3600' } }
     )
   } catch (error) {
     console.error('[MODULE PERMISSIONS GET]', error)
