@@ -261,31 +261,67 @@ export function buildEmailHtml(
   secondaryColor = '#8b5cf6',
   trackingPixelUrl?: string,
   unsubscribeUrl?: string,
+  // false (default) = `body` es texto plano con \n como salto de línea —
+  // TODOS los crons/notificaciones internas mandan así (ver stock-bajo,
+  // task-reminders, etc.), así que el default preserva su comportamiento
+  // de siempre. true = `body` ya es HTML de un RichEditor (Campañas y
+  // Plantillas de email) — ahí NO hay que tocar los saltos de línea, ya
+  // vienen como <p> propios; convertir \n a <br/> encima era justo lo que
+  // duplicaba el espaciado (pedido de Abba, punto 9 del ticket).
+  contentIsHtml = false,
 ): string {
+  const bodyHtml = contentIsHtml ? body : body.replace(/\n/g, '<br/>')
+  //
+  // Contenedor con TABLAS anidadas, no <div>+CSS: Outlook de escritorio
+  // renderiza con el motor de Word, que ignora max-width/margin:auto en un
+  // div y por eso el cuerpo quedaba angosto/descentrado ahí aunque en Gmail
+  // se viera bien — la tabla con width="600" es el estándar de compatibilidad
+  // de email, entiende ambos motores igual.
+  //
+  // Header: antes era una franja grande con gradiente + el asunto repetido
+  // como título — se veía tosco y es redundante (el asunto ya lo muestra el
+  // cliente de correo en la bandeja). Ahora es una franja fina de marca con
+  // el nombre de la empresa, sin repetir el asunto.
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
     body{font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:0}
-    .container{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-    .header{background:linear-gradient(135deg,${primaryColor} 0%,${secondaryColor} 100%);padding:32px 40px}
-    .header h1{color:#fff;margin:0;font-size:22px;font-weight:600}
-    .body{padding:40px;color:#1e293b;line-height:1.7;font-size:15px}
-    .body img{max-width:100%;height:auto;display:block}
-    .footer{background:#f1f5f9;padding:20px 40px;text-align:center;color:#94a3b8;font-size:13px}
+    .body-content{color:#1e293b;line-height:1.6;font-size:15px}
+    .body-content p{margin:0 0 14px}
+    .body-content img{max-width:100%;height:auto;display:block}
     .footer a{color:#94a3b8;text-decoration:underline}
+    @media only screen and (max-width:620px) {
+      .email-container{width:100% !important}
+      .email-pad{padding:24px !important}
+    }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header"><h1>${subject}</h1></div>
-    <div class="body">${body.replace(/\n/g, '<br/>')}</div>
-    <div class="footer">
-      Enviado por ${orgName} &mdash; No responder a este correo.
-      ${unsubscribeUrl ? `<br/><a href="${unsubscribeUrl}">Darse de baja de estos correos</a>` : ''}
-    </div>
-  </div>${trackingPixelUrl ? `\n  <img src="${trackingPixelUrl}" width="1" height="1" style="display:none;border:0" alt="" />` : ''}
+<body style="margin:0;padding:0;background:#f8fafc">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc">
+    <tr>
+      <td align="center" style="padding:32px 12px">
+        <table role="presentation" width="600" class="email-container" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+          <tr>
+            <td style="background:${primaryColor};padding:16px 32px">
+              <span style="color:#ffffff;font-size:14px;font-weight:600">${orgName}</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="email-pad body-content" style="padding:36px 40px">${bodyHtml}</td>
+          </tr>
+          <tr>
+            <td class="footer" style="background:#f1f5f9;padding:20px 40px;text-align:center;color:#94a3b8;font-size:13px">
+              Enviado por ${orgName} &mdash; No responder a este correo.
+              ${unsubscribeUrl ? `<br/><a href="${unsubscribeUrl}">Darse de baja de estos correos</a>` : ''}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>${trackingPixelUrl ? `\n  <img src="${trackingPixelUrl}" width="1" height="1" style="display:none;border:0" alt="" />` : ''}
 </body>
 </html>`
 }

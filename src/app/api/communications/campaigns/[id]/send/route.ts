@@ -130,6 +130,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         org.secondaryColor ?? '#8b5cf6',
         pixelUrl,
         unsubscribeUrl,
+        true, // contentIsHtml — campaign.body viene del RichEditor, no es texto plano
       )
 
       try {
