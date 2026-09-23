@@ -83,11 +83,18 @@ export async function POST(req: NextRequest) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds } = await req.json()
+    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds, ccEmails } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })
 
     const db = prisma as any
     const finalAssignedToId = assignedToId || payload.userId
+    // Emails en copia — texto libre, no tienen que ser usuarios del CRM
+    // (a diferencia de collaboratorIds). Sin validar formato acá, sólo
+    // limpiar vacíos/duplicados; el POST no debe fallar por un typo menor.
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const finalCcEmails: string[] = Array.isArray(ccEmails)
+      ? Array.from(new Set(ccEmails.filter((e: unknown) => typeof e === 'string' && EMAIL_RE.test(e.trim())).map((e: string) => e.trim().toLowerCase())))
+      : []
     // Colaboradores adicionales — opcional (ver TaskCollaborator), nunca
     // duplica al asignado principal aunque venga repetido en la lista.
     const collabIds: string[] = Array.isArray(collaboratorIds)
@@ -134,16 +141,18 @@ export async function POST(req: NextRequest) {
         empresaId:      empresaId || null,
         dealId:         dealId    || null,
         ticketId:       ticketId  || null,
+        ccEmails:       finalCcEmails,
         organizationId: payload.orgId,
         ...(collabIds.length && { collaborators: { create: collabIds.map((userId) => ({ userId })) } }),
       },
       include: INCLUDE,
     })
 
-    // Email al asignado — sólo si se la asignaron a otra persona (no a uno
-    // mismo) y la org tiene correo configurado. Best-effort: si falla, la
-    // tarea ya se creó igual, no se revierte nada por esto.
-    if (finalAssignedToId !== payload.userId) {
+    // Email al asignado (si es a otra persona) y/o a los CC — si hay
+    // ccEmails, avisa igual aunque uno se la haya asignado a sí mismo
+    // (el caso de Abba: un supervisor que se entera aunque el responsable
+    // sea el mismo que la creó). Best-effort, no revierte nada si falla.
+    if (finalAssignedToId !== payload.userId || finalCcEmails.length > 0) {
       notifyTaskAssignment(task, payload.orgId)
     }
     for (const userId of collabIds) {

@@ -588,6 +588,8 @@ export interface Task {
   organizationId: string
   // Colaboradores adicionales — no obligatorio, ver TaskCollaborator.
   collaborators?: Array<{ user: { id: string; name: string; avatarUrl: string | null } }>
+  // Emails en copia (texto libre) — casos sensibles, pedido de Abba.
+  ccEmails?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -642,6 +644,8 @@ export interface Ticket {
   _count?: { messages: number }
   // Colaboradores adicionales — no obligatorio, ver TicketCollaborator.
   collaborators?: Array<{ user: { id: string; name: string; avatarUrl: string | null } }>
+  // Emails en copia (texto libre) — casos sensibles, pedido de Abba.
+  ccEmails?: string[]
   createdAt: string
   updatedAt: string
 }

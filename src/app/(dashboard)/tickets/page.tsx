@@ -82,10 +82,14 @@ interface TicketFormState {
   // Gente adicional en el ticket, además de a quien se le asigne después —
   // no obligatorio (ver TicketCollaborator).
   collaboratorIds: string[]
+  // Emails en copia — texto libre separado por coma, no usuarios del CRM
+  // (pedido de Abba: casos sensibles como RRHH, donde un supervisor tiene
+  // que enterarse aunque no sea ni el asignado ni un colaborador de trabajo).
+  ccEmailsRaw: string
 }
 
 const EMPTY_FORM: TicketFormState = {
-  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '', recipientEmail: '', recipientName: '', collaboratorIds: [],
+  title: '', description: '', priority: 'MEDIA', category: 'SOPORTE', empresaId: '', recipientEmail: '', recipientName: '', collaboratorIds: [], ccEmailsRaw: '',
 }
 
 export default function TicketsPage() {
@@ -190,10 +194,14 @@ export default function TicketsPage() {
     if (!form.description.trim()) { toast.error('La descripción es requerida'); return }
     setSaving(true)
     try {
+      const { ccEmailsRaw, ...formRest } = form
       const res = await fetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, empresaId: form.empresaId || undefined }),
+        body: JSON.stringify({
+          ...formRest, empresaId: form.empresaId || undefined,
+          ccEmails: ccEmailsRaw.split(',').map(e => e.trim()).filter(Boolean),
+        }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error); return }
@@ -427,6 +435,12 @@ export default function TicketsPage() {
             users={users}
             selectedIds={form.collaboratorIds}
             onChange={ids => setForm(f => ({ ...f, collaboratorIds: ids }))}
+          />
+          <Input
+            label="Copia — CC (opcional)"
+            placeholder="supervisor@empresa.com, otro@empresa.com"
+            value={form.ccEmailsRaw}
+            onChange={e => setForm(f => ({ ...f, ccEmailsRaw: e.target.value }))}
           />
           <div className="grid grid-cols-2 gap-3">
             <Input

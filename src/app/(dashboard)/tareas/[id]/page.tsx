@@ -291,6 +291,7 @@ export default function TareaDetailPage() {
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [form, setForm]         = useState<Partial<Task & { dueDate: string; collaboratorIds: string[] }>>({})
+  const [ccEmailsRaw, setCcEmailsRaw] = useState('')
   const [dirty, setDirty]       = useState(false)
   const [syncingGcal, setSyncingGcal] = useState(false)
   const { enabled: gcalEnabled } = usePlugin('google-calendar')
@@ -339,6 +340,7 @@ export default function TareaDetailPage() {
         empresaId:    task.empresaId ?? '',
         collaboratorIds: (task.collaborators ?? []).map(c => c.user.id),
       })
+      setCcEmailsRaw((task.ccEmails ?? []).join(', '))
     }
   }, [task, dirty])
 
@@ -371,6 +373,7 @@ export default function TareaDetailPage() {
           assignedToId: form.assignedToId || user?.id,
           empresaId:    (form as any).empresaId || null,
           collaboratorIds: form.collaboratorIds ?? [],
+          ccEmails: ccEmailsRaw.split(',').map(e => e.trim()).filter(Boolean),
         }),
       })
       if (!res.ok) { const j = await res.json(); toast.error(j.error); return }
@@ -573,6 +576,15 @@ export default function TareaDetailPage() {
             selectedIds={form.collaboratorIds ?? []}
             onChange={ids => { setForm(f => ({ ...f, collaboratorIds: ids })); setDirty(true) }}
             excludeId={form.assignedToId || user?.id}
+          />
+        )}
+
+        {!isTech && (
+          <Input
+            label="Copia — CC (opcional)"
+            placeholder="supervisor@empresa.com, otro@empresa.com"
+            value={ccEmailsRaw}
+            onChange={e => { setCcEmailsRaw(e.target.value); setDirty(true) }}
           />
         )}
 

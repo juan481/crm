@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { SLA_HOURS } from '@/lib/tickets'
 import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
+import { notifyTicketCreated } from '@/lib/ticket-notifications'
 
 interface Params { params: { id: string } }
 
@@ -98,7 +99,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // desactualizado con el ticket ya reabierto).
     const isReopening = status !== undefined && status !== 'RESUELTO' && status !== 'CERRADO' && wasClosed
 
-    const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName, collaboratorIds } = body
+    const { title, priority, category, assignedToId, empresaId, clientId, recipientEmail, recipientName, collaboratorIds, ccEmails } = body
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const finalCcEmails: string[] | undefined = (!isTech && Array.isArray(ccEmails))
+      ? Array.from(new Set(ccEmails.filter((e: unknown) => typeof e === 'string' && EMAIL_RE.test(e.trim())).map((e: string) => e.trim().toLowerCase())))
+      : undefined
 
     // Colaboradores — mismo nivel de permiso que reasignar (isAdmin), y
     // mismo criterio que Tareas: reemplazo completo de la lista, nunca
@@ -160,6 +165,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...((!isTech && clientId !== undefined)   && { clientId: clientId || null }),
         ...((!isTech && recipientEmail !== undefined) && { recipientEmail: recipientEmail || null }),
         ...((!isTech && recipientName !== undefined)  && { recipientName: recipientName || null }),
+        ...(finalCcEmails !== undefined         && { ccEmails: finalCcEmails }),
         ...(isResolving                        && { resolvedAt: new Date() }),
         ...(isReopening                        && { resolvedAt: null }),
         ...(newSlaDueAt                        && { slaDueAt: newSlaDueAt }),
@@ -173,6 +179,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     for (const userId of addedCollabIds) {
       if (userId === payload.userId) continue
       notifyCollaboratorAdded({ userId, orgId: payload.orgId, kind: 'ticket', title: ticket.title, entityId: ticket.id })
+    }
+
+    // CC en una reasignación — sólo si de verdad cambió el asignado Y hay
+    // CC cargado (mismo criterio conservador que en la creación: no sumar
+    // un mail nuevo que nadie pidió en cada PATCH, sólo cuando el pedido de
+    // Abba — "caso sensible" — realmente aplica).
+    if (isAdmin && assignedToId !== undefined && assignedToId !== existing.assignedToId && (ticket.ccEmails?.length ?? 0) > 0) {
+      notifyTicketCreated(ticket, payload.orgId)
     }
 
     // Invitar al contacto a calificar la atención — link público de un solo

@@ -161,7 +161,7 @@ export default function TicketDetailPage() {
     }
   }
 
-  const handleUpdate = async (field: Partial<{ status: string; priority: string; category: string; assignedToId: string | null; recipientEmail: string | null; collaboratorIds: string[] }>) => {
+  const handleUpdate = async (field: Partial<{ status: string; priority: string; category: string; assignedToId: string | null; recipientEmail: string | null; collaboratorIds: string[]; ccEmails: string[] }>) => {
     setUpdating(true)
     try {
       const res = await fetch(`/api/tickets/${id}`, {
@@ -467,6 +467,26 @@ export default function TicketDetailPage() {
                   />
                 ) : (
                   <p className="text-sm text-[var(--color-text)]">{data.recipientEmail ?? 'Sin cargar'}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-text-subtle)] mb-1">Copia — CC</p>
+                {user?.role !== 'TECHNICIAN' ? (
+                  <input
+                    key={(data.ccEmails ?? []).join(',')}
+                    type="text"
+                    defaultValue={(data.ccEmails ?? []).join(', ')}
+                    placeholder="supervisor@empresa.com, otro@empresa.com"
+                    disabled={updating}
+                    onBlur={e => {
+                      const next = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                      const prev = data.ccEmails ?? []
+                      if (JSON.stringify(next) !== JSON.stringify(prev)) handleUpdate({ ccEmails: next })
+                    }}
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)]"
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--color-text)]">{(data.ccEmails ?? []).join(', ') || 'Ninguno'}</p>
                 )}
               </div>
             </div>

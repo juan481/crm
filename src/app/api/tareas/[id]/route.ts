@@ -94,10 +94,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const isOwnerOrCreator = existing.assignedToId === payload.userId || existing.createdById === payload.userId
     const canReassign = !isTech && (payload.role !== 'SELLER' || isOwnerOrCreator)
 
-    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds } = body
+    const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds, ccEmails } = body
     const isCompleting    = status === 'HECHA' && existing.status !== 'HECHA'
     const shouldMarkViewed = viewed === true && payload.userId === existing.assignedToId && !existing.viewedAt
     const isReassigning = canReassign && assignedToId && assignedToId !== existing.assignedToId
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const finalCcEmails: string[] | undefined = (!isTech && Array.isArray(ccEmails))
+      ? Array.from(new Set(ccEmails.filter((e: unknown) => typeof e === 'string' && EMAIL_RE.test(e.trim())).map((e: string) => e.trim().toLowerCase())))
+      : undefined
 
     // Colaboradores — reemplazo completo de la lista (semántica simple: lo
     // que mandás es lo que queda), sólo si el body trae la clave, y sólo si
@@ -147,13 +151,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(!isCompleting && status && status !== 'HECHA' && { completedAt: null }),
         ...(shouldMarkViewed                       && { viewedAt: new Date() }),
         ...(newCollabIds !== undefined             && { collaborators: { deleteMany: {}, create: newCollabIds.map((userId) => ({ userId })) } }),
+        ...(finalCcEmails !== undefined            && { ccEmails: finalCcEmails }),
       },
       include: INCLUDE,
     })
 
     // Email al nuevo asignado — sólo cuando de verdad cambia a otra persona
-    // (no cuando se re-guarda la misma), y nunca cuando uno se autoasigna.
-    if (isReassigning && assignedToId !== payload.userId) {
+    // (no cuando se re-guarda la misma). El disparo por CC es aparte y sólo
+    // cuando la lista de CC se tocó EN ESTE PATCH (finalCcEmails viene de
+    // `ccEmails` en el body) — si sólo se mira `task.ccEmails` sin más,
+    // cualquier edición futura no relacionada (marcar vista, cambiar el
+    // título) volvería a mandar el mismo mail una y otra vez.
+    if ((isReassigning && assignedToId !== payload.userId) || (finalCcEmails !== undefined && finalCcEmails.length > 0)) {
       notifyTaskAssignment(task, payload.orgId)
     }
     for (const userId of addedCollabIds) {

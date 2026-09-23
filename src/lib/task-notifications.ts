@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 
 async function doNotifyTaskAssignment(
-  task: { id: string; title: string; dueDate: Date | string | null; assignedToId: string },
+  task: { id: string; title: string; dueDate: Date | string | null; assignedToId: string; ccEmails?: string[] },
   orgId: string
 ): Promise<void> {
   const db = prisma as any
@@ -12,7 +12,8 @@ async function doNotifyTaskAssignment(
     where: { id: task.assignedToId },
     select: { name: true, email: true },
   })
-  if (!assignee?.email) return
+  const cc = (task.ccEmails ?? []).filter((e) => e !== assignee?.email)
+  if (!assignee?.email && cc.length === 0) return
 
   const org = await db.organization.findUnique({
     where: { id: orgId },
@@ -34,8 +35,15 @@ async function doNotifyTaskAssignment(
     org?.secondaryColor || '#8b5cf6',
   )
 
+  // "Copia" real (header Cc) no está soportada por los 3 proveedores de
+  // envío (SES/Brevo/SMTP) sin plomería extra en cada uno — se manda como
+  // destinatarios adicionales en `to`. Cumple el objetivo real (que el
+  // supervisor se entere), aunque no aparezca como "Cc:" en su bandeja.
+  const to = [assignee?.email, ...cc].filter((e): e is string => !!e)
+  if (to.length === 0) return
+
   await sendEmail({
-    to: assignee.email,
+    to,
     subject: `Tarea nueva: ${task.title}`,
     html,
     smtpConfig: resolveOrgSmtpConfig(org),

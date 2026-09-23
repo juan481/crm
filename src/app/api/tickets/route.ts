@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { SLA_HOURS } from '@/lib/tickets'
 import { fireWebhook } from '@/lib/webhooks'
 import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
+import { notifyTicketCreated } from '@/lib/ticket-notifications'
 import { ticketInvolvesUser } from '@/lib/assignment-scope'
 
 export const dynamic = 'force-dynamic'
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { title, description, priority, category, clientId, empresaId, assignedToId, recipientEmail, recipientName, collaboratorIds } = await req.json()
+    const { title, description, priority, category, clientId, empresaId, assignedToId, recipientEmail, recipientName, collaboratorIds, ccEmails } = await req.json()
     if (!title?.trim())       return NextResponse.json({ error: 'El título es requerido' },       { status: 400 })
     if (!description?.trim()) return NextResponse.json({ error: 'La descripción es requerida' },  { status: 400 })
 
@@ -91,6 +92,13 @@ export async function POST(req: NextRequest) {
     // duplica al asignado principal aunque venga repetido en la lista.
     const collabIds: string[] = Array.isArray(collaboratorIds)
       ? Array.from(new Set(collaboratorIds.filter((id: unknown) => typeof id === 'string' && id !== assignedToId)))
+      : []
+    // Emails en copia — mismo criterio que /api/tareas (texto libre, no
+    // tienen que ser usuarios del CRM). Pedido de Abba: casos sensibles
+    // (ej. RRHH) donde un supervisor tiene que enterarse igual.
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    const finalCcEmails: string[] = Array.isArray(ccEmails)
+      ? Array.from(new Set(ccEmails.filter((e: unknown) => typeof e === 'string' && EMAIL_RE.test(e.trim())).map((e: string) => e.trim().toLowerCase())))
       : []
 
     // Sin esto, clientId/empresaId/assignedToId de OTRA organización se
@@ -126,6 +134,7 @@ export async function POST(req: NextRequest) {
       createdById:    payload.userId,
       organizationId: payload.orgId,
       slaDueAt:       new Date(Date.now() + SLA_HOURS[priorityValue] * 60 * 60 * 1000),
+      ccEmails:       finalCcEmails,
       ...(collabIds.length && { collaborators: { create: collabIds.map((userId) => ({ userId })) } }),
     }
 
@@ -147,6 +156,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Sólo si hay CC — antes de esto un ticket manual no le avisaba a nadie
+    // por mail (a diferencia de las tareas), y no es el momento de sumar esa
+    // notificación en general sin que nadie la haya pedido; esto es
+    // puntualmente para que el CC (el caso sensible de Abba) funcione.
+    if (finalCcEmails.length > 0) {
+      notifyTicketCreated(ticket, payload.orgId)
+    }
     for (const userId of collabIds) {
       if (userId === payload.userId) continue
       notifyCollaboratorAdded({ userId, orgId: payload.orgId, kind: 'ticket', title: ticket.title, entityId: ticket.id })

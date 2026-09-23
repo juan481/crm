@@ -58,10 +58,13 @@ interface TaskFormState {
   // Gente adicional además del asignado principal — no obligatorio (ver
   // TaskCollaborator).
   collaboratorIds: string[]
+  // Emails en copia — texto libre separado por coma (pedido de Abba, casos
+  // sensibles como RRHH).
+  ccEmailsRaw: string
 }
 
 const EMPTY_FORM: TaskFormState = {
-  title: '', description: '', priority: 'MEDIA', dueDate: '', assignedToId: '', empresaId: '', collaboratorIds: [],
+  title: '', description: '', priority: 'MEDIA', dueDate: '', assignedToId: '', empresaId: '', collaboratorIds: [], ccEmailsRaw: '',
 }
 
 function isOverdue(task: Task): boolean {
@@ -189,6 +192,7 @@ export default function TareasPage() {
           assignedToId: form.assignedToId || user?.id,
           empresaId: form.empresaId || null,
           collaboratorIds: form.collaboratorIds,
+          ccEmails: form.ccEmailsRaw.split(',').map(e => e.trim()).filter(Boolean),
         }),
       })
       const json = await res.json()
@@ -411,6 +415,13 @@ export default function TareasPage() {
               selectedIds={form.collaboratorIds}
               onChange={ids => setForm(f => ({ ...f, collaboratorIds: ids }))}
               excludeId={form.assignedToId || user?.id}
+            />
+            <Input
+              label="Copia — CC (opcional)"
+              placeholder="supervisor@empresa.com, otro@empresa.com"
+              value={form.ccEmailsRaw}
+              onChange={e => setForm(f => ({ ...f, ccEmailsRaw: e.target.value }))}
+              className="col-span-2"
             />
             <div className="flex flex-col gap-1.5 col-span-2" ref={empresaRef}>
               <label className="text-sm font-medium text-[var(--color-text-muted)]">Empresa (opcional)</label>

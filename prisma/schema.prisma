@@ -1259,6 +1259,11 @@ model Task {
   ticket         Ticket?            @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   organizationId String
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Emails en copia — para casos sensibles (ej. RRHH) donde además del
+  // responsable tiene que enterarse un supervisor que no es ni el asignado
+  // ni un colaborador de trabajo. Texto libre, no requiere que sea un
+  // usuario del CRM (a diferencia de collaborators). Pedido de Abba.
+  ccEmails       String[]           @default([])
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   comments       TaskComment[]
@@ -1367,6 +1372,8 @@ model Ticket {
   satisfactionRating  Int?
   satisfactionComment String?
   satisfactionRatedAt DateTime?
+  // Emails en copia — mismo criterio que Task.ccEmails.
+  ccEmails            String[]             @default([])
   organizationId      String
   organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   messages            TicketMessage[]
