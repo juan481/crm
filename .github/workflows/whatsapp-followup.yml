@@ -1,0 +1,19 @@
+name: WhatsApp followup (seguís ahí)
+
+# Le "toca el timbre" al endpoint /api/cron/whatsapp-followup cada 5 minutos
+# — reemplaza al cron nativo de Vercel, que en el plan gratuito (Hobby) sólo
+# se puede ejecutar una vez al día. GitHub Actions es gratis para esto (uso
+# mínimo, unos segundos por corrida).
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {} # permite dispararlo a mano desde la pestaña Actions, para probar
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar al endpoint de seguimiento de WhatsApp
+        run: |
+          curl -sf -X GET "${{ secrets.CRM_APP_URL }}/api/cron/whatsapp-followup" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
