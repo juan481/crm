@@ -1,647 +1,859 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
-  AlertTriangle, CheckCircle2, ArrowRight, Zap, Bot, FileText, BarChart3,
-  Layers, Users, Package, RefreshCw, Send, Check, Sparkles, Building2,
-  Clock, ShieldAlert, XCircle, MessageSquare, Flame, CheckCheck,
-  ChevronDown, Star, Play, Compass, PhoneCall, HelpCircle, HardDriveDownload
+  Shield, Zap, Bot, FileText, BarChart3, Layers, Package, Users,
+  CheckCircle2, ArrowRight, Play, Clock, Sparkles, Send, Check,
+  ChevronDown, PhoneCall, AlertTriangle, Eye, RefreshCw, X,
+  TrendingUp, DollarSign, Calendar, MessageSquare, Flame, CheckCheck,
+  Receipt, ArrowUpRight, Laptop, Smartphone, Lock
 } from 'lucide-react'
 
 export default function LandingPage() {
-  const [activeTab, setActiveTab] = useState<'todos' | 'ventas' | 'operaciones' | 'administracion'>('todos')
+  const [activeScreen, setActiveScreen] = useState<'cotizador' | 'whatsapp' | 'pipeline' | 'stock' | 'facturacion' | 'dashboard'>('cotizador')
   const [currency, setCurrency] = useState<'USD' | 'ARS'>('USD')
   const [priceMode, setPriceMode] = useState<'GREMIO' | 'PUBLICO'>('GREMIO')
+  const [liveNotification, setLiveNotification] = useState(0)
   const [faqOpen, setFaqOpen] = useState<number | null>(null)
 
-  // Simulation data for Cotizador
-  const demoItems = [
-    {
-      sku: 'DS-2CD2123G2-I',
-      name: 'Domo IP Hikvision AcuSense 2MP Lente 2.8mm',
-      desc: 'Detección inteligente de humanos y vehículos. IR 30m, IP67, antivandálica IK10.',
-      tipo: 'PRODUCTO',
-      cant: 4,
-      precioGremio: 85.00,
-      precioPublico: 120.00,
-    },
-    {
-      sku: 'DS-7608NI-K2/8P',
-      name: 'NVR 8 Canales PoE 4K 80Mbps H.265+',
-      desc: 'Grabador digital con 8 puertos PoE integrados. Soporta 2 discos rígidos de hasta 8TB.',
-      tipo: 'PRODUCTO',
-      cant: 1,
-      precioGremio: 195.00,
-      precioPublico: 270.00,
-    },
-    {
-      sku: 'KIT-CONECT-04',
-      name: 'Kit de Cableado UTP + Baluns + Fuentes Estancas',
-      desc: 'Incluye: 100m UTP Cat5e exterior, 8× baluns pasivos, 4× fuentes 12V 2A y conectores.',
-      tipo: 'KIT',
-      cant: 1,
-      precioGremio: 70.00,
-      precioPublico: 95.00,
-    },
-    {
-      sku: 'SRV-INST-PUESTA',
-      name: 'Mano de Obra Instalación, Cableado y Vinculación App',
-      desc: 'Fijación en altura, canalización estética, ponchado, configuración en NVR y app celular Hik-Connect.',
-      tipo: 'SERVICIO',
-      cant: 1,
-      precioGremio: 180.00,
-      precioPublico: 240.00,
-    }
+  // Rotating live notifications to show real-time automation
+  const notifications = [
+    { text: '🤖 NISSI derivó un lead de 8 cámaras IP al Pipeline de Ventas', time: 'hace 2 min', tag: 'WhatsApp IA' },
+    { text: '⚡ Cotización #PRESUP-842 enviada en 24 segundos por email', time: 'hace 5 min', tag: 'Cotizador' },
+    { text: '📦 4 Domos Hikvision AcuSense reservados para instalación', time: 'hace 8 min', tag: 'Depósito' },
+    { text: '🧾 Factura A #0004-00012984 emitida con CAE de ARCA/AFIP', time: 'hace 14 min', tag: 'Finanzas' }
   ]
 
-  const exchangeRate = 1280
-  const subtotalNeto = demoItems.reduce((acc, item) => {
-    const unitPrice = priceMode === 'GREMIO' ? item.precioGremio : item.precioPublico
-    return acc + (unitPrice * item.cant)
-  }, 0)
-  const iva = subtotalNeto * 0.21
-  const total = subtotalNeto + iva
-
-  const formatPrice = (usd: number) => {
-    if (currency === 'USD') {
-      return `US$ ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    }
-    return `$ ${(usd * exchangeRate).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-
-  // The 7 Core Pain vs Function Battles
-  const painPoints = [
-    {
-      id: 'respuesta-lenta',
-      categoria: 'ventas',
-      icono: Clock,
-      badge: 'VELOCIDAD COMERCIAL',
-      dolorTitulo: 'El cliente pide presupuesto por WhatsApp y espera horas. Para cuando le contestás, ya le compró a tu competencia.',
-      dolorDetalle: 'Un prospecto escribe un sábado o a las 19 hs preguntando por un kit de 4 cámaras. El vendedor lo ve al día siguiente o se le pierde entre 40 chats personales. En seguridad electrónica, el 70% de las ventas las cierra quien responde primero.',
-      solucionTitulo: 'Respuesta Instantánea con Bot IA (NISSI) + Derivación con Transcript Completo',
-      solucionDetalle: 'NISSI (con Gemini 2.5 Flash) contesta en 2 segundos, comprende si el cliente busca cámaras, alarmas o servicio técnico, consulta el catálogo y crea la oportunidad en el Pipeline del vendedor con TODO el chat adjunto como nota. Cero segundos perdidos.',
-      impacto: 'Tiempo de respuesta reducido de 4 horas a 2 segundos. +45% en tasa de conversión de leads.'
-    },
-    {
-      id: 'cotizaciones-word',
-      categoria: 'ventas',
-      icono: FileText,
-      badge: 'COTIZADOR FLASH',
-      dolorTitulo: 'Tardar 45 minutos por presupuesto en un Word desalineado, buscando precios en un Excel desactualizado.',
-      dolorDetalle: 'El vendedor tiene que abrir la lista del mayorista, calcular el dólar blue o MEP a mano, rezar que la fórmula del Excel no esté rota, copiar y pegar a un Word donde se le descalabra la tabla, y exportar un PDF con aspecto amateur. Si tiene 8 cotizaciones, pierde todo el día haciendo burocracia.',
-      solucionTitulo: 'Cotizador Inteligente en 30 Segundos + Dólar en Vivo + PDF White-Clean',
-      solucionDetalle: 'Seleccionás productos o kits con 1 clic. El sistema conmuta entre precio Gremio o Público automáticamente, actualiza el dólar oficial en tiempo real, desglosa el IVA exacto y genera un PDF corporativo de diseño impecable que se envía por mail con 1 clic.',
-      impacto: 'De 45 minutos a 30 segundos por cotización. Cotizás mientras estás hablando por teléfono con el cliente.'
-    },
-    {
-      id: 'informacion-perdida',
-      categoria: 'ventas',
-      icono: MessageSquare,
-      badge: 'BLINDAJE DE INFORMACIÓN',
-      dolorTitulo: 'Toda la relación con el cliente está atrapada en el WhatsApp personal del vendedor. Si renuncia, te quedás a ciegas.',
-      dolorDetalle: 'Nadie sabe qué precio se le pasó al cliente, qué condiciones se le prometieron ni cuándo hay que llamarlo. Si el vendedor se enferma, falta o se va a trabajar con la competencia, se lleva los contactos, las conversaciones y las ventas en su teléfono.',
-      solucionTitulo: 'Bandeja de WhatsApp Omnicanal Compartida + Historial Inmutable',
-      solucionDetalle: 'Todo el equipo trabaja sobre el número oficial de la empresa desde el CRM. Cada conversación, nota de cotización y estado queda registrado en la ficha del cliente. Cualquier compañero puede continuar la atención sin preguntarle nada a nadie.',
-      impacto: '100% de la información pertenece a la empresa. Transición transparente entre operadores.'
-    },
-    {
-      id: 'telefono-descompuesto',
-      categoria: 'operaciones',
-      icono: CheckCheck,
-      badge: 'OPERACIÓN & INSTALACIÓN',
-      dolorTitulo: 'El técnico llega a la obra y le faltan 2 baluns o la fuente no alcanza: teléfono descompuesto entre ventas y pañol.',
-      dolorDetalle: 'Ventas avisa por WhatsApp: "armate el kit para mañana". El pañolero agarra lo que encuentra. El instalador llega a la casa o fábrica del cliente, abre la caja y falta el conector de alimentación o el disco rígido. La obra se para, el cliente se queja y perdés plata en viajes.',
-      solucionTitulo: 'Órdenes de Entrega con Desglose Milimétrico de Componentes',
-      solucionDetalle: 'Al aprobarse un presupuesto, el CRM genera la orden de preparación (`/entregas`). Si cotizaste un "Kit 4 Cámaras", el pañol recibe la lista exacta con código SKU de cada tornillo, fuente, balun y metro de cable necesario, con firma de remito de entrega.',
-      impacto: 'Cero viajes duplicados por olvidos. Entregas exactas con trazabilidad por técnico.'
-    },
-    {
-      id: 'stock-sin-facturas',
-      categoria: 'operaciones',
-      icono: Package,
-      badge: 'DEPÓSITO & STOCK',
-      dolorTitulo: 'Tenés 30 cámaras en la estantería del pañol pero el sistema dice "Stock 0" porque nadie cargó las facturas viejas.',
-      dolorDetalle: 'Los sistemas contables tradicionales te obligan a ingresar factura por factura de los últimos 6 meses para dar de alta el stock. Mientras tanto, tu equipo no sabe qué hay disponible en depósito y venden productos que no tienen o compran de más al mayorista.',
-      solucionTitulo: 'Módulo de Conteo Inicial Físico sin Factura previa',
-      solucionDetalle: 'Vas al depósito, contás físicamente cuántos grabadores, cámaras o sensores tenés, y los cargás con 1 clic en el CRM mediante el Conteo Inicial. El stock queda operativo de inmediato para que los vendedores lo vean en tiempo real al cotizar.',
-      impacto: 'Inventario 100% operativo en menos de 2 horas. Ni un solo peso inmovilizado por burocracia contable.'
-    },
-    {
-      id: 'cobranzas-abonos',
-      categoria: 'administracion',
-      icono: ShieldAlert,
-      badge: 'FINANZAS & COBRANZAS',
-      dolorTitulo: 'Nadie sabe con certeza quién pagó el abono mensual de monitoreo y quién debe 3 meses: cruce eterno de comprobantes.',
-      dolorDetalle: 'Administración gasta días enteros buscando transferencias en el banco y pidiendo comprobantes por WhatsApp. Los clientes que adeudan abonos siguen teniendo servicio técnico gratuito porque los técnicos no saben que están en mora.',
-      solucionTitulo: 'Facturación ARCA/AFIP 1-Clic + Cuentas Corrientes + Portal de Clientes',
-      solucionDetalle: 'Convertí cotizaciones ganadas en Facturas oficiales A, B o C con CAE en segundos. Los clientes tienen su propio Portal de Autogestión (`/portal`) para descargar sus facturas y ver su estado de cuenta, y el técnico ve si el cliente está al día antes de ir a reparar.',
-      impacto: 'Cobranzas al día. Reducción del 80% en tiempo administrativo de conciliación bancaria.'
-    },
-    {
-      id: 'islas-incomunicadas',
-      categoria: 'administracion',
-      icono: Users,
-      badge: 'ALINEACIÓN TOTAL',
-      dolorTitulo: 'Tu empresa opera como 3 islas aisladas: Ventas promete, Técnica sufre y Administración no puede cobrar.',
-      dolorDetalle: 'El vendedor no sabe si hay técnicos disponibles antes de prometer una fecha. Técnica instala pero no le avisa a Administración para que facture. Administración reclama facturas a un cliente que está furioso porque una cámara no le anda.',
-      solucionTitulo: 'Un Único Ecosistema donde Toda la Empresa habla el Mismo Idioma',
-      solucionDetalle: 'Desde el primer "Hola" por WhatsApp hasta la firma del remito, la emisión de la factura electrónica y la encuesta de satisfacción del ticket, cada paso ocurre en la misma línea de tiempo visible para toda la empresa con roles y permisos específicos.',
-      impacto: 'Fin del caos interno. El dueño y los gerentes tienen el control absoluto en un solo dashboard.'
-    }
-  ]
-
-  const filteredPains = activeTab === 'todos' 
-    ? painPoints 
-    : painPoints.filter(p => p.categoria === activeTab)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveNotification((prev) => (prev + 1) % notifications.length)
+    }, 4500)
+    return () => clearInterval(interval)
+  }, [notifications.length])
 
   const faqs = [
     {
-      q: '¿Por qué JustCRM resuelve el dolor de respuesta lenta mejor que tener a alguien atendiendo WhatsApp?',
-      a: 'Porque una persona física no puede responder 24/7 en 2 segundos, ni atender 5 consultas simultáneas a las 23:00 hs de un domingo. El Bot NISSI con Gemini 2.5 comprende lenguaje natural, evacúa dudas técnicas sobre cámaras IP, analítica perimetral o centrales de alarma al instante, y le deja al vendedor el lead calificado con la transcripción completa del chat listo para cerrar.'
+      q: '¿Por qué JustCRM es superior para empresas de seguridad frente a un CRM tradicional?',
+      a: 'Porque los CRMs tradicionales no entienden el rubro: no saben cotizar kits de cámaras con componentes desglosados para el pañol, no manejan listas duales de Gremio vs Público, no permiten cargar stock físico sin factura de compra y no emiten facturas electrónicas con CAE de AFIP. Con JustCRM tenés todo nativo en una sola pantalla.'
     },
     {
-      q: '¿Cómo evita JustCRM que los técnicos olviden materiales para las instalaciones?',
-      a: 'A través de las Órdenes de Entrega generadas automáticamente desde la cotización aprobada. Si cotizás un "Kit 4 Cámaras", el CRM no solo le muestra el kit al cliente; desglosa para el pañol la lista de preparación con cada código SKU (baluns, fuentes, conectores, cable). El pañolero prepara la caja y el técnico firma la recepción digital.'
+      q: '¿Cómo funciona el Bot de WhatsApp NISSI y cómo interactúa con el catálogo?',
+      a: 'NISSI corre sobre Gemini 2.5 Flash conectado a la API oficial de Meta. Entiende lenguaje natural técnico (cámaras IP vs analógicas, analítica AcuSense, distancias infrarrojas, centrales de alarma). Jamás inventa un precio: cuando detecta intención de compra o soporte, deriva al instante con la transcripción completa pegada en la ficha del cliente.'
     },
     {
-      q: '¿Realmente puedo cargar mi stock si no tengo las facturas de compra anteriores?',
-      a: 'Sí, 100%. Implementamos la función exclusiva de "Conteo Inicial de Stock". Entendemos la realidad de las empresas de seguridad en Argentina: tenés mercadería que compraste hace meses. Con JustCRM podés contar físicamente tus estanterías y asentar el inventario real en 1 clic para empezar a vender inmediatamente.'
+      q: '¿Qué pasa si un vendedor quiere responder en vivo por WhatsApp?',
+      a: 'El CRM cuenta con una bandeja de entrada compartida. Con 1 clic en "Tomar conversación", el humano atiende directamente y NISSI se silencia automáticamente para ese chat. Cuando termina, puede devolver el control al bot con un botón o el sistema lo reactiva a las 24 horas.'
     },
     {
-      q: '¿Cómo funciona la cotización con dólar y pesos?',
-      a: 'El cotizador lee la cotización del dólar oficial en tiempo real. Podés armar el presupuesto en Dólares (estándar de CCTV y alarmas importadas) y con un solo interruptor ver el equivalente en Pesos Argentinos con IVA del 21% o 10.5% discriminado. El PDF se imprime con el tipo de cambio congelado a la fecha para evitar discusiones con el cliente.'
+      q: '¿Puedo cargar mi inventario actual si no tengo las facturas de compra a mano?',
+      a: 'Sí, absolutamente. Gracias al módulo exclusivo de "Conteo Físico Inicial", podés contar lo que tenés en tus estanterías (cámaras, baluns, cables, fuentes) e ingresarlo al CRM con un clic para tener tu inventario listo y visible para ventas en menos de 2 horas.'
     },
     {
-      q: '¿Los vendedores pueden ver las ventas o clientes de sus compañeros?',
-      a: 'No, a menos que vos lo autorices. El sistema cuenta con una matriz de roles estricta: los Vendedores (`SELLER`) solo tienen acceso a sus propios prospectos, tratos y cotizaciones. Los Gerentes y Administradores tienen la vista panorámica de todo el equipo y métricas globales.'
+      q: '¿Cómo se resuelven las cotizaciones en dólares y pesos en Argentina?',
+      a: 'El cotizador lee el tipo de cambio oficial en vivo. Podés presupuestar en USD (estándar de CCTV y alarmas importadas) y conmutar a Pesos con IVA discriminado (21% o 10.5%). El PDF White-Clean se genera en segundos con validez técnica congelada.'
+    },
+    {
+      q: '¿Los vendedores pueden ver las cotizaciones o clientes de sus compañeros?',
+      a: 'No, a menos que tengan rol de Gerente o Administrador. Cada vendedor solo ve sus propios prospectos y tratos, resguardando la privacidad de tu base de clientes.'
     }
   ]
 
   return (
-    <div className="min-h-screen bg-[#080c15] text-slate-100 selection:bg-indigo-500 selection:text-white font-sans antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-indigo-500 selection:text-white font-sans antialiased overflow-x-hidden">
       
-      {/* ── Top Navigation Bar ────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#080c15]/90 border-b border-slate-800">
+      {/* ── Top Bar ─────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#070b14]/85 border-b border-slate-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <Zap className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-500 via-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-600/30">
+              <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                JustCRM <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">Cero Caos Operativo</span>
+              <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                JustCRM <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Security OS</span>
               </span>
               <p className="text-[10px] text-slate-400 font-medium -mt-0.5">by JustCreate</p>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-300">
-            <a href="#dolores" className="hover:text-white transition-colors">Los Dolores que Eliminamos</a>
-            <a href="#cotizador-demo" className="hover:text-white transition-colors">Cotizador en 30 Seg</a>
-            <a href="#bot-ia" className="hover:text-white transition-colors">Bot con IA</a>
+          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-300">
+            <a href="#pantallas" className="hover:text-white transition-colors">Pantallas del Sistema</a>
+            <a href="#dolores" className="hover:text-white transition-colors">Dolores que Eliminamos</a>
             <a href="#planes" className="hover:text-white transition-colors">Planes</a>
-            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
+            <a href="#faq" className="hover:text-white transition-colors">Preguntas</a>
           </nav>
 
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-all"
+              className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
             >
               Ingresar
             </Link>
             <a
               href="#contacto"
-              className="text-xs sm:text-sm font-bold px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-indigo-600 to-indigo-700 hover:from-red-500 hover:to-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+              className="text-xs sm:text-sm font-black px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
             >
-              <span>Terminar con el Caos</span>
+              <span>Ver Demo en Vivo</span>
               <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
       </header>
 
-      {/* ── Hero: Atacando el Dolor de Cabeza Central ─────────────────── */}
-      <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 overflow-hidden text-center">
+      {/* ── Hero: Título Corto, Impactante y al Grano ─────────────────── */}
+      <section className="relative pt-16 pb-20 md:pt-24 md:pb-28 overflow-hidden text-center">
         {/* Glow ambient effects */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-red-600/15 via-indigo-600/20 to-cyan-500/10 blur-[140px] pointer-events-none rounded-full" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[450px] bg-gradient-to-tr from-red-600/20 via-indigo-600/20 to-cyan-400/15 blur-[140px] pointer-events-none rounded-full" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-950/60 border border-red-500/30 text-xs font-bold text-red-300 mb-8 shadow-inner">
-            <Flame className="w-3.5 h-3.5 text-red-400" />
-            <span>¿Cuánto dinero pierde tu empresa de seguridad por responder tarde y gestionar a ciegas?</span>
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-bold text-indigo-300 mb-8 shadow-inner">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>El único CRM vertical para Seguridad Electrónica & IoT</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-5xl mx-auto leading-[1.08] mb-6">
-            El antídoto definitivo contra el caos interno, <br className="hidden sm:inline" />
+          {/* Título de 4 palabras: contundente */}
+          <h1 className="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tight text-white max-w-5xl mx-auto leading-[0.98] mb-6">
+            Menos caos. <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-indigo-300 to-cyan-300">
-              la lentitud de respuesta y la información perdida.
+              Más instalaciones.
             </span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
-            Si tu cliente espera horas un presupuesto, si cotizar te toma 45 minutos en un Word, si los instaladores llegan a la obra y les faltan piezas, y si cada vendedor atiende desde su WhatsApp personal sin dejar registro... <strong className="text-white font-semibold">tu problema no es de ventas: es de fricción operativa.</strong>
+          {/* Subtítulo claro: ataca tiempo y desorden */}
+          <p className="text-lg sm:text-2xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
+            Cotizaciones flash en 30 segundos, WhatsApp con IA 24/7 y depósito bajo control. <br className="hidden sm:inline" />
+            <strong className="text-white font-semibold">Toda tu empresa hablando exactamente el mismo idioma.</strong>
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <a
               href="#contacto"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-bold text-base shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
+              className="w-full sm:w-auto px-9 py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-base shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
             >
-              <span>Agendar Demo y Optimizar mi Operación</span>
+              <span>Agendar Demostración Personalizada</span>
               <ArrowRight className="w-5 h-5" />
             </a>
             <a
-              href="#dolores"
-              className="w-full sm:w-auto px-7 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-base border border-slate-700 transition-all flex items-center justify-center gap-2"
+              href="#pantallas"
+              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-bold text-base border border-slate-700 transition-all flex items-center justify-center gap-2"
             >
-              <Compass className="w-4 h-4 text-cyan-400" />
-              <span>Ver los 7 Dolores que Destruimos</span>
+              <Play className="w-4 h-4 text-cyan-400 fill-cyan-400" />
+              <span>Explorar las Pantallas del Sistema</span>
             </a>
           </div>
 
-          {/* Quick Metrics Bar: The 3 Core Pillars */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
-            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-white font-bold text-sm">Respuesta en 2 Segundos</h4>
-                <p className="text-xs text-slate-400 mt-1">El bot con IA califica y deriva al instante. Nunca más un lead enfriándose en WhatsApp.</p>
-              </div>
+          {/* Live Floating Automation Ticker */}
+          <div className="max-w-2xl mx-auto p-3 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl flex items-center justify-between gap-4 text-left">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                {notifications[liveNotification].tag}
+              </span>
+              <p className="text-xs text-slate-200 font-medium">
+                {notifications[liveNotification].text}
+              </p>
             </div>
-
-            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-white font-bold text-sm">Cotizaciones en 30 Segundos</h4>
-                <p className="text-xs text-slate-400 mt-1">Buscador instantáneo por SKU, precios Gremio/Público, dólar oficial y PDF White-Clean.</p>
-              </div>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center flex-shrink-0">
-                <CheckCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-white font-bold text-sm">Cero Información Perdida</h4>
-                <p className="text-xs text-slate-400 mt-1">Ventas, Pañol, Instaladores y Finanzas en la misma sintonía con tareas detalladas al milímetro.</p>
-              </div>
-            </div>
+            <span className="text-[10px] text-slate-500 whitespace-nowrap">
+              {notifications[liveNotification].time}
+            </span>
           </div>
+
         </div>
       </section>
 
-      {/* ── The 7 Dolores de Cabeza vs Funciones JustCRM ──────────────── */}
-      <section id="dolores" className="py-24 bg-slate-950 border-t border-slate-800 relative">
+      {/* ── THE INTERACTIVE SYSTEM SHOWCASE (PANTALLAS EN VIVO) ────────── */}
+      <section id="pantallas" className="py-20 bg-slate-950 border-t border-slate-800 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="text-center max-w-3xl mx-auto mb-10">
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Recorrido Visual</span>
+            <h2 className="text-3xl sm:text-5xl font-black text-white mt-2">
+              Mirá cómo se ve tu empresa funcionando sin fricción
+            </h2>
+            <p className="text-slate-400 mt-3 text-base">
+              Hacé clic en cada módulo para ver la pantalla real del sistema y cómo resuelve cada operación:
+            </p>
+          </div>
+
+          {/* Screen Switcher Tabs */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+            {[
+              { id: 'cotizador', label: '1. Cotizador Flash & PDF', icon: FileText },
+              { id: 'whatsapp', label: '2. WhatsApp IA (NISSI)', icon: Bot },
+              { id: 'pipeline', label: '3. Pipeline de Ventas', icon: Layers },
+              { id: 'stock', label: '4. Depósito & Conteo Inicial', icon: Package },
+              { id: 'facturacion', label: '5. Facturación ARCA / AFIP', icon: Receipt },
+              { id: 'dashboard', label: '6. Dashboard Ejecutivo', icon: BarChart3 },
+            ].map(tab => {
+              const Icon = tab.icon
+              const isActive = activeScreen === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveScreen(tab.id as any)}
+                  className={`px-4 sm:px-5 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2.5 border ${
+                    isActive
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-indigo-500 shadow-xl shadow-indigo-600/30 scale-105'
+                      : 'bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-cyan-300' : 'text-slate-500'}`} />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Browser Chrome Container */}
+          <div className="max-w-6xl mx-auto rounded-3xl border border-slate-700/80 bg-slate-900/90 shadow-2xl p-2 sm:p-5 backdrop-blur-xl">
+            
+            {/* Top Browser Bar */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 px-3">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                <span className="text-xs font-mono text-slate-400 ml-2">
+                  justcrm.app / {activeScreen}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Operación en Tiempo Real
+                </span>
+              </div>
+            </div>
+
+            {/* SCREEN 1: COTIZADOR FLASH */}
+            {activeScreen === 'cotizador' && (
+              <div className="p-4 sm:p-6 text-left">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-indigo-400" />
+                      Cotizador Flash · Presupuesto #PRESUP-2026-AB
+                    </h3>
+                    <p className="text-xs text-slate-400">Cliente: Consorcio Torre Alvear · Validez: 15 días</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+                      <button
+                        onClick={() => setPriceMode('GREMIO')}
+                        className={`px-3 py-1 rounded text-xs font-bold ${priceMode === 'GREMIO' ? 'bg-emerald-500 text-white' : 'text-slate-400'}`}
+                      >
+                        Precio Gremio
+                      </button>
+                      <button
+                        onClick={() => setPriceMode('PUBLICO')}
+                        className={`px-3 py-1 rounded text-xs font-bold ${priceMode === 'PUBLICO' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                      >
+                        Público Final
+                      </button>
+                    </div>
+
+                    <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+                      <button
+                        onClick={() => setCurrency('USD')}
+                        className={`px-3 py-1 rounded text-xs font-bold ${currency === 'USD' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                      >
+                        USD
+                      </button>
+                      <button
+                        onClick={() => setCurrency('ARS')}
+                        className={`px-3 py-1 rounded text-xs font-bold ${currency === 'ARS' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
+                      >
+                        ARS ($ 1.280)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PDF White-Clean Mock */}
+                <div className="rounded-2xl bg-white text-slate-900 p-6 shadow-inner border border-slate-200">
+                  <div className="flex items-center justify-between border-b-2 border-indigo-600 pb-4 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-lg">
+                        AB
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-black text-slate-900 leading-tight">ABBA SEGURIDAD ELECTRÓNICA</h4>
+                        <p className="text-[11px] text-slate-500 font-medium">CCTV · Alarmas · Redes · Control de Accesos</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-block px-3 py-1 rounded-full bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider">
+                        PRESUPUESTO OFICIAL
+                      </span>
+                      <p className="text-[11px] text-slate-500 mt-1">Fecha: {new Date().toLocaleDateString('es-AR')}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-12 text-[11px] font-bold text-slate-500 uppercase pb-2 border-b border-slate-200">
+                      <div className="col-span-6">Ítem & Código SKU</div>
+                      <div className="col-span-2 text-center">Tipo</div>
+                      <div className="col-span-2 text-center">Cantidad</div>
+                      <div className="col-span-2 text-right">Total</div>
+                    </div>
+
+                    <div className="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
+                      <div className="col-span-6 pr-2">
+                        <p className="font-bold text-slate-900"><span className="text-indigo-600 font-mono">[DS-2CD2123G2-I]</span> Domo IP Hikvision AcuSense 2MP</p>
+                        <p className="text-[11px] text-slate-500 italic">Detección inteligente de humanos/vehículos. Lente 2.8mm, IR 30m, IK10 antivandálica.</p>
+                      </div>
+                      <div className="col-span-2 text-center"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">PRODUCTO</span></div>
+                      <div className="col-span-2 text-center text-slate-600 font-medium">4 × unidad</div>
+                      <div className="col-span-2 text-right font-bold text-slate-900">{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 340,00' : '$ 435.200') : (currency === 'USD' ? 'US$ 480,00' : '$ 614.400')}</div>
+                    </div>
+
+                    <div className="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
+                      <div className="col-span-6 pr-2">
+                        <p className="font-bold text-slate-900"><span className="text-indigo-600 font-mono">[DS-7608NI-K2/8P]</span> Grabador NVR 8 Canales PoE 4K</p>
+                        <p className="text-[11px] text-slate-500 italic">Switch PoE integrado de 8 bocas independientes. Soporta 2 discos rígidos de hasta 8TB.</p>
+                      </div>
+                      <div className="col-span-2 text-center"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">PRODUCTO</span></div>
+                      <div className="col-span-2 text-center text-slate-600 font-medium">1 × unidad</div>
+                      <div className="col-span-2 text-right font-bold text-slate-900">{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 195,00' : '$ 249.600') : (currency === 'USD' ? 'US$ 270,00' : '$ 345.600')}</div>
+                    </div>
+
+                    <div className="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
+                      <div className="col-span-6 pr-2">
+                        <p className="font-bold text-slate-900"><span className="text-amber-600 font-mono">[KIT-CONEXION-04]</span> Kit Cableado UTP + Baluns + Fuentes</p>
+                        <p className="text-[11px] text-slate-500 italic">Incluye: 100m UTP Cat5e exterior, 8× baluns pasivos, 4 fuentes estancas 12V 2A y conectores.</p>
+                      </div>
+                      <div className="col-span-2 text-center"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">KIT</span></div>
+                      <div className="col-span-2 text-center text-slate-600 font-medium">1 × kit</div>
+                      <div className="col-span-2 text-right font-bold text-slate-900">{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 70,00' : '$ 89.600') : (currency === 'USD' ? 'US$ 95,00' : '$ 121.600')}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex justify-end">
+                    <div className="w-64 bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1 text-xs">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Subtotal Neto:</span>
+                        <span className="font-bold">{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 605,00' : '$ 774.400') : (currency === 'USD' ? 'US$ 845,00' : '$ 1.081.600')}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-500">
+                        <span>IVA (21%):</span>
+                        <span>{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 127,05' : '$ 162.624') : (currency === 'USD' ? 'US$ 177,45' : '$ 227.136')}</span>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-indigo-700">
+                        <span>TOTAL (IVA incl.):</span>
+                        <span>{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 732,05' : '$ 937.024') : (currency === 'USD' ? 'US$ 1.022,45' : '$ 1.308.736')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                  <span>⚡ Presupuesto generado en <strong>22 segundos</strong>. Listo para enviar por email.</span>
+                  <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold flex items-center gap-2">
+                    <Send className="w-3.5 h-3.5" /> Enviar PDF por Email con 1 Clic
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* SCREEN 2: WHATSAPP IA (NISSI) */}
+            {activeScreen === 'whatsapp' && (
+              <div className="p-4 sm:p-6 text-left">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Left Chat List */}
+                  <div className="lg:col-span-4 bg-slate-950 rounded-2xl p-4 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">Bandeja Oficial WhatsApp</h4>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">En Línea</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-indigo-600/10 border border-indigo-500/30 cursor-pointer">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-bold text-xs text-white">Distribuidora San Martín</span>
+                          <span className="text-[10px] text-indigo-300">18:42</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 line-clamp-1">"Necesitamos 8 cámaras para galpón..."</p>
+                        <span className="inline-block mt-2 text-[9px] font-bold px-2 py-0.5 rounded bg-indigo-500 text-white">
+                          Derivado a Ventas
+                        </span>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer opacity-70">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-bold text-xs text-white">Barrio Los Robles (Admin)</span>
+                          <span className="text-[10px] text-slate-500">17:15</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 line-clamp-1">"La barrera de acceso no levanta..."</p>
+                        <span className="inline-block mt-2 text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                          Ticket de Soporte #108
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Active Chat Thread */}
+                  <div className="lg:col-span-8 bg-slate-950 rounded-2xl p-4 border border-slate-800 flex flex-col justify-between h-[420px]">
+                    <div>
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                            SM
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-white">Distribuidora San Martín · +54 9 11 5821-XXXX</h4>
+                            <p className="text-[10px] text-emerald-400">Atendido por: Bot NISSI (Gemini 2.5 Flash)</p>
+                          </div>
+                        </div>
+                        <button className="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs hover:bg-emerald-400 flex items-center gap-1.5 shadow">
+                          <Check className="w-3.5 h-3.5" /> Tomar Conversación (Humano)
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 text-xs">
+                        <div className="bg-slate-900 p-3 rounded-xl rounded-tl-none border border-slate-800 max-w-[80%]">
+                          <p className="text-slate-200">"Hola buenas tardes, necesitamos instalar 8 cámaras en un galpón de logística para controlar accesos y carga de camiones."</p>
+                          <span className="text-[9px] text-slate-500 block text-right mt-1">18:42</span>
+                        </div>
+
+                        <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl rounded-tr-none ml-auto max-w-[85%]">
+                          <p className="text-emerald-200 leading-relaxed">
+                            "¡Buenas tardes! Para galpones de logística te recomendamos cámaras <strong>IP Varifocales Hikvision de 4MP</strong> para lectura de patentes en ingresos, combinadas con domos AcuSense para pasillos internos. Ya generé la solicitud con nuestro especialista comercial para armarte el presupuesto."
+                          </p>
+                          <span className="text-[9px] text-emerald-400/60 block text-right mt-1">NISSI (IA) · 18:42:03 ✓✓</span>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs flex items-center gap-3">
+                          <Zap className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+                          <div>
+                            <strong className="text-white block">Acción Automática Realizada:</strong>
+                            <span>Lead creado en Pipeline: <em>[Venta] Galpón Logística 8 Cámaras</em>. Asignado a: Juan (Ventas). Transcript adjunto.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-800 flex items-center gap-2">
+                      <input
+                        type="text"
+                        disabled
+                        placeholder="El bot está gestionando la conversación (hacé clic en 'Tomar Conversación' para escribir)"
+                        className="w-full bg-slate-900 text-xs text-slate-500 px-3 py-2 rounded-xl border border-slate-800 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SCREEN 3: PIPELINE KANBAN */}
+            {activeScreen === 'pipeline' && (
+              <div className="p-4 sm:p-6 text-left">
+                <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-cyan-400" />
+                      Pipeline Comercial · Embudo de Seguridad
+                    </h3>
+                    <p className="text-xs text-slate-400">Total en Juego: <strong className="text-emerald-400">US$ 28.450</strong> · 18 Oportunidades Activas</p>
+                  </div>
+                  <span className="text-xs px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                    Filtro: Todo el Equipo
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+                  {/* Col 1 */}
+                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                      <span className="font-bold text-slate-300">1. Nuevo Lead (IA)</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">3</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition-all cursor-grab">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase">WhatsApp NISSI</span>
+                        <p className="font-bold text-white mt-1">Galpón Logística 8 Cámaras</p>
+                        <p className="text-[11px] text-slate-400">Distribuidora San Martín</p>
+                        <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between font-bold">
+                          <span className="text-slate-400">Est: US$ 1.840</span>
+                          <span className="text-indigo-400">Asig: Juan</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Col 2 */}
+                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                      <span className="font-bold text-indigo-300">2. Cotización Enviada</span>
+                      <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">5</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30 cursor-grab">
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase">Cotización Flash</span>
+                        <p className="font-bold text-white mt-1">Consorcio Torre Alvear</p>
+                        <p className="text-[11px] text-slate-400">4 Domos AcuSense + NVR 4K</p>
+                        <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between font-bold">
+                          <span className="text-emerald-400">US$ 732,05</span>
+                          <span className="text-indigo-400">Asig: Lucas</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Col 3 */}
+                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                      <span className="font-bold text-amber-300">3. En Negociación</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">2</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 cursor-grab">
+                        <span className="text-[10px] font-bold text-amber-400 uppercase">Abono Monitoreo</span>
+                        <p className="font-bold text-white mt-1">Fábrica Metalúrgica Sur</p>
+                        <p className="text-[11px] text-slate-400">Alarma Garnet + Cerco 200m</p>
+                        <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between font-bold">
+                          <span className="text-emerald-400">US$ 3.400</span>
+                          <span className="text-indigo-400">Asig: Juan</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Col 4 */}
+                  <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                      <span className="font-bold text-emerald-400">4. Ganado / A Instalar</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">8</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 cursor-grab">
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase">Stock Reservado</span>
+                        <p className="font-bold text-white mt-1">Colegio San Agustín</p>
+                        <p className="text-[11px] text-slate-400">16 Cámaras IP Dahua + NVR</p>
+                        <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between font-bold">
+                          <span className="text-emerald-400">US$ 2.850</span>
+                          <span className="text-emerald-300">✓ Listo pañol</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SCREEN 4: DEPÓSITO & CONTEO INICIAL */}
+            {activeScreen === 'stock' && (
+              <div className="p-4 sm:p-6 text-left">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-5 pb-3 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Package className="w-5 h-5 text-amber-400" />
+                      Control de Stock & Depósito
+                    </h3>
+                    <p className="text-xs text-slate-400">Depósito Central · Inventario físico en tiempo real</p>
+                  </div>
+                  <button className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow">
+                    <Sparkles className="w-3.5 h-3.5" /> Conteo Físico Inicial (Sin Factura)
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 overflow-hidden text-xs">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-950 text-slate-400 uppercase font-bold text-[10px] border-b border-slate-800">
+                      <tr>
+                        <th className="p-3">Código SKU / MPN</th>
+                        <th className="p-3">Producto / Modelo</th>
+                        <th className="p-3">Marca</th>
+                        <th className="p-3 text-center">Físico</th>
+                        <th className="p-3 text-center">Reservado</th>
+                        <th className="p-3 text-center">Disponible</th>
+                        <th className="p-3 text-right">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 bg-slate-900/60">
+                      <tr>
+                        <td className="p-3 font-mono text-indigo-300 font-bold">DS-2CD2123G2-I</td>
+                        <td className="p-3 font-bold text-white">Domo IP Hikvision AcuSense 2MP 2.8mm</td>
+                        <td className="p-3 text-slate-400">Hikvision</td>
+                        <td className="p-3 text-center font-bold">24</td>
+                        <td className="p-3 text-center text-amber-400 font-bold">4</td>
+                        <td className="p-3 text-center text-emerald-400 font-black text-sm">20</td>
+                        <td className="p-3 text-right"><span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Stock Óptimo</span></td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 font-mono text-indigo-300 font-bold">DS-7608NI-K2/8P</td>
+                        <td className="p-3 font-bold text-white">NVR Grabador 8 Canales PoE 4K</td>
+                        <td className="p-3 text-slate-400">Hikvision</td>
+                        <td className="p-3 text-center font-bold">6</td>
+                        <td className="p-3 text-center text-amber-400 font-bold">1</td>
+                        <td className="p-3 text-center text-emerald-400 font-black text-sm">5</td>
+                        <td className="p-3 text-right"><span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Stock Óptimo</span></td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 font-mono text-indigo-300 font-bold">DH-HAC-HFW1200R</td>
+                        <td className="p-3 font-bold text-white">Bullet HDCVI Dahua 2MP 3.6mm IR 20m</td>
+                        <td className="p-3 text-slate-400">Dahua</td>
+                        <td className="p-3 text-center font-bold">3</td>
+                        <td className="p-3 text-center text-amber-400 font-bold">0</td>
+                        <td className="p-3 text-center text-red-400 font-black text-sm">3</td>
+                        <td className="p-3 text-right"><span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-bold">Stock Crítico</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200 flex items-center justify-between">
+                  <span>💡 <strong>Ventaja única:</strong> Los vendedores ven en tiempo real cuántas unidades están libres sin llamar al pañolero.</span>
+                  <span className="font-bold underline cursor-pointer">Ver Órdenes de Entrega</span>
+                </div>
+              </div>
+            )}
+
+            {/* SCREEN 5: FACTURACIÓN ARCA / AFIP */}
+            {activeScreen === 'facturacion' && (
+              <div className="p-4 sm:p-6 text-left">
+                <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-emerald-400" />
+                      Facturación Electrónica Oficial ARCA / AFIP
+                    </h3>
+                    <p className="text-xs text-slate-400">Emisión directa con CAE y QR reglamentario</p>
+                  </div>
+                  <span className="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                    Servicio AFIP Conectado
+                  </span>
+                </div>
+
+                {/* Factura A Mock */}
+                <div className="bg-white text-slate-900 rounded-2xl p-6 border border-slate-300 shadow-inner max-w-3xl mx-auto font-mono text-xs">
+                  <div className="flex justify-between items-center border-b border-slate-400 pb-3 mb-3">
+                    <div>
+                      <h4 className="text-sm font-black tracking-tight">ABBA SEGURIDAD ELECTRÓNICA S.A.</h4>
+                      <p className="text-[10px] text-slate-600">CUIT: 30-71649281-9 · IVA Responsable Inscripto</p>
+                    </div>
+                    <div className="w-12 h-12 rounded border-2 border-slate-900 flex items-center justify-center font-black text-2xl">
+                      A
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-xs">FACTURA A</p>
+                      <p className="text-[10px]">Nº 0004-00012984</p>
+                      <p className="text-[10px] text-slate-600">Fecha: {new Date().toLocaleDateString('es-AR')}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-100 p-2.5 rounded mb-3 text-[11px]">
+                    <p><strong>Cliente:</strong> CONSORCIO TORRE ALVEAR · <strong>CUIT:</strong> 30-68192841-4</p>
+                    <p><strong>Condición de Venta:</strong> Cuenta Corriente (15 días) · <strong>Cotización Vinculada:</strong> #PRESUP-842</p>
+                  </div>
+
+                  <div className="space-y-1.5 border-b border-slate-300 pb-3 mb-3 text-[11px]">
+                    <div className="flex justify-between font-bold text-slate-600">
+                      <span>Concepto</span>
+                      <span>Total Neto</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>4× Domo IP Hikvision AcuSense 2MP + Grabador NVR 8Ch</span>
+                      <span>$ 774.400,00</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>IVA Discriminado (21%):</span>
+                      <span>$ 162.624,00</span>
+                    </div>
+                    <div className="flex justify-between font-black text-sm text-slate-900 pt-1 border-t border-slate-200">
+                      <span>TOTAL A PAGAR:</span>
+                      <span>$ 937.024,00</span>
+                    </div>
+                  </div>
+
+                  {/* CAE & QR Barcode */}
+                  <div className="flex items-center justify-between text-[10px] text-slate-700 pt-1">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-slate-900 text-white flex items-center justify-center font-bold text-[9px] rounded">
+                        QR AFIP
+                      </div>
+                      <div>
+                        <p><strong>CAE Nº:</strong> 74182901849201</p>
+                        <p><strong>Vto. CAE:</strong> {new Date(Date.now() + 10 * 86400000).toLocaleDateString('es-AR')}</p>
+                      </div>
+                    </div>
+                    <span className="text-emerald-700 font-bold">✓ Comprobante Autorizado por ARCA</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SCREEN 6: DASHBOARD EJECUTIVO */}
+            {activeScreen === 'dashboard' && (
+              <div className="p-4 sm:p-6 text-left">
+                <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-indigo-400" />
+                      Dashboard Ejecutivo · Métricas del Negocio
+                    </h3>
+                    <p className="text-xs text-slate-400">Rendimiento comercial y abonos de monitoreo en tiempo real</p>
+                  </div>
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5" /> +24% vs mes anterior
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-xs text-slate-400">MRR Abonos Monitoreo</span>
+                    <p className="text-2xl font-black text-white mt-1">$ 14.850.000</p>
+                    <span className="text-[10px] text-emerald-400">182 clientes abonados activos</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-xs text-slate-400">Presupuestos Emitidos</span>
+                    <p className="text-2xl font-black text-cyan-400 mt-1">48</p>
+                    <span className="text-[10px] text-slate-400">Promedio de cierre: 2.8 días</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-xs text-slate-400">Tasa de Conversión</span>
+                    <p className="text-2xl font-black text-emerald-400 mt-1">41.8%</p>
+                    <span className="text-[10px] text-emerald-400">+12% gracias al Bot NISSI</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-xs text-slate-400">Tiempo de Respuesta</span>
+                    <p className="text-2xl font-black text-amber-400 mt-1">2.1 seg</p>
+                    <span className="text-[10px] text-slate-400">Antes: 3.5 horas</span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+                  <div>
+                    <strong className="text-white">Ranking de Vendedores del Mes:</strong>
+                    <span className="text-slate-400 ml-2">1º Juan ($ 12.4M) · 2º Lucas ($ 9.1M) · 3º Marcos ($ 6.8M)</span>
+                  </div>
+                  <span className="text-indigo-400 font-bold hover:underline cursor-pointer">Ver reporte analítico completo</span>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── Pain vs Solution Breakdown (Los Dolores Resueltos) ────────── */}
+      <section id="dolores" className="py-24 bg-[#070b14] border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center justify-center gap-1.5 mb-2">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              Diagnóstico Operativo
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-white">
-              Los 7 Dolores de Cabeza que están frenando a tu empresa
-            </h2>
-            <p className="text-slate-400 mt-4 text-base">
-              Identificá los cuellos de botella que hoy te cuestan horas de estrés, clientes perdidos y desorganización interna:
-            </p>
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex justify-center gap-2 mb-12">
-            {[
-              { id: 'todos', label: 'Todos los Dolores' },
-              { id: 'ventas', label: 'Ventas & Clientes' },
-              { id: 'operaciones', label: 'Técnica & Depósito' },
-              { id: 'administracion', label: 'Cobranzas & Gestión' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                  activeTab === tab.id
-                    ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/30'
-                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Pain Cards List */}
-          <div className="space-y-8 max-w-5xl mx-auto">
-            {filteredPains.map((item, idx) => (
-              <div
-                key={item.id}
-                className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl hover:border-slate-700 transition-all"
-              >
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center font-bold text-xs">
-                      #{idx + 1}
-                    </div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      {item.badge}
-                    </span>
-                  </div>
-                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Solución Resuelta
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Left: The Pain (El Dolor) */}
-                  <div className="p-5 rounded-2xl bg-red-950/20 border border-red-500/20 text-left">
-                    <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase tracking-wider mb-2">
-                      <XCircle className="w-4 h-4 text-red-400" />
-                      <span>El Dolor de Cabeza</span>
-                    </div>
-                    <h4 className="text-base sm:text-lg font-bold text-white mb-2 leading-snug">
-                      {item.dolorTitulo}
-                    </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {item.dolorDetalle}
-                    </p>
-                  </div>
-
-                  {/* Right: The JustCRM Function (La Solución) */}
-                  <div className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-left">
-                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>Cómo lo Destruye JustCRM</span>
-                    </div>
-                    <h4 className="text-base sm:text-lg font-bold text-white mb-2 leading-snug">
-                      {item.solucionTitulo}
-                    </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                      {item.solucionDetalle}
-                    </p>
-                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-cyan-300 font-semibold flex items-center gap-2">
-                      <Zap className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                      <span><strong>Impacto directo:</strong> {item.impacto}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-        </div>
-      </section>
-
-      {/* ── Interactive Live Cotizador: Cómo se ve la Solución ───────── */}
-      <section id="cotizador-demo" className="py-24 bg-[#080c15] border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Demostración en Tiempo Real</span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mt-2">
-              Cotizá mientras hablás por teléfono con el cliente
+            <span className="text-xs font-bold uppercase tracking-wider text-red-400">Fricciones Reales</span>
+            <h2 className="text-3xl sm:text-5xl font-black text-white mt-2">
+              El costo oculto de seguir trabajando como en el 2015
             </h2>
             <p className="text-slate-400 mt-3 text-base">
-              Nunca más abras un Word ni busques en listas rotas de Excel. Probá el cotizador dinámico:
+              Mirá cómo JustCRM reemplaza cada dolor de cabeza por un flujo automático que ahorra horas de trabajo:
             </p>
           </div>
 
-          <div className="max-w-5xl mx-auto bg-slate-900/90 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl">
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800 mb-6">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-400">Condición Comercial:</span>
-                <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-                  <button
-                    onClick={() => setPriceMode('GREMIO')}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                      priceMode === 'GREMIO'
-                        ? 'bg-emerald-500 text-white shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Gremio / Instalador
-                  </button>
-                  <button
-                    onClick={() => setPriceMode('PUBLICO')}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                      priceMode === 'PUBLICO'
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Público Final
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-400">Moneda:</span>
-                <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-                  <button
-                    onClick={() => setCurrency('USD')}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                      currency === 'USD'
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    USD (Dólares)
-                  </button>
-                  <button
-                    onClick={() => setCurrency('ARS')}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                      currency === 'ARS'
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    ARS ($ 1.280)
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Simulated Clean PDF Table */}
-            <div className="rounded-2xl border border-slate-800 bg-white text-slate-900 p-6 shadow-inner font-sans">
-              
-              {/* White-Clean PDF Header Design */}
-              <div className="flex items-center justify-between border-b-2 border-indigo-600 pb-4 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-lg">
-                    AB
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-extrabold text-slate-900 leading-tight">ABBA SEGURIDAD ELECTRÓNICA</h4>
-                    <p className="text-[11px] text-slate-500 font-medium">CCTV · Alarmas · Redes · Control de Accesos</p>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span className="inline-block px-3 py-1 rounded-full bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider">
-                    PRESUPUESTO
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-1">Ref: PRESUP-2026-AB · {new Date().toLocaleDateString('es-AR')}</p>
-                </div>
-              </div>
-
-              {/* Table items */}
-              <div className="space-y-3">
-                <div className="grid grid-cols-12 text-[11px] font-bold text-slate-500 uppercase pb-2 border-b border-slate-200">
-                  <div className="col-span-6">Ítem & Código SKU</div>
-                  <div className="col-span-2 text-center">Tipo</div>
-                  <div className="col-span-2 text-center">Cantidad</div>
-                  <div className="col-span-2 text-right">Total</div>
-                </div>
-
-                {demoItems.map((item, idx) => {
-                  const unitPrice = priceMode === 'GREMIO' ? item.precioGremio : item.precioPublico
-                  const lineTotal = unitPrice * item.cant
-                  return (
-                    <div key={idx} className="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
-                      <div className="col-span-6 pr-2">
-                        <p className="font-bold text-slate-900 leading-snug">
-                          <span className="text-indigo-600 font-mono text-[11px]">[{item.sku}]</span> {item.name}
-                        </p>
-                        <p className="text-[11px] text-slate-500 italic mt-0.5 line-clamp-1">{item.desc}</p>
-                      </div>
-                      <div className="col-span-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          item.tipo === 'KIT'
-                            ? 'bg-amber-100 text-amber-800'
-                            : item.tipo === 'SERVICIO'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-indigo-100 text-indigo-800'
-                        }`}>
-                          {item.tipo}
-                        </span>
-                      </div>
-                      <div className="col-span-2 text-center text-slate-600 font-medium">
-                        {item.cant} × unidad
-                      </div>
-                      <div className="col-span-2 text-right font-bold text-slate-900">
-                        {formatPrice(lineTotal)}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Totals Box */}
-              <div className="mt-5 flex justify-end">
-                <div className="w-64 bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 text-xs">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Subtotal Neto:</span>
-                    <span className="font-semibold">{formatPrice(subtotalNeto)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-500">
-                    <span>IVA (21%):</span>
-                    <span>{formatPrice(iva)}</span>
-                  </div>
-                  <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-extrabold text-indigo-700">
-                    <span>TOTAL (IVA incl.):</span>
-                    <span>{formatPrice(total)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
-                <p>✓ Cotización con validez técnica de 15 días.</p>
-                <p className="font-semibold text-indigo-600">PDF White-Clean Engine · Sin recuadros blancos feos</p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-              <div className="text-xs text-slate-400">
-                ⚡ Creado para que el cliente lo reciba en su bandeja de entrada antes de colgar la llamada.
-              </div>
-              <a
-                href="#contacto"
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center gap-2 shadow"
-              >
-                <span>Quiero este cotizador en mi empresa</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── WhatsApp Bot NISSI Deep Dive ──────────────────────────────── */}
-      <section id="bot-ia" className="py-24 bg-slate-950 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
             
-            <div className="lg:col-span-6 text-left">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-3">
-                <Bot className="w-4 h-4 text-emerald-400" />
-                Inteligencia Artificial Especializada
-              </span>
-              <h2 className="text-3xl sm:text-5xl font-black text-white leading-tight mb-6">
-                El Bot NISSI no inventa precios: asesora técnicamente y deriva con transcript.
-              </h2>
-              <p className="text-slate-300 text-base leading-relaxed mb-6">
-                La mayoría de los chatbots frustran a los clientes porque dan respuestas genéricas o tiran precios inventados. 
-                <strong>NISSI</strong> está entrenado para la realidad de la seguridad electrónica:
-              </p>
-
-              <div className="space-y-4 text-sm text-slate-300">
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-white">Conoce tu Catálogo en Tiempo Real:</strong> Explica diferencias entre cámaras analógicas e IP, analítica AcuSense, distancias infrarrojas y compatibilidad de grabadores.
-                  </div>
+            {/* Box 1 */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-red-500/40 transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center font-bold mb-4">
+                  01
                 </div>
-
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-white">Derivación Quirúrgica por Departamento:</strong> Si el cliente quiere comprar, crea un Lead en el Pipeline del vendedor. Si tiene una falla técnica, abre un Ticket de soporte. Cero confusión.
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="text-white">Takeover Humano con 1 Clic:</strong> Si un asesor quiere responder, toma el chat desde el CRM y el bot se silencia al instante.
-                  </div>
-                </div>
+                <h3 className="text-base font-bold text-white mb-2">Lead que espera = Venta perdida</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Si un cliente pide cotización por WhatsApp y pasan 3 horas, le compra a tu competidor. NISSI responde en 2 segundos, orienta técnicamente y deriva al vendedor con el chat completo.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> De 3 horas de espera a 2 segundos
               </div>
             </div>
 
-            <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-bold text-white">Conversación en Vivo · WhatsApp Cloud API</span>
+            {/* Box 2 */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold mb-4">
+                  02
                 </div>
-                <span className="text-xs text-slate-500 font-mono">Motor: Gemini 2.5 Flash</span>
+                <h3 className="text-base font-bold text-white mb-2">45 minutos por presupuesto en Word</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Buscar en Excels del mayorista, calcular el dólar blue a mano y renegar con tablas rotas. Con JustCRM cotizás en 30 segundos con precios Gremio o Público y mandás el PDF en vivo.
+                </p>
               </div>
+              <div className="pt-3 border-t border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Cotizaciones mientras hablás por teléfono
+              </div>
+            </div>
 
-              <div className="space-y-3 text-xs">
-                <div className="bg-slate-950 p-3 rounded-xl rounded-tl-none border border-slate-800 max-w-[85%] text-left">
-                  <p className="text-slate-300">"Hola, necesitamos poner 8 cámaras en un galpón de logística para controlar carga de camiones. ¿Qué conviene?"</p>
-                  <span className="text-[9px] text-slate-500 block text-right mt-1">Cliente · 18:42</span>
+            {/* Box 3 */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-bold mb-4">
+                  03
                 </div>
+                <h3 className="text-base font-bold text-white mb-2">Información cautiva en teléfonos personales</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Si el vendedor falta o renuncia, te quedás a ciegas. Con la bandeja compartida oficial, cada mensaje, audio y cotización queda en la ficha del cliente protegida para la empresa.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Soberanía total de la base de clientes
+              </div>
+            </div>
 
-                <div className="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-xl rounded-tr-none ml-auto max-w-[90%] text-left">
-                  <p className="text-emerald-200">
-                    "¡Buenas tardes! Para galpones de logística recomendamos cámaras <strong>IP Varifocales de 4MP</strong> para cubrir accesos de camiones y lectura de patentes, combinadas con domos fijos para pasillos. Te derivo ahora mismo con nuestro ingeniero comercial para armarte el proyecto a medida."
-                  </p>
-                  <span className="text-[9px] text-emerald-400/60 block text-right mt-1">NISSI (IA) · 18:42 (2 segundos después)</span>
+            {/* Box 4 */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-amber-500/40 transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold mb-4">
+                  04
                 </div>
+                <h3 className="text-base font-bold text-white mb-2">Faltantes de piezas en la obra</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  El técnico llega a instalar y faltan baluns o conectores. Las órdenes de entrega desglosan cada componente del kit para el pañol con remito firmado. Cero viajes dobles.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Desglose técnico milimétrico
+              </div>
+            </div>
 
-                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 text-left flex items-start gap-2">
-                  <Zap className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold text-white">Acción del Sistema Ejecutada:</p>
-                    <p className="text-[11px] text-indigo-200 mt-0.5">Oportunidad creada en el Pipeline: <strong>[Ventas] Galpón Logística 8 Cámaras</strong>. Transcripción completa pegada en la nota.</p>
-                  </div>
+            {/* Box 5 */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-purple-500/40 transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold mb-4">
+                  05
                 </div>
+                <h3 className="text-base font-bold text-white mb-2">Stock trabado por falta de facturas</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Tenés 20 cámaras en el pañol pero el sistema dice cero porque no cargaron la factura de compra. Con el Conteo Físico Inicial cargás tus estanterías en 1 clic y empezás a vender.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Depósito operativo en 2 horas
+              </div>
+            </div>
+
+            {/* Box 6 */}
+            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition-all flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold mb-4">
+                  06
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">Cruce eterno de comprobantes de abonos</h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-4">
+                  Nadie sabe quién pagó el abono de monitoreo del mes. Con el Portal de Clientes y la facturación automática ARCA/AFIP, tus clientes pagan online y descargan sus comprobantes solos.
+                </p>
+              </div>
+              <div className="pt-3 border-t border-slate-800 text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> Cobranzas en piloto automático
               </div>
             </div>
 
@@ -650,27 +862,27 @@ export default function LandingPage() {
       </section>
 
       {/* ── Planes de Suscripción ─────────────────────────────────────── */}
-      <section id="planes" className="py-24 bg-[#080c15] border-t border-slate-800">
+      <section id="planes" className="py-24 bg-slate-950 border-t border-slate-800 text-center">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Inversión Transparente</span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mt-2">
-              Menos de lo que perdés con una sola venta caída
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Inversión Directa</span>
+            <h2 className="text-3xl sm:text-5xl font-black text-white mt-2">
+              Planes claros para escalar tu empresa
             </h2>
             <p className="text-slate-400 mt-3 text-base">
-              Elegí el plan que mejor se adapte al tamaño de tu empresa y activalo hoy mismo con JustCreate.
+              Menos de lo que perdés con una sola venta caída por demorarte en contestar.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto text-left">
             {/* Starter */}
-            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all text-left">
+            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all">
               <div>
                 <h3 className="text-xl font-bold text-white">Starter Instalador</h3>
                 <p className="text-xs text-slate-400 mt-1">Para técnicos independientes y equipos chicos de hasta 3 personas.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-3xl font-extrabold text-white">Consultar</span>
+                  <span className="text-3xl font-black text-white">Consultar</span>
                   <span className="text-xs text-slate-400 block mt-1">Planes a medida en pesos o dólares</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-300">
@@ -683,14 +895,14 @@ export default function LandingPage() {
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs text-center transition-all"
+                className="mt-8 w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs text-center transition-all"
               >
                 Solicitar Cotización Starter
               </a>
             </div>
 
             {/* Plan Pro con Bot IA (Destacado) */}
-            <div className="rounded-3xl bg-gradient-to-b from-indigo-950/60 via-slate-900 to-slate-900 border-2 border-indigo-500 p-8 flex flex-col justify-between shadow-2xl relative text-left">
+            <div className="rounded-3xl bg-gradient-to-b from-indigo-950/60 via-slate-900 to-slate-900 border-2 border-indigo-500 p-8 flex flex-col justify-between shadow-2xl relative">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-red-500 via-indigo-500 to-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow">
                 MÁS ELEGIDO POR EMPRESAS
               </div>
@@ -698,7 +910,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-bold text-white">Security Pro & Bot IA</h3>
                 <p className="text-xs text-slate-300 mt-1">Para empresas de seguridad, monitoreo y CCTV que quieren escalar.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-3xl font-extrabold text-white">Plan Pro</span>
+                  <span className="text-3xl font-black text-white">Plan Pro</span>
                   <span className="text-xs text-indigo-300 block mt-1">Con Bot de WhatsApp NISSI Gemini 2.5</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-200">
@@ -713,19 +925,19 @@ export default function LandingPage() {
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-slate-950 font-extrabold text-xs text-center shadow-lg transition-all"
+                className="mt-8 w-full py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-xs text-center shadow-lg transition-all"
               >
                 Comenzar con Plan Pro
               </a>
             </div>
 
             {/* Enterprise */}
-            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all text-left">
+            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all">
               <div>
                 <h3 className="text-xl font-bold text-white">Enterprise White-Label</h3>
                 <p className="text-xs text-slate-400 mt-1">Para grandes integradores, franquicias o múltiples depósitos.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-3xl font-extrabold text-white">A Medida</span>
+                  <span className="text-3xl font-black text-white">A Medida</span>
                   <span className="text-xs text-slate-400 block mt-1">Servidor privado dedicado + Marca blanca total</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-300">
@@ -738,7 +950,7 @@ export default function LandingPage() {
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs text-center transition-all"
+                className="mt-8 w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs text-center transition-all"
               >
                 Contactar a Ventas Enterprise
               </a>
@@ -748,11 +960,11 @@ export default function LandingPage() {
       </section>
 
       {/* ── FAQ Section ──────────────────────────────────────────────── */}
-      <section id="faq" className="py-20 bg-slate-950 border-t border-slate-800">
+      <section id="faq" className="py-20 bg-[#070b14] border-t border-slate-800">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Preguntas Frecuentes</span>
-            <h2 className="text-3xl font-extrabold text-white mt-2">
+            <h2 className="text-3xl font-black text-white mt-2">
               Todo lo que necesitás saber antes de dar el salto
             </h2>
           </div>
@@ -778,100 +990,77 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Final Call to Action / Formulario ─────────────────────────── */}
-      <section id="contacto" className="py-24 bg-gradient-to-b from-[#080c15] to-slate-950 border-t border-slate-800 relative">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-500 via-indigo-600 to-cyan-400 flex items-center justify-center mx-auto mb-6 shadow-xl">
-            <Zap className="w-8 h-8 text-white" />
+      {/* ── Contact Form ──────────────────────────────────────────────── */}
+      <section id="contacto" className="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4">
+        <div className="max-w-xl mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-500 via-indigo-600 to-cyan-400 flex items-center justify-center mx-auto mb-5 shadow-xl">
+            <Shield className="w-7 h-7 text-white" />
           </div>
-
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
-            Basta de perder tiempo y dinero en tareas manuales
-          </h2>
-          <p className="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto mb-10">
-            Completá tus datos y un especialista de JustCreate te contactará hoy mismo para mostrarte el sistema funcionando en vivo con los productos reales de tu empresa.
+          <h2 className="text-3xl sm:text-4xl font-black text-white mb-3">Terminá con el Caos Operativo</h2>
+          <p className="text-slate-400 text-sm mb-8">
+            Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para mostrarte el sistema en vivo con tus propios productos.
           </p>
 
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              alert('¡Gracias por tu interés! Un especialista de JustCreate te contactará a la brevedad.')
+              alert('¡Gracias! Un especialista técnico de JustCreate se pondrá en contacto a la brevedad.')
             }}
-            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl max-w-xl mx-auto text-left space-y-4"
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-left space-y-4 shadow-2xl"
           >
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Tu Nombre y Apellido</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre y Apellido</label>
               <input
                 type="text"
                 required
                 placeholder="Ej. Juan Pérez"
-                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500"
               />
             </div>
-
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Nombre de tu Empresa de Seguridad o IoT</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Empresa de Seguridad o IoT</label>
               <input
                 type="text"
                 required
-                placeholder="Ej. Securitas, Abba Seguridad, etc."
-                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
+                placeholder="Ej. Abba Seguridad Electrónica"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500"
               />
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Corporativo</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Email</label>
                 <input
                   type="email"
                   required
-                  placeholder="juan@seguridad.com"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
+                  placeholder="juan@empresa.com"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">WhatsApp de Contacto</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">WhatsApp</label>
                 <input
                   type="tel"
                   required
                   placeholder="+54 9 11 ..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
-
             <button
               type="submit"
-              className="w-full mt-4 py-4 rounded-xl bg-gradient-to-r from-red-600 via-indigo-600 to-cyan-500 hover:from-red-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5"
+              className="w-full mt-4 py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-xs shadow-lg transition-all"
             >
-              Agendar Demostración y Eliminar el Caos
+              Agendar Demostración Personalizada
             </button>
-            <p className="text-[11px] text-slate-500 text-center mt-2">
-              Sin contratos forzados · Implementación guiada paso a paso por JustCreate
-            </p>
           </form>
         </div>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
-      <footer className="py-12 bg-slate-950 border-t border-slate-900 text-slate-500 text-xs">
+      <footer className="py-10 bg-slate-950 border-t border-slate-900 text-slate-500 text-xs text-center sm:text-left">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center text-white font-bold text-xs">
-              J
-            </div>
-            <span>JustCRM · Desarrollado con orgullo por <a href="https://justcreate.com.ar" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-white underline">JustCreate</a></span>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <Link href="/login" className="hover:text-slate-300 transition-colors">Iniciar Sesión</Link>
-            <a href="#dolores" className="hover:text-slate-300 transition-colors">Dolores Operativos</a>
-            <a href="#planes" className="hover:text-slate-300 transition-colors">Planes</a>
-            <a href="mailto:contacto@justcreate.com.ar" className="hover:text-slate-300 transition-colors">contacto@justcreate.com.ar</a>
-          </div>
-
-          <p>© {new Date().getFullYear()} JustCRM. Todos los derechos reservados.</p>
+          <p>JustCRM · Desarrollado con orgullo por <a href="https://justcreate.com.ar" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-white underline">JustCreate</a></p>
+          <p>© 2026 JustCRM. Todos los derechos reservados.</p>
         </div>
       </footer>
     </div>

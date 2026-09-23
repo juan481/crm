@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JustCRM · El Antídoto contra el Caos en Empresas de Seguridad & IoT</title>
+  <title>JustCRM · Menos Caos. Más Instalaciones.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -20,9 +20,9 @@
     }
   </script>
   <style>
-    body { background-color: #080c15; color: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
-    .glow-red { background: radial-gradient(circle, rgba(239, 68, 68, 0.14) 0%, rgba(239, 68, 68, 0) 70%); }
-    .glow-indigo { background: radial-gradient(circle, rgba(99, 102, 241, 0.18) 0%, rgba(99, 102, 241, 0) 70%); }
+    body { background-color: #070b14; color: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glow-accent { background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0) 70%); }
+    .glow-red { background: radial-gradient(circle, rgba(239, 68, 68, 0.16) 0%, rgba(239, 68, 68, 0) 70%); }
     .gradient-headline { background: linear-gradient(135deg, #f87171 0%, #a5b4fc 50%, #38bdf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
   </style>
 </head>
@@ -30,33 +30,32 @@
 
   <!-- Ambient Glow -->
   <div class="fixed top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] glow-red pointer-events-none z-0"></div>
-  <div class="fixed bottom-0 right-0 w-[600px] h-[500px] glow-indigo pointer-events-none z-0"></div>
+  <div class="fixed bottom-0 right-0 w-[600px] h-[500px] glow-accent pointer-events-none z-0"></div>
 
   <!-- Header -->
-  <header class="sticky top-0 z-50 backdrop-blur-xl bg-[#080c15]/90 border-b border-slate-800">
+  <header class="sticky top-0 z-50 backdrop-blur-2xl bg-[#070b14]/85 border-b border-slate-800/80">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 via-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-500 via-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-600/30">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
         </div>
         <div>
           <span class="text-xl font-black tracking-tight text-white flex items-center gap-2">
-            JustCRM <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">Cero Caos</span>
+            JustCRM <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Security OS</span>
           </span>
           <p class="text-[10px] text-slate-400 font-medium">by JustCreate</p>
         </div>
       </div>
 
-      <nav class="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-300">
-        <a href="#dolores" class="hover:text-white transition-colors">Los 7 Dolores</a>
-        <a href="#cotizador-demo" class="hover:text-white transition-colors">Cotizador en 30 Seg</a>
-        <a href="#bot-ia" class="hover:text-white transition-colors">Bot con IA</a>
+      <nav class="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-300">
+        <a href="#pantallas" class="hover:text-white transition-colors">Pantallas del Sistema</a>
+        <a href="#dolores" class="hover:text-white transition-colors">Dolores que Eliminamos</a>
         <a href="#planes" class="hover:text-white transition-colors">Planes</a>
-        <a href="#contacto" class="hover:text-white transition-colors">Agendar Demo</a>
+        <a href="#faq" class="hover:text-white transition-colors">Preguntas</a>
       </nav>
 
-      <a href="#contacto" class="text-xs sm:text-sm font-bold px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-indigo-600 to-indigo-700 hover:from-red-500 hover:to-indigo-600 text-white shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
-        <span>Terminar con el Caos</span>
+      <a href="#contacto" class="text-xs sm:text-sm font-black px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all transform hover:-translate-y-0.5 flex items-center gap-2">
+        <span>Ver Demo en Vivo</span>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
       </a>
     </div>
@@ -64,202 +63,253 @@
 
   <!-- Hero Section -->
   <section class="relative pt-16 pb-20 md:pt-24 md:pb-28 text-center px-4 max-w-7xl mx-auto z-10">
-    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-950/60 border border-red-500/30 text-xs font-bold text-red-300 mb-8 shadow-inner">
-      <span class="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
-      <span>¿Cuánto dinero pierde tu empresa de seguridad por responder tarde y gestionar a ciegas?</span>
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-bold text-indigo-300 mb-8 shadow-inner">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+      <span>El único CRM vertical para Seguridad Electrónica & IoT</span>
     </div>
 
-    <h1 class="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-5xl mx-auto leading-[1.08] mb-6">
-      El antídoto definitivo contra el caos interno, <br class="hidden sm:inline" />
-      <span class="gradient-headline">la lentitud de respuesta y la información perdida.</span>
+    <h1 class="text-5xl sm:text-7xl lg:text-8xl font-black tracking-tight text-white max-w-5xl mx-auto leading-[0.98] mb-6">
+      Menos caos. <br />
+      <span class="gradient-headline">Más instalaciones.</span>
     </h1>
 
-    <p class="text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
-      Si tu cliente espera horas un presupuesto, si cotizar te toma 45 minutos en un Word, si los instaladores llegan a la obra y les faltan piezas, y si cada vendedor atiende desde su WhatsApp personal... <strong class="text-white font-semibold">tu problema no es de ventas: es de fricción operativa.</strong>
+    <p class="text-lg sm:text-2xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
+      Cotizaciones flash en 30 segundos, WhatsApp con IA 24/7 y depósito bajo control. <br class="hidden sm:inline" />
+      <strong class="text-white font-semibold">Toda tu empresa hablando exactamente el mismo idioma.</strong>
     </p>
 
-    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-      <a href="#contacto" class="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-bold text-base shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
-        <span>Agendar Demo y Optimizar mi Operación</span>
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+      <a href="#contacto" class="w-full sm:w-auto px-9 py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-base shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+        <span>Agendar Demostración Personalizada</span>
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
       </a>
-      <a href="#dolores" class="w-full sm:w-auto px-7 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-base border border-slate-700 transition-all flex items-center justify-center gap-2">
-        <span>Ver los 7 Dolores que Destruimos</span>
+      <a href="#pantallas" class="w-full sm:w-auto px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-bold text-base border border-slate-700 transition-all flex items-center justify-center gap-2">
+        <span>Explorar las Pantallas del Sistema</span>
       </a>
     </div>
 
-    <!-- 3 Core Pillars -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
-      <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
-        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold flex-shrink-0">
-          2s
-        </div>
-        <div>
-          <h4 class="text-white font-bold text-sm">Respuesta en 2 Segundos</h4>
-          <p class="text-xs text-slate-400 mt-1">El bot con IA califica y deriva al instante. Nunca más un lead enfriándose en WhatsApp.</p>
-        </div>
+    <!-- Live Ticker -->
+    <div class="max-w-xl mx-auto p-3 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl flex items-center justify-between text-xs">
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]">EN VIVO</span>
+        <span class="text-slate-300">🤖 NISSI acaba de derivar un lead de 8 cámaras IP a Ventas</span>
       </div>
-
-      <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
-        <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-bold flex-shrink-0">
-          30s
-        </div>
-        <div>
-          <h4 class="text-white font-bold text-sm">Cotizaciones en 30 Segundos</h4>
-          <p class="text-xs text-slate-400 mt-1">Buscador instantáneo por SKU, precios Gremio/Público, dólar oficial y PDF White-Clean.</p>
-        </div>
-      </div>
-
-      <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
-        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center font-bold flex-shrink-0">
-          100%
-        </div>
-        <div>
-          <h4 class="text-white font-bold text-sm">Cero Información Perdida</h4>
-          <p class="text-xs text-slate-400 mt-1">Ventas, Pañol, Instaladores y Finanzas en la misma sintonía con tareas detalladas al milímetro.</p>
-        </div>
-      </div>
+      <span class="text-slate-500 text-[10px]">hace 2 min</span>
     </div>
   </section>
 
-  <!-- The 7 Dolores Section -->
-  <section id="dolores" class="py-24 bg-slate-950 border-t border-slate-800">
+  <!-- Interactive Screens Showcase -->
+  <section id="pantallas" class="py-20 bg-slate-950 border-t border-slate-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       
-      <div class="text-center max-w-3xl mx-auto mb-16">
-        <span class="text-xs font-bold uppercase tracking-wider text-red-400 block mb-2">Diagnóstico Operativo</span>
-        <h2 class="text-3xl sm:text-5xl font-extrabold text-white">
-          Los 7 Dolores de Cabeza que están frenando a tu empresa
+      <div class="text-center max-w-3xl mx-auto mb-10">
+        <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Recorrido Visual</span>
+        <h2 class="text-3xl sm:text-5xl font-black text-white mt-2">
+          Mirá cómo se ve tu empresa funcionando sin fricción
         </h2>
-        <p class="text-slate-400 mt-4 text-base">
-          Identificá los cuellos de botella que hoy te cuestan horas de estrés, clientes perdidos y desorganización interna:
+        <p class="text-slate-400 mt-3 text-base">
+          Hacé clic en cada módulo para ver la pantalla real y cómo resuelve cada operación:
         </p>
       </div>
 
-      <div class="space-y-8 max-w-5xl mx-auto">
+      <!-- Tabs Buttons -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mb-8">
+        <button onclick="showScreen('cotizador')" id="tab-cotizador" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white border border-indigo-500 shadow-xl transition-all">
+          1. Cotizador Flash & PDF
+        </button>
+        <button onclick="showScreen('whatsapp')" id="tab-whatsapp" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-slate-400 border border-slate-800 hover:text-white transition-all">
+          2. WhatsApp IA (NISSI)
+        </button>
+        <button onclick="showScreen('pipeline')" id="tab-pipeline" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-slate-400 border border-slate-800 hover:text-white transition-all">
+          3. Pipeline de Ventas
+        </button>
+        <button onclick="showScreen('stock')" id="tab-stock" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-slate-400 border border-slate-800 hover:text-white transition-all">
+          4. Depósito & Stock
+        </button>
+        <button onclick="showScreen('facturacion')" id="tab-facturacion" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-slate-400 border border-slate-800 hover:text-white transition-all">
+          5. Facturas ARCA / AFIP
+        </button>
+        <button onclick="showScreen('dashboard')" id="tab-dashboard" class="px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-slate-400 border border-slate-800 hover:text-white transition-all">
+          6. Dashboard Ejecutivo
+        </button>
+      </div>
+
+      <!-- Container Screen Mock -->
+      <div class="max-w-6xl mx-auto rounded-3xl border border-slate-700/80 bg-slate-900/90 shadow-2xl p-4 sm:p-6 backdrop-blur-xl text-left">
         
-        <!-- Dolor 1 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-red-400">#1 · VELOCIDAD DE RESPUESTA</span>
-            <span class="text-emerald-400">✓ Resuelto con Bot IA</span>
-          </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">El cliente pide presupuesto y espera horas; le compra a tu competencia.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Escribe un sábado a las 19 hs. El vendedor lo ve al lunes al mediodía. En seguridad electrónica, el 70% de las ventas las gana quien responde primero.</p>
+        <!-- Screen Content: Cotizador -->
+        <div id="screen-cotizador" class="space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h3 class="text-base font-bold text-white">Cotizador Flash · Presupuesto #PRESUP-2026-AB</h3>
+              <p class="text-xs text-slate-400">Cliente: Consorcio Torre Alvear · 4 Domos AcuSense + NVR 4K</p>
             </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Bot IA (NISSI) responde en 2s y deriva con transcript completo.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">NISSI atiende 24/7 con Gemini 2.5 Flash, entiende la necesidad técnica, consulta catálogo y crea el Lead en el Pipeline con todo el chat pegado para el vendedor.</p>
+            <span class="px-3 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+              Precio Gremio Activado
+            </span>
+          </div>
+
+          <div class="bg-white text-slate-900 rounded-2xl p-6 shadow-inner border border-slate-200">
+            <div class="flex justify-between items-center border-b-2 border-indigo-600 pb-3 mb-4">
+              <div>
+                <h4 class="font-black text-lg">ABBA SEGURIDAD ELECTRÓNICA</h4>
+                <p class="text-xs text-slate-500">CCTV · Alarmas · Redes</p>
+              </div>
+              <span class="px-3 py-1 rounded-full bg-indigo-600 text-white font-bold text-xs uppercase">PRESUPUESTO</span>
+            </div>
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between py-2 border-b border-slate-100">
+                <span>[DS-2CD2123G2-I] 4× Domo IP Hikvision AcuSense 2MP</span>
+                <span class="font-bold">US$ 340,00</span>
+              </div>
+              <div class="flex justify-between py-2 border-b border-slate-100">
+                <span>[DS-7608NI-K2/8P] 1× Grabador NVR 8 Ch PoE 4K</span>
+                <span class="font-bold">US$ 195,00</span>
+              </div>
+              <div class="flex justify-between py-2 border-b border-slate-100">
+                <span>[KIT-CONECT-04] 1× Kit UTP + Baluns + Fuentes</span>
+                <span class="font-bold">US$ 70,00</span>
+              </div>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-200 flex justify-between font-black text-sm text-indigo-700">
+              <span>TOTAL (IVA 21% incl.):</span>
+              <span>US$ 732,05 ($ 937.024 ARS)</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400">⚡ Presupuesto generado en <strong>22 segundos</strong>. Listo para enviar por email con 1 clic.</p>
+        </div>
+
+        <!-- Screen Content: WhatsApp -->
+        <div id="screen-whatsapp" class="hidden space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white">Bot NISSI (Gemini 2.5 Flash) · WhatsApp Oficial</h3>
+            <span class="px-3 py-1 rounded bg-emerald-500 text-slate-950 font-black text-xs">Tomar Conversación (Humano)</span>
+          </div>
+          <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 text-xs">
+            <div class="bg-slate-900 p-3 rounded-xl rounded-tl-none max-w-[80%] border border-slate-800">
+              <p class="text-slate-200">"Hola, queremos poner 8 cámaras en un galpón de logística para control de camiones."</p>
+              <span class="text-[9px] text-slate-500 block text-right mt-1">Cliente · 18:42</span>
+            </div>
+            <div class="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-xl rounded-tr-none ml-auto max-w-[85%] text-emerald-200">
+              "¡Buenas tardes! Para galpones te recomendamos cámaras <strong>IP Varifocales Hikvision de 4MP</strong> para lectura de patentes más domos fijos internos. Ya derivo tu requerimiento a nuestro especialista comercial junto al proyecto."
+              <span class="text-[9px] text-emerald-400/60 block text-right mt-1">NISSI (IA) · 18:42:02 ✓✓</span>
+            </div>
+            <div class="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-semibold">
+              ✓ Lead creado en Pipeline: <strong>[Ventas] Galpón Logística 8 Cámaras</strong> con transcripción completa.
             </div>
           </div>
         </div>
 
-        <!-- Dolor 2 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-indigo-400">#2 · TIEMPO DE COTIZACIÓN</span>
-            <span class="text-emerald-400">✓ Resuelto con Cotizador Flash</span>
+        <!-- Screen Content: Pipeline -->
+        <div id="screen-pipeline" class="hidden space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white">Pipeline de Ventas Drag & Drop</h3>
+            <span class="text-xs text-emerald-400 font-bold">Total en juego: US$ 28.450</span>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Tardar 45 minutos por presupuesto en Word y Excel desactualizados.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Buscar el precio en la lista del mayorista, calcular el dólar a mano, pasar a Word donde se rompen las tablas y exportar un PDF con aspecto desprolijo.</p>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="font-bold text-slate-400 block mb-2">1. Nuevo Lead (IA)</span>
+              <div class="p-2.5 rounded bg-slate-900 border border-slate-800 font-bold text-white">
+                Galpón Logística 8 Cámaras
+                <span class="text-[10px] text-emerald-400 block mt-1">Est: US$ 1.840</span>
+              </div>
             </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Cotizador en 30 segundos + Dólar oficial en vivo + PDF White-Clean.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Agregás ítems por SKU con 1 clic, conmutás entre precio Gremio o Público, desglosás el IVA exacto y mandás el PDF por correo mientras seguís al teléfono con el cliente.</p>
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="font-bold text-indigo-400 block mb-2">2. Cotización Enviada</span>
+              <div class="p-2.5 rounded bg-slate-900 border border-indigo-500/30 font-bold text-white">
+                Consorcio Torre Alvear
+                <span class="text-[10px] text-emerald-400 block mt-1">US$ 732,05</span>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Dolor 3 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-cyan-400">#3 · SOBERANÍA DE LA INFORMACIÓN</span>
-            <span class="text-emerald-400">✓ Resuelto con Inbox Compartido</span>
-          </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Todo en el WhatsApp personal del vendedor: si renuncia, perdés todo.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Nadie sabe qué precio se le pasó, qué condiciones se pactaron ni cuándo recontactarlo. La empresa queda completamente a ciegas si el vendedor falta o se va.</p>
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="font-bold text-amber-400 block mb-2">3. En Negociación</span>
+              <div class="p-2.5 rounded bg-slate-900 border border-slate-800 font-bold text-white">
+                Fábrica Metalúrgica Sur
+                <span class="text-[10px] text-emerald-400 block mt-1">US$ 3.400</span>
+              </div>
             </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Bandeja Oficial Centralizada + Historial Inmutable.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Todo el equipo atiende desde el CRM con el WhatsApp oficial. Cada conversación, cotización y nota queda archivada en la ficha del cliente para siempre.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Dolor 4 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-amber-400">#4 · OPERACIÓN EN OBRA</span>
-            <span class="text-emerald-400">✓ Resuelto con Órdenes de Entrega</span>
-          </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">El técnico llega a instalar y le faltan piezas: teléfono descompuesto.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Ventas avisa por WhatsApp "armate el kit". El técnico llega a la obra y faltan baluns o la fuente. La obra se frena, el cliente se queja y perdés plata en viajes.</p>
-            </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Desglose milimétrico de componentes con firma de remito.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Al aprobarse el presupuesto, el pañol recibe la lista exacta con código SKU de cada cable, conector y fuente para armar la caja. Cero sorpresas en obra.</p>
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <span class="font-bold text-emerald-400 block mb-2">4. Ganado / A Instalar</span>
+              <div class="p-2.5 rounded bg-slate-900 border border-emerald-500/30 font-bold text-white">
+                Colegio San Agustín
+                <span class="text-[10px] text-emerald-400 block mt-1">US$ 2.850 (Stock Reservado)</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Dolor 5 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-purple-400">#5 · STOCK & DEPÓSITO</span>
-            <span class="text-emerald-400">✓ Resuelto con Conteo Inicial</span>
+        <!-- Screen Content: Stock -->
+        <div id="screen-stock" class="hidden space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white">Depósito & Conteo Inicial Físico (Sin Factura)</h3>
+            <span class="px-3 py-1 rounded bg-amber-500 text-slate-950 font-black text-xs">Conteo Inicial en 1 Clic</span>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Tenés 30 cámaras en el pañol pero el sistema dice 0 por falta de facturas.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Los sistemas contables te obligan a ingresar factura por factura de los últimos meses para dar de alta stock. Mientras tanto, vendés a ciegas o comprás de más.</p>
+          <div class="bg-slate-950 rounded-xl border border-slate-800 p-4 text-xs space-y-2">
+            <div class="flex justify-between border-b border-slate-800 pb-2 text-slate-400 font-bold">
+              <span>SKU / Modelo</span>
+              <span>Físico</span>
+              <span>Reservado</span>
+              <span>Disponible</span>
             </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Conteo Físico Inicial sin Factura en 1 clic.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Contás físicamente tus estanterías, ingresás las cantidades reales y tenés tu inventario operativo y visible para ventas en menos de 2 horas.</p>
+            <div class="flex justify-between py-1 border-b border-slate-900">
+              <span class="font-bold text-white">[DS-2CD2123G2-I] Domo IP Hikvision AcuSense</span>
+              <span>24</span>
+              <span class="text-amber-400">4</span>
+              <span class="text-emerald-400 font-bold">20</span>
             </div>
-          </div>
-        </div>
-
-        <!-- Dolor 6 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-blue-400">#6 · COBRANZAS & FACTURACIÓN</span>
-            <span class="text-emerald-400">✓ Resuelto con AFIP + Portal</span>
-          </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Cruce eterno de comprobantes: nadie sabe quién pagó el abono del mes.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Días perdidos cruzando transferencias en el homebanking. Los técnicos atienden a clientes morosos porque no saben que deben 3 meses de abono de monitoreo.</p>
-            </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Facturación ARCA/AFIP 1-clic + Portal de autogestión.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Facturas A, B, C oficiales emitidas en segundos. El cliente entra a su portal seguro a descargar comprobantes y pagar online. El técnico ve el estado contable antes de ir.</p>
+            <div class="flex justify-between py-1 border-b border-slate-900">
+              <span class="font-bold text-white">[DS-7608NI-K2/8P] NVR 8 Canales PoE 4K</span>
+              <span>6</span>
+              <span class="text-amber-400">1</span>
+              <span class="text-emerald-400 font-bold">5</span>
             </div>
           </div>
         </div>
 
-        <!-- Dolor 7 -->
-        <div class="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
-          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800 text-xs font-bold">
-            <span class="text-emerald-400">#7 · ALINEACIÓN DEL EQUIPO</span>
-            <span class="text-emerald-400">✓ Resuelto con Ecosistema Único</span>
+        <!-- Screen Content: Facturacion -->
+        <div id="screen-facturacion" class="hidden space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white">Factura A Oficial con CAE de AFIP / ARCA</h3>
+            <span class="text-emerald-400 font-bold text-xs">CAE Nº: 74182901849201</span>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="p-4 rounded-xl bg-red-950/20 border border-red-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Empresa dividida en islas: Ventas promete, Técnica sufre y Finanzas no cobra.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Falta de sincronía total. Tareas asignadas sin detalles técnicos donde la información se diluye en llamadas telefónicas o papeles perdidos.</p>
+          <div class="bg-white text-slate-900 rounded-xl p-5 border border-slate-300 font-mono text-xs space-y-2">
+            <div class="flex justify-between border-b pb-2">
+              <span>ABBA SEGURIDAD S.A. · CUIT 30-71649281-9</span>
+              <span class="font-black text-sm">FACTURA A</span>
             </div>
-            <div class="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/20">
-              <h4 class="text-sm font-bold text-white mb-2">Toda la empresa en el mismo idioma con roles y permisos específicos.</h4>
-              <p class="text-xs text-slate-300 leading-relaxed">Desde el primer mensaje de WhatsApp hasta la cobranza y el soporte postventa, cada tarea tiene responsable, fecha límite, notas técnicas y trazabilidad total.</p>
+            <div class="flex justify-between">
+              <span>Consorcio Torre Alvear · 4 Domos + NVR</span>
+              <span class="font-bold">$ 937.024,00 (IVA 21% incl.)</span>
+            </div>
+            <div class="pt-2 border-t flex justify-between text-[10px] text-slate-600">
+              <span>✓ Código QR Reglamentario AFIP Generado</span>
+              <span class="text-emerald-700 font-bold">Comprobante Autorizado</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screen Content: Dashboard -->
+        <div id="screen-dashboard" class="hidden space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white">Dashboard Ejecutivo · KPIs de Seguridad</h3>
+            <span class="text-xs text-emerald-400 font-bold">+24% Crecimiento MRR</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-slate-400">MRR Monitoreo</span>
+              <p class="text-lg font-black text-white">$ 14.850.000</p>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-slate-400">Presupuestos Mes</span>
+              <p class="text-lg font-black text-cyan-400">48</p>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-slate-400">Tasa Conversión</span>
+              <p class="text-lg font-black text-emerald-400">41.8%</p>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-slate-400">Tiempo Respuesta</span>
+              <p class="text-lg font-black text-amber-400">2.1 seg</p>
             </div>
           </div>
         </div>
@@ -268,235 +318,77 @@
     </div>
   </section>
 
-  <!-- Interactive Cotizador Flash -->
-  <section id="cotizador-demo" class="py-24 bg-[#080c15] border-t border-slate-800">
+  <!-- Planes Section -->
+  <section id="planes" class="py-24 bg-[#070b14] border-t border-slate-800 text-center">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center max-w-3xl mx-auto mb-12">
-        <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Cotizador en 30 Segundos</span>
-        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2">
-          Comprobá la velocidad del Cotizador Flash
-        </h2>
-        <p class="text-slate-400 mt-3 text-base">
-          Cambiá la lista de precios o la moneda y mirá cómo se recalcula al instante en formato PDF White-Clean:
-        </p>
-      </div>
-
-      <div class="max-w-5xl mx-auto bg-slate-900 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl">
-        <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800 mb-6">
-          <div class="flex items-center gap-3">
-            <span class="text-xs font-semibold text-slate-400">Lista Aplicada:</span>
-            <div class="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-              <button id="btnGremio" onclick="setMode('GREMIO')" class="px-3 py-1 rounded-md text-xs font-bold bg-emerald-500 text-white shadow">
-                Gremio / Instalador
-              </button>
-              <button id="btnPublico" onclick="setMode('PUBLICO')" class="px-3 py-1 rounded-md text-xs font-bold text-slate-400 hover:text-white">
-                Público Final
-              </button>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3">
-            <span class="text-xs font-semibold text-slate-400">Moneda:</span>
-            <div class="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
-              <button id="btnUSD" onclick="setCurr('USD')" class="px-3 py-1 rounded-md text-xs font-bold bg-indigo-600 text-white shadow">
-                USD (Dólares)
-              </button>
-              <button id="btnARS" onclick="setCurr('ARS')" class="px-3 py-1 rounded-md text-xs font-bold text-slate-400 hover:text-white">
-                ARS ($ 1.280)
-              </button>
-            </div>
-          </div>
+      <h2 class="text-3xl sm:text-5xl font-black text-white mb-4">Planes Claros y Transparentes</h2>
+      <p class="text-slate-400 mb-12">Menos de lo que perdés con una sola venta caída por responder tarde.</p>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto text-left">
+        <div class="p-8 rounded-3xl bg-slate-900 border border-slate-800">
+          <h3 class="text-lg font-bold text-white">Starter Instalador</h3>
+          <p class="text-xs text-slate-400 mb-4">Hasta 3 usuarios · Cotizador Flash + PDF</p>
+          <a href="#contacto" class="block w-full py-3 rounded-xl bg-slate-800 text-center font-bold text-xs text-white">Solicitar Starter</a>
         </div>
-
-        <!-- PDF White Clean Mock -->
-        <div class="rounded-2xl border border-slate-800 bg-white text-slate-900 p-6 shadow-inner">
-          <div class="flex items-center justify-between border-b-2 border-indigo-600 pb-4 mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-lg">
-                AB
-              </div>
-              <div>
-                <h4 class="text-lg font-extrabold text-slate-900 leading-tight">ABBA SEGURIDAD ELECTRÓNICA</h4>
-                <p class="text-[11px] text-slate-500 font-medium">CCTV · Alarmas · Redes · Control de Accesos</p>
-              </div>
-            </div>
-            <div class="text-right">
-              <span class="inline-block px-3 py-1 rounded-full bg-indigo-600 text-white font-bold text-xs uppercase tracking-wider">
-                PRESUPUESTO
-              </span>
-              <p class="text-[11px] text-slate-500 mt-1">Ref: PRESUP-2026-AB · <span id="currentDate"></span></p>
-            </div>
-          </div>
-
-          <div class="space-y-3">
-            <div class="grid grid-cols-12 text-[11px] font-bold text-slate-500 uppercase pb-2 border-b border-slate-200">
-              <div class="col-span-6">Ítem & Código SKU</div>
-              <div class="col-span-2 text-center">Tipo</div>
-              <div class="col-span-2 text-center">Cantidad</div>
-              <div class="col-span-2 text-right">Total</div>
-            </div>
-
-            <!-- Item 1 -->
-            <div class="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
-              <div class="col-span-6 pr-2">
-                <p class="font-bold text-slate-900"><span class="text-indigo-600 font-mono">[DS-2CD2123G2-I]</span> Domo IP Hikvision AcuSense 2MP</p>
-                <p class="text-[11px] text-slate-500 italic">Detección inteligente de humanos y vehículos. IR 30m, antivandálica IK10.</p>
-              </div>
-              <div class="col-span-2 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">PRODUCTO</span></div>
-              <div class="col-span-2 text-center text-slate-600">4 × unidad</div>
-              <div class="col-span-2 text-right font-bold text-slate-900" id="item1Total">US$ 340,00</div>
-            </div>
-
-            <!-- Item 2 -->
-            <div class="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
-              <div class="col-span-6 pr-2">
-                <p class="font-bold text-slate-900"><span class="text-indigo-600 font-mono">[DS-7608NI-K2/8P]</span> NVR 8 Canales PoE 4K 80Mbps</p>
-                <p class="text-[11px] text-slate-500 italic">Grabador digital de red con 8 puertos PoE independientes.</p>
-              </div>
-              <div class="col-span-2 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">PRODUCTO</span></div>
-              <div class="col-span-2 text-center text-slate-600">1 × unidad</div>
-              <div class="col-span-2 text-right font-bold text-slate-900" id="item2Total">US$ 195,00</div>
-            </div>
-
-            <!-- Item 3 (KIT) -->
-            <div class="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
-              <div class="col-span-6 pr-2">
-                <p class="font-bold text-slate-900"><span class="text-amber-600 font-mono">[KIT-CONECT-04]</span> Kit de Cableado UTP + Baluns + Fuentes</p>
-                <p class="text-[11px] text-slate-500 italic">Incluye: 100m Cable UTP exterior, 8× Baluns pasivos, 4× conectores y fuente 12V 5A.</p>
-              </div>
-              <div class="col-span-2 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">KIT</span></div>
-              <div class="col-span-2 text-center text-slate-600">1 × kit</div>
-              <div class="col-span-2 text-right font-bold text-slate-900" id="item3Total">US$ 70,00</div>
-            </div>
-
-            <!-- Item 4 (SERVICIO) -->
-            <div class="grid grid-cols-12 text-xs py-2 border-b border-slate-100 items-center">
-              <div class="col-span-6 pr-2">
-                <p class="font-bold text-slate-900"><span class="text-purple-600 font-mono">[SRV-INST-PUESTA]</span> Mano de Obra Instalación & Puesta en Marcha</p>
-                <p class="text-[11px] text-slate-500 italic">Fijación de domos, canalización, ponchado y configuración en app celular.</p>
-              </div>
-              <div class="col-span-2 text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">SERVICIO</span></div>
-              <div class="col-span-2 text-center text-slate-600">1 × servicio</div>
-              <div class="col-span-2 text-right font-bold text-slate-900" id="item4Total">US$ 180,00</div>
-            </div>
-          </div>
-
-          <!-- Total Calculation -->
-          <div class="mt-5 flex justify-end">
-            <div class="w-64 bg-slate-50 rounded-xl p-3 border border-slate-200 space-y-1.5 text-xs">
-              <div class="flex justify-between text-slate-600">
-                <span>Subtotal Neto:</span>
-                <span class="font-semibold" id="subtotalVal">US$ 785,00</span>
-              </div>
-              <div class="flex justify-between text-slate-500">
-                <span>IVA (21%):</span>
-                <span id="ivaVal">US$ 164,85</span>
-              </div>
-              <div class="pt-2 border-t border-slate-200 flex justify-between text-sm font-extrabold text-indigo-700">
-                <span>TOTAL (IVA incl.):</span>
-                <span id="totalVal">US$ 949,85</span>
-              </div>
-            </div>
-          </div>
+        <div class="p-8 rounded-3xl bg-indigo-950/40 border-2 border-indigo-500 shadow-2xl relative">
+          <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-gradient-to-r from-red-500 to-cyan-400 text-slate-950 text-[10px] font-black uppercase">MÁS POPULAR</span>
+          <h3 class="text-lg font-bold text-white">Security Pro & Bot IA</h3>
+          <p class="text-xs text-indigo-300 mb-4">Usuarios Ilimitados · Bot NISSI Meta Oficial · AFIP</p>
+          <a href="#contacto" class="block w-full py-3.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 text-center font-black text-xs text-white shadow-lg">Comenzar con Plan Pro</a>
+        </div>
+        <div class="p-8 rounded-3xl bg-slate-900 border border-slate-800">
+          <h3 class="text-lg font-bold text-white">Enterprise White-Label</h3>
+          <p class="text-xs text-slate-400 mb-4">Servidor dedicado + Marca blanca total</p>
+          <a href="#contacto" class="block w-full py-3 rounded-xl bg-slate-800 text-center font-bold text-xs text-white">Contactar Ventas</a>
         </div>
       </div>
     </div>
   </section>
 
   <!-- Contact Form -->
-  <section id="contacto" class="py-24 bg-gradient-to-b from-[#080c15] to-slate-950 border-t border-slate-800 text-center px-4">
+  <section id="contacto" class="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4">
     <div class="max-w-xl mx-auto">
-      <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-600 via-indigo-600 to-cyan-400 flex items-center justify-center mx-auto mb-5 shadow-xl">
-        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-      </div>
-      <h2 class="text-3xl sm:text-4xl font-black text-white mb-3">Eliminá el Caos Operativo Hoy</h2>
-      <p class="text-slate-400 text-sm mb-8">
-        Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para mostrarte el sistema en vivo funcionando con la realidad de tu empresa.
-      </p>
+      <h2 class="text-3xl sm:text-4xl font-black text-white mb-2">Terminá con el Caos Hoy</h2>
+      <p class="text-slate-400 text-xs mb-8">Coordiná una demostración en vivo guiada de 15 minutos con JustCreate.</p>
 
-      <form onsubmit="event.preventDefault(); alert('¡Gracias! Un especialista de JustCreate se comunicará contigo a la brevedad.');" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-left space-y-4 shadow-xl">
+      <form onsubmit="event.preventDefault(); alert('¡Gracias! Un especialista se comunicará a la brevedad.');" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-left space-y-3 shadow-2xl">
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre y Apellido</label>
-          <input type="text" required placeholder="Ej. Juan Pérez" class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500">
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre</label>
+          <input type="text" required placeholder="Juan Pérez" class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre de tu Empresa de Seguridad o IoT</label>
-          <input type="text" required placeholder="Ej. Abba Seguridad Electrónica" class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500">
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Empresa</label>
+          <input type="text" required placeholder="Abba Seguridad SRL" class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs">
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Email</label>
-            <input type="email" required placeholder="juan@empresa.com" class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500">
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">WhatsApp</label>
-            <input type="tel" required placeholder="+54 9 11 ..." class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500">
-          </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">WhatsApp</label>
+          <input type="tel" required placeholder="+54 9 11 ..." class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs">
         </div>
-        <button type="submit" class="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-red-600 via-indigo-600 to-indigo-700 hover:from-red-500 hover:to-indigo-600 text-white font-bold text-xs shadow-lg transition-all">
+        <button type="submit" class="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 text-white font-black text-xs shadow-lg">
           Agendar Demostración Personalizada
         </button>
-        <p class="text-[11px] text-slate-500 text-center mt-2">
-          Sin contratos forzados · Implementación guiada paso a paso por JustCreate
-        </p>
       </form>
     </div>
   </section>
 
-  <!-- Footer -->
-  <footer class="py-10 bg-slate-950 border-t border-slate-900 text-slate-500 text-xs text-center sm:text-left">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <p>JustCRM · Desarrollado con orgullo por <a href="https://justcreate.com.ar" target="_blank" class="text-slate-300 hover:text-white underline">JustCreate</a></p>
-      <p>© 2026 JustCRM. Todos los derechos reservados.</p>
-    </div>
+  <footer class="py-8 bg-slate-950 border-t border-slate-900 text-slate-500 text-xs text-center">
+    JustCRM · Desarrollado por <a href="https://justcreate.com.ar" class="text-slate-300 underline">JustCreate</a> © 2026.
   </footer>
 
   <script>
-    document.getElementById('currentDate').innerText = new Date().toLocaleDateString('es-AR');
-
-    let currentMode = 'GREMIO';
-    let currentCurrency = 'USD';
-    const rate = 1280;
-
-    const prices = {
-      GREMIO: { item1: 85 * 4, item2: 195, item3: 70, item4: 180 },
-      PUBLICO: { item1: 120 * 4, item2: 270, item3: 95, item4: 240 }
-    };
-
-    function updateSimulation() {
-      const p = prices[currentMode];
-      const subtotal = p.item1 + p.item2 + p.item3 + p.item4;
-      const iva = subtotal * 0.21;
-      const total = subtotal + iva;
-
-      function fmt(val) {
-        if (currentCurrency === 'USD') {
-          return 'US$ ' + val.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function showScreen(screenId) {
+      const screens = ['cotizador', 'whatsapp', 'pipeline', 'stock', 'facturacion', 'dashboard'];
+      screens.forEach(s => {
+        const el = document.getElementById('screen-' + s);
+        const tab = document.getElementById('tab-' + s);
+        if (s === screenId) {
+          el.classList.remove('hidden');
+          tab.className = 'px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white border border-indigo-500 shadow-xl transition-all scale-105';
+        } else {
+          el.classList.add('hidden');
+          tab.className = 'px-5 py-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-slate-400 border border-slate-800 hover:text-white transition-all';
         }
-        return '$ ' + (val * rate).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      }
-
-      document.getElementById('item1Total').innerText = fmt(p.item1);
-      document.getElementById('item2Total').innerText = fmt(p.item2);
-      document.getElementById('item3Total').innerText = fmt(p.item3);
-      document.getElementById('item4Total').innerText = fmt(p.item4);
-      document.getElementById('subtotalVal').innerText = fmt(subtotal);
-      document.getElementById('ivaVal').innerText = fmt(iva);
-      document.getElementById('totalVal').innerText = fmt(total);
-    }
-
-    function setMode(mode) {
-      currentMode = mode;
-      document.getElementById('btnGremio').className = mode === 'GREMIO' ? 'px-3 py-1 rounded-md text-xs font-bold bg-emerald-500 text-white shadow' : 'px-3 py-1 rounded-md text-xs font-bold text-slate-400 hover:text-white';
-      document.getElementById('btnPublico').className = mode === 'PUBLICO' ? 'px-3 py-1 rounded-md text-xs font-bold bg-indigo-600 text-white shadow' : 'px-3 py-1 rounded-md text-xs font-bold text-slate-400 hover:text-white';
-      updateSimulation();
-    }
-
-    function setCurr(curr) {
-      currentCurrency = curr;
-      document.getElementById('btnUSD').className = curr === 'USD' ? 'px-3 py-1 rounded-md text-xs font-bold bg-indigo-600 text-white shadow' : 'px-3 py-1 rounded-md text-xs font-bold text-slate-400 hover:text-white';
-      document.getElementById('btnARS').className = curr === 'ARS' ? 'px-3 py-1 rounded-md text-xs font-bold bg-indigo-600 text-white shadow' : 'px-3 py-1 rounded-md text-xs font-bold text-slate-400 hover:text-white';
-      updateSimulation();
+      });
     }
   </script>
 </body>
