@@ -39,12 +39,16 @@ export interface WhatsAppBotConfig {
   // ── Derivación ──────────────────────────────────────────────────────────
   salesContactEmail: string | null
   salesContactName: string | null
+  salesContactPhone: string | null
   supportContactEmail: string | null
   supportContactName: string | null
+  supportContactPhone: string | null
   billingContactEmail: string | null
   billingContactName: string | null
+  billingContactPhone: string | null
   rrhhContactEmail: string | null
   rrhhContactName: string | null
+  rrhhContactPhone: string | null
 
   // ── Instrucciones (bloque editable del prompt) ──────────────────────────
   // null = usar NISSI_DEFAULT_INSTRUCTIONS. El núcleo de seguridad NUNCA sale
@@ -111,12 +115,16 @@ export function parseWhatsAppBotConfig(raw: Record<string, unknown> | null): Wha
 
     salesContactEmail: strOrNull(raw.salesContactEmail),
     salesContactName: strOrNull(raw.salesContactName),
+    salesContactPhone: strOrNull(raw.salesContactPhone),
     supportContactEmail: strOrNull(raw.supportContactEmail),
     supportContactName: strOrNull(raw.supportContactName),
+    supportContactPhone: strOrNull(raw.supportContactPhone),
     billingContactEmail: strOrNull(raw.billingContactEmail),
     billingContactName: strOrNull(raw.billingContactName),
+    billingContactPhone: strOrNull(raw.billingContactPhone),
     rrhhContactEmail: strOrNull(raw.rrhhContactEmail),
     rrhhContactName: strOrNull(raw.rrhhContactName),
+    rrhhContactPhone: strOrNull(raw.rrhhContactPhone),
 
     instructions: strOrNull(raw.instructions),
 

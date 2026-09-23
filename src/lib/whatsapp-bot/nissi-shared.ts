@@ -33,7 +33,10 @@ export const REPLY_ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'SUPER_ADMIN', label: 'Solo Super Admin' },
 ]
 
-export const NISSI_INSTRUCTIONS_MAX = 12000
+// Subido de 12.000 a 20.000 (pedido de Abba, estaban al borde del límite
+// viejo) — Gemini soporta system instructions bastante más largas que esto,
+// el límite es una decisión de producto nuestra, no una restricción técnica.
+export const NISSI_INSTRUCTIONS_MAX = 20000
 
 // Texto que se precarga en el textarea de "Instrucciones". Es lo que hacía
 // NISSI antes de que fuera configurable — el admin lo puede editar entero.

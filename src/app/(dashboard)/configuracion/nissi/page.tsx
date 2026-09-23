@@ -32,8 +32,10 @@ const STRING_KEYS = [
   'phoneNumberId', 'apiToken', 'geminiApiKey', 'geminiModel',
   'businessName', 'businessHours', 'address', 'coverage', 'phones', 'website', 'paymentMethods',
   'tone', 'styleNote', 'instructions', 'replyRoleMin',
-  'salesContactName', 'salesContactEmail', 'supportContactName', 'supportContactEmail',
-  'billingContactName', 'billingContactEmail', 'rrhhContactName', 'rrhhContactEmail',
+  'salesContactName', 'salesContactEmail', 'salesContactPhone',
+  'supportContactName', 'supportContactEmail', 'supportContactPhone',
+  'billingContactName', 'billingContactEmail', 'billingContactPhone',
+  'rrhhContactName', 'rrhhContactEmail', 'rrhhContactPhone',
 ]
 
 function Section({ icon, title, desc, children }: { icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode }) {
@@ -188,26 +190,30 @@ export default function NissiConfigPage() {
           placeholder='Ej: "Siempre saludar por el nombre si lo tenemos. No usar emojis. Cerrar los mensajes ofreciendo ayuda."' rows={3} />
       </Section>
 
-      <Section icon={<GitBranch size={16} />} title="A quién deriva" desc="Cuando NISSI arma un lead o un ticket, avisa a estas personas por mail. Para Ventas, además la oportunidad le queda asignada a ese usuario del CRM.">
-        <div className="grid sm:grid-cols-2 gap-4">
+      <Section icon={<GitBranch size={16} />} title="A quién deriva" desc="Cuando NISSI arma un lead o un ticket, avisa a estas personas por mail y, si cargás el teléfono, también les manda un WhatsApp interno con los datos del cliente (nunca comparte ese teléfono con el cliente). Para Ventas, además la oportunidad le queda asignada a ese usuario del CRM.">
+        <div className="grid sm:grid-cols-3 gap-4">
           <Input label="Ventas — nombre" value={String(form.salesContactName ?? '')} onChange={(e) => set('salesContactName', e.target.value)} placeholder="Oscar Ale" />
           <Select label="Ventas — email (usuario del CRM)" value={String(form.salesContactEmail ?? '')} onChange={(e) => set('salesContactEmail', e.target.value)} options={userOptions} />
+          <Input label="Ventas — WhatsApp (opcional)" value={String(form.salesContactPhone ?? '')} onChange={(e) => set('salesContactPhone', e.target.value)} placeholder="+54 9 2302 64-2018" />
         </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="Soporte — nombre" value={String(form.supportContactName ?? '')} onChange={(e) => set('supportContactName', e.target.value)} placeholder="Equipo IT" />
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Input label="Soporte — nombre" value={String(form.supportContactName ?? '')} onChange={(e) => set('supportContactName', e.target.value)} placeholder="Equipo IT / CRA" />
           <Select label="Soporte — email (usuario del CRM)" value={String(form.supportContactEmail ?? '')} onChange={(e) => set('supportContactEmail', e.target.value)} options={userOptions} />
+          <Input label="Soporte — WhatsApp (opcional)" value={String(form.supportContactPhone ?? '')} onChange={(e) => set('supportContactPhone', e.target.value)} placeholder="+54 9 2302 66-4835" />
         </div>
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-3 gap-4">
           <Input label="Administración — nombre" value={String(form.billingContactName ?? '')} onChange={(e) => set('billingContactName', e.target.value)} placeholder="Norma" />
           <Select label="Administración — email (usuario del CRM)" value={String(form.billingContactEmail ?? '')} onChange={(e) => set('billingContactEmail', e.target.value)} options={userOptions} />
+          <Input label="Administración — WhatsApp (opcional)" value={String(form.billingContactPhone ?? '')} onChange={(e) => set('billingContactPhone', e.target.value)} placeholder="+54 9 2302 34-5907" />
         </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="RRHH — nombre" value={String(form.rrhhContactName ?? '')} onChange={(e) => set('rrhhContactName', e.target.value)} placeholder="Recursos Humanos" />
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Input label="RRHH — nombre" value={String(form.rrhhContactName ?? '')} onChange={(e) => set('rrhhContactName', e.target.value)} placeholder="Sergio" />
           <Select label="RRHH — email (usuario del CRM)" value={String(form.rrhhContactEmail ?? '')} onChange={(e) => set('rrhhContactEmail', e.target.value)} options={userOptions} />
+          <Input label="RRHH — WhatsApp (opcional)" value={String(form.rrhhContactPhone ?? '')} onChange={(e) => set('rrhhContactPhone', e.target.value)} placeholder="+54 9 2302 63-7803" />
         </div>
         <p className="text-xs text-[var(--color-text-subtle)] flex items-start gap-1.5">
           <Info size={13} className="mt-0.5 shrink-0" />
-          Los tickets de soporte se asignan solos al técnico fichado con menos carga. El email de Soporte de acá es sólo para el aviso.
+          Los tickets de soporte se asignan solos al técnico fichado con menos carga. El email/WhatsApp de Soporte de acá es sólo para el aviso. El WhatsApp interno se manda apenas se guarda esta pantalla — no hace falta ningún otro paso.
         </p>
       </Section>
 

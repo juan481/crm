@@ -7,6 +7,8 @@ import { resolveBotActorId } from '@/lib/whatsapp-bot/resolve-org'
 import { resolveContactoForConversation } from '@/lib/whatsapp-bot/contacto'
 import { buildConversationTranscript } from '@/lib/whatsapp-bot/transcript'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
+import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
+import { appBaseUrl } from '@/lib/app-url'
 import { buscarCatalogoParaBot } from '@/lib/catalogo-search'
 import type { WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
@@ -131,6 +133,36 @@ interface ToolResult {
 }
 
 const HUMAN_WAIT_MESSAGE = 'En minutos un asesor o responsable de área se comunicará con usted.'
+
+// Aviso interno por WhatsApp al responsable de área cuando NISSI deriva —
+// además del email de siempre (notifyHuman). REGLA DE PRIVACIDAD: esto le
+// llega SÓLO al responsable interno, nunca se le comparte al cliente el
+// teléfono/datos del responsable — ver system-prompt.ts (buildLockedCore),
+// que ya le prohíbe a NISSI compartir contactos internos. Falla suave: si no
+// hay teléfono configurado para el área, no se manda nada (no rompe el flujo
+// de derivación por esto).
+async function notifyAreaByWhatsApp(
+  ctx: ToolContext,
+  opts: { phone: string | null; responsableName: string | null; areaLabel: string; customerName: string | null; motivo: string },
+): Promise<void> {
+  if (!opts.phone) return
+  try {
+    const saludo = opts.responsableName ? `Hola ${opts.responsableName}, soy NISSI.` : 'Hola, soy NISSI.'
+    const link = `${appBaseUrl()}/conversaciones?c=${ctx.conversationId}`
+    const motivoCorto = opts.motivo.length > 220 ? `${opts.motivo.slice(0, 220)}…` : opts.motivo
+    const message =
+      `${saludo}\n` +
+      `Te derivo un contacto que requiere atención de tu área (${opts.areaLabel}):\n\n` +
+      `👤 Nombre: ${opts.customerName || 'Sin nombre'}\n` +
+      `📱 Teléfono: ${ctx.customerPhone}\n` +
+      `💬 Motivo: ${motivoCorto}\n\n` +
+      `👉 Contactar directamente acá: ${link}`
+    const sent = await sendWhatsAppBotMessage(ctx.botConfig.apiToken, ctx.botConfig.phoneNumberId, opts.phone, message)
+    if (!sent.ok) console.error('[NISSI] no se pudo mandar el aviso interno de WhatsApp', opts.areaLabel, sent.error)
+  } catch (err) {
+    console.error('[NISSI] error mandando el aviso interno de WhatsApp', opts.areaLabel, err)
+  }
+}
 
 // El origen (ej. "Facebook Ads - Kit de Cámaras") se guarda solo, sin que la
 // IA tenga que acordarse de mencionarlo — se setea en collectedData.origen
@@ -302,6 +334,11 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
       })
     }
 
+    notifyAreaByWhatsApp(ctx, {
+      phone: ctx.botConfig.supportContactPhone, responsableName: ctx.botConfig.supportContactName,
+      areaLabel: 'Soporte', customerName, motivo: description,
+    })
+
     return {
       resultText: technician
         ? `Ticket #${ticket.number} creado y asignado a ${technician.name}.`
@@ -315,8 +352,8 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     // lógica de creación — sólo cambia a quién avisan, la categoría y el
     // área que queda registrada en la conversación.
     const TICKET_KIND = {
-      create_billing_ticket: { category: 'FACTURACION', handedOffTo: 'ADMINISTRACION', label: 'Administración', defaultTitle: 'Consulta de facturación por WhatsApp', emailField: 'billingContactEmail' as const },
-      create_rrhh_ticket: { category: 'RRHH', handedOffTo: 'RRHH', label: 'RRHH', defaultTitle: 'Consulta de RRHH por WhatsApp', emailField: 'rrhhContactEmail' as const },
+      create_billing_ticket: { category: 'FACTURACION', handedOffTo: 'ADMINISTRACION', label: 'Administración', defaultTitle: 'Consulta de facturación por WhatsApp', emailField: 'billingContactEmail' as const, phoneField: 'billingContactPhone' as const, nameField: 'billingContactName' as const },
+      create_rrhh_ticket: { category: 'RRHH', handedOffTo: 'RRHH', label: 'RRHH', defaultTitle: 'Consulta de RRHH por WhatsApp', emailField: 'rrhhContactEmail' as const, phoneField: 'rrhhContactPhone' as const, nameField: 'rrhhContactName' as const },
     } as const
     const ticketKind = (name === 'create_billing_ticket' || name === 'create_rrhh_ticket') ? TICKET_KIND[name] : null
 
@@ -379,6 +416,11 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
           bodyText: `NISSI (el bot de WhatsApp) derivó esta consulta a ${ticketKind.label} — quedó como ticket #${ticket.number} en el CRM.\n\n${detail}`,
         })
       }
+      notifyAreaByWhatsApp(ctx, {
+        phone: ctx.botConfig[ticketKind.phoneField], responsableName: ctx.botConfig[ticketKind.nameField],
+        areaLabel: ticketKind.label, customerName, motivo: detail,
+      })
+
       return {
         resultText: `Consulta derivada a ${ticketKind.label} (ticket #${ticket.number}).${notifyTarget ? '' : ` Nota: no hay un email de ${ticketKind.label} configurado en el plugin, no se pudo avisar por mail.`}`,
         handedOff: { to: ticketKind.handedOffTo, ticketId: ticket.id },
@@ -411,6 +453,11 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
         bodyText: `NISSI (el bot de WhatsApp) juntó los datos de un cliente interesado y lo dejó cargado en el Pipeline como "${title}" — no cotizó nada, queda para que lo tomes vos.\n\n${detail}`,
       })
     }
+    notifyAreaByWhatsApp(ctx, {
+      phone: ctx.botConfig.salesContactPhone, responsableName: ctx.botConfig.salesContactName,
+      areaLabel: 'Ventas', customerName, motivo: detail,
+    })
+
     return {
       resultText: `Oportunidad cargada en el Pipeline.${notifyTarget ? '' : ' Nota: no hay un email de Ventas configurado en el plugin, no se pudo avisar por mail.'}`,
       handedOff: { to: 'VENTAS', dealId: deal.id },
