@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 const PUBLIC_PATHS = [
+  // Landing page pública de JustCRM
+  '/landing',
+  '/landing.html',
+  '/api/contacto',
   '/login',
   '/forgot-password',
   '/reset-password',
@@ -58,7 +62,9 @@ export async function middleware(req: NextRequest) {
     pathname === '/favicon.ico' ||
     pathname === '/manifest.json' ||
     pathname === '/sw.js' ||
-    pathname.startsWith('/icons/')
+    pathname.startsWith('/icons/') ||
+    pathname === '/logo.png' ||
+    /\.(png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf)$/.test(pathname)
   ) {
     return NextResponse.next()
   }
@@ -115,6 +121,10 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!user) {
+    // Si entran a la raíz sin sesión, redirigir a la landing page pública en vez del login
+    if (pathname === '/') {
+      return NextResponse.redirect(new URL('/landing', req.url))
+    }
     // Portal de clientes: su propia pantalla de ingreso (magic link), no el
     // /login del CRM interno.
     const dest = pathname.startsWith('/portal') ? '/portal/login' : '/login'
