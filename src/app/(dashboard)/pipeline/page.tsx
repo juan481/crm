@@ -74,8 +74,10 @@ const EMPTY_FORM: DealFormState = {
 
 function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => void }) {
   const qc = useQueryClient()
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const [saving, setSaving] = useState(false)
-  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string; tipo: string } | null>(null)
+  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string; tipo: string; ownerId: string } | null>(null)
   const [closing, setClosing] = useState<null | 'GANADO' | 'PERDIDO'>(null)
   // Al ganar: paso "¿qué sigue?" — el usuario elige qué crear para la instalación.
   const [followUp, setFollowUp] = useState<{ empresaId: string | null; nombre: string } | null>(null)
@@ -98,7 +100,25 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
     expectedCloseDate: data.expectedCloseDate ? data.expectedCloseDate.slice(0, 10) : '',
     notes: data.notes ?? '',
     tipo: data.tipo ?? '',
+    ownerId: data.owner?.id ?? '',
   } : null)
+
+  // Sólo para reasignar — la API ya exige ADMIN+ para tocar ownerId (mismo
+  // criterio que reasignar un Ticket), así que ni se pide la lista para un
+  // SELLER que sólo puede ver su propio deal.
+  const { data: users } = useQuery<{ id: string; name: string; role: string }[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/users')
+      const json = await res.json()
+      return json.data ?? []
+    },
+    enabled: isAdmin,
+    staleTime: 5 * 60 * 1000,
+  })
+  const ownerOptions = (users ?? [])
+    .filter(u => ['SELLER', 'TECHNICIAN', 'ADMIN', 'SUPER_ADMIN'].includes(u.role))
+    .map(u => ({ value: u.id, label: u.name }))
 
   const handleSave = async () => {
     if (!d) return
@@ -113,6 +133,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
           expectedCloseDate: d.expectedCloseDate || null,
           notes: d.notes.trim() || null,
           tipo: d.tipo || null,
+          ...(isAdmin && d.ownerId && d.ownerId !== data?.owner?.id ? { ownerId: d.ownerId } : {}),
         }),
       })
       const json = await res.json()
@@ -340,6 +361,15 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
               ]}
             />
           </div>
+
+          {isAdmin && (
+            <Select
+              label="Responsable / Asignado a"
+              value={d.ownerId}
+              onChange={e => setDraft({ ...d, ownerId: e.target.value })}
+              options={ownerOptions.length ? ownerOptions : [{ value: d.ownerId, label: data.owner?.name ?? 'Cargando…' }]}
+            />
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Notas</label>

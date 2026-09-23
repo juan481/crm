@@ -28,7 +28,7 @@ function formatMs(ms: number | null): string {
   return `${m}m ${rem}s`
 }
 
-const AREA_LABEL: Record<string, string> = { VENTAS: 'Ventas', SOPORTE: 'Soporte', ADMINISTRACION: 'Administración', OTRO: 'Otro' }
+const AREA_LABEL: Record<string, string> = { VENTAS: 'Ventas', SOPORTE: 'Soporte', ADMINISTRACION: 'Administración', RRHH: 'RRHH', OTRO: 'Otro' }
 const LEAD_LABEL: Record<string, string> = {
   compra: 'Compra de equipos', instalacion_nueva: 'Instalación', gremio: 'Gremio', asesor: 'Pidió un asesor', sin_clasificar: 'Sin clasificar',
 }

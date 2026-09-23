@@ -18,11 +18,14 @@ const STRING_FIELDS = [
   'businessName', 'businessHours', 'address', 'coverage', 'paymentMethods', 'phones', 'website',
   'styleNote',
   'salesContactEmail', 'salesContactName', 'supportContactEmail', 'supportContactName',
-  'billingContactEmail', 'billingContactName',
+  'billingContactEmail', 'billingContactName', 'rrhhContactEmail', 'rrhhContactName',
 ] as const
 
 const TONES = ['cercano', 'formal', 'neutro']
-const REPLY_ROLES = ['SELLER', 'ADMIN', 'SUPER_ADMIN']
+// TECHNICIAN/HR agregados junto con el piso bajado en
+// src/lib/whatsapp-bot/permissions.ts — sin esto acá, el panel nunca
+// dejaba guardar esos dos valores aunque el backend ya los aceptara.
+const REPLY_ROLES = ['SELLER', 'ADMIN', 'SUPER_ADMIN', 'HR', 'TECHNICIAN']
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : ''
@@ -125,7 +128,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Email simple check (no bloqueante duro, sólo avisa)
-    for (const k of ['salesContactEmail', 'supportContactEmail', 'billingContactEmail']) {
+    for (const k of ['salesContactEmail', 'supportContactEmail', 'billingContactEmail', 'rrhhContactEmail']) {
       const v = str(next[k])
       if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
         return NextResponse.json({ error: `El email de ${k.replace('ContactEmail', '')} no parece válido.` }, { status: 400 })

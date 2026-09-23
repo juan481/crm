@@ -124,11 +124,16 @@ export default function CotizacionDetailPage() {
       doc.roundedRect(mg, y, cw, 8.5, 3, 3, 'F')
       doc.rect(mg, y + 4, cw, 4.5, 'F') // quita el redondeo inferior de la cabecera
       
+      // Público (pedido de Abba): nunca precio por ítem — sólo lista qué
+      // incluye la cotización, el Total Final va únicamente en el pie
+      // (drawQuoteTotalsBox con simple:true). Gremio mantiene el desglose.
+      const showLinePrices = data.priceMode !== 'PUBLICO'
+
       doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
       doc.text('ÍTEM',     mg + 3,        y + 5.8)
       doc.text('TIPO',     mg + cw * 0.54, y + 5.8, { align: 'center' })
       doc.text('CANT.',    mg + cw * 0.72, y + 5.8, { align: 'center' })
-      doc.text('TOTAL',    mg + cw - 3,   y + 5.8, { align: 'right' })
+      if (showLinePrices) doc.text('TOTAL', mg + cw - 3, y + 5.8, { align: 'right' })
       y += 8.5
 
       data.items.forEach((item: any, idx: number) => {
@@ -191,8 +196,10 @@ export default function CotizacionDetailPage() {
         // Draw Quantity & Total
         doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
         doc.text(`${item.quantity} ${typeLabel}`, mg + cw * 0.72, y + 7.5, { align: 'center' })
-        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
-        doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
+        if (showLinePrices) {
+          doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
+          doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
+        }
 
         y += rowH
       })
@@ -206,7 +213,7 @@ export default function CotizacionDetailPage() {
       doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
       const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
       const boxW = 78
-      y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: tt, currency: data.currency, pr, pg, pb })
+      y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: tt, currency: data.currency, pr, pg, pb, simple: data.priceMode === 'PUBLICO' })
 
       // Notes
       if (data.notes) {

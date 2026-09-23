@@ -50,6 +50,7 @@ const CATEGORY_OPTIONS = [
   { value: 'BUG',        label: 'Bug / Falla' },
   { value: 'FACTURACION',label: 'Facturación' },
   { value: 'CONSULTA',   label: 'Consulta' },
+  { value: 'RRHH',       label: 'Recursos Humanos' },
 ]
 
 const PRIORITY_OPTIONS = [

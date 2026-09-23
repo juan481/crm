@@ -9,9 +9,15 @@ import type { QuoteTotals } from '@/lib/quote-totals'
  */
 export function drawQuoteTotalsBox(
   doc: jsPDF,
-  opts: { x: number; y: number; w: number; totals: QuoteTotals; currency: string; pr: number; pg: number; pb: number },
+  opts: {
+    x: number; y: number; w: number; totals: QuoteTotals; currency: string; pr: number; pg: number; pb: number
+    // true en cotizaciones "Público" (pedido de Abba): oculta subtotal,
+    // descuento e IVA discriminado — el documento sólo muestra el Precio
+    // Total Final, nunca el desglose. "Gremio" sigue mostrando todo.
+    simple?: boolean
+  },
 ): number {
-  const { x, y, w, totals: tt, currency, pr, pg, pb } = opts
+  const { x, y, w, totals: tt, currency, pr, pg, pb, simple } = opts
   // Siempre con centavos — el cliente pidió que no se redondee nada a entero.
   const money = (n: number) => {
     try {
@@ -22,9 +28,9 @@ export function drawQuoteTotalsBox(
   }
 
   type Row = { label: string; value: string; kind: 'normal' | 'discount' | 'muted' }
-  const rows: Row[] = [{ label: 'Subtotal (neto)', value: money(tt.neto), kind: 'normal' }]
-  if (tt.descuentoMonto > 0) rows.push({ label: `Descuento (${tt.descuentoPct}%)`, value: `-${money(tt.descuentoMonto)}`, kind: 'discount' })
-  if (tt.discriminado && tt.iva.length > 0) {
+  const rows: Row[] = simple ? [] : [{ label: 'Subtotal (neto)', value: money(tt.neto), kind: 'normal' }]
+  if (!simple && tt.descuentoMonto > 0) rows.push({ label: `Descuento (${tt.descuentoPct}%)`, value: `-${money(tt.descuentoMonto)}`, kind: 'discount' })
+  if (!simple && tt.discriminado && tt.iva.length > 0) {
     if (tt.descuentoMonto > 0) rows.push({ label: 'Neto gravado', value: money(tt.netoGravado), kind: 'muted' })
     for (const b of tt.iva) rows.push({ label: `IVA ${String(b.pct).replace('.', ',')}%`, value: money(b.monto), kind: 'muted' })
   }

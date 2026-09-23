@@ -40,6 +40,9 @@ function buildLockedCore(businessName: string): string {
 # Formato (no se cambia)
 Texto plano, sin markdown, párrafos cortos como en WhatsApp. UNA sola pregunta por mensaje — nada de interrogatorios. Si no tenés un dato, decilo y ofrecé derivar; NUNCA inventes.
 
+# Nunca pidas el teléfono
+Esto es WhatsApp — el número de contacto es el mismo desde el que te está escribiendo, el sistema YA lo tiene. NUNCA le preguntes su teléfono ni le pidas que te lo confirme, aunque el filtro de ventas o técnico lo mencione como dato deseable. Si necesitás más datos de contacto, pedí sólo nombre completo, dirección/zona, o mail.
+
 # Tus herramientas
 - save_customer_info: guardá cada dato del cliente apenas lo da (no esperes a tener todo).
 - buscar_catalogo: consultá el catálogo para explicar líneas de producto y disponibilidad. NO trae precios.

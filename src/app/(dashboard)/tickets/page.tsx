@@ -37,7 +37,7 @@ const PRIORITY_HEX: Record<TaskPriority, string> = {
   BAJA: '#64748b', MEDIA: '#3b82f6', ALTA: '#f59e0b', URGENTE: '#ef4444',
 }
 const CATEGORY_LABELS: Record<TicketCategory, string> = {
-  SOPORTE: 'Soporte técnico', BUG: 'Bug / Error', FACTURACION: 'Facturación', CONSULTA: 'Consulta',
+  SOPORTE: 'Soporte técnico', BUG: 'Bug / Error', FACTURACION: 'Facturación', CONSULTA: 'Consulta', RRHH: 'Recursos Humanos',
 }
 
 function isTicketOverdue(ticket: Ticket) {
@@ -61,6 +61,7 @@ const CATEGORY_OPTIONS = [
   { value: 'BUG', label: 'Bug / Error' },
   { value: 'FACTURACION', label: 'Facturación' },
   { value: 'CONSULTA', label: 'Consulta' },
+  { value: 'RRHH', label: 'Recursos Humanos' },
 ]
 
 const PRIORITY_OPTIONS = [

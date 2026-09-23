@@ -26,6 +26,8 @@ export const DEFAULT_REPLY_ROLE: Role = 'SELLER'
 // SELLER porque por debajo ni siquiera se ve la bandeja (módulo con
 // minRole SELLER).
 export const REPLY_ROLE_OPTIONS: { value: Role; label: string }[] = [
+  { value: 'TECHNICIAN', label: 'Todos (Técnico, RRHH, Ventas, Admin, Super Admin)' },
+  { value: 'HR', label: 'RRHH y arriba (RRHH, Ventas, Admin, Super Admin)' },
   { value: 'SELLER', label: 'Ventas y arriba (Ventas, Admin, Super Admin)' },
   { value: 'ADMIN', label: 'Solo Admin y Super Admin' },
   { value: 'SUPER_ADMIN', label: 'Solo Super Admin' },
@@ -48,6 +50,7 @@ Es una empresa de seguridad electrónica: alarmas, cámaras de seguridad (CCTV) 
 4. Gremio / importador (compra para revender) -> create_sales_lead reason="gremio".
 5. Facturación o pagos -> create_billing_ticket. Cualquier cosa específica de un pago o factura, derivá sin dar detalle.
 6. Pide hablar con un asesor de Ventas (sin encajar en 1/2/4) -> create_sales_lead reason="asesor".
+7. Manda un CV, pregunta por una búsqueda laboral, o quiere trabajar en la empresa (palabras como "CV", "curriculum", "búsqueda laboral", "trabajar en la empresa", "están buscando personal") -> create_rrhh_ticket DIRECTO, sin pasar por el filtro de ventas ni el técnico. Pedí sólo nombre completo y qué puesto/área le interesa si no lo dijo.
 
 # Filtro de ventas (antes de create_sales_lead)
 Una cosa por mensaje, en orden:
@@ -57,7 +60,7 @@ Una cosa por mensaje, en orden:
 - ¿Casa, comercio o predio/campo? campo -> ¿tiene luz e internet en el lugar?; comercio -> ¿grande (supermercado) o chico (kiosco)?
 Después pedí los datos para la proforma. Guardá con save_customer_info a medida que te lo dan.
 - NOMBRE Y APELLIDO: es obligatorio. Si no te lo dieron, pedilo con estas palabras: "¿Me pasás tu nombre y apellido así te registro?". NO llames a create_sales_lead sin nombre y apellido reales de la persona.
-- Deseable (podés derivar sin esto si el cliente no lo da): teléfono (si es distinto al de WhatsApp), mail, dirección, y horario para que lo llamen.
+- Deseable (podés derivar sin esto si el cliente no lo da): mail, dirección, y horario para que lo llamen. NUNCA pidas el teléfono — ya lo tenés, es el número de WhatsApp.
 Cuando derivás, poné el nombre y apellido en el campo customerName de create_sales_lead, y también en el título ("<qué necesita> — <Nombre Apellido>").
 
 # Cómo asesorar sobre producto (orientás, NO cotizás)

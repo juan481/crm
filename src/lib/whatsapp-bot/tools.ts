@@ -99,6 +99,20 @@ export const WHATSAPP_BOT_TOOLS: FunctionDeclaration[] = [
       required: ['title', 'description'],
     },
   },
+  {
+    name: 'create_rrhh_ticket',
+    description: 'Deriva a Recursos Humanos — usala cuando alguien manda su CV, pregunta por una búsqueda laboral abierta, o quiere trabajar en la empresa. Nunca lo mandes a Soporte ni a Administración.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING, description: 'Resumen corto, ej: "Envío de CV — Técnico instalador"' },
+        description: { type: Type.STRING, description: 'Detalle: qué puesto busca o menciona, y cualquier dato que haya dado (experiencia, zona, etc.).' },
+        customerName: { type: Type.STRING },
+        customerEmail: { type: Type.STRING },
+      },
+      required: ['title', 'description'],
+    },
+  },
 ]
 
 export interface ToolContext {
@@ -296,23 +310,31 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     }
   }
 
-  if (name === 'create_sales_lead' || name === 'create_billing_ticket') {
-    const isBilling = name === 'create_billing_ticket'
+  if (name === 'create_sales_lead' || name === 'create_billing_ticket' || name === 'create_rrhh_ticket') {
+    // Los tres tipos de derivación a TICKET (no Deal) comparten toda la
+    // lógica de creación — sólo cambia a quién avisan, la categoría y el
+    // área que queda registrada en la conversación.
+    const TICKET_KIND = {
+      create_billing_ticket: { category: 'FACTURACION', handedOffTo: 'ADMINISTRACION', label: 'Administración', defaultTitle: 'Consulta de facturación por WhatsApp', emailField: 'billingContactEmail' as const },
+      create_rrhh_ticket: { category: 'RRHH', handedOffTo: 'RRHH', label: 'RRHH', defaultTitle: 'Consulta de RRHH por WhatsApp', emailField: 'rrhhContactEmail' as const },
+    } as const
+    const ticketKind = (name === 'create_billing_ticket' || name === 'create_rrhh_ticket') ? TICKET_KIND[name] : null
+
     const rawCustomerName = typeof input.customerName === 'string' ? input.customerName.trim() : ''
     // Nunca dejar entrar "Sin nombre" / placeholders al nombre ni al título.
     const customerName = (!rawCustomerName || /^(sin nombre|cliente|desconocido|n\/?a)/i.test(rawCustomerName)) ? null : rawCustomerName
     const rawTitle = String(input.title ?? '').trim().replace(/\s*[—-]?\s*sin nombre\s*(\([^)]*\))?/i, '').trim()
-    let title = rawTitle || (isBilling ? 'Consulta de facturación por WhatsApp' : 'Lead de ventas por WhatsApp')
+    let title = rawTitle || ticketKind?.defaultTitle || 'Lead de ventas por WhatsApp'
     // Si NISSI no metió el nombre en el título y lo tenemos, agregarlo — así se
     // busca por nombre en el Pipeline (pedido de Abba).
     if (customerName && !title.toLowerCase().includes(customerName.toLowerCase())) {
       title = `${title} — ${customerName}`
     }
-    const detail = (String((isBilling ? input.description : input.summary) ?? '').trim() || 'Sin detalle — revisar la conversación completa en el CRM.')
+    const detail = (String((ticketKind ? input.description : input.summary) ?? '').trim() || 'Sin detalle — revisar la conversación completa en el CRM.')
     const customerEmail = typeof input.customerEmail === 'string' ? input.customerEmail.trim() : null
     const fullDetail = await prependOrigin(db, ctx.conversationId, `${detail}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`)
 
-    const contactEmail = isBilling ? ctx.botConfig.billingContactEmail : ctx.botConfig.salesContactEmail
+    const contactEmail = ticketKind ? ctx.botConfig[ticketKind.emailField] : ctx.botConfig.salesContactEmail
     const contactUser = await findUserByEmail(ctx.orgId, contactEmail)
 
     // Alta / match del contacto (persona) con lo que NISSI fue juntando —
@@ -321,9 +343,9 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     // contactoId.
     const contactoId = await resolveContactoForConversation(ctx.orgId, { conversationId: ctx.conversationId, customerPhone: ctx.customerPhone })
 
-    if (isBilling) {
+    if (ticketKind) {
       const createdById = contactUser?.id ?? (await resolveBotActorId(ctx.orgId))
-      if (!createdById) return { resultText: 'No se pudo derivar a Administración: no hay ningún administrador cargado en esta organización todavía.' }
+      if (!createdById) return { resultText: `No se pudo derivar a ${ticketKind.label}: no hay ningún administrador cargado en esta organización todavía.` }
 
       let ticket: any = null
       for (let attempt = 0; attempt < 5 && !ticket; attempt++) {
@@ -332,7 +354,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
           ticket = await db.ticket.create({
             data: {
               number: (last?.number ?? 0) + 1,
-              title, description: fullDetail, priority: 'MEDIA', category: 'FACTURACION',
+              title, description: fullDetail, priority: 'MEDIA', category: ticketKind.category,
               recipientName: customerName, recipientEmail: customerEmail,
               contactoId: contactoId ?? null,
               assignedToId: contactUser?.id ?? null,
@@ -344,22 +366,22 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
           if (err.code !== 'P2002' || attempt === 4) throw err
         }
       }
-      await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: 'ADMINISTRACION', ticketId: ticket.id } })
+      await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: ticketKind.handedOffTo, ticketId: ticket.id } })
       await attachTranscript(db, { ticketId: ticket.id }, ctx.conversationId, ctx.orgId, createdById)
-      fireWebhook(ctx.orgId, 'ticket.created', { id: ticket.id, number: ticket.number, title, category: 'FACTURACION', source: 'whatsapp-ai-bot' })
+      fireWebhook(ctx.orgId, 'ticket.created', { id: ticket.id, number: ticket.number, title, category: ticketKind.category, source: 'whatsapp-ai-bot' })
 
       const notifyTarget = contactUser ?? (contactEmail ? { name: null, email: contactEmail } : null)
       if (notifyTarget) {
         notifyHuman({
           orgId: ctx.orgId, toEmail: notifyTarget.email, toName: notifyTarget.name,
-          subject: `Consulta de facturación por WhatsApp: ${title}`,
-          heading: 'Nueva consulta de facturación',
-          bodyText: `NISSI (el bot de WhatsApp) derivó esta consulta a Administración — quedó como ticket #${ticket.number} en el CRM.\n\n${detail}`,
+          subject: `Consulta de ${ticketKind.label.toLowerCase()} por WhatsApp: ${title}`,
+          heading: `Nueva consulta de ${ticketKind.label}`,
+          bodyText: `NISSI (el bot de WhatsApp) derivó esta consulta a ${ticketKind.label} — quedó como ticket #${ticket.number} en el CRM.\n\n${detail}`,
         })
       }
       return {
-        resultText: `Consulta derivada a Administración (ticket #${ticket.number}).${notifyTarget ? '' : ' Nota: no hay un email de Administración configurado en el plugin, no se pudo avisar por mail.'}`,
-        handedOff: { to: 'ADMINISTRACION', ticketId: ticket.id },
+        resultText: `Consulta derivada a ${ticketKind.label} (ticket #${ticket.number}).${notifyTarget ? '' : ` Nota: no hay un email de ${ticketKind.label} configurado en el plugin, no se pudo avisar por mail.`}`,
+        handedOff: { to: ticketKind.handedOffTo, ticketId: ticket.id },
       }
     }
 

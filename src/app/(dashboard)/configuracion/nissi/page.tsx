@@ -33,7 +33,7 @@ const STRING_KEYS = [
   'businessName', 'businessHours', 'address', 'coverage', 'phones', 'website', 'paymentMethods',
   'tone', 'styleNote', 'instructions', 'replyRoleMin',
   'salesContactName', 'salesContactEmail', 'supportContactName', 'supportContactEmail',
-  'billingContactName', 'billingContactEmail',
+  'billingContactName', 'billingContactEmail', 'rrhhContactName', 'rrhhContactEmail',
 ]
 
 function Section({ icon, title, desc, children }: { icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode }) {
@@ -200,6 +200,10 @@ export default function NissiConfigPage() {
         <div className="grid sm:grid-cols-2 gap-4">
           <Input label="Administración — nombre" value={String(form.billingContactName ?? '')} onChange={(e) => set('billingContactName', e.target.value)} placeholder="Norma" />
           <Select label="Administración — email (usuario del CRM)" value={String(form.billingContactEmail ?? '')} onChange={(e) => set('billingContactEmail', e.target.value)} options={userOptions} />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="RRHH — nombre" value={String(form.rrhhContactName ?? '')} onChange={(e) => set('rrhhContactName', e.target.value)} placeholder="Recursos Humanos" />
+          <Select label="RRHH — email (usuario del CRM)" value={String(form.rrhhContactEmail ?? '')} onChange={(e) => set('rrhhContactEmail', e.target.value)} options={userOptions} />
         </div>
         <p className="text-xs text-[var(--color-text-subtle)] flex items-start gap-1.5">
           <Info size={13} className="mt-0.5 shrink-0" />

@@ -53,6 +53,7 @@ const CATEGORY_OPTIONS = [
   { value: 'BUG',         label: 'Bug / Error' },
   { value: 'FACTURACION', label: 'Facturación' },
   { value: 'CONSULTA',    label: 'Consulta' },
+  { value: 'RRHH',        label: 'Recursos Humanos' },
 ]
 
 interface TicketDetail extends Ticket {

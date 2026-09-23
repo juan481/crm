@@ -28,14 +28,19 @@ function buildQuoteHtml(opts: {
   orgName: string; primaryColor: string; recipientName: string
   items: QuoteItem[]; totals: QuoteTotals; currency: string
   notes?: string; quoteRef: string; agentName: string
+  // Público (pedido de Abba): nunca precio por ítem — este es el CUERPO del
+  // mail que recibe el cliente, más importante de blindar que el PDF
+  // adjunto. Oculta la columna "Precio", el subtotal y el IVA discriminado;
+  // deja sólo el Total Final. Gremio mantiene el desglose de siempre.
+  simple?: boolean
 }): string {
-  const { orgName, primaryColor, recipientName, items, totals: tt, currency, notes, quoteRef, agentName } = opts
+  const { orgName, primaryColor, recipientName, items, totals: tt, currency, notes, quoteRef, agentName, simple } = opts
   const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
   const money = (n: number) => formatMoney(n, currency)
   const footRow = (label: string, value: string, color: string, bold = false) =>
     `<tr><td colspan="2" style="padding:4px 0;font-size:13px;color:${color}${bold ? ';font-weight:700' : ''}">${label}</td>
      <td style="padding:4px 0;font-size:13px;color:${color};text-align:right${bold ? ';font-weight:700' : ''}">${value}</td></tr>`
-  const foot =
+  const foot = simple ? '' :
     footRow('Subtotal (neto)', money(tt.neto), '#64748b')
     + (tt.descuentoMonto > 0 ? footRow(`Descuento (${tt.descuentoPct}%)`, `− ${money(tt.descuentoMonto)}`, '#10b981') : '')
     + (tt.discriminado && tt.iva.length && tt.descuentoMonto > 0 ? footRow('Neto gravado', money(tt.netoGravado), '#94a3b8') : '')
@@ -49,9 +54,9 @@ function buildQuoteHtml(opts: {
       <td style="padding:12px 0;color:#64748b;font-size:13px;border-bottom:1px solid #f1f5f9;text-align:center">
         ${BILLING_LABELS[item.billingCycle ?? ''] ?? (item.unit ?? 'mes')}
       </td>
-      <td style="padding:12px 0;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #f1f5f9;text-align:right">
+      ${simple ? '' : `<td style="padding:12px 0;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #f1f5f9;text-align:right">
         ${formatMoney(item.price * item.quantity, item.currency)}
-      </td>
+      </td>`}
     </tr>`).join('')
 
   const notesSection = notes
@@ -77,7 +82,7 @@ function buildQuoteHtml(opts: {
           <tr>
             <th style="text-align:left;font-size:11px;color:#94a3b8;text-transform:uppercase;padding:0 0 10px;border-bottom:2px solid #e2e8f0">Servicio</th>
             <th style="text-align:center;font-size:11px;color:#94a3b8;text-transform:uppercase;padding:0 0 10px;border-bottom:2px solid #e2e8f0">Período</th>
-            <th style="text-align:right;font-size:11px;color:#94a3b8;text-transform:uppercase;padding:0 0 10px;border-bottom:2px solid #e2e8f0">Precio</th>
+            ${simple ? '' : '<th style="text-align:right;font-size:11px;color:#94a3b8;text-transform:uppercase;padding:0 0 10px;border-bottom:2px solid #e2e8f0">Precio</th>'}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -160,6 +165,7 @@ export async function POST(req: NextRequest) {
       notes:         cotizacion.notes ?? undefined,
       quoteRef:      cotizacion.ref,
       agentName,
+      simple:        cotizacion.priceMode === 'PUBLICO',
     })
 
     const smtpConfig = resolveOrgSmtpConfig(org)

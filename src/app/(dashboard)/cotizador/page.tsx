@@ -145,6 +145,12 @@ export default function CotizadorPage() {
   const dealId = searchParams.get('dealId') ?? null
   const [clientMode,              setClientMode]              = useState<'existing' | 'manual'>('existing')
   const [selectedEmpresaId,       setSelectedEmpresaId]       = useState(() => searchParams.get('empresaId') ?? '')
+  // Búsqueda directa de contacto (persona), independiente de elegir una
+  // empresa primero — la mayoría de los leads de WhatsApp son consumidor
+  // final sin empresa cargada, y antes no había forma de encontrarlos acá
+  // (el flujo exigía Empresa → sus contactos). Ver ContactoSearchResult más
+  // abajo y el bloque "Buscar contacto" en el paso 2.
+  const [contactSearch,           setContactSearch]           = useState('')
   const [selectedContactEmail,    setSelectedContactEmail]    = useState('')
   const [selectedContactName,     setSelectedContactName]     = useState('')
   const [manualContactInput,      setManualContactInput]      = useState(false)
@@ -248,6 +254,19 @@ export default function CotizadorPage() {
     enabled:   !!selectedEmpresaId && clientMode === 'existing',
     staleTime: 2 * 60_000,
   })
+  const { data: contactSearchData } = useQuery({
+    queryKey: ['contactos-buscar-cot', contactSearch],
+    queryFn:  async () => {
+      const r = await fetch(`/api/contactos?search=${encodeURIComponent(contactSearch)}&limit=10`)
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as Array<{
+        id: string; firstName: string; lastName: string; email: string | null; phone: string | null
+        empresa: { id: string; name: string } | null
+      }>
+    },
+    enabled:   clientMode === 'existing' && contactSearch.trim().length >= 2,
+    staleTime: 30_000,
+  })
   const { data: cotizadorConfig } = useQuery({
     queryKey: ['cotizador-config'],
     queryFn:  async () => {
@@ -286,6 +305,7 @@ export default function CotizadorPage() {
   const productBrands: ProductBrand[] = productBrandsData?.data ?? []
   const empresas = Array.isArray(empresasData) ? empresasData : []
   const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
+  const contactSearchResults = (Array.isArray(contactSearchData) ? contactSearchData : []).filter(c => c.email)
 
   const cartItems  = Object.values(cart)
   const ivaRateFor = (ci: CartItem) => ci.type === 'PRODUCT' ? sanitizeIvaPct((ci.item as Product).ivaPct) : DEFAULT_IVA_PCT
@@ -417,11 +437,16 @@ export default function CotizadorPage() {
     doc.roundedRect(mg, y, cw, 8.5, 3, 3, 'F')
     doc.rect(mg, y + 4, cw, 4.5, 'F') // quita el redondeo inferior de la cabecera
     
+    // Público (pedido de Abba): nunca precio por ítem — sólo lista qué
+    // incluye la cotización, el Total Final va únicamente en el pie
+    // (drawQuoteTotalsBox con simple:true). Gremio mantiene el desglose.
+    const showLinePrices = quote.priceMode !== 'PUBLICO'
+
     doc.setTextColor(255, 255, 255); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
     doc.text('ÍTEM',     mg + 3,        y + 5.8)
     doc.text('TIPO',     mg + cw * 0.54, y + 5.8, { align: 'center' })
     doc.text('CANT.',    mg + cw * 0.72, y + 5.8, { align: 'center' })
-    doc.text('TOTAL',    mg + cw - 3,   y + 5.8, { align: 'right' })
+    if (showLinePrices) doc.text('TOTAL', mg + cw - 3, y + 5.8, { align: 'right' })
     y += 8.5
 
     quote.cartItems.forEach((ci, idx) => {
@@ -484,8 +509,10 @@ export default function CotizadorPage() {
       // Draw Quantity & Total
       doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
       doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.72, y + 7.5, { align: 'center' })
-      doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
-      doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
+      if (showLinePrices) {
+        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
+        doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
+      }
 
       y += rowH
     })
@@ -498,7 +525,7 @@ export default function CotizadorPage() {
     y += 4
     doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
     const boxW = 78
-    y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: quote.totals, currency: quote.currency, pr, pg, pb })
+    y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: quote.totals, currency: quote.currency, pr, pg, pb, simple: quote.priceMode === 'PUBLICO' })
 
     // Notes
     if (quote.notes) {
@@ -1365,6 +1392,44 @@ export default function CotizadorPage() {
 
           {clientMode === 'existing' ? (
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}><User size={11} className="inline mr-1" />Buscar contacto (empresa o particular)</label>
+                <Input
+                  placeholder="Nombre del contacto…"
+                  value={contactSearch}
+                  onChange={e => setContactSearch(e.target.value)}
+                  leftIcon={<User size={14} />}
+                />
+                {contactSearch.trim().length >= 2 && (
+                  <div className="mt-1.5 rounded-xl overflow-hidden border max-h-52 overflow-y-auto" style={{ borderColor: 'var(--color-border)' }}>
+                    {contactSearchResults.length === 0 ? (
+                      <p className="text-xs px-3 py-2" style={{ color: 'var(--color-text-subtle)' }}>
+                        Sin resultados con mail cargado — cargalo en Contactos o usá &quot;Email directo&quot;.
+                      </p>
+                    ) : (
+                      contactSearchResults.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setSelectedContactEmail(c.email ?? '')
+                            setSelectedContactName(`${c.firstName} ${c.lastName}`.trim())
+                            setSelectedEmpresaId(c.empresa?.id ?? '')
+                            setManualContactInput(false)
+                            setContactSearch('')
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-[var(--color-surface-raised)] transition-colors border-b last:border-0"
+                          style={{ borderColor: 'var(--color-border)' }}
+                        >
+                          <span style={{ color: 'var(--color-text)' }}>{c.firstName} {c.lastName}</span>
+                          <span className="block text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>
+                            {c.empresa?.name ?? 'Particular'} — {c.email}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}><Building2 size={11} className="inline mr-1" />Empresa</label>
                 <Select
