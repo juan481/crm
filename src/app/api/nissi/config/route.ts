@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { revalidateTag } from 'next/cache'
 import {
   DEFAULT_GEMINI_MODEL, DEFAULT_REPLY_ROLE, NISSI_DEFAULT_INSTRUCTIONS, NISSI_INSTRUCTIONS_MAX,
+  DEFAULT_FOLLOWUP_MINUTES, DEFAULT_FOLLOWUP_MESSAGE,
 } from '@/lib/whatsapp-bot/nissi-shared'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,7 @@ const STRING_FIELDS = [
   'supportContactEmail', 'supportContactName', 'supportContactPhone',
   'billingContactEmail', 'billingContactName', 'billingContactPhone',
   'rrhhContactEmail', 'rrhhContactName', 'rrhhContactPhone',
+  'followUpMessage',
 ] as const
 
 const TONES = ['cercano', 'formal', 'neutro']
@@ -66,6 +68,10 @@ export async function GET() {
     publicCfg.instructions = str(cfg.instructions) || null
     publicCfg.replyRoleMin = REPLY_ROLES.includes(cfg.replyRoleMin as string) ? cfg.replyRoleMin : null
     publicCfg.abuseGuardEnabled = cfg.abuseGuardEnabled !== false
+    publicCfg.followUpEnabled = cfg.followUpEnabled !== false
+    const followUpMinutesNum = Number(cfg.followUpMinutes)
+    publicCfg.followUpMinutes = Number.isFinite(followUpMinutesNum) && followUpMinutesNum >= 1 ? Math.round(followUpMinutesNum) : null
+    publicCfg.followUpMessage = str(cfg.followUpMessage) || null
 
     return NextResponse.json({
       data: {
@@ -79,6 +85,8 @@ export async function GET() {
           replyRoleMin: DEFAULT_REPLY_ROLE,
           instructions: NISSI_DEFAULT_INSTRUCTIONS,
           instructionsMax: NISSI_INSTRUCTIONS_MAX,
+          followUpMinutes: DEFAULT_FOLLOWUP_MINUTES,
+          followUpMessage: DEFAULT_FOLLOWUP_MESSAGE,
         },
       },
     })
@@ -120,6 +128,14 @@ export async function POST(req: NextRequest) {
     if ('tone' in patch) next.tone = TONES.includes(patch.tone as string) ? patch.tone : null
     if ('replyRoleMin' in patch) next.replyRoleMin = REPLY_ROLES.includes(patch.replyRoleMin as string) ? patch.replyRoleMin : null
     if ('abuseGuardEnabled' in patch) next.abuseGuardEnabled = patch.abuseGuardEnabled !== false
+    if ('followUpEnabled' in patch) next.followUpEnabled = patch.followUpEnabled !== false
+    if ('followUpMinutes' in patch) {
+      const n = Number(patch.followUpMinutes)
+      if (!Number.isFinite(n) || n < 1 || n > 1440) {
+        return NextResponse.json({ error: 'Los minutos de seguimiento tienen que ser un número entre 1 y 1440.' }, { status: 400 })
+      }
+      next.followUpMinutes = Math.round(n)
+    }
     if ('instructions' in patch) {
       const ins = str(patch.instructions)
       if (ins.length > NISSI_INSTRUCTIONS_MAX) {

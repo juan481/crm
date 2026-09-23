@@ -909,6 +909,13 @@ model WhatsAppConversation {
   contextResetAt  DateTime?
   lastMessageAt   DateTime                   @default(now())
   createdAt       DateTime                   @default(now())
+  // Cuándo se mandó el aviso automático de "¿seguís ahí?" (silencio del
+  // cliente tras el último mensaje NUESTRO — ver cron whatsapp-followup).
+  // null = todavía no se mandó para el silencio actual. Se resetea a null
+  // cada vez que se manda un mensaje saliente nuevo (persistAndSendOutbound
+  // en engine.ts, reply/route.ts) para que el aviso pueda volver a
+  // dispararse en la próxima espera.
+  followUpSentAt  DateTime?
   messages        WhatsAppMessage[]
 
   @@unique([organizationId, customerPhone])

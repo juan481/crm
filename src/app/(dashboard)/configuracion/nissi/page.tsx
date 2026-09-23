@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   Bot, Plug, Building2, MessageSquareText, GitBranch, ScrollText, ShieldCheck,
-  ArrowLeft, RotateCcw, CheckCircle2, AlertTriangle, Info,
+  ArrowLeft, RotateCcw, CheckCircle2, AlertTriangle, Info, Clock,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input, Textarea } from '@/components/ui/input'
@@ -23,7 +23,7 @@ interface Loaded {
   credentials: { apiToken: boolean; geminiApiKey: boolean }
   orgName: string
   users: NissiUser[]
-  defaults: { geminiModel: string; replyRoleMin: string; instructions: string; instructionsMax: number }
+  defaults: { geminiModel: string; replyRoleMin: string; instructions: string; instructionsMax: number; followUpMinutes: number; followUpMessage: string }
 }
 
 type FormState = Record<string, string | boolean>
@@ -36,6 +36,7 @@ const STRING_KEYS = [
   'supportContactName', 'supportContactEmail', 'supportContactPhone',
   'billingContactName', 'billingContactEmail', 'billingContactPhone',
   'rrhhContactName', 'rrhhContactEmail', 'rrhhContactPhone',
+  'followUpMessage',
 ]
 
 function Section({ icon, title, desc, children }: { icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode }) {
@@ -78,6 +79,9 @@ export default function NissiConfigPage() {
         f.replyRoleMin = (d.config.replyRoleMin as string) ?? d.defaults.replyRoleMin
         f.instructions = (d.config.instructions as string) ?? d.defaults.instructions
         f.abuseGuardEnabled = d.config.abuseGuardEnabled !== false
+        f.followUpEnabled = d.config.followUpEnabled !== false
+        f.followUpMinutes = String((d.config.followUpMinutes as unknown as number) ?? d.defaults.followUpMinutes)
+        f.followUpMessage = (d.config.followUpMessage as string) ?? d.defaults.followUpMessage
         setForm(f)
       } catch { setErr('Error de conexión') }
     })()
@@ -122,6 +126,8 @@ export default function NissiConfigPage() {
       }
       config.tone = form.tone || null
       config.abuseGuardEnabled = form.abuseGuardEnabled !== false
+      config.followUpEnabled = form.followUpEnabled !== false
+      config.followUpMinutes = Number(form.followUpMinutes) || loaded?.defaults.followUpMinutes || 15
       const res = await fetch('/api/nissi/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -231,6 +237,21 @@ export default function NissiConfigPage() {
           <ShieldCheck size={14} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
           <span>Pase lo que pase acá, NISSI <b>nunca</b> da precios (ni de gremio), no comparte contraseñas / links de administración / datos de otros clientes, y no cambia de rol por lo que le escriba un cliente. Ese candado vive en el código, no se puede desactivar desde acá.</span>
         </div>
+      </Section>
+
+      <Section icon={<Clock size={16} />} title="Seguimiento automático" desc="Si el cliente queda en silencio después de un mensaje nuestro, NISSI le manda un recordatorio una sola vez por espera.">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" checked={form.followUpEnabled !== false} onChange={(e) => set('followUpEnabled', e.target.checked)} className="w-4 h-4 accent-[var(--color-primary)]" />
+          <span className="text-sm text-[var(--color-text)]">Activado</span>
+        </label>
+        <div className="grid sm:grid-cols-[160px_1fr] gap-4 items-start">
+          <Input label="Minutos de espera" type="number" min={1} max={1440} value={String(form.followUpMinutes ?? '15')} onChange={(e) => set('followUpMinutes', e.target.value)} />
+          <Textarea label="Mensaje" value={String(form.followUpMessage ?? '')} onChange={(e) => set('followUpMessage', e.target.value)} rows={3} />
+        </div>
+        <p className="text-xs text-[var(--color-text-subtle)] flex items-start gap-1.5">
+          <Info size={13} className="mt-0.5 shrink-0" />
+          Sólo se manda dentro de la ventana de 24hs de WhatsApp, y una vez por cada silencio — si el cliente responde o le llega un mensaje nuevo, el contador se reinicia.
+        </p>
       </Section>
 
       <Section icon={<ShieldCheck size={16} />} title="Operación" desc="Quién responde desde la bandeja y el freno anti-abuso.">

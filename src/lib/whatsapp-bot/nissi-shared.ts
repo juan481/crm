@@ -33,6 +33,12 @@ export const REPLY_ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'SUPER_ADMIN', label: 'Solo Super Admin' },
 ]
 
+// Aviso automático cuando el cliente queda en silencio tras un mensaje
+// nuestro (ver cron whatsapp-followup). Configurable entero desde el panel.
+export const DEFAULT_FOLLOWUP_ENABLED = true
+export const DEFAULT_FOLLOWUP_MINUTES = 15
+export const DEFAULT_FOLLOWUP_MESSAGE = '¡Hola! ¿Te encontrás ahí? 🤔\n\nHan pasado 15 minutos desde que recibimos tu último mensaje ⏳'
+
 // Subido de 12.000 a 20.000 (pedido de Abba, estaban al borde del límite
 // viejo) — Gemini soporta system instructions bastante más largas que esto,
 // el límite es una decisión de producto nuestra, no una restricción técnica.

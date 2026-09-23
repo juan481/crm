@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // auto-liberación del engine (24hs) cuenta desde la última actividad.
       db.whatsAppConversation.update({
         where: { id: conv.id },
-        data: { lastMessageAt: now, humanTakeoverAt: now, assignedUserId: payload.userId },
+        data: { lastMessageAt: now, followUpSentAt: null, humanTakeoverAt: now, assignedUserId: payload.userId },
       }),
       // "Mensajes contestados": mismo criterio que persistAndSendOutbound
       // (engine.ts) — un humano respondiendo desde el inbox también cuenta.

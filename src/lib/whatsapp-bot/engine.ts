@@ -324,7 +324,9 @@ async function persistAndSendOutbound(
     }),
     db.whatsAppConversation.update({
       where: { id: conversationId },
-      data: { lastMessageAt: now, ...(opts?.markConversationRead ? { lastReadAt: now } : {}) },
+      // followUpSentAt: null — sale un mensaje nuevo, arranca una espera
+      // nueva; el cron de "¿seguís ahí?" puede volver a dispararse.
+      data: { lastMessageAt: now, followUpSentAt: null, ...(opts?.markConversationRead ? { lastReadAt: now } : {}) },
     }),
     // "Mensajes contestados": todo entrante todavía sin marca de respuesta en
     // este hilo queda atendido con esta respuesta (el debounce puede haber

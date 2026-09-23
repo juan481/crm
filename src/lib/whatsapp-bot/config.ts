@@ -1,6 +1,7 @@
 import { getPluginConfig } from '@/lib/plugins'
 import type { Role } from '@/types'
 import type { NissiTone } from '@/lib/whatsapp-bot/nissi-shared'
+import { DEFAULT_FOLLOWUP_MINUTES, DEFAULT_FOLLOWUP_MESSAGE } from '@/lib/whatsapp-bot/nissi-shared'
 
 export type { NissiTone } from '@/lib/whatsapp-bot/nissi-shared'
 export { DEFAULT_GEMINI_MODEL, DEFAULT_REPLY_ROLE, NISSI_TONES } from '@/lib/whatsapp-bot/nissi-shared'
@@ -61,6 +62,11 @@ export interface WhatsAppBotConfig {
   replyRoleMin: Role | null
   // Frenar mensajes de relleno / repetidos para no gastar tokens. Default on.
   abuseGuardEnabled: boolean
+
+  // ── Seguimiento automático ("¿seguís ahí?") ─────────────────────────────
+  followUpEnabled: boolean
+  followUpMinutes: number
+  followUpMessage: string
 }
 
 function str(v: unknown): string {
@@ -131,5 +137,13 @@ export function parseWhatsAppBotConfig(raw: Record<string, unknown> | null): Wha
     replyRoleMin: roleOrNull(raw.replyRoleMin),
     // default true — sólo se apaga si está explícitamente en false
     abuseGuardEnabled: raw.abuseGuardEnabled !== false,
+
+    // default true — sólo se apaga si está explícitamente en false
+    followUpEnabled: raw.followUpEnabled !== false,
+    followUpMinutes: (() => {
+      const n = Number(raw.followUpMinutes)
+      return Number.isFinite(n) && n >= 1 ? Math.round(n) : DEFAULT_FOLLOWUP_MINUTES
+    })(),
+    followUpMessage: strOrNull(raw.followUpMessage) ?? DEFAULT_FOLLOWUP_MESSAGE,
   }
 }
