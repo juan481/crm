@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic'
 import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import {
   MessageCircle, Search, Send, Bot, User as UserIcon, ArrowLeft, Hand, RotateCcw,
-  AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus, Building2, Plus,
+  AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus, Building2, Plus, Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -345,6 +345,36 @@ function Inbox() {
     } catch { toast.error('No se pudo cambiar') }
   }
 
+  const [derivarOpen, setDerivarOpen] = useState(false)
+  // /api/usuarios (no /api/settings/users, que es sólo-ADMIN) — cualquiera
+  // que pueda responder desde la bandeja tiene que poder ver a quién
+  // derivarle, no sólo un admin.
+  const agentsQuery = useQuery<{ id: string; name: string; role: string; status: string }[]>({
+    queryKey: ['usuarios-derivar'],
+    queryFn: async () => {
+      const r = await fetch('/api/usuarios')
+      const json = await r.json()
+      return json.data ?? []
+    },
+    enabled: derivarOpen,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const doDerivar = async (toUserId: string) => {
+    if (!selectedId) return
+    try {
+      const r = await fetch(`/api/conversaciones/${selectedId}/derivar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toUserId }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(json.error ?? 'No se pudo derivar'); return }
+      toast.success(`Derivada a ${json.assignedUser?.name ?? 'otro agente'}`)
+      setDerivarOpen(false)
+      threadQuery.refetch(); listQuery.refetch()
+    } catch { toast.error('No se pudo derivar') }
+  }
+
   const send = async () => {
     if (!selectedId || !reply.trim() || sending) return
     const text = reply.trim()
@@ -595,7 +625,12 @@ function Inbox() {
                   {thread.assignedUser && <span>· lo maneja {thread.assignedUser.name}</span>}
                 </div>
               </div>
-              <div className="shrink-0">
+              <div className="shrink-0 flex items-center gap-1.5">
+                {thread.canReply && thread.humanHandling && (
+                  <Button variant="ghost" size="xs" leftIcon={<Users size={13} />} onClick={() => setDerivarOpen(true)}>
+                    <span className="hidden sm:inline">Derivar</span>
+                  </Button>
+                )}
                 {thread.canReply && (thread.humanHandling ? (
                   <Button variant="ghost" size="xs" leftIcon={<RotateCcw size={13} />} onClick={() => doTakeover(false)}>
                     <span className="hidden sm:inline">Devolver a </span>NISSI
@@ -789,6 +824,34 @@ function Inbox() {
             </div>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        open={derivarOpen}
+        onClose={() => setDerivarOpen(false)}
+        title="Derivar conversación"
+        description="Elegí a quién le pasás este chat — queda registrado en el hilo."
+        size="sm"
+      >
+        {agentsQuery.isLoading ? (
+          <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-11 rounded-xl" />)}</div>
+        ) : (
+          <div className="space-y-1.5 max-h-80 overflow-y-auto">
+            {(agentsQuery.data ?? [])
+              .filter((u) => u.status === 'ACTIVE')
+              .map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => doDerivar(u.id)}
+                  className="w-full text-left px-3 py-2.5 rounded-xl text-sm hover:bg-[var(--color-surface-raised)] transition-colors flex items-center justify-between"
+                  style={{ border: '1px solid var(--color-border)' }}
+                >
+                  <span className="text-[var(--color-text)]">{u.name}</span>
+                  <span className="text-[11px] text-[var(--color-text-subtle)]">{u.role}</span>
+                </button>
+              ))}
+          </div>
+        )}
       </Modal>
     </div>
   )
