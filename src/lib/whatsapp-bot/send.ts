@@ -77,6 +77,7 @@ export async function sendWhatsAppBotMedia(
   mediaUrl: string,
   mediaType: string,
   fileName?: string,
+  caption?: string,
 ): Promise<SendResult> {
   if (!toDigitsOnly) return { ok: false, error: 'Número de destino vacío' }
   const field = MEDIA_FIELD_BY_TYPE[mediaType]
@@ -85,6 +86,9 @@ export async function sendWhatsAppBotMedia(
   const to = normalizeWhatsAppTo(toDigitsOnly)
   const mediaObj: Record<string, unknown> = { link: mediaUrl }
   if (field === 'document' && fileName) mediaObj.filename = fileName
+  // WhatsApp sólo soporta "caption" en image/video/document, NO en audio —
+  // ahí el texto se manda aparte (ver reply/route.ts).
+  if (caption && field !== 'audio') mediaObj.caption = caption
 
   try {
     const res = await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {

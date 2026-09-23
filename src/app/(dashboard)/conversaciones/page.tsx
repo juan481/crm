@@ -100,6 +100,25 @@ const FILTERS = [
   { key: 'cerradas', label: 'Cerradas' },
 ]
 
+// Etiquetas legibles para lo que junta NISSI (ver KEYS en tools.ts) — sin
+// esto se mostraba la key cruda en camelCase ("tipoConsulta").
+const COLLECTED_LABELS: Record<string, string> = {
+  nombre: 'Nombre', apellido: 'Apellido', telefono: 'Teléfono', email: 'Email',
+  direccion: 'Dirección', localidad: 'Localidad', horarioContacto: 'Horario de contacto',
+  tipoConsulta: 'Tipo de consulta', detalle: 'Detalle',
+}
+function collectedLabel(key: string): string {
+  return COLLECTED_LABELS[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
+}
+
+// El placeholder tipo "[El cliente envió una imagen.]" (ver
+// describeNonTextMessage en el webhook) es para el transcript de texto plano
+// / contexto de NISSI — de más una vez que el adjunto ya se ve en el chat.
+function displayContent(content: string, hasMedia: boolean): string {
+  if (!hasMedia) return content
+  return content.replace(/^\[[^\]]*\]\s*/, '').trim()
+}
+
 function estadoBadge(c: { status: string; humanHandling: boolean }) {
   if (c.humanHandling) return <Badge variant="warning" size="sm">Con humano</Badge>
   if (c.status === 'HANDED_OFF') return <Badge variant="info" size="sm">Derivada</Badge>
@@ -726,7 +745,7 @@ function Inbox() {
             {collected.length > 0 && (
               <div className="px-3 py-2 border-b text-[11px] text-[var(--color-text-muted)] flex flex-wrap gap-x-3 gap-y-0.5 max-h-16 overflow-y-auto" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-raised)' }}>
                 {collected.map(([k, v]) => (
-                  <span key={k}><b className="text-[var(--color-text)]">{k}:</b> {String(v)}</span>
+                  <span key={k}><b className="text-[var(--color-text)]">{collectedLabel(k)}:</b> {String(v)}</span>
                 ))}
               </div>
             )}
@@ -765,7 +784,7 @@ function Inbox() {
                         {m.author} · {formatDateTime(m.createdAt)}
                       </div>
                       {m.media && <MediaAttachment media={m.media} onOpenImage={setLightboxUrl} />}
-                      <div className="whitespace-pre-wrap break-words">{m.content}</div>
+                      {(() => { const text = displayContent(m.content, !!m.media); return text ? <div className="whitespace-pre-wrap break-words">{text}</div> : null })()}
                       {!isCustomer && (
                         <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px]">
                           {failed && <span className="text-red-300">no se envió</span>}

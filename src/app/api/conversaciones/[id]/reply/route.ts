@@ -91,8 +91,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     ])
 
     const sent = media
-      ? await sendWhatsAppBotMedia(apiToken, phoneNumberId, conv.customerPhone, media.url, media.mediaType, media.fileName)
+      ? await sendWhatsAppBotMedia(apiToken, phoneNumberId, conv.customerPhone, media.url, media.mediaType, media.fileName, message || undefined)
       : await sendWhatsAppBotMessage(apiToken, phoneNumberId, conv.customerPhone, message)
+    // El audio no soporta "caption" en la Cloud API — si había texto además
+    // de un audio, se manda como segundo mensaje aparte (best-effort: si
+    // falla, el adjunto ya se mandó igual, no se corta el flujo por esto).
+    if (sent.ok && media?.mediaType === 'audio' && message) {
+      const extra = await sendWhatsAppBotMessage(apiToken, phoneNumberId, conv.customerPhone, message)
+      if (!extra.ok) console.error('[CONVERSACION REPLY] no se pudo mandar el texto junto al audio', extra.error)
+    }
     await db.whatsAppMessage.update({
       where: { id: created.id },
       data: sent.ok
