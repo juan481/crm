@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   RefreshCw, Plus, Search, Shield, Radio, Pencil, Trash2, AlertTriangle,
-  TrendingUp, CalendarClock, Building2, FileText,
+  TrendingUp, CalendarClock, Building2, FileText, DollarSign, Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -28,7 +28,8 @@ interface Kpis {
   porCanal: Record<string, number>
   renovaciones: { d30: number; d60: number; d90: number }
 }
-interface ListResponse { data: ServicioRecurrente[]; kpis: Kpis }
+interface Grupo { nombre: string; moneda: string; clientes: number; mrr: number; min: number; max: number; ciclo: string }
+interface ListResponse { data: ServicioRecurrente[]; kpis: Kpis; agrupado: Grupo[] }
 
 function money(byCur: Record<string, number>): string {
   const e = Object.entries(byCur).filter(([, v]) => v > 0.005)
@@ -56,6 +57,7 @@ export default function ServiciosPage() {
   const [deleting, setDeleting] = useState<ServicioRecurrente | null>(null)
   const [delLoading, setDelLoading] = useState(false)
   const [genOpen, setGenOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const params = new URLSearchParams()
   if (estado) params.set('estado', estado)
@@ -113,6 +115,9 @@ export default function ServiciosPage() {
           <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Abonos, monitoreo y contratos de todos los clientes.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" leftIcon={<DollarSign size={14} />} onClick={() => setBulkOpen(true)}>
+            Ajustar precio en masa
+          </Button>
           <Button variant="outline" size="sm" leftIcon={<FileText size={14} />} onClick={() => setGenOpen(true)}>
             Generar facturas del mes
           </Button>
@@ -295,7 +300,93 @@ export default function ServiciosPage() {
       </Modal>
 
       <GenerarFacturasModal open={genOpen} onClose={() => setGenOpen(false)} onDone={refresh} />
+      <BulkPriceModal open={bulkOpen} onClose={() => setBulkOpen(false)} onDone={refresh} agrupado={data?.agrupado ?? []} />
     </div>
+  )
+}
+
+// ── Modal: ajustar el precio de un servicio para TODOS los clientes que lo
+// tienen activo (pedido de Abba: el abono se re-precia trimestralmente y no
+// quieren editar cliente por cliente) ────────────────────────────────────
+function BulkPriceModal({ open, onClose, onDone, agrupado }: { open: boolean; onClose: () => void; onDone: () => void; agrupado: Grupo[] }) {
+  const [selected, setSelected] = useState<string>('') // "nombre::moneda"
+  const [monto, setMonto] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const grupo = agrupado.find((g) => `${g.nombre}::${g.moneda}` === selected) ?? null
+
+  const pick = (key: string) => {
+    setSelected(key)
+    const g = agrupado.find((x) => `${x.nombre}::${x.moneda}` === key)
+    setMonto(g && g.min === g.max ? String(g.min) : '')
+  }
+
+  const confirmar = async () => {
+    if (!grupo) return
+    const montoNum = Number(monto)
+    if (!Number.isFinite(montoNum) || montoNum < 0) { toast.error('Monto inválido'); return }
+    setLoading(true)
+    try {
+      const r = await fetch('/api/servicios-recurrentes/bulk-update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: grupo.nombre, moneda: grupo.moneda, monto: montoNum }),
+      })
+      const j = await r.json()
+      if (!r.ok) { toast.error(j.error || 'No se pudo actualizar'); return }
+      toast.success(`Precio actualizado en ${j.updated} cliente${j.updated !== 1 ? 's' : ''}`)
+      onDone()
+      onClose()
+      setSelected(''); setMonto('')
+    } catch { toast.error('Error de conexión') } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Ajustar precio en masa" size="sm">
+      <div className="space-y-4">
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Elegí un servicio y el precio nuevo se aplica de una sola vez a <strong>todos los clientes que lo tienen activo</strong> hoy — no toca a los pausados/de baja.
+        </p>
+        {agrupado.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-subtle)]">No hay servicios activos para ajustar.</p>
+        ) : (
+          <>
+            <Select
+              label="Servicio"
+              value={selected}
+              onChange={(e) => pick(e.target.value)}
+              options={[
+                { value: '', label: '— elegir —' },
+                ...agrupado.map((g) => ({
+                  value: `${g.nombre}::${g.moneda}`,
+                  label: `${g.nombre} (${g.moneda}) — ${g.clientes} cliente${g.clientes !== 1 ? 's' : ''}`,
+                })),
+              ]}
+            />
+            {grupo && (
+              <>
+                <div className="text-xs text-[var(--color-text-muted)] flex items-center gap-1.5">
+                  <Users size={12} />
+                  Precio actual: {grupo.min === grupo.max ? formatCurrency(grupo.min, grupo.moneda) : `entre ${formatCurrency(grupo.min, grupo.moneda)} y ${formatCurrency(grupo.max, grupo.moneda)}`}
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-[var(--color-text-muted)] block mb-1.5">Precio nuevo ({grupo.moneda})</label>
+                  <input
+                    type="number" min={0} step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                  />
+                </div>
+              </>
+            )}
+            <ModalFooter>
+              <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+              <Button loading={loading} disabled={!grupo || !monto} onClick={confirmar} leftIcon={<DollarSign size={14} />}>
+                Aplicar a {grupo?.clientes ?? 0} cliente{(grupo?.clientes ?? 0) !== 1 ? 's' : ''}
+              </Button>
+            </ModalFooter>
+          </>
+        )}
+      </div>
+    </Modal>
   )
 }
 

@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
     // la tabla, para que el panel de arriba sea estable) ──────────────────
     const todos = await prisma.servicioRecurrente.findMany({
       where: { organizationId: payload.orgId },
-      select: { monto: true, ciclo: true, estado: true, moneda: true, incluyeMonitoreo: true, canalIngreso: true, contratoFin: true },
+      select: { nombre: true, monto: true, ciclo: true, estado: true, moneda: true, incluyeMonitoreo: true, canalIngreso: true, contratoFin: true },
     })
     const activos = todos.filter((t) => t.estado === 'ACTIVO')
     const mrrPorMoneda: Record<string, number> = {}
@@ -93,8 +93,29 @@ export async function GET(req: NextRequest) {
       else if (d <= 90) renov.d90++
     }
 
+    // ── Agrupado por nombre+moneda — para el selector del ajuste de precio
+    // en masa y el panel "Recurrentes" del Pipeline: cuántos clientes tienen
+    // cada servicio activo, el MRR que suma, y el rango de precios actual
+    // (si todos cobran lo mismo, min===max — sirve para precargar el input).
+    const agrupadoMap = new Map<string, { nombre: string; moneda: string; clientes: number; mrr: number; min: number; max: number; ciclo: string }>()
+    for (const a of activos as any[]) {
+      const key = `${a.nombre}::${a.moneda}`
+      const m = montoMensualizado(a)
+      const g = agrupadoMap.get(key)
+      if (g) {
+        g.clientes++
+        g.mrr += m
+        g.min = Math.min(g.min, a.monto)
+        g.max = Math.max(g.max, a.monto)
+      } else {
+        agrupadoMap.set(key, { nombre: a.nombre, moneda: a.moneda, clientes: 1, mrr: m, min: a.monto, max: a.monto, ciclo: a.ciclo })
+      }
+    }
+    const agrupado = Array.from(agrupadoMap.values()).sort((a, b) => b.mrr - a.mrr)
+
     return NextResponse.json({
       data,
+      agrupado,
       kpis: {
         total: todos.length,
         activos: activos.length,

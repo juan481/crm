@@ -17,6 +17,7 @@ import { DealNotas } from '@/components/pipeline/deal-notas'
 import { DealMateriales } from '@/components/pipeline/deal-materiales'
 import { DealRentabilidad } from '@/components/pipeline/deal-rentabilidad'
 import { ForecastPanel } from '@/components/pipeline/forecast-panel'
+import { RecurrentesPanel } from '@/components/pipeline/recurrentes-panel'
 import { ContactoPicker } from '@/components/pipeline/contacto-picker'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
@@ -679,6 +680,7 @@ export default function PipelinePage() {
       )}
 
       {!isLoading && !isError && deals.length > 0 && <ForecastPanel deals={deals} />}
+      <RecurrentesPanel />
 
       {/* Kanban board */}
       {isLoading ? (
