@@ -3,7 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { roleHasModule } from '@/lib/module-access'
 import { getPluginConfig } from '@/lib/plugins'
-import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
+import { sendWhatsAppBotMessage, sendWhatsAppBotMedia } from '@/lib/whatsapp-bot/send'
 import { canReplyToConversations } from '@/lib/whatsapp-bot/permissions'
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +25,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json().catch(() => ({}))
     const message = typeof body.message === 'string' ? body.message.trim() : ''
-    if (!message) return NextResponse.json({ error: 'El mensaje no puede estar vacío' }, { status: 400 })
+    const media = body.media && typeof body.media.url === 'string' && typeof body.media.mediaType === 'string'
+      ? { url: body.media.url as string, mimeType: (body.media.mimeType as string) ?? '', mediaType: body.media.mediaType as string, fileName: typeof body.media.fileName === 'string' ? body.media.fileName as string : undefined }
+      : null
+    if (!message && !media) return NextResponse.json({ error: 'El mensaje no puede estar vacío' }, { status: 400 })
 
     const db = prisma as any
     const conv = await db.whatsAppConversation.findFirst({
@@ -60,11 +63,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // aunque el cliente conteste. El estado de entrega se ajusta después.
     const now = new Date()
     const responseTimeMs = conv.lastInboundAt ? now.getTime() - new Date(conv.lastInboundAt).getTime() : null
+    // Igual que en el import histórico y en los mensajes entrantes: content
+    // siempre tiene texto legible aunque sea sólo un adjunto, para que el
+    // transcript / contexto de NISSI / panel de Estadísticas tengan sentido.
+    const content = message || `[Adjunto: ${media?.fileName ?? media?.mediaType}]`
     const [created] = await Promise.all([
       db.whatsAppMessage.create({
         data: {
-          conversationId: conv.id, organizationId: payload.orgId, role: 'assistant', content: message,
+          conversationId: conv.id, organizationId: payload.orgId, role: 'assistant', content,
           senderUserId: payload.userId, processedAt: now, deliveryStatus: 'pending', responseTimeMs,
+          ...(media ? { mediaUrl: media.url, mediaType: media.mediaType, mediaMimeType: media.mimeType, mediaFileName: media.fileName ?? null } : {}),
         },
         select: { id: true, createdAt: true },
       }),
@@ -82,7 +90,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }),
     ])
 
-    const sent = await sendWhatsAppBotMessage(apiToken, phoneNumberId, conv.customerPhone, message)
+    const sent = media
+      ? await sendWhatsAppBotMedia(apiToken, phoneNumberId, conv.customerPhone, media.url, media.mediaType, media.fileName)
+      : await sendWhatsAppBotMessage(apiToken, phoneNumberId, conv.customerPhone, message)
     await db.whatsAppMessage.update({
       where: { id: created.id },
       data: sent.ok
@@ -100,8 +110,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({
       ok: true,
       message: {
-        id: created.id, role: 'assistant', content: message, createdAt: created.createdAt,
+        id: created.id, role: 'assistant', content, createdAt: created.createdAt,
         author: 'vos', fromHuman: true, deliveryStatus: 'sent',
+        media: media ? { url: media.url, type: media.mediaType, mimeType: media.mimeType, fileName: media.fileName } : null,
       },
     })
   } catch (error) {

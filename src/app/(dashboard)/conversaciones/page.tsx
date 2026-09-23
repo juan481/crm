@@ -8,7 +8,7 @@ import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-quer
 import {
   MessageCircle, Search, Send, Bot, User as UserIcon, ArrowLeft, Hand, RotateCcw,
   AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus, Building2, Plus, Users,
-  FileText, Download, X as CloseIcon,
+  FileText, Download, X as CloseIcon, Paperclip, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -213,10 +213,13 @@ function Inbox() {
   const [assignQuery, setAssignQuery] = useState('')
   const [assignBusy, setAssignBusy] = useState('') // '' | 'crear-contacto' | 'crear-empresa'
   const [optimistic, setOptimistic] = useState<Msg[]>([])
+  const [attachment, setAttachment] = useState<{ url: string; mimeType: string; mediaType: string; fileName: string } | null>(null)
+  const [uploading, setUploading] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const markedRef = useRef<string>('')
   const replyRef = useRef<HTMLTextAreaElement>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Reset del alto del textarea cuando se vacía (tras enviar).
   useEffect(() => { if (!reply && replyRef.current) replyRef.current.style.height = 'auto' }, [reply])
@@ -416,26 +419,60 @@ function Inbox() {
     } catch { toast.error('No se pudo derivar') }
   }
 
+  const MAX_ATTACHMENT_MB = 10
+  const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/amr']
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !selectedId) return
+    if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
+      toast.error('Formato no permitido. Usá JPG, PNG, WEBP, PDF, Word, Excel o audio')
+      return
+    }
+    if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
+      toast.error(`El archivo supera el límite de ${MAX_ATTACHMENT_MB}MB`)
+      return
+    }
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch(`/api/conversaciones/${selectedId}/upload`, { method: 'POST', body: fd })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(json.error ?? 'No se pudo subir el archivo'); return }
+      setAttachment(json.data)
+    } catch {
+      toast.error('Error de conexión al subir el archivo')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const send = async () => {
-    if (!selectedId || !reply.trim() || sending) return
+    if (!selectedId || (!reply.trim() && !attachment) || sending) return
     const text = reply.trim()
+    const media = attachment
     const tempId = `temp-${Date.now()}`
     setReply('')
+    setAttachment(null)
     setSending(true)
     nearBottomRef.current = true // al mandar, siempre baja al fondo
     setOptimistic((o) => [...o, {
-      id: tempId, role: 'assistant', content: text, createdAt: new Date().toISOString(),
+      id: tempId, role: 'assistant', content: text || `[Adjunto: ${media?.fileName}]`, createdAt: new Date().toISOString(),
       author: 'vos', fromHuman: true, deliveryStatus: 'pending',
+      media: media ? { url: media.url, type: media.mediaType, mimeType: media.mimeType, fileName: media.fileName } : null,
     }])
     try {
       const r = await fetch(`/api/conversaciones/${selectedId}/reply`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, media }),
       })
       const json = await r.json().catch(() => ({}))
       if (!r.ok) {
         setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...m, deliveryStatus: 'failed' } : m)))
         setReply(text) // no perder lo escrito ante un fallo transitorio
+        setAttachment(media)
         toast.error(json.message || json.error || 'No se pudo enviar')
         // La respuesta 502 con persisted=true ya guardó el mensaje como
         // fallido — refrescamos para que quede respaldado por la DB.
@@ -452,6 +489,7 @@ function Inbox() {
     } catch {
       setOptimistic((o) => o.map((m) => (m.id === tempId ? { ...m, deliveryStatus: 'failed' } : m)))
       setReply(text)
+      setAttachment(media)
       toast.error('Error de conexión')
     } finally {
       setSending(false)
@@ -757,27 +795,48 @@ function Inbox() {
                   Fuera de la ventana de 24&nbsp;h de WhatsApp — el cliente tiene que volver a escribir primero para poder mandarle un mensaje de texto libre. Escribirle sin que te haya escrito antes puede hacer que te reporte como spam.
                 </div>
               ) : (
-                <div className="flex items-end gap-2">
-                  <textarea
-                    ref={replyRef}
-                    value={reply}
-                    onChange={(e) => {
-                      setReply(e.target.value)
-                      e.target.style.height = 'auto'
-                      e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`
-                    }}
-                    onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'nearest' }), 250)}
-                    onKeyDown={(e) => {
-                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send() }
-                    }}
-                    rows={1}
-                    placeholder="Escribí una respuesta…"
-                    className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none resize-none max-h-32 leading-snug"
-                    style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
-                  />
-                  <Button onClick={send} loading={sending} disabled={!reply.trim()} leftIcon={<Send size={14} />} className="shrink-0">
-                    <span className="hidden sm:inline">Enviar</span>
-                  </Button>
+                <div className="flex flex-col gap-2">
+                  {attachment && (
+                    <div className="flex items-center gap-2 text-xs rounded-lg px-2.5 py-1.5 w-fit" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)' }}>
+                      <FileText size={13} />
+                      <span className="max-w-[180px] truncate">{attachment.fileName}</span>
+                      <button onClick={() => setAttachment(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                        <CloseIcon size={13} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} accept={ALLOWED_ATTACHMENT_TYPES.join(',')} />
+                    <Button
+                      variant="ghost"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading || !!attachment}
+                      className="shrink-0 px-2.5"
+                      title="Adjuntar archivo"
+                    >
+                      {uploading ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
+                    </Button>
+                    <textarea
+                      ref={replyRef}
+                      value={reply}
+                      onChange={(e) => {
+                        setReply(e.target.value)
+                        e.target.style.height = 'auto'
+                        e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`
+                      }}
+                      onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'nearest' }), 250)}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send() }
+                      }}
+                      rows={1}
+                      placeholder={attachment ? 'Agregá un texto (opcional)…' : 'Escribí una respuesta…'}
+                      className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none resize-none max-h-32 leading-snug"
+                      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+                    />
+                    <Button onClick={send} loading={sending} disabled={(!reply.trim() && !attachment) || uploading} leftIcon={<Send size={14} />} className="shrink-0">
+                      <span className="hidden sm:inline">Enviar</span>
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

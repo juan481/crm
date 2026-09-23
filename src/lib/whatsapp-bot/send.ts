@@ -62,6 +62,56 @@ export async function sendWhatsAppBotMessage(
   }
 }
 
+// Adjunto saliente (agente humano manda una foto/PDF/audio desde el inbox).
+// Se manda por `link` a la URL pública de Supabase Storage — evita el paso
+// extra de subirlo primero a la Media API de Meta (POST /media), que exige
+// re-subir el archivo entero ahí antes de poder referenciarlo por id.
+const MEDIA_FIELD_BY_TYPE: Record<string, string> = {
+  image: 'image', audio: 'audio', video: 'video', document: 'document',
+}
+
+export async function sendWhatsAppBotMedia(
+  apiToken: string,
+  phoneNumberId: string,
+  toDigitsOnly: string,
+  mediaUrl: string,
+  mediaType: string,
+  fileName?: string,
+): Promise<SendResult> {
+  if (!toDigitsOnly) return { ok: false, error: 'Número de destino vacío' }
+  const field = MEDIA_FIELD_BY_TYPE[mediaType]
+  if (!field) return { ok: false, error: `Tipo de adjunto no soportado: ${mediaType}` }
+
+  const to = normalizeWhatsAppTo(toDigitsOnly)
+  const mediaObj: Record<string, unknown> = { link: mediaUrl }
+  if (field === 'document' && fileName) mediaObj.filename = fileName
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: field,
+        [field]: mediaObj,
+      }),
+    })
+    const json = await res.json().catch(() => null) as
+      | { messages?: { id?: string }[]; error?: { message?: string } }
+      | null
+    if (!res.ok) {
+      const error = json?.error?.message || `WhatsApp devolvió un error (HTTP ${res.status})`
+      console.error('[NISSI SEND MEDIA] WhatsApp Cloud API respondió error', { status: res.status, error, phoneNumberId, to })
+      return { ok: false, error }
+    }
+    return { ok: true, messageId: json?.messages?.[0]?.id }
+  } catch (err) {
+    console.error('[NISSI SEND MEDIA]', err)
+    return { ok: false, error: 'Error de conexión con la API de WhatsApp' }
+  }
+}
+
 /** Marca un mensaje entrante como leído (el doble check azul) — puramente
  *  cosmético para el cliente, no afecta la lógica del bot; se ignora
  *  cualquier error (no vale la pena reintentar ni loguear ruido por esto). */
