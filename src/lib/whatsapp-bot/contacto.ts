@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { resolveBotActorId } from '@/lib/whatsapp-bot/resolve-org'
 
 // Resuelve (matchea o crea) el DirectorioContacto de la persona detrás de una
 // conversación de WhatsApp que NISSI acaba de calificar, para vincularlo al
@@ -6,6 +7,14 @@ import { prisma } from '@/lib/db'
 // (soporte/facturación). La mayoría de los contactos de Abba son consumidor
 // final (vivienda, quinta, campo particular) → contacto SIN empresa, igual
 // criterio que el import de chats de WhatsApp (scripts/import-abba-leads.ts).
+//
+// ALTA OBLIGATORIA (pedido de Abba, 2026-09-23): todo chat de WhatsApp tiene
+// que quedar guardado en Clientes desde el primer contacto, tenga o no
+// nombre todavía y termine o no en una oportunidad/ticket — antes esta
+// función devolvía null si NISSI no había juntado un nombre real todavía, y
+// el Deal/Ticket quedaba "suelto" sin contacto. Ahora SIEMPRE crea (usando
+// un nombre provisorio si hace falta, ver fallbackName) — lo único que sigue
+// devolviendo null es un error real de DB (falla suave, ver catch).
 //
 // Falla suave: si algo sale mal devuelve null y el Deal/Ticket se crea igual
 // sin contacto vinculado (mismo espíritu que el resto del bot).
@@ -72,6 +81,22 @@ function pickName(
   return { firstName: firstName.trim(), lastName: lastName.trim() }
 }
 
+// Nombre "de emergencia" cuando todavía no hay uno real — nunca dejamos de
+// crear el contacto por esto (ver ALTA OBLIGATORIA arriba). Se puede
+// renombrar a mano después; el teléfono completo queda en `phone` para
+// buscar/mergear igual. Últimos 4 dígitos (no 8, como el match) sólo para
+// diferenciar contactos "Contacto WhatsApp" entre sí a simple vista en una
+// lista — la identidad real la da el teléfono completo guardado.
+function fallbackName(waName: string | null, phoneDigits: string): { firstName: string; lastName: string } {
+  const trimmed = (waName || '').trim()
+  if (trimmed) {
+    const parts = trimmed.split(/\s+/).filter(Boolean)
+    return { firstName: parts[0] ?? 'Contacto WhatsApp', lastName: parts.slice(1).join(' ') }
+  }
+  const tail = phoneDigits.slice(-4) || phoneDigits
+  return { firstName: 'Contacto WhatsApp', lastName: tail }
+}
+
 export interface ResolveContactoCtx {
   conversationId: string
   customerPhone: string // wa_id, sólo dígitos (sin "+")
@@ -106,27 +131,24 @@ export async function resolveContactoForConversation(orgId: string, ctx: Resolve
 
     const nombrePersona = pickName(collected, waName)
 
-    // Sin un nombre real: NO se crea un contacto genérico. El Deal/Ticket se
-    // crea sin contactoId; el teléfono queda en las notas y una persona
-    // completa el nombre en el CRM. Así el directorio no se llena de
-    // "Sin nombre (+549...)" que después no se pueden buscar por nombre.
-    if (!nombrePersona) return null
-    const { firstName, lastName } = nombrePersona
-
-    // 2) Match por nombre + apellido (contacto sin empresa).
-    {
+    // 2) Match por nombre + apellido — SÓLO con un nombre real (si estamos
+    // por usar el de emergencia, no matcheamos por nombre: dos personas
+    // anónimas distintas no tienen por qué compartir "Contacto WhatsApp").
+    if (nombrePersona) {
       const byName = await db.directorioContacto.findFirst({
         where: {
           organizationId: orgId,
-          firstName: { equals: firstName, mode: 'insensitive' },
-          lastName: { equals: lastName, mode: 'insensitive' },
+          firstName: { equals: nombrePersona.firstName, mode: 'insensitive' },
+          lastName: { equals: nombrePersona.lastName, mode: 'insensitive' },
         },
         select: { id: true },
       })
       if (byName) return byName.id
     }
 
-    // 3) Crear nuevo.
+    // 3) Crear nuevo — con nombre real si lo tenemos, o uno provisorio si
+    // no (ver ALTA OBLIGATORIA arriba: nunca se deja de crear por esto).
+    const { firstName, lastName } = nombrePersona ?? fallbackName(waName, phoneDigits)
     const email =
       typeof collected.email === 'string' && collected.email.includes('@')
         ? collected.email.trim().toLowerCase()
@@ -135,6 +157,7 @@ export async function resolveContactoForConversation(orgId: string, ctx: Resolve
       ['localidad', 'ciudad', 'zona', 'direccion', 'domicilio']
         .map((k) => (typeof collected[k] === 'string' ? (collected[k] as string).trim() : ''))
         .find(Boolean) || null
+    const origen = typeof collected.origen === 'string' ? collected.origen.trim() : ''
 
     const created = await db.directorioContacto.create({
       data: {
@@ -147,6 +170,25 @@ export async function resolveContactoForConversation(orgId: string, ctx: Resolve
       },
       select: { id: true },
     })
+
+    // Nota de alta — deja registrado el origen y que fue NISSI quien lo dio
+    // de alta, sin depender de que la charla termine en Deal/Ticket (ahí
+    // además se adjunta el transcript completo, ver attachTranscript en
+    // tools.ts). Falla suave: no bloquea el alta si esto no se puede crear.
+    try {
+      const actorId = await resolveBotActorId(orgId)
+      if (actorId) {
+        await db.directorioContactoNota.create({
+          data: {
+            contactoId: created.id, organizationId: orgId, userId: actorId, tipo: 'NOTA',
+            content: `Alta automática desde WhatsApp (NISSI)${origen ? ` — Origen: ${origen}` : ''}.${!nombrePersona ? ' Todavía sin nombre confirmado — revisar y completar.' : ''}`,
+          },
+        })
+      }
+    } catch (err) {
+      console.error('[NISSI] no se pudo dejar la nota de alta del contacto', err)
+    }
+
     return created.id
   } catch (err) {
     console.error('[NISSI] resolveContactoForConversation falló — el registro se crea sin contacto', err)

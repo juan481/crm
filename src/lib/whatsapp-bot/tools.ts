@@ -236,6 +236,18 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
         const contacto = await db.directorioContacto.findUnique({ where: { id: contactoId }, select: { empresaId: true } })
         await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { contactoId, empresaId: contacto?.empresaId ?? null } })
       }
+    } else if (conv?.contactoId && (patch.nombre || patch.apellido)) {
+      // El contacto YA existe (alta obligatoria lo crea desde el primer
+      // mensaje, ver contacto.ts) pero puede tener el nombre provisorio
+      // "Contacto WhatsApp" — apenas NISSI junta el nombre real, se
+      // completa el registro en vez de dejarlo con el nombre de emergencia.
+      const existing = await db.directorioContacto.findUnique({ where: { id: conv.contactoId }, select: { firstName: true } })
+      if (existing?.firstName === 'Contacto WhatsApp') {
+        await db.directorioContacto.update({
+          where: { id: conv.contactoId },
+          data: { firstName: patch.nombre || existing.firstName, lastName: patch.apellido || '' },
+        })
+      }
     }
 
     return { resultText: 'Datos guardados.' }

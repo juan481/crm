@@ -15,7 +15,7 @@ import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool } from '@/lib/whatsapp-bot/tools
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 import { looksAbusive, ABUSE_MAX_REPLIES_PER_HOUR, ABUSE_MAX_REPLIES_PER_DAY } from '@/lib/whatsapp-bot/abuse-guard'
-import { findContactoIdByPhone } from '@/lib/whatsapp-bot/contacto'
+import { findContactoIdByPhone, resolveContactoForConversation } from '@/lib/whatsapp-bot/contacto'
 
 // NISSI corre sobre Gemini Flash-Lite — un flujo guiado por herramientas como
 // este no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
@@ -387,6 +387,23 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
         where: { organizationId_customerPhone: { organizationId: msg.orgId, customerPhone: msg.customerPhone } },
       })
       if (!conversation) throw err
+    }
+
+    // ALTA OBLIGATORIA (pedido de Abba, 2026-09-23): si el teléfono no
+    // matcheó ningún contacto existente, se crea uno nuevo desde el primer
+    // mensaje — con nombre provisorio si todavía no lo tenemos (ver
+    // fallbackName en contacto.ts). Así ningún chat de WhatsApp queda sin
+    // pasar por Clientes, derive o no en una oportunidad/ticket. Falla
+    // suave: si esto no anda, la conversación ya quedó creada igual.
+    if (!match && conversation && !conversation.contactoId) {
+      const contactoId = await resolveContactoForConversation(msg.orgId, {
+        conversationId: conversation.id, customerPhone: msg.customerPhone,
+      })
+      if (contactoId) {
+        conversation = await db.whatsAppConversation.update({
+          where: { id: conversation.id }, data: { contactoId },
+        })
+      }
     }
   }
 
