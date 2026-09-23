@@ -8,6 +8,7 @@ import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-quer
 import {
   MessageCircle, Search, Send, Bot, User as UserIcon, ArrowLeft, Hand, RotateCcw,
   AlertTriangle, Check, CheckCheck, Clock, BarChart3, Inbox as InboxIcon, UserPlus, Building2, Plus, Users,
+  FileText, Download, X as CloseIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,13 @@ interface ConvListItem {
   preview: string
 }
 
+interface MsgMedia {
+  url: string
+  type: string // 'image' | 'audio' | 'document' | 'video' | 'sticker'
+  mimeType: string
+  fileName: string | null
+}
+
 interface Msg {
   id: string
   role: string
@@ -47,6 +55,7 @@ interface Msg {
   author: string
   fromHuman: boolean
   deliveryStatus: string | null
+  media?: MsgMedia | null
 }
 
 interface ConvThread {
@@ -105,6 +114,37 @@ function DeliveryTick({ status }: { status: string | null }) {
   if (status === 'read') return <CheckCheck size={12} className="text-sky-300" />
   if (status === 'delivered') return <CheckCheck size={12} className="opacity-70" />
   return <Check size={12} className="opacity-70" /> // sent
+}
+
+// Visor de adjuntos entrantes/salientes del hilo — imagen (con lightbox),
+// audio (reproductor nativo), video (idem), documento (chip de descarga).
+// Sticker se trata como imagen chica (son .webp normales).
+function MediaAttachment({ media, onOpenImage }: { media: MsgMedia; onOpenImage: (url: string) => void }) {
+  if (media.type === 'image' || media.type === 'sticker') {
+    return (
+      <button type="button" onClick={() => onOpenImage(media.url)} className="block mb-1.5 -mx-1">
+        <img src={media.url} alt="Adjunto" className="rounded-lg max-h-64 max-w-full object-contain" loading="lazy" />
+      </button>
+    )
+  }
+  if (media.type === 'audio') {
+    return <audio controls src={media.url} className="w-full mb-1.5" style={{ maxWidth: 260 }} />
+  }
+  if (media.type === 'video') {
+    return <video controls src={media.url} className="rounded-lg max-h-64 max-w-full mb-1.5" />
+  }
+  // document (o cualquier otro tipo que igual se haya guardado)
+  return (
+    <a
+      href={media.url} target="_blank" rel="noopener noreferrer"
+      className="flex items-center gap-2 px-2.5 py-2 rounded-lg mb-1.5 hover:opacity-80 transition-opacity"
+      style={{ background: 'rgba(0,0,0,0.08)' }}
+    >
+      <FileText size={16} className="shrink-0" />
+      <span className="text-xs truncate flex-1">{media.fileName || 'Documento adjunto'}</span>
+      <Download size={13} className="shrink-0" />
+    </a>
+  )
 }
 
 export default function ConversacionesPage() {
@@ -346,6 +386,7 @@ function Inbox() {
   }
 
   const [derivarOpen, setDerivarOpen] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   // /api/usuarios (no /api/settings/users, que es sólo-ADMIN) — cualquiera
   // que pueda responder desde la bandeja tiene que poder ver a quién
   // derivarle, no sólo un admin.
@@ -685,6 +726,7 @@ function Inbox() {
                         {isCustomer ? <UserIcon size={10} /> : m.fromHuman ? <UserIcon size={10} /> : <Bot size={10} />}
                         {m.author} · {formatDateTime(m.createdAt)}
                       </div>
+                      {m.media && <MediaAttachment media={m.media} onOpenImage={setLightboxUrl} />}
                       <div className="whitespace-pre-wrap break-words">{m.content}</div>
                       {!isCustomer && (
                         <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px]">
@@ -853,6 +895,22 @@ function Inbox() {
           </div>
         )}
       </Modal>
+
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.9)' }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 p-2 rounded-full text-white hover:bg-white/10"
+          >
+            <CloseIcon size={22} />
+          </button>
+          <img src={lightboxUrl} alt="Adjunto" className="max-w-full max-h-full rounded-lg object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </div>
   )
 }

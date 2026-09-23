@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { resolveOrgByPhoneNumberId } from '@/lib/whatsapp-bot/resolve-org'
 import { handleIncomingWhatsAppMessage } from '@/lib/whatsapp-bot/engine'
 import { markWhatsAppMessageRead } from '@/lib/whatsapp-bot/send'
+import { downloadAndStoreWhatsAppMedia } from '@/lib/whatsapp-bot/media'
 
 export const dynamic = 'force-dynamic'
 // El procesamiento va en waitUntil (Gemini + debounce de 2.5s + loop de
@@ -56,29 +57,45 @@ function verifyMetaSignature(rawBody: string, signatureHeader: string | null): b
   return timingSafeEqual(expectedBuf, providedBuf)
 }
 
+interface MetaMedia {
+  id: string
+  mime_type?: string
+  sha256?: string
+  caption?: string
+  filename?: string // sólo document
+}
+
 interface MetaMessage {
   from: string
   id: string
   type: string
   text?: { body: string }
+  image?: MetaMedia
+  audio?: MetaMedia
+  document?: MetaMedia
+  video?: MetaMedia
+  sticker?: MetaMedia
   // Presente sólo cuando el mensaje viene de un botón "Enviar mensaje" de
   // un anuncio de WhatsApp (Facebook/Instagram Ads, "Click to WhatsApp") —
   // ver Fase 2 del embudo publicitario, memoria abba-bot-whatsapp-ia-spec.
   referral?: { headline?: string; source_type?: string }
 }
 
-// Todavía no sabemos "leer" fotos/audios/documentos (no hay vision/transcripción
-// acá) — pero el propio filtro técnico de Abba le pide al cliente mandar una
-// captura de pantalla ("pedile una captura si no ve cámaras"), así que ESTO VA A
-// PASAR seguido. Antes esto se ignoraba en silencio (el cliente mandaba la
-// captura pedida y no recibía nada de vuelta, parecía que el bot se había
-// colgado). Ahora se lo convierte en un mensaje de texto sintético y se lo
-// procesa igual que cualquier otro — así la IA se mantiene al tanto de que
-// algo llegó y puede reaccionar en contexto (ej. derivar a un técnico en vez
-// de insistir con la misma pregunta).
-function describeNonTextMessage(type: string): string {
+// Tipos que SÍ se descargan y se guardan (ver downloadAndStoreWhatsAppMedia)
+// — imagen/audio además se le mandan a Gemini como adjunto real en el turno
+// en el que llegan (ver engine.ts), no sólo como texto. Documento/video/
+// sticker se guardan y se pueden ver en el inbox, pero por ahora NISSI sigue
+// sin "leerlos" (menos crítico: el filtro técnico de Abba pide capturas de
+// pantalla, que son imágenes).
+const DOWNLOADABLE_TYPES = new Set(['image', 'audio', 'document', 'video', 'sticker'])
+
+// Texto que acompaña SIEMPRE al adjunto (además del archivo en sí, cuando se
+// pudo descargar) — así el historial de texto plano (transcript, panel de
+// Estadísticas, el propio contexto de Gemini en turnos futuros) sigue
+// teniendo sentido aunque no se vuelva a mandar la imagen/audio real.
+function describeNonTextMessage(type: string, caption?: string): string {
   const labels: Record<string, string> = {
-    image: 'una imagen o captura de pantalla',
+    image: 'una imagen',
     audio: 'un audio de voz',
     document: 'un documento/archivo',
     video: 'un video',
@@ -86,7 +103,8 @@ function describeNonTextMessage(type: string): string {
     location: 'su ubicación',
     contacts: 'una tarjeta de contacto',
   }
-  return `[El cliente envió ${labels[type] ?? 'un mensaje que no podés leer directamente (tipo: ' + type + ')'} — no podés verlo/escucharlo. Si estabas esperando justo eso (ej. le pediste una captura), agradecele y avisale que se lo vas a dejar a un humano para que lo revise; si no, pedile que te lo resuma en un mensaje de texto corto.]`
+  const base = `[El cliente envió ${labels[type] ?? 'un mensaje que no podés leer directamente (tipo: ' + type + ')'}.]`
+  return caption ? `${base} ${caption}` : base
 }
 interface MetaStatus {
   id: string
@@ -189,7 +207,16 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
       // todo el batch, los demás se retiran (ver `newest` en engine.ts).
       // Secuencial mandaría una respuesta por mensaje.
       await Promise.all(messages.map(async (m) => {
-        const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type)
+        const mediaMeta: MetaMedia | undefined = (m as any)[m.type]
+        let media: { url: string; mimeType: string; type: string; fileName?: string } | null = null
+        // Sólo si el plugin tiene token (si no, ni vale la pena — la Media
+        // API de Meta lo exige) y el tipo es uno que descargamos.
+        if (resolved.config && DOWNLOADABLE_TYPES.has(m.type) && mediaMeta?.id) {
+          const stored = await downloadAndStoreWhatsAppMedia(resolved.config.apiToken, mediaMeta.id, resolved.orgId, m.from)
+          if (stored) media = { url: stored.url, mimeType: stored.mimeType, type: m.type, fileName: mediaMeta.filename }
+        }
+
+        const text = m.type === 'text' ? m.text?.body : describeNonTextMessage(m.type, mediaMeta?.caption)
         if (!text) return // texto vacío de verdad (raro, pero no hay nada que contestar)
         const contact = value.contacts?.find((c) => c.wa_id === m.from)
 
@@ -207,6 +234,7 @@ async function processPayload(payload: { entry?: { changes?: { value: MetaChange
           waMessageId: m.id,
           botConfig: resolved.config,
           adReferral: m.referral ? { headline: m.referral.headline, sourceType: m.referral.source_type } : null,
+          media,
         })
       }))
     }

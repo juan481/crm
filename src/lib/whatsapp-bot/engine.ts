@@ -137,10 +137,22 @@ interface IncomingMessage {
   // NISSI no lo responde. Ver resolveOrgByPhoneNumberId.
   botConfig: WhatsAppBotConfig | null
   adReferral?: AdReferral | null
+  // Adjunto ya descargado y subido a Storage (ver media.ts) — null si no
+  // había adjunto, o si la descarga falló (el mensaje sigue su curso igual,
+  // sólo con el texto placeholder de describeNonTextMessage).
+  media?: { url: string; mimeType: string; type: string; fileName?: string } | null
 }
 
 function buildOriginLabel(ref: AdReferral): string {
   return ref.headline ? `Facebook/Instagram Ads - ${ref.headline}` : 'Anuncio de WhatsApp (Facebook/Instagram Ads)'
+}
+
+function mediaFields(media: IncomingMessage['media']): Record<string, string> {
+  if (!media) return {}
+  return {
+    mediaUrl: media.url, mediaType: media.type, mediaMimeType: media.mimeType,
+    ...(media.fileName ? { mediaFileName: media.fileName } : {}),
+  }
 }
 
 function handoffConfirmationText(to: string): string {
@@ -164,6 +176,25 @@ function buildContents(history: { role: string; content: string }[]): Content[] 
     }
   }
   return out
+}
+
+// Límite conservador para no inflar el costo/latencia de cada turno — un
+// audio de WhatsApp típico (nota de voz de 1-2min) o una foto de cámara
+// entran cómodos en esto; algo más grande no se manda inline (Gemini igual
+// tiene su propio tope, esto corta antes por costo/latencia del bot).
+const MAX_INLINE_MEDIA_BYTES = 15 * 1024 * 1024
+
+async function fetchInlineDataPart(url: string, mimeType: string): Promise<Part | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const buf = await res.arrayBuffer()
+    if (buf.byteLength > MAX_INLINE_MEDIA_BYTES) return null
+    return { inlineData: { mimeType, data: Buffer.from(buf).toString('base64') } }
+  } catch (err) {
+    console.error('[NISSI ENGINE] no se pudo traer el adjunto para Gemini', err)
+    return null
+  }
 }
 
 async function isHandoffStillOpen(db: any, conversation: { ticketId: string | null; dealId: string | null }): Promise<boolean> {
@@ -364,7 +395,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // mano. NO se tocan estados de la conversación (reabrir, mergear origen) —
   // eso es cosa de NISSI.
   if (!msg.botConfig) {
-    await db.whatsAppMessage.create({ data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId } })
+    await db.whatsAppMessage.create({ data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId, ...mediaFields(msg.media) } })
     await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastMessageAt: now, lastInboundAt: now } })
     console.warn('[NISSI ENGINE] plugin sin config completa — mensaje guardado, NISSI no responde', { orgId: msg.orgId, conversationId: conversation.id })
     return
@@ -387,7 +418,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
 
   const [inbound] = await Promise.all([
     db.whatsAppMessage.create({
-      data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId },
+      data: { conversationId: conversation.id, organizationId: msg.orgId, role: 'user', content: msg.text, waMessageId: msg.waMessageId, ...mediaFields(msg.media) },
       select: { id: true },
     }),
     db.whatsAppConversation.update({
@@ -507,6 +538,22 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     customerName: msg.customerName,
   })
   const contents = buildContents(history)
+
+  // Si el turno actual trae una imagen o un audio (ya descargado y subido a
+  // Storage por el webhook, ver media.ts), se le suma a Gemini como adjunto
+  // real — no sólo el texto placeholder. Gemini entiende imagen/audio
+  // inline de forma nativa; documento/video quedan afuera por ahora (menos
+  // crítico: el filtro técnico de Abba pide capturas, que son imágenes).
+  // Va en el ÚLTIMO bloque 'user' de contents (el turno recién llegado) —
+  // buildContents ya lo dejó ahí. Falla suave: si no se puede traer el
+  // archivo, sigue sólo con el texto, como si esto no existiera.
+  if (msg.media && (msg.media.type === 'image' || msg.media.type === 'audio')) {
+    const inlinePart = await fetchInlineDataPart(msg.media.url, msg.media.mimeType)
+    if (inlinePart) {
+      const last = contents[contents.length - 1]
+      if (last?.role === 'user') (last.parts as Part[]).push(inlinePart)
+    }
+  }
 
   let finalText = ''
   let handedOff: { to: string } | null = null

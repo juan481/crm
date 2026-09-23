@@ -45,6 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           select: {
             id: true, role: true, content: true, createdAt: true, senderUserId: true,
             deliveryStatus: true,
+            mediaUrl: true, mediaType: true, mediaMimeType: true, mediaFileName: true,
             sender: { select: { id: true, name: true } },
           },
         },
@@ -105,6 +106,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
                 : 'NISSI',
           fromHuman: !!m.senderUserId,
           deliveryStatus: m.role === 'user' ? null : m.deliveryStatus ?? null,
+          media: m.mediaUrl ? { url: m.mediaUrl, type: m.mediaType, mimeType: m.mediaMimeType, fileName: m.mediaFileName } : null,
         })),
       },
     })
