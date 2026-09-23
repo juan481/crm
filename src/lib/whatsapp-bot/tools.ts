@@ -157,7 +157,12 @@ async function notifyAreaByWhatsApp(
       `📱 Teléfono: ${ctx.customerPhone}\n` +
       `💬 Motivo: ${motivoCorto}\n\n` +
       `👉 Contactar directamente acá: ${link}`
-    const sent = await sendWhatsAppBotMessage(ctx.botConfig.apiToken, ctx.botConfig.phoneNumberId, opts.phone, message)
+    // El admin carga el teléfono en el panel como escriba (con +, espacios,
+    // guiones — el propio placeholder del formulario lo sugiere así) —
+    // sendWhatsAppBotMessage/normalizeWhatsAppTo esperan sólo dígitos, sin
+    // esto el envío le llega mal formado a Meta y falla en silencio.
+    const digitsOnly = opts.phone.replace(/\D/g, '')
+    const sent = await sendWhatsAppBotMessage(ctx.botConfig.apiToken, ctx.botConfig.phoneNumberId, digitsOnly, message)
     if (!sent.ok) console.error('[NISSI] no se pudo mandar el aviso interno de WhatsApp', opts.areaLabel, sent.error)
   } catch (err) {
     console.error('[NISSI] error mandando el aviso interno de WhatsApp', opts.areaLabel, err)
