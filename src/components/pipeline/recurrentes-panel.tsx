@@ -22,7 +22,7 @@ function money(byCur: Record<string, number>): string {
 
 export function RecurrentesPanel() {
   const { user } = useAuthStore()
-  const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')
+  const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'ADMINISTRATIVO')
 
   const { data, isLoading } = useQuery<Resp>({
     queryKey: ['servicios-recurrentes', 'panel-pipeline'],
