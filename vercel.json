@@ -36,10 +36,6 @@
     {
       "path": "/api/cron/catalogo-sync",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/whatsapp-followup",
-      "schedule": "*/5 * * * *"
     }
   ]
 }
