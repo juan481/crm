@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-  Shield, CheckCircle2, ArrowRight, Zap, Bot, FileText, BarChart3,
+  AlertTriangle, CheckCircle2, ArrowRight, Zap, Bot, FileText, BarChart3,
   Layers, Users, Package, RefreshCw, Send, Check, Sparkles, Building2,
-  Lock, Eye, Cpu, ChevronRight, PhoneCall, ChevronDown, Star, Laptop, Play
+  Clock, ShieldAlert, XCircle, MessageSquare, Flame, CheckCheck,
+  ChevronDown, Star, Play, Compass, PhoneCall, HelpCircle, HardDriveDownload
 } from 'lucide-react'
 
 export default function LandingPage() {
-  const [activePersona, setActivePersona] = useState<'seguridad' | 'gerentes' | 'vendedores' | 'administracion' | 'iot'>('seguridad')
-  const [activeInteractiveTab, setActiveInteractiveTab] = useState<'cotizador' | 'bot' | 'pipeline'>('cotizador')
+  const [activeTab, setActiveTab] = useState<'todos' | 'ventas' | 'operaciones' | 'administracion'>('todos')
   const [currency, setCurrency] = useState<'USD' | 'ARS'>('USD')
   const [priceMode, setPriceMode] = useState<'GREMIO' | 'PUBLICO'>('GREMIO')
   const [faqOpen, setFaqOpen] = useState<number | null>(null)
@@ -29,25 +29,25 @@ export default function LandingPage() {
     {
       sku: 'DS-7608NI-K2/8P',
       name: 'NVR 8 Canales PoE 4K 80Mbps H.265+',
-      desc: 'Grabador digital de red con 8 puertos PoE independientes. Soporta 2 discos rígidos de hasta 8TB.',
+      desc: 'Grabador digital con 8 puertos PoE integrados. Soporta 2 discos rígidos de hasta 8TB.',
       tipo: 'PRODUCTO',
       cant: 1,
       precioGremio: 195.00,
       precioPublico: 270.00,
     },
     {
-      sku: 'KIT-INST-SEC-01',
-      name: 'Kit de Cableado UTP Exterior + Fuentes + Conectores',
-      desc: 'Incluye: 100m Cable UTP Cat5e exterior, 8× Baluns pasivos, 4× Conectores macho/hembra, 1× Fuente switching 12V 5A.',
+      sku: 'KIT-CONECT-04',
+      name: 'Kit de Cableado UTP + Baluns + Fuentes Estancas',
+      desc: 'Incluye: 100m UTP Cat5e exterior, 8× baluns pasivos, 4× fuentes 12V 2A y conectores.',
       tipo: 'KIT',
       cant: 1,
       precioGremio: 70.00,
       precioPublico: 95.00,
     },
     {
-      sku: 'SRV-INST-CAM-04',
-      name: 'Mano de Obra Instalación, Cableado y Puesta en Marcha',
-      desc: 'Fijación de cámaras, canalización estética, ponchado, configuración en NVR y vinculación con app celular Hik-Connect.',
+      sku: 'SRV-INST-PUESTA',
+      name: 'Mano de Obra Instalación, Cableado y Vinculación App',
+      desc: 'Fijación en altura, canalización estética, ponchado, configuración en NVR y app celular Hik-Connect.',
       tipo: 'SERVICIO',
       cant: 1,
       precioGremio: 180.00,
@@ -70,413 +70,351 @@ export default function LandingPage() {
     return `$ ${(usd * exchangeRate).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  const personas = [
+  // The 7 Core Pain vs Function Battles
+  const painPoints = [
     {
-      id: 'seguridad',
-      label: 'Empresas de Seguridad',
-      badge: 'NUESTRO FUERTE',
-      title: 'El único CRM pensado desde el día 1 para Seguridad Electrónica & Monitoreo',
-      desc: 'Diseñado a medida para instaladores, empresas de alarmas comunitarias, CCTV, cercos eléctricos y monitoreo 24/7. Dejá de sufrir con CRMs genéricos que no entienden de kits, marcas técnicas ni abonos.',
-      bullets: [
-        'Cotización de Kits de seguridad con componentes desglosados para el depósito pero precio cerrado para el cliente.',
-        'Catálogo precargado de marcas líderes: Hikvision, Dahua, DSC, Paradox, Garnet, Intelbras.',
-        'Facturación y seguimiento de abonos mensuales recurrentes de monitoreo (MRR).',
-        'Órdenes de trabajo, remitos de entrega y partes de servicio técnico para los instaladores.'
-      ]
+      id: 'respuesta-lenta',
+      categoria: 'ventas',
+      icono: Clock,
+      badge: 'VELOCIDAD COMERCIAL',
+      dolorTitulo: 'El cliente pide presupuesto por WhatsApp y espera horas. Para cuando le contestás, ya le compró a tu competencia.',
+      dolorDetalle: 'Un prospecto escribe un sábado o a las 19 hs preguntando por un kit de 4 cámaras. El vendedor lo ve al día siguiente o se le pierde entre 40 chats personales. En seguridad electrónica, el 70% de las ventas las cierra quien responde primero.',
+      solucionTitulo: 'Respuesta Instantánea con Bot IA (NISSI) + Derivación con Transcript Completo',
+      solucionDetalle: 'NISSI (con Gemini 2.5 Flash) contesta en 2 segundos, comprende si el cliente busca cámaras, alarmas o servicio técnico, consulta el catálogo y crea la oportunidad en el Pipeline del vendedor con TODO el chat adjunto como nota. Cero segundos perdidos.',
+      impacto: 'Tiempo de respuesta reducido de 4 horas a 2 segundos. +45% en tasa de conversión de leads.'
     },
     {
-      id: 'gerentes',
-      label: 'Gerentes de Ventas',
-      badge: 'CONTROL & METRICAS',
-      title: 'Visión total del pipeline comercial y supervisión en tiempo real',
-      desc: 'Supervisá cada cotización, medí la efectividad de cada vendedor y sabé con certeza cuánto dinero hay en juego en el embudo comercial sin pedir informes en Excel.',
-      bullets: [
-        'Tablero Kanban interactivo con valor monetario ponderado por cada etapa.',
-        'Métricas de conversión, tiempo de respuesta a prospectos y ranking comercial.',
-        'Panel de supervisión de WhatsApp: medí cuántas consultas atiende la IA y cuántas toma tu equipo humano.',
-        'Historial congelado e inmutable de cada cotización para evitar descuentos no autorizados.'
-      ]
+      id: 'cotizaciones-word',
+      categoria: 'ventas',
+      icono: FileText,
+      badge: 'COTIZADOR FLASH',
+      dolorTitulo: 'Tardar 45 minutos por presupuesto en un Word desalineado, buscando precios en un Excel desactualizado.',
+      dolorDetalle: 'El vendedor tiene que abrir la lista del mayorista, calcular el dólar blue o MEP a mano, rezar que la fórmula del Excel no esté rota, copiar y pegar a un Word donde se le descalabra la tabla, y exportar un PDF con aspecto amateur. Si tiene 8 cotizaciones, pierde todo el día haciendo burocracia.',
+      solucionTitulo: 'Cotizador Inteligente en 30 Segundos + Dólar en Vivo + PDF White-Clean',
+      solucionDetalle: 'Seleccionás productos o kits con 1 clic. El sistema conmuta entre precio Gremio o Público automáticamente, actualiza el dólar oficial en tiempo real, desglosa el IVA exacto y genera un PDF corporativo de diseño impecable que se envía por mail con 1 clic.',
+      impacto: 'De 45 minutos a 30 segundos por cotización. Cotizás mientras estás hablando por teléfono con el cliente.'
     },
     {
-      id: 'vendedores',
-      label: 'Vendedores',
-      badge: 'AGILIDAD & CIERRES',
-      title: 'Armá cotizaciones técnicas impecables en 30 segundos y cerrá más ventas',
-      desc: 'Eliminá el trabajo tedioso. Buscá productos por modelo o SKU, conmutá entre precios Público y Gremio, calculá en dólares o pesos y enviá el PDF con 1 solo clic.',
-      bullets: [
-        'Generador de presupuestos con diseño White-Clean de lujo: sin logos recortados feos ni tablas rotas.',
-        'Envío automático del PDF por email desde tu propio servidor corporativo.',
-        'WhatsApp Web integrado con derivación automática de leads calificados por la IA.',
-        'Notificaciones en vivo cuando un cliente aprueba un presupuesto en el portal.'
-      ]
+      id: 'informacion-perdida',
+      categoria: 'ventas',
+      icono: MessageSquare,
+      badge: 'BLINDAJE DE INFORMACIÓN',
+      dolorTitulo: 'Toda la relación con el cliente está atrapada en el WhatsApp personal del vendedor. Si renuncia, te quedás a ciegas.',
+      dolorDetalle: 'Nadie sabe qué precio se le pasó al cliente, qué condiciones se le prometieron ni cuándo hay que llamarlo. Si el vendedor se enferma, falta o se va a trabajar con la competencia, se lleva los contactos, las conversaciones y las ventas en su teléfono.',
+      solucionTitulo: 'Bandeja de WhatsApp Omnicanal Compartida + Historial Inmutable',
+      solucionDetalle: 'Todo el equipo trabaja sobre el número oficial de la empresa desde el CRM. Cada conversación, nota de cotización y estado queda registrado en la ficha del cliente. Cualquier compañero puede continuar la atención sin preguntarle nada a nadie.',
+      impacto: '100% de la información pertenece a la empresa. Transición transparente entre operadores.'
     },
     {
-      id: 'administracion',
-      label: 'Administración & Finanzas',
-      badge: 'SIN FRICCIÓN',
-      title: 'Facturación ARCA / AFIP, inventario sin facturas y control de cobranzas',
-      desc: 'Unificá las ventas con el pañol y la contabilidad. Convertí cualquier cotización ganada en factura legal y orden de entrega sin tipear dos veces.',
-      bullets: [
-        'Facturación electrónica oficial A, B, C y Notas de Crédito con CAE y código QR.',
-        'Conteo físico inicial de stock: cargá mercadería existente sin necesidad de facturas de compra previas.',
-        'Portal de clientes: tus clientes descargan facturas y pagan sus abonos con tarjeta o transferencia.',
-        'Control estricto de cuentas corrientes, saldos impagos y recibos de cobro.'
-      ]
+      id: 'telefono-descompuesto',
+      categoria: 'operaciones',
+      icono: CheckCheck,
+      badge: 'OPERACIÓN & INSTALACIÓN',
+      dolorTitulo: 'El técnico llega a la obra y le faltan 2 baluns o la fuente no alcanza: teléfono descompuesto entre ventas y pañol.',
+      dolorDetalle: 'Ventas avisa por WhatsApp: "armate el kit para mañana". El pañolero agarra lo que encuentra. El instalador llega a la casa o fábrica del cliente, abre la caja y falta el conector de alimentación o el disco rígido. La obra se para, el cliente se queja y perdés plata en viajes.',
+      solucionTitulo: 'Órdenes de Entrega con Desglose Milimétrico de Componentes',
+      solucionDetalle: 'Al aprobarse un presupuesto, el CRM genera la orden de preparación (`/entregas`). Si cotizaste un "Kit 4 Cámaras", el pañol recibe la lista exacta con código SKU de cada tornillo, fuente, balun y metro de cable necesario, con firma de remito de entrega.',
+      impacto: 'Cero viajes duplicados por olvidos. Entregas exactas con trazabilidad por técnico.'
     },
     {
-      id: 'iot',
-      label: 'Empresas de IoT & Redes',
-      badge: 'TECNOLOGÍA & ESCALA',
-      title: 'Gestión integral para proyectos de telemetría, sensores y conectividad',
-      desc: 'Adaptado para integradores de infraestructura tecnológica, domótica, antenas punto a punto, fibra óptica y sensores inteligentes de IoT.',
-      bullets: [
-        'Estructuración de propuestas con hardware, licencias en la nube (SaaS) y mantenimiento.',
-        'Manejo de números de parte (MPN), números de serie y especificaciones de conectividad.',
-        'Soporte técnico estructurado con mesa de ayuda y medición de acuerdos de nivel de servicio (SLA).',
-        'API robusta y webhooks para sincronización con plataformas de telemetría externas.'
-      ]
+      id: 'stock-sin-facturas',
+      categoria: 'operaciones',
+      icono: Package,
+      badge: 'DEPÓSITO & STOCK',
+      dolorTitulo: 'Tenés 30 cámaras en la estantería del pañol pero el sistema dice "Stock 0" porque nadie cargó las facturas viejas.',
+      dolorDetalle: 'Los sistemas contables tradicionales te obligan a ingresar factura por factura de los últimos 6 meses para dar de alta el stock. Mientras tanto, tu equipo no sabe qué hay disponible en depósito y venden productos que no tienen o compran de más al mayorista.',
+      solucionTitulo: 'Módulo de Conteo Inicial Físico sin Factura previa',
+      solucionDetalle: 'Vas al depósito, contás físicamente cuántos grabadores, cámaras o sensores tenés, y los cargás con 1 clic en el CRM mediante el Conteo Inicial. El stock queda operativo de inmediato para que los vendedores lo vean en tiempo real al cotizar.',
+      impacto: 'Inventario 100% operativo en menos de 2 horas. Ni un solo peso inmovilizado por burocracia contable.'
     },
+    {
+      id: 'cobranzas-abonos',
+      categoria: 'administracion',
+      icono: ShieldAlert,
+      badge: 'FINANZAS & COBRANZAS',
+      dolorTitulo: 'Nadie sabe con certeza quién pagó el abono mensual de monitoreo y quién debe 3 meses: cruce eterno de comprobantes.',
+      dolorDetalle: 'Administración gasta días enteros buscando transferencias en el banco y pidiendo comprobantes por WhatsApp. Los clientes que adeudan abonos siguen teniendo servicio técnico gratuito porque los técnicos no saben que están en mora.',
+      solucionTitulo: 'Facturación ARCA/AFIP 1-Clic + Cuentas Corrientes + Portal de Clientes',
+      solucionDetalle: 'Convertí cotizaciones ganadas en Facturas oficiales A, B o C con CAE en segundos. Los clientes tienen su propio Portal de Autogestión (`/portal`) para descargar sus facturas y ver su estado de cuenta, y el técnico ve si el cliente está al día antes de ir a reparar.',
+      impacto: 'Cobranzas al día. Reducción del 80% en tiempo administrativo de conciliación bancaria.'
+    },
+    {
+      id: 'islas-incomunicadas',
+      categoria: 'administracion',
+      icono: Users,
+      badge: 'ALINEACIÓN TOTAL',
+      dolorTitulo: 'Tu empresa opera como 3 islas aisladas: Ventas promete, Técnica sufre y Administración no puede cobrar.',
+      dolorDetalle: 'El vendedor no sabe si hay técnicos disponibles antes de prometer una fecha. Técnica instala pero no le avisa a Administración para que facture. Administración reclama facturas a un cliente que está furioso porque una cámara no le anda.',
+      solucionTitulo: 'Un Único Ecosistema donde Toda la Empresa habla el Mismo Idioma',
+      solucionDetalle: 'Desde el primer "Hola" por WhatsApp hasta la firma del remito, la emisión de la factura electrónica y la encuesta de satisfacción del ticket, cada paso ocurre en la misma línea de tiempo visible para toda la empresa con roles y permisos específicos.',
+      impacto: 'Fin del caos interno. El dueño y los gerentes tienen el control absoluto en un solo dashboard.'
+    }
   ]
 
-  const activePersonaData = personas.find(p => p.id === activePersona)!
+  const filteredPains = activeTab === 'todos' 
+    ? painPoints 
+    : painPoints.filter(p => p.categoria === activeTab)
 
   const faqs = [
     {
-      q: '¿Por qué JustCRM es superior para empresas de seguridad frente a HubSpot o Salesforce?',
-      a: 'Los CRMs masivos son genéricos y están pensados para software o servicios simples. No entienden la lógica de un kit de cámaras (donde el cliente ve un precio pero el pañol debe entregar 4 cámaras, baluns, fuente y cables), ni tienen distinción nativa entre listas de instalador (Gremio) y usuario final, ni manejan stock físico sin factura previa, ni emiten facturas oficiales con CAE de AFIP/ARCA. Con JustCRM tenés todo resuelto de forma nativa sin pagar licencias de miles de dólares.'
+      q: '¿Por qué JustCRM resuelve el dolor de respuesta lenta mejor que tener a alguien atendiendo WhatsApp?',
+      a: 'Porque una persona física no puede responder 24/7 en 2 segundos, ni atender 5 consultas simultáneas a las 23:00 hs de un domingo. El Bot NISSI con Gemini 2.5 comprende lenguaje natural, evacúa dudas técnicas sobre cámaras IP, analítica perimetral o centrales de alarma al instante, y le deja al vendedor el lead calificado con la transcripción completa del chat listo para cerrar.'
     },
     {
-      q: '¿Cómo funciona el Bot de WhatsApp NISSI y cómo interactúa con el catálogo?',
-      a: 'NISSI corre sobre el motor Gemini 2.5 Flash de Google, conectado a la API oficial de WhatsApp de Meta. El bot comprende lenguaje natural, conoce todo tu catálogo de cámaras, alarmas y sensores, y responde consultas técnicas de inmediato. Jamás inventa un precio: cuando detecta que el usuario quiere cotizar o tiene una duda puntual, califica al cliente y lo deriva con todo el historial de la conversación directamente al área de Ventas, Soporte o Administración.'
+      q: '¿Cómo evita JustCRM que los técnicos olviden materiales para las instalaciones?',
+      a: 'A través de las Órdenes de Entrega generadas automáticamente desde la cotización aprobada. Si cotizás un "Kit 4 Cámaras", el CRM no solo le muestra el kit al cliente; desglosa para el pañol la lista de preparación con cada código SKU (baluns, fuentes, conectores, cable). El pañolero prepara la caja y el técnico firma la recepción digital.'
     },
     {
-      q: '¿Qué pasa si un vendedor o asesor quiere responder en vivo por WhatsApp?',
-      a: 'El CRM cuenta con una bandeja de entrada (Inbox de WhatsApp) compartida. Con un solo clic en "Tomar conversación", el humano toma el control total del chat y NISSI se silencia automáticamente para ese hilo. Cuando el operador termina, puede devolver el control al bot con un botón o el sistema lo reactiva automáticamente a las 24 horas.'
+      q: '¿Realmente puedo cargar mi stock si no tengo las facturas de compra anteriores?',
+      a: 'Sí, 100%. Implementamos la función exclusiva de "Conteo Inicial de Stock". Entendemos la realidad de las empresas de seguridad en Argentina: tenés mercadería que compraste hace meses. Con JustCRM podés contar físicamente tus estanterías y asentar el inventario real en 1 clic para empezar a vender inmediatamente.'
     },
     {
-      q: '¿Cómo se resuelven las cotizaciones en dólares y pesos en Argentina?',
-      a: 'JustCRM posee un selector multimoneda instantáneo con actualización automática del tipo de cambio oficial del día. Podés cotizar en USD (muy común para hardware importado de CCTV) o en ARS, discriminar o incluir el IVA con alícuotas del 21% o 10.5%, y enviar el PDF con un diseño White-Clean corporativo que deja fascinados a los clientes.'
+      q: '¿Cómo funciona la cotización con dólar y pesos?',
+      a: 'El cotizador lee la cotización del dólar oficial en tiempo real. Podés armar el presupuesto en Dólares (estándar de CCTV y alarmas importadas) y con un solo interruptor ver el equivalente en Pesos Argentinos con IVA del 21% o 10.5% discriminado. El PDF se imprime con el tipo de cambio congelado a la fecha para evitar discusiones con el cliente.'
     },
     {
-      q: '¿Qué es el módulo de "Conteo Inicial de Stock"?',
-      a: 'Sabemos que muchas empresas de seguridad tienen cientos de equipos comprados con anterioridad o almacenados en pañol de los que no tienen una factura de compra a mano. Nuestro sistema permite realizar un "Conteo Físico Inicial" seleccionando cualquier producto del catálogo y fijando la cantidad real en depósito con un clic, dejando el inventario operativo al instante.'
-    },
-    {
-      q: '¿Cómo se manejan los roles y permisos del personal?',
-      a: 'El sistema cuenta con roles preconfigurados (Super Admin, Administrador, Vendedor, Soporte Técnico, Administrativo) y permisos modulares. Podés configurar que tus vendedores solo vean sus propias cotizaciones y prospectos, mientras los gerentes de ventas y directores tienen una panorámica total del negocio.'
+      q: '¿Los vendedores pueden ver las ventas o clientes de sus compañeros?',
+      a: 'No, a menos que vos lo autorices. El sistema cuenta con una matriz de roles estricta: los Vendedores (`SELLER`) solo tienen acceso a sus propios prospectos, tratos y cotizaciones. Los Gerentes y Administradores tienen la vista panorámica de todo el equipo y métricas globales.'
     }
   ]
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 selection:bg-indigo-500 selection:text-white font-sans antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-[#080c15] text-slate-100 selection:bg-indigo-500 selection:text-white font-sans antialiased overflow-x-hidden">
       
       {/* ── Top Navigation Bar ────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#090d16]/80 border-b border-slate-800/80">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#080c15]/90 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <Shield className="w-5 h-5 text-white" />
+              <Zap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <span className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                JustCRM <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Security Edition</span>
+              <span className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                JustCRM <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">Cero Caos Operativo</span>
               </span>
               <p className="text-[10px] text-slate-400 font-medium -mt-0.5">by JustCreate</p>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
-            <a href="#soluciones" className="hover:text-white transition-colors">Para tu Rubro</a>
-            <a href="#funciones" className="hover:text-white transition-colors">Funcionalidades</a>
-            <a href="#cotizador-demo" className="hover:text-white transition-colors">Cotizador en Vivo</a>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-300">
+            <a href="#dolores" className="hover:text-white transition-colors">Los Dolores que Eliminamos</a>
+            <a href="#cotizador-demo" className="hover:text-white transition-colors">Cotizador en 30 Seg</a>
             <a href="#bot-ia" className="hover:text-white transition-colors">Bot con IA</a>
             <a href="#planes" className="hover:text-white transition-colors">Planes</a>
-            <a href="#faq" className="hover:text-white transition-colors">Preguntas</a>
+            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
           </nav>
 
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="text-sm font-medium px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
+              className="text-xs sm:text-sm font-semibold px-4 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-all"
             >
-              Ingresar al CRM
+              Ingresar
             </Link>
             <a
               href="#contacto"
-              className="text-sm font-semibold px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+              className="text-xs sm:text-sm font-bold px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-indigo-600 to-indigo-700 hover:from-red-500 hover:to-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
             >
-              <span>Solicitar Demo</span>
+              <span>Terminar con el Caos</span>
               <ArrowRight className="w-4 h-4" />
             </a>
           </div>
         </div>
       </header>
 
-      {/* ── Hero Section ─────────────────────────────────────────────── */}
-      <section className="relative pt-16 pb-24 md:pt-24 md:pb-32 overflow-hidden">
-        {/* Ambient glow backgrounds */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[450px] bg-gradient-to-tr from-indigo-600/20 via-purple-600/15 to-cyan-500/10 blur-[130px] pointer-events-none rounded-full" />
-        <div className="absolute top-1/3 -left-48 w-96 h-96 bg-blue-600/10 blur-[100px] pointer-events-none rounded-full" />
+      {/* ── Hero: Atacando el Dolor de Cabeza Central ─────────────────── */}
+      <section className="relative pt-16 pb-20 md:pt-24 md:pb-32 overflow-hidden text-center">
+        {/* Glow ambient effects */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-red-600/15 via-indigo-600/20 to-cyan-500/10 blur-[140px] pointer-events-none rounded-full" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs font-semibold text-indigo-300 mb-8 shadow-inner">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-            <span>El primer CRM vertical especializado en Empresas de Seguridad & IoT</span>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-950/60 border border-red-500/30 text-xs font-bold text-red-300 mb-8 shadow-inner">
+            <Flame className="w-3.5 h-3.5 text-red-400" />
+            <span>¿Cuánto dinero pierde tu empresa de seguridad por responder tarde y gestionar a ciegas?</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-5xl mx-auto leading-[1.1] mb-6">
-            Vendé, cotizá y gestioná tu empresa de seguridad <br className="hidden sm:inline" />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-cyan-300 to-white">
-              sin caos y a la velocidad de la luz.
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-5xl mx-auto leading-[1.08] mb-6">
+            El antídoto definitivo contra el caos interno, <br className="hidden sm:inline" />
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-indigo-300 to-cyan-300">
+              la lentitud de respuesta y la información perdida.
             </span>
           </h1>
 
           <p className="text-lg sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
-            Dejá atrás los presupuestos manuales en Word, las notas de WhatsApp desparramadas y el descontrol de depósito.
-            JustCRM combina <strong className="text-white font-semibold">Cotizador Inteligente con PDF White-Clean</strong>, <strong className="text-white font-semibold">Bot de WhatsApp con IA para calificar y derivar</strong>, <strong className="text-white font-semibold">Stock sin factura</strong> y <strong className="text-white font-semibold">Facturación ARCA/AFIP</strong> en una sola plataforma.
+            Si tu cliente espera horas un presupuesto, si cotizar te toma 45 minutos en un Word, si los instaladores llegan a la obra y les faltan piezas, y si cada vendedor atiende desde su WhatsApp personal sin dejar registro... <strong className="text-white font-semibold">tu problema no es de ventas: es de fricción operativa.</strong>
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <a
               href="#contacto"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-bold text-base shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/40 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
+              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-bold text-base shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
             >
-              <span>Agendar Demostración Personalizada</span>
+              <span>Agendar Demo y Optimizar mi Operación</span>
               <ArrowRight className="w-5 h-5" />
             </a>
             <a
-              href="#cotizador-demo"
-              className="w-full sm:w-auto px-7 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-base border border-slate-700/80 transition-all flex items-center justify-center gap-2"
+              href="#dolores"
+              className="w-full sm:w-auto px-7 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-base border border-slate-700 transition-all flex items-center justify-center gap-2"
             >
-              <Play className="w-4 h-4 text-cyan-400" />
-              <span>Probar Cotizador Interactivo</span>
+              <Compass className="w-4 h-4 text-cyan-400" />
+              <span>Ver los 7 Dolores que Destruimos</span>
             </a>
           </div>
 
-          {/* Social Proof Mini Bar */}
-          <div className="flex flex-wrap items-center justify-center gap-8 text-xs font-medium text-slate-400 border-y border-slate-800/80 py-5 max-w-4xl mx-auto">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Integración con WhatsApp Oficial (Meta Cloud)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Cotización oficial Dólar en vivo</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Facturación Electrónica ARCA / AFIP</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Precios Gremio vs Público automáticos</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Hero Interactive App Preview */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-14 relative z-10">
-          <div className="rounded-2xl border border-slate-700/80 bg-slate-900/90 shadow-2xl shadow-indigo-950/50 p-2 sm:p-4 backdrop-blur-md">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 px-3">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                <span className="ml-2 text-xs font-medium text-slate-400">justcrm.justcreate.com.ar / dashboard / cotizador</span>
+          {/* Quick Metrics Bar: The 3 Core Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5" />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  Bot NISSI Activo en WhatsApp
-                </span>
+              <div>
+                <h4 className="text-white font-bold text-sm">Respuesta en 2 Segundos</h4>
+                <p className="text-xs text-slate-400 mt-1">El bot con IA califica y deriva al instante. Nunca más un lead enfriándose en WhatsApp.</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-4 text-left">
-              {/* Left Widget: Cotizador Flash */}
-              <div className="lg:col-span-7 bg-slate-950/70 rounded-xl p-4 border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-indigo-400" />
-                      <h4 className="text-sm font-bold text-white">Cotizador Flash · Presupuesto #PRESUP-2026-X8</h4>
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
-                      Precio Gremio Aplicado
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                      <div>
-                        <p className="font-semibold text-slate-200">[DS-2CD2123G2-I] Domo IP Hikvision AcuSense 2MP</p>
-                        <p className="text-[11px] text-slate-400">4 unidades × US$ 85,00 (Gremio)</p>
-                      </div>
-                      <span className="font-bold text-white">US$ 340,00</span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                      <div>
-                        <p className="font-semibold text-slate-200">[DS-7608NI-K2/8P] NVR 8 Canales PoE 4K</p>
-                        <p className="text-[11px] text-slate-400">1 unidad × US$ 195,00 (Gremio)</p>
-                      </div>
-                      <span className="font-bold text-white">US$ 195,00</span>
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                      <div>
-                        <p className="font-semibold text-amber-300 flex items-center gap-1">
-                          <Package className="w-3 h-3" /> [KIT-INSTALACION] Kit Conectividad + Cables + Baluns
-                        </p>
-                        <p className="text-[11px] text-slate-400">Incluye: 100m UTP, 8× baluns, fuentes y conectores</p>
-                      </div>
-                      <span className="font-bold text-white">US$ 70,00</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-slate-400">Total con IVA (21%):</span>
-                    <p className="text-lg font-bold text-emerald-400">US$ 732,05 <span className="text-xs font-normal text-slate-400">($ 937.024 ARS)</span></p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5 shadow">
-                      <Send className="w-3 h-3" /> Enviar PDF por Email
-                    </button>
-                  </div>
-                </div>
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5" />
               </div>
+              <div>
+                <h4 className="text-white font-bold text-sm">Cotizaciones en 30 Segundos</h4>
+                <p className="text-xs text-slate-400 mt-1">Buscador instantáneo por SKU, precios Gremio/Público, dólar oficial y PDF White-Clean.</p>
+              </div>
+            </div>
 
-              {/* Right Widget: WhatsApp Bot Derivation Stream */}
-              <div className="lg:col-span-5 bg-slate-950/70 rounded-xl p-4 border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Bot className="w-4 h-4 text-emerald-400" />
-                      <h4 className="text-sm font-bold text-white">Bot NISSI (WhatsApp AI)</h4>
-                    </div>
-                    <span className="text-[11px] text-slate-400 font-mono">Gemini 2.5 Flash</span>
-                  </div>
-
-                  <div className="space-y-2 text-xs">
-                    <div className="bg-slate-900 p-2.5 rounded-lg rounded-tl-none border border-slate-800 max-w-[90%]">
-                      <p className="text-slate-300">"Hola, necesito poner 4 cámaras en una fábrica que detecten personas de noche y no me disparen falsas alarmas con gatos o lluvia."</p>
-                      <span className="text-[9px] text-slate-500 block text-right mt-1">Cliente · 16:32</span>
-                    </div>
-
-                    <div className="bg-emerald-950/40 border border-emerald-500/30 p-2.5 rounded-lg rounded-tr-none ml-auto max-w-[92%]">
-                      <p className="text-emerald-200">
-                        "¡Hola! Te recomiendo la línea <strong>Hikvision AcuSense</strong> con análisis perimetral de IA que discrimina vehículos y humanos, con infrarrojo EXIR hasta 30m. Te derivo de inmediato con el área de Ventas Técnicas junto a tu propuesta."
-                      </p>
-                      <span className="text-[9px] text-emerald-400/60 block text-right mt-1">NISSI (IA) · 16:32</span>
-                    </div>
-
-                    <div className="p-2 rounded bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-300 flex items-center gap-2">
-                      <Zap className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                      <span><strong>Derivación a Ventas:</strong> Lead creado en Pipeline con transcript completo.</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-                  <span>Asignado a: <strong>Juan (Vendedor)</strong></span>
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Tomar conversación
-                  </span>
-                </div>
+            <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                <CheckCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-white font-bold text-sm">Cero Información Perdida</h4>
+                <p className="text-xs text-slate-400 mt-1">Ventas, Pañol, Instaladores y Finanzas en la misma sintonía con tareas detalladas al milímetro.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Rubros & Personas Tabs (A quién le hablamos) ─────────────── */}
-      <section id="soluciones" className="py-20 bg-slate-950/80 border-t border-slate-800 relative">
+      {/* ── The 7 Dolores de Cabeza vs Funciones JustCRM ──────────────── */}
+      <section id="dolores" className="py-24 bg-slate-950 border-t border-slate-800 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Especialización Total</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white mt-2">
-              Un CRM diseñado para cada pieza clave de tu empresa
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <span className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center justify-center gap-1.5 mb-2">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+              Diagnóstico Operativo
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white">
+              Los 7 Dolores de Cabeza que están frenando a tu empresa
             </h2>
-            <p className="text-slate-400 mt-3 text-base">
-              Seleccioná tu rol o departamento y descubrí cómo JustCRM resuelve tus dolores diarios.
+            <p className="text-slate-400 mt-4 text-base">
+              Identificá los cuellos de botella que hoy te cuestan horas de estrés, clientes perdidos y desorganización interna:
             </p>
           </div>
 
-          {/* Persona selector tabs */}
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-12">
-            {personas.map(p => (
+          {/* Filter Pills */}
+          <div className="flex justify-center gap-2 mb-12">
+            {[
+              { id: 'todos', label: 'Todos los Dolores' },
+              { id: 'ventas', label: 'Ventas & Clientes' },
+              { id: 'operaciones', label: 'Técnica & Depósito' },
+              { id: 'administracion', label: 'Cobranzas & Gestión' },
+            ].map(tab => (
               <button
-                key={p.id}
-                onClick={() => setActivePersona(p.id as any)}
-                className={`px-4 sm:px-6 py-3 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 border ${
-                  activePersona === p.id
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  activeTab === tab.id
                     ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-600/30'
-                    : 'bg-slate-900/90 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                 }`}
               >
-                <span>{p.label}</span>
-                {p.id === 'seguridad' && (
-                  <span className="text-[10px] bg-cyan-400 text-slate-950 font-bold px-1.5 py-0.2 rounded">
-                    ★
-                  </span>
-                )}
+                {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Persona Card Detail */}
-          <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl max-w-5xl mx-auto">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                {activePersonaData.badge}
-              </span>
-              <span className="text-xs text-slate-400 font-medium">Solución a medida para tu operación</span>
-            </div>
-
-            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-              {activePersonaData.title}
-            </h3>
-
-            <p className="text-slate-300 text-base leading-relaxed mb-8">
-              {activePersonaData.desc}
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activePersonaData.bullets.map((bullet, idx) => (
-                <div key={idx} className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80">
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3.5 h-3.5" />
+          {/* Pain Cards List */}
+          <div className="space-y-8 max-w-5xl mx-auto">
+            {filteredPains.map((item, idx) => (
+              <div
+                key={item.id}
+                className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 sm:p-8 shadow-xl hover:border-slate-700 transition-all"
+              >
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 flex items-center justify-center font-bold text-xs">
+                      #{idx + 1}
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {item.badge}
+                    </span>
                   </div>
-                  <span className="text-sm text-slate-200 font-medium leading-snug">{bullet}</span>
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Solución Resuelta
+                  </span>
                 </div>
-              ))}
-            </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left: The Pain (El Dolor) */}
+                  <div className="p-5 rounded-2xl bg-red-950/20 border border-red-500/20 text-left">
+                    <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase tracking-wider mb-2">
+                      <XCircle className="w-4 h-4 text-red-400" />
+                      <span>El Dolor de Cabeza</span>
+                    </div>
+                    <h4 className="text-base sm:text-lg font-bold text-white mb-2 leading-snug">
+                      {item.dolorTitulo}
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      {item.dolorDetalle}
+                    </p>
+                  </div>
+
+                  {/* Right: The JustCRM Function (La Solución) */}
+                  <div className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-left">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Cómo lo Destruye JustCRM</span>
+                    </div>
+                    <h4 className="text-base sm:text-lg font-bold text-white mb-2 leading-snug">
+                      {item.solucionTitulo}
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                      {item.solucionDetalle}
+                    </p>
+                    <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-cyan-300 font-semibold flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                      <span><strong>Impacto directo:</strong> {item.impacto}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+
         </div>
       </section>
 
-      {/* ── Interactive Demo Showcase: Cotizador en Vivo ─────────────── */}
-      <section id="cotizador-demo" className="py-24 relative overflow-hidden bg-[#090d16]">
+      {/* ── Interactive Live Cotizador: Cómo se ve la Solución ───────── */}
+      <section id="cotizador-demo" className="py-24 bg-[#080c15] border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center max-w-3xl mx-auto mb-12">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Pruébelo Usted Mismo</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white mt-2">
-              El Cotizador Técnico más veloz y potente del mercado
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Demostración en Tiempo Real</span>
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mt-2">
+              Cotizá mientras hablás por teléfono con el cliente
             </h2>
             <p className="text-slate-400 mt-3 text-base">
-              Probá cómo se recalcula un presupuesto técnico en vivo alternando entre lista Gremio o Público, y cambiando entre Dólares o Pesos.
+              Nunca más abras un Word ni busques en listas rotas de Excel. Probá el cotizador dinámico:
             </p>
           </div>
 
-          <div className="max-w-5xl mx-auto bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 sm:p-8">
-            
-            {/* Control Bar: Currency & Mode Toggle */}
+          <div className="max-w-5xl mx-auto bg-slate-900/90 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-950 border border-slate-800 mb-6">
               <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-slate-400">Lista de Precios:</span>
+                <span className="text-xs font-semibold text-slate-400">Condición Comercial:</span>
                 <div className="inline-flex rounded-lg bg-slate-900 p-1 border border-slate-800">
                   <button
                     onClick={() => setPriceMode('GREMIO')}
@@ -554,7 +492,7 @@ export default function LandingPage() {
               {/* Table items */}
               <div className="space-y-3">
                 <div className="grid grid-cols-12 text-[11px] font-bold text-slate-500 uppercase pb-2 border-b border-slate-200">
-                  <div className="col-span-6">Ítem & Especificación Técnica</div>
+                  <div className="col-span-6">Ítem & Código SKU</div>
                   <div className="col-span-2 text-center">Tipo</div>
                   <div className="col-span-2 text-center">Cantidad</div>
                   <div className="col-span-2 text-right">Total</div>
@@ -612,20 +550,20 @@ export default function LandingPage() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
-                <p>✓ Cotización válida por 15 días luego de su emisión.</p>
-                <p className="font-semibold text-indigo-600">Generado con JustCRM White-Clean Engine</p>
+                <p>✓ Cotización con validez técnica de 15 días.</p>
+                <p className="font-semibold text-indigo-600">PDF White-Clean Engine · Sin recuadros blancos feos</p>
               </div>
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
               <div className="text-xs text-slate-400">
-                ⚡ Podés descargarlo como PDF o enviarlo automáticamente por correo al cliente desde el CRM.
+                ⚡ Creado para que el cliente lo reciba en su bandeja de entrada antes de colgar la llamada.
               </div>
               <a
                 href="#contacto"
                 className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center gap-2 shadow"
               >
-                <span>Quiero esta función para mi empresa</span>
+                <span>Quiero este cotizador en mi empresa</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -633,114 +571,106 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Feature Grid: Todo lo que incluye el CRM ──────────────────── */}
-      <section id="funciones" className="py-24 bg-slate-950 border-t border-slate-800">
+      {/* ── WhatsApp Bot NISSI Deep Dive ──────────────────────────────── */}
+      <section id="bot-ia" className="py-24 bg-slate-950 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Capacidades Completas</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white mt-2">
-              Todas las herramientas para dominar tu operación comercial
-            </h2>
-            <p className="text-slate-400 mt-3 text-base">
-              No dejes nada al azar. Cada módulo fue construido para que tu equipo ahorre horas de trabajo diario.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
-            {/* Feature 1 */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-indigo-500/50 transition-all group">
-              <div className="w-12 h-12 rounded-xl bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <FileText className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">Cotizador Técnico & PDF White-Clean</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Generá presupuestos con código SKU, descripciones multilínea, KITS desglosados y alícuotas de IVA exactas. Envío por email directo en 1 clic.
+            <div className="lg:col-span-6 text-left">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-3">
+                <Bot className="w-4 h-4 text-emerald-400" />
+                Inteligencia Artificial Especializada
+              </span>
+              <h2 className="text-3xl sm:text-5xl font-black text-white leading-tight mb-6">
+                El Bot NISSI no inventa precios: asesora técnicamente y deriva con transcript.
+              </h2>
+              <p className="text-slate-300 text-base leading-relaxed mb-6">
+                La mayoría de los chatbots frustran a los clientes porque dan respuestas genéricas o tiran precios inventados. 
+                <strong>NISSI</strong> está entrenado para la realidad de la seguridad electrónica:
               </p>
+
+              <div className="space-y-4 text-sm text-slate-300">
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-white">Conoce tu Catálogo en Tiempo Real:</strong> Explica diferencias entre cámaras analógicas e IP, analítica AcuSense, distancias infrarrojas y compatibilidad de grabadores.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-white">Derivación Quirúrgica por Departamento:</strong> Si el cliente quiere comprar, crea un Lead en el Pipeline del vendedor. Si tiene una falla técnica, abre un Ticket de soporte. Cero confusión.
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-white">Takeover Humano con 1 Clic:</strong> Si un asesor quiere responder, toma el chat desde el CRM y el bot se silencia al instante.
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Feature 2 */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-emerald-500/50 transition-all group">
-              <div className="w-12 h-12 rounded-xl bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Bot className="w-6 h-6" />
+            <div className="lg:col-span-6 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold text-white">Conversación en Vivo · WhatsApp Cloud API</span>
+                </div>
+                <span className="text-xs text-slate-500 font-mono">Motor: Gemini 2.5 Flash</span>
               </div>
-              <h3 className="text-lg font-bold text-white mb-2">Bot de WhatsApp con IA (NISSI)</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Asesor técnico con Gemini 2.5 Flash que atiende consultas por WhatsApp 24/7, conoce tu catálogo y deriva a Ventas o Soporte con transcript completo.
-              </p>
+
+              <div className="space-y-3 text-xs">
+                <div className="bg-slate-950 p-3 rounded-xl rounded-tl-none border border-slate-800 max-w-[85%] text-left">
+                  <p className="text-slate-300">"Hola, necesitamos poner 8 cámaras en un galpón de logística para controlar carga de camiones. ¿Qué conviene?"</p>
+                  <span className="text-[9px] text-slate-500 block text-right mt-1">Cliente · 18:42</span>
+                </div>
+
+                <div className="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-xl rounded-tr-none ml-auto max-w-[90%] text-left">
+                  <p className="text-emerald-200">
+                    "¡Buenas tardes! Para galpones de logística recomendamos cámaras <strong>IP Varifocales de 4MP</strong> para cubrir accesos de camiones y lectura de patentes, combinadas con domos fijos para pasillos. Te derivo ahora mismo con nuestro ingeniero comercial para armarte el proyecto a medida."
+                  </p>
+                  <span className="text-[9px] text-emerald-400/60 block text-right mt-1">NISSI (IA) · 18:42 (2 segundos después)</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 text-left flex items-start gap-2">
+                  <Zap className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-white">Acción del Sistema Ejecutada:</p>
+                    <p className="text-[11px] text-indigo-200 mt-0.5">Oportunidad creada en el Pipeline: <strong>[Ventas] Galpón Logística 8 Cámaras</strong>. Transcripción completa pegada en la nota.</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Feature 3 */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-cyan-500/50 transition-all group">
-              <div className="w-12 h-12 rounded-xl bg-cyan-600/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Layers className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">Pipeline Visual Drag & Drop</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Embudo de oportunidades conectado a las cotizaciones y WhatsApp. Arrastrá tratos, medí probabilidades y no pierdas jamás un prospecto.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-amber-500/50 transition-all group">
-              <div className="w-12 h-12 rounded-xl bg-amber-600/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Package className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">Conteo Inicial de Stock sin Factura</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Cargá todo el inventario físico que ya tenés en depósito sin trabarte por no tener las facturas de compra anteriores. Órdenes de entrega automáticas.
-              </p>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-purple-500/50 transition-all group">
-              <div className="w-12 h-12 rounded-xl bg-purple-600/10 text-purple-400 border border-purple-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Shield className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">Facturación Fiscal ARCA / AFIP</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Emisión de comprobantes electrónicos legales (A, B, C) con CAE y QR. Cobro de abonos mensuales recurrentes y seguimiento de cuentas corrientes.
-              </p>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800/80 hover:border-blue-500/50 transition-all group">
-              <div className="w-12 h-12 rounded-xl bg-blue-600/10 text-blue-400 border border-blue-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                <Users className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-2">Matriz de Roles & Permisos Modulares</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Super Admin, Gerente, Vendedor, Técnico y Administrativo. Cada usuario ve exactamente lo que le corresponde, protegiendo tus datos y márgenes.
-              </p>
-            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Pricing / Suscripción Tiers ──────────────────────────────── */}
-      <section id="planes" className="py-24 bg-[#090d16] border-t border-slate-800 relative">
+      {/* ── Planes de Suscripción ─────────────────────────────────────── */}
+      <section id="planes" className="py-24 bg-[#080c15] border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Planes Transparentes</span>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white mt-2">
-              Invertí en el crecimiento real de tu empresa de seguridad
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Inversión Transparente</span>
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white mt-2">
+              Menos de lo que perdés con una sola venta caída
             </h2>
             <p className="text-slate-400 mt-3 text-base">
-              Comenzá hoy mismo y activá tu CRM con soporte e implementación guiada por JustCreate.
+              Elegí el plan que mejor se adapte al tamaño de tu empresa y activalo hoy mismo con JustCreate.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            
-            {/* Plan 1 */}
-            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all">
+            {/* Starter */}
+            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all text-left">
               <div>
                 <h3 className="text-xl font-bold text-white">Starter Instalador</h3>
                 <p className="text-xs text-slate-400 mt-1">Para técnicos independientes y equipos chicos de hasta 3 personas.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-4xl font-extrabold text-white">Consultar</span>
+                  <span className="text-3xl font-extrabold text-white">Consultar</span>
                   <span className="text-xs text-slate-400 block mt-1">Planes a medida en pesos o dólares</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-300">
@@ -748,7 +678,7 @@ export default function LandingPage() {
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Cotizador Flash ilimitado con PDF White-Clean</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Catálogo de productos & precios Gremio</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Pipeline de ventas Kanban</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Control básico de stock físico</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Conteo inicial de stock sin factura</li>
                 </ul>
               </div>
               <a
@@ -759,16 +689,16 @@ export default function LandingPage() {
               </a>
             </div>
 
-            {/* Plan 2: Destacado */}
-            <div className="rounded-3xl bg-gradient-to-b from-indigo-900/40 via-slate-900 to-slate-900 border-2 border-indigo-500 p-8 flex flex-col justify-between shadow-2xl shadow-indigo-950/60 relative">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow">
+            {/* Plan Pro con Bot IA (Destacado) */}
+            <div className="rounded-3xl bg-gradient-to-b from-indigo-950/60 via-slate-900 to-slate-900 border-2 border-indigo-500 p-8 flex flex-col justify-between shadow-2xl relative text-left">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-red-500 via-indigo-500 to-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow">
                 MÁS ELEGIDO POR EMPRESAS
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white">Security Pro & Bot IA</h3>
-                <p className="text-xs text-slate-300 mt-1">Para empresas de seguridad, CCTV y monitoreo en expansión.</p>
+                <p className="text-xs text-slate-300 mt-1">Para empresas de seguridad, monitoreo y CCTV que quieren escalar.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-4xl font-extrabold text-white">Plan Pro</span>
+                  <span className="text-3xl font-extrabold text-white">Plan Pro</span>
                   <span className="text-xs text-indigo-300 block mt-1">Con Bot de WhatsApp NISSI Gemini 2.5</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-200">
@@ -778,30 +708,30 @@ export default function LandingPage() {
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Inbox compartido de WhatsApp con Takeover humano</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Facturación electrónica oficial ARCA / AFIP</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Portal de autogestión de clientes</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Conteo inicial de stock sin factura</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Remitos y órdenes de entrega con código de componentes</li>
                 </ul>
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-slate-950 font-extrabold text-xs text-center shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5"
+                className="mt-8 w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-slate-950 font-extrabold text-xs text-center shadow-lg transition-all"
               >
                 Comenzar con Plan Pro
               </a>
             </div>
 
-            {/* Plan 3 */}
-            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all">
+            {/* Enterprise */}
+            <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all text-left">
               <div>
                 <h3 className="text-xl font-bold text-white">Enterprise White-Label</h3>
-                <p className="text-xs text-slate-400 mt-1">Para grandes integradores, franquicias o múltiples sucursales.</p>
+                <p className="text-xs text-slate-400 mt-1">Para grandes integradores, franquicias o múltiples depósitos.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-4xl font-extrabold text-white">A Medida</span>
-                  <span className="text-xs text-slate-400 block mt-1">Servidor dedicado + Marca blanca total</span>
+                  <span className="text-3xl font-extrabold text-white">A Medida</span>
+                  <span className="text-xs text-slate-400 block mt-1">Servidor privado dedicado + Marca blanca total</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-300">
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Servidor privado dedicado en Hetzner / AWS</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Servidor privado en Hetzner / AWS</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Dominio propio (crm.tuempresa.com)</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Múltiples organizaciones / sucursales aisladas</li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Múltiples sucursales / depósitos aislados</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Integraciones personalizadas por API</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Soporte prioritario directo con ingenieros</li>
                 </ul>
@@ -813,7 +743,6 @@ export default function LandingPage() {
                 Contactar a Ventas Enterprise
               </a>
             </div>
-
           </div>
         </div>
       </section>
@@ -824,13 +753,13 @@ export default function LandingPage() {
           <div className="text-center mb-14">
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Preguntas Frecuentes</span>
             <h2 className="text-3xl font-extrabold text-white mt-2">
-              Todo lo que necesitás saber antes de empezar
+              Todo lo que necesitás saber antes de dar el salto
             </h2>
           </div>
 
           <div className="space-y-4">
             {faqs.map((faq, idx) => (
-              <div key={idx} className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden">
+              <div key={idx} className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden text-left">
                 <button
                   onClick={() => setFaqOpen(faqOpen === idx ? null : idx)}
                   className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-white hover:text-indigo-300 transition-colors"
@@ -849,25 +778,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Final Call to Action / Contact Form ──────────────────────── */}
-      <section id="contacto" className="py-24 bg-gradient-to-b from-[#090d16] to-slate-950 border-t border-slate-800 relative">
+      {/* ── Final Call to Action / Formulario ─────────────────────────── */}
+      <section id="contacto" className="py-24 bg-gradient-to-b from-[#080c15] to-slate-950 border-t border-slate-800 relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-500/20">
-            <Shield className="w-8 h-8 text-white" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-500 via-indigo-600 to-cyan-400 flex items-center justify-center mx-auto mb-6 shadow-xl">
+            <Zap className="w-8 h-8 text-white" />
           </div>
 
-          <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
-            Llevá tu empresa de seguridad al siguiente nivel
+          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mb-4">
+            Basta de perder tiempo y dinero en tareas manuales
           </h2>
           <p className="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto mb-10">
-            Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para coordinar una demo guiada de 15 minutos en vivo.
+            Completá tus datos y un especialista de JustCreate te contactará hoy mismo para mostrarte el sistema funcionando en vivo con los productos reales de tu empresa.
           </p>
 
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              alert('¡Gracias por tu interés! Un especialista se pondrá en contacto a la brevedad.')
+              alert('¡Gracias por tu interés! Un especialista de JustCreate te contactará a la brevedad.')
             }}
             className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl max-w-xl mx-auto text-left space-y-4"
           >
@@ -877,58 +806,46 @@ export default function LandingPage() {
                 type="text"
                 required
                 placeholder="Ej. Juan Pérez"
-                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Nombre de tu Empresa</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Nombre de tu Empresa de Seguridad o IoT</label>
               <input
                 type="text"
                 required
-                placeholder="Ej. Alarmas & Seguridad Integral SRL"
-                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="Ej. Securitas, Abba Seguridad, etc."
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email de Contacto</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Corporativo</label>
                 <input
                   type="email"
                   required
                   placeholder="juan@seguridad.com"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">WhatsApp / Teléfono</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">WhatsApp de Contacto</label>
                 <input
                   type="tel"
                   required
                   placeholder="+54 9 11 ..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Rubro Principal</label>
-              <select className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors">
-                <option>Empresa de Seguridad Electrónica & CCTV</option>
-                <option>Monitoreo de Alarmas 24/7</option>
-                <option>Integrador Tecnológico / IoT</option>
-                <option>Cercos Eléctricos & Control de Accesos</option>
-                <option>Telecomunicaciones & Redes</option>
-                <option>Otro rubro afín</option>
-              </select>
-            </div>
-
             <button
               type="submit"
-              className="w-full mt-4 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5"
+              className="w-full mt-4 py-4 rounded-xl bg-gradient-to-r from-red-600 via-indigo-600 to-cyan-500 hover:from-red-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5"
             >
-              Solicitar Demostración y Asesoramiento
+              Agendar Demostración y Eliminar el Caos
             </button>
             <p className="text-[11px] text-slate-500 text-center mt-2">
               Sin contratos forzados · Implementación guiada paso a paso por JustCreate
@@ -949,7 +866,7 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-6">
             <Link href="/login" className="hover:text-slate-300 transition-colors">Iniciar Sesión</Link>
-            <a href="#soluciones" className="hover:text-slate-300 transition-colors">Soluciones</a>
+            <a href="#dolores" className="hover:text-slate-300 transition-colors">Dolores Operativos</a>
             <a href="#planes" className="hover:text-slate-300 transition-colors">Planes</a>
             <a href="mailto:contacto@justcreate.com.ar" className="hover:text-slate-300 transition-colors">contacto@justcreate.com.ar</a>
           </div>
