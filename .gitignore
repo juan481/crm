@@ -44,3 +44,4 @@ crm-just-create-*.json
 # one-off — nunca al repo)
 /Chats viejos/
 scripts/whatsapp-import-sin-telefono.json
+*.tsbuildinfo
