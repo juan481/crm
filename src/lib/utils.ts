@@ -161,6 +161,7 @@ export function toWhatsappUrl(phone: string): string {
 export const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Super Admin',
   ADMIN:       'Administrador',
+  ADMINISTRATIVO: 'Administrativo',
   SELLER:      'Vendedor',
   TECHNICIAN:  'Técnico',
   HR:          'RRHH',

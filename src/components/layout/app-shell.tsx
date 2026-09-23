@@ -211,7 +211,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
           </ErrorBoundary>
           <footer className="text-center py-2 text-[10px] leading-none opacity-40 hover:opacity-70 transition-opacity">
             <a href="https://justcreate.com.ar" target="_blank" rel="noopener noreferrer" className="text-[var(--color-text-subtle)]">
-              Tecnología desarrollada por JustCreate
+              Tecnología desarrollada por Just Create
             </a>
           </footer>
         </main>

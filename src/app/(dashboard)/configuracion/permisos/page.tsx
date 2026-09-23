@@ -23,7 +23,7 @@ interface ModulePermissionRow {
 // GREMIO / CLIENTE: -1 sólo para que TS no rompa (Record<Role,...> exige
 // todas las claves) — no entran a ROLES, nunca aparecen como columna acá.
 // Mismo criterio que src/lib/auth.ts y src/lib/modules.ts.
-const ROLE_LEVEL: Record<Role, number> = { SUPER_ADMIN: 4, ADMIN: 3, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1, CLIENTE: -1 }
+const ROLE_LEVEL: Record<Role, number> = { SUPER_ADMIN: 4, ADMIN: 3, ADMINISTRATIVO: 2.5, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1, CLIENTE: -1 }
 const meetsFloor = (role: Role, minRole: Role) => ROLE_LEVEL[role] >= ROLE_LEVEL[minRole]
 
 export default function PermisosPage() {

@@ -14,6 +14,11 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
   const hierarchy: Record<Role, number> = {
     SUPER_ADMIN: 4,
     ADMIN: 3,
+    // Entre SELLER y ADMIN a propósito: ve más módulos operativos que un
+    // vendedor (Facturación, Compras, Depósito, Servicios — ver minRole
+    // bajado en modules.ts) pero canAccess(role,'ADMIN') sigue dando false,
+    // así que nunca hereda gratis usuarios/Configuración/Permisos/Plugins.
+    ADMINISTRATIVO: 2.5,
     SELLER: 2,
     HR: 1,         // canAccess(role, 'HR')  → blocks only TECHNICIAN
     TECHNICIAN: 0, // canAccess(role, 'SELLER') → blocks HR and TECHNICIAN

@@ -12,6 +12,12 @@ datasource db {
 enum Role {
   SUPER_ADMIN
   ADMIN
+  // Ve la mayoría de los módulos operativos/financieros (Facturación, Compras,
+  // Depósito, Servicios/Licencias, etc.) pero NO tiene poderes de ADMIN
+  // (usuarios, Configuración, Permisos, Plugins, Marca) ni acceso al
+  // Cotizador. Rango 2.5 en canAccess()/ROLE_LEVEL: por encima de SELLER,
+  // por debajo de ADMIN — ver src/lib/auth.ts. Pedido de Abba (Norma).
+  ADMINISTRATIVO
   SELLER
   HR
   TECHNICIAN

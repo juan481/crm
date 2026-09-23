@@ -264,7 +264,9 @@ export async function GET() {
 
     // "Restricciones sobre rentabilidad neta" para Ventas (pedido del
     // cliente) — SELLER ve todo lo operativo, nada de plata agregada.
-    const canSeeFinancials = canAccess(payload.role, 'ADMIN')
+    // ADMINISTRATIVO SÍ ve financials (Facturación/Servicios son parte de su
+    // rol) aunque no sea ADMIN — ver rango 2.5 en auth.ts.
+    const canSeeFinancials = canAccess(payload.role, 'ADMIN') || payload.role === 'ADMINISTRATIVO'
     const data = await fetchMetrics(payload.orgId, canSeeFinancials, payload.userId, payload.role)
 
     return NextResponse.json(

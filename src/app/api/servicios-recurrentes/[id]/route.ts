@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { puedeVerServicios } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { sanitizeMoneda, clampDiaVencimiento } from '@/lib/servicios-recurrentes'
 
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const current = await prisma.servicioRecurrente.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
@@ -77,7 +78,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // Sólo borra si es de la org. Las facturas ya emitidas quedan (el FK es
     // onDelete: SetNull) — borrar el abono no borra la plata ya facturada.

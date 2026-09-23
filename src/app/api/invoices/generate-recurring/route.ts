@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { puedeVerFacturacion } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 import { empresasConAbono, getBillingConfig } from '@/lib/billing-recurrente'
@@ -13,7 +14,7 @@ export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN'))
+    if (!(await puedeVerFacturacion(payload.orgId, payload.role)))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const now = new Date()
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) {
+    if (!(await puedeVerFacturacion(payload.orgId, payload.role))) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nombre, email y contraseña son requeridos' }, { status: 400 })
     }
 
-    const VALID_ROLES = ['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN', 'GREMIO']
+    const VALID_ROLES = ['ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR', 'SUPER_ADMIN', 'GREMIO']
     if (!VALID_ROLES.includes(role)) {
       return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
     }

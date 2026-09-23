@@ -1,6 +1,6 @@
 import type { Role } from '@/types'
 
-export const ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN']
+export const ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN']
 
 export interface ModuleDefinition {
   id: string
@@ -17,29 +17,36 @@ export interface ModuleDefinition {
   minRole: Role
 }
 
+// ADMINISTRATIVO (Norma, Abba) — ve la mayoría de los módulos operativos y
+// financieros pero NUNCA Cotizador/Cotizaciones/Catálogo·gestión (no cotiza)
+// ni nada de Configuración/Usuarios/Permisos (eso sigue siendo sólo ADMIN+,
+// ver canAccess() en auth.ts — el rango 2.5 no llega a 'ADMIN'). Se agrega
+// como defaultRole en cada módulo de la lista del pedido; un Super Admin
+// puede ajustarlo después desde Configuración → Permisos como cualquier
+// otro rol.
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
-  { id: 'dashboard',      label: 'Dashboard',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
+  { id: 'dashboard',      label: 'Dashboard',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'mi-dia',         label: 'Mi Día',          defaultRoles: ['TECHNICIAN'],                                              minRole: 'TECHNICIAN' },
-  { id: 'clientes',       label: 'Clientes',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'pipeline',       label: 'Pipeline',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'tareas',         label: 'Tareas',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
+  { id: 'clientes',       label: 'Clientes',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
+  { id: 'pipeline',       label: 'Pipeline',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
+  { id: 'tareas',         label: 'Tareas',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
   // Técnico puede ganar Cotizador / Cotizaciones / Catálogo desde el panel de
   // permisos (piso bajado a TECHNICIAN). El default sigue siendo SELLER+, así
   // que ninguna org existente cambia hasta que un Super Admin prenda el toggle.
   // Las APIs de estos módulos chequean roleHasModule() (ver src/lib/module-access.ts).
   { id: 'cotizador',      label: 'Cotizador',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
   { id: 'cotizaciones',   label: 'Cotizaciones',    defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
-  { id: 'catalogo',       label: 'Catálogo',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
+  { id: 'catalogo',       label: 'Catálogo',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'TECHNICIAN' },
   // "Catálogo · cargar productos y stock" — permiso separado de sólo ver el
   // catálogo. Habilita /catalogo/gestion + las APIs de alta/edición de
   // productos y ajuste de stock. Default ADMIN+.
   { id: 'catalogo-gestion', label: 'Catálogo · cargar productos y stock', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],              minRole: 'TECHNICIAN' },
-  { id: 'tickets',        label: 'Tickets',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'],            minRole: 'TECHNICIAN' },
+  { id: 'tickets',        label: 'Tickets',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'],            minRole: 'TECHNICIAN' },
   // Técnico gana Eventos por default a partir de este sistema — requiere el
   // piso ampliado en src/app/api/eventos/route.ts y [id]/route.ts (GET) para
   // que este default sea real y no sólo cosmético (ver comentario ahí).
   { id: 'eventos',        label: 'Eventos',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'],            minRole: 'TECHNICIAN' },
-  { id: 'comunicaciones', label: 'Comunicaciones',  defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
+  { id: 'comunicaciones', label: 'Comunicaciones',  defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
   // Piso bajado a TECHNICIAN para que RRHH y Técnicos puedan ganar la
   // bandeja de WhatsApp desde el panel de Permisos — mismo criterio que
   // Cotizador/Depósito más arriba. El default sigue siendo SELLER+, así que
@@ -47,22 +54,30 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // Las APIs de /api/conversaciones/* chequean roleHasModule() (ver
   // src/lib/module-access.ts) — sin eso, el toggle sería sólo cosmético.
   { id: 'conversaciones', label: 'WhatsApp',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'TECHNICIAN' },
-  { id: 'servicios',      label: 'Servicios',       defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                    minRole: 'ADMIN' },
-  { id: 'facturas',       label: 'Facturación',     defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                    minRole: 'ADMIN' },
+  // Piso bajado de ADMIN a SELLER (ADMINISTRATIVO cae en el medio, rango 2.5)
+  // para que Norma pueda tener Servicios/Licencias sin ser ADMIN — mismo
+  // criterio que Stock/Cotizador más arriba. Las APIs de
+  // /api/servicios-recurrentes/* chequean canAccess('ADMIN') || roleHasModule(...).
+  { id: 'servicios',      label: 'Servicios',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],                  minRole: 'SELLER' },
+  // Idem — las APIs de /api/facturas/* y /api/invoices/* chequean
+  // canAccess('ADMIN') || roleHasModule(...).
+  { id: 'facturas',       label: 'Facturación',     defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],                  minRole: 'SELLER' },
   // Depósito — stock físico propio, movimientos y alertas de costo. El piso
   // baja a TECHNICIAN para que un encargado de depósito (rol Técnico en Abba)
   // pueda tenerlo desde el panel de Permisos; el default sigue siendo ADMIN+.
   // Las APIs de /api/stock/* chequean canAccess('ADMIN') || roleHasModule(...).
-  { id: 'stock',          label: 'Depósito · Stock', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                   minRole: 'TECHNICIAN' },
+  { id: 'stock',          label: 'Depósito · Stock', defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],                 minRole: 'TECHNICIAN' },
   // Compras a proveedores + OCR de facturas + cuentas por pagar. Toca datos
-  // de costo y pago → default y piso más altos que Stock.
-  { id: 'compras',        label: 'Depósito · Compras', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                 minRole: 'ADMIN' },
+  // de costo y pago → default y piso más altos que Stock. Piso bajado a
+  // SELLER para admitir a ADMINISTRATIVO (rango 2.5) — las APIs de
+  // /api/compras/* chequean canAccess('ADMIN') || roleHasModule(...).
+  { id: 'compras',        label: 'Depósito · Compras', defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],               minRole: 'SELLER' },
   // Entregas / remitos internos — egresos de material a obra o mostrador.
   // Piso TECHNICIAN (el depósito prepara y entrega); default ADMIN+.
-  { id: 'entregas',       label: 'Depósito · Entregas', defaultRoles: ['SUPER_ADMIN', 'ADMIN'],                                minRole: 'TECHNICIAN' },
-  { id: 'documentos',     label: 'Documentos',      defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
-  { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],                          minRole: 'SELLER' },
+  { id: 'entregas',       label: 'Depósito · Entregas', defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],              minRole: 'TECHNICIAN' },
+  { id: 'documentos',     label: 'Documentos',      defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
+  { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
+  { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
   { id: 'rrhh',           label: 'RRHH',            defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'HR'],                              minRole: 'HR' },
   { id: 'mi-asistencia',  label: 'Mi Asistencia',   defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
 ]
@@ -94,6 +109,7 @@ export const MODULE_ROUTES: Record<string, string> = {
 const ROLE_LEVEL: Record<Role, number> = {
   SUPER_ADMIN: 4,
   ADMIN: 3,
+  ADMINISTRATIVO: 2.5,
   SELLER: 2,
   HR: 1,
   TECHNICIAN: 0,

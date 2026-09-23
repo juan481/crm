@@ -86,6 +86,18 @@ const PERMISSIONS: Record<Role, Action[]> = {
     'tasks:view', 'tasks:create', 'tasks:edit',
     'tickets:view', 'tickets:create',
   ],
+  // Norma (Abba) — ve/gestiona la operación y lo financiero (Facturación,
+  // Compras, Depósito, Servicios/Licencias vía módulos aparte) pero SIN
+  // 'sales:register'/'templates:manage' (no cotiza) ni 'users:manage'/
+  // 'settings:*'/'hr:*' (no es ADMIN, no ve RRHH).
+  ADMINISTRATIVO: [
+    'clients:view_all', 'clients:view_own', 'clients:create', 'clients:edit',
+    'invoices:view', 'invoices:manage',
+    'documents:upload', 'documents:delete',
+    'deals:view', 'deals:create', 'deals:edit',
+    'tasks:view', 'tasks:create', 'tasks:edit',
+    'tickets:view', 'tickets:create', 'tickets:manage',
+  ],
 }
 
 export function can(user: AuthPayload | { role: Role }, action: Action): boolean {

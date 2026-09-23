@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { puedeVerServicios } from '@/lib/finance-access'
 import { billAbonosForOrg, getBillingConfig } from '@/lib/billing-recurrente'
 import { sendInvoiceEmail } from '@/lib/invoice-email'
 
@@ -12,7 +13,7 @@ export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { dueSameMonth } = await getBillingConfig(payload.orgId)
     const preview = await billAbonosForOrg(payload.orgId, { dryRun: true, dueSameMonth })
@@ -27,7 +28,7 @@ export async function POST(_req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { dueSameMonth, autoSend } = await getBillingConfig(payload.orgId)
     const res = await billAbonosForOrg(payload.orgId, { dueSameMonth })

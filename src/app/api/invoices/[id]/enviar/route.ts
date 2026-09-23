@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { puedeVerFacturacion } from '@/lib/finance-access'
 import { sendInvoiceEmail } from '@/lib/invoice-email'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+    if (!(await puedeVerFacturacion(payload.orgId, payload.role))) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

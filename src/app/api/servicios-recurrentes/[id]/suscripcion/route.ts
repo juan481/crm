@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { puedeVerServicios } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { createAbonoSubscription, markAbonoSubscriptionCancelled } from '@/lib/payments/subscription'
 import type { PayProvider } from '@/lib/payments/types'
@@ -16,7 +17,7 @@ interface Params { params: { id: string } }
 export async function POST(req: NextRequest, { params }: Params) {
   const payload = await getCurrentUser()
   if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
   const abono = await prisma.servicioRecurrente.findFirst({
     where: { id: params.id, organizationId: payload.orgId },
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const payload = await getCurrentUser()
   if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+  if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
   const abono = await prisma.servicioRecurrente.findFirst({
     where: { id: params.id, organizationId: payload.orgId },

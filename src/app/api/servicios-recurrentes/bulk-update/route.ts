@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { puedeVerServicios } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { sanitizeMoneda } from '@/lib/servicios-recurrentes'
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!(await puedeVerServicios(payload.orgId, payload.role))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const b = await req.json().catch(() => ({}))
     const nombre = str(b.nombre)

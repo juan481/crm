@@ -25,7 +25,7 @@ import toast from 'react-hot-toast'
 const createSchema = z.object({
   name: z.string().min(2),
   email: z.string().email('Email inválido'),
-  role: z.enum(['ADMIN', 'SELLER', 'TECHNICIAN', 'HR', 'GREMIO']),
+  role: z.enum(['ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR', 'GREMIO']),
   password: z.string().min(8, 'Mínimo 8 caracteres'),
 })
 type CreateData = z.infer<typeof createSchema>
@@ -41,6 +41,7 @@ function getRoleOptions(vertical: string | null) {
     { value: 'SELLER',     label: vertical === 'marketing' ? getRoleLabel('SELLER', vertical) : 'Vendedor / Comercial' },
     { value: 'TECHNICIAN', label: getRoleLabel('TECHNICIAN', vertical) },
     { value: 'HR',         label: getRoleLabel('HR', vertical) },
+    { value: 'ADMINISTRATIVO', label: getRoleLabel('ADMINISTRATIVO', vertical) },
     { value: 'ADMIN',      label: getRoleLabel('ADMIN', vertical) },
     { value: 'GREMIO',     label: getRoleLabel('GREMIO', vertical) },
   ]
@@ -70,7 +71,7 @@ export default function UsuariosPage() {
   // ROLE_LEVEL['GREMIO'] daba undefined → el `?? 99` de canManage() hacía
   // que NINGÚN rol pudiera gestionar (editar/suspender/resetear password)
   // una cuenta Gremio desde este panel.
-  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1 }
+  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, ADMINISTRATIVO: 2.5, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1 }
   const canManage = (targetRole: string) => (ROLE_LEVEL[me?.role ?? ''] ?? -1) >= (ROLE_LEVEL[targetRole] ?? 99)
 
   const { data, isLoading } = useQuery<User[]>({

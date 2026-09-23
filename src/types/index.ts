@@ -6,7 +6,7 @@
 // GREMIO y CLIENTE son carriles laterales (portal B2B / portal de clientes) —
 // no participan de la jerarquía de canAccess(), se resuelven con guards
 // explícitos. Ver comentario en el enum Role del schema y en src/lib/auth.ts.
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'SELLER' | 'TECHNICIAN' | 'HR' | 'GREMIO' | 'CLIENTE'
+export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'ADMINISTRATIVO' | 'SELLER' | 'TECHNICIAN' | 'HR' | 'GREMIO' | 'CLIENTE'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED'
 export type ClientStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING_PAYMENT' | 'EXPIRED' | 'PROSPECT'
 export type ClientType = 'B2B' | 'B2C'

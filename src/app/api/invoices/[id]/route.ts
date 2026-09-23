@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
+import { puedeVerFacturacion } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
 import { dateOnlyArgentina } from '@/lib/timezone'
@@ -11,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+    if (!(await puedeVerFacturacion(payload.orgId, payload.role))) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
@@ -57,7 +58,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+    if (!(await puedeVerFacturacion(payload.orgId, payload.role))) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
@@ -142,7 +143,7 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) {
+    if (!(await puedeVerFacturacion(payload.orgId, payload.role))) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
