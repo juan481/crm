@@ -1,7 +1,7 @@
 {
-  "name": "CRM Pro",
-  "short_name": "CRM",
-  "description": "CRM para gestión de clientes, ventas, tareas y soporte",
+  "name": "JustCRM - Productivity OS",
+  "short_name": "JustCRM",
+  "description": "Sistema operativo de gestión, obras y servicios técnicos para empresas de seguridad y telecomunicaciones",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",

@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 const PUBLIC_PATHS = [
-  // Landing page pública de JustCRM
+  // Landing page pública de JustCRM y SEO
   '/landing',
   '/landing.html',
   '/api/contacto',
+  '/sitemap.xml',
+  '/robots.txt',
   '/login',
   '/forgot-password',
   '/reset-password',
@@ -60,10 +62,14 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/uploads') ||
     pathname === '/favicon.ico' ||
+    pathname === '/apple-touch-icon.png' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/robots.txt' ||
     pathname === '/manifest.json' ||
     pathname === '/sw.js' ||
     pathname.startsWith('/icons/') ||
     pathname === '/logo.png' ||
+    pathname === '/og-image.png' ||
     /\.(png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf)$/.test(pathname)
   ) {
     return NextResponse.next()
