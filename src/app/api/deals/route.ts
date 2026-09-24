@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
+import { sellerOwnerScope } from '@/lib/deal-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,12 @@ export async function GET(req: NextRequest) {
     // La ficha de cliente (/clientes/[id]) pide ?empresaId= — sin esto el
     // endpoint devolvía TODOS los deals de la org como si fueran del cliente.
     if (empresaId) where.empresaId = empresaId
-    if (payload.role === 'SELLER') where.ownerId = payload.userId
+    // SELLER sólo ve lo suyo, SALVO que un admin le haya prendido
+    // "verTodoPipeline" (Configuración → Usuarios) — pedido de Abba
+    // 2026-09-24: un vendedor puede necesitar ver/hablar con TODOS los
+    // clientes del Pipeline sin que eso implique que se le reasignen (eso
+    // sigue siendo sólo ADMIN+, ver deals/[id]/route.ts).
+    if (payload.role === 'SELLER') Object.assign(where, await sellerOwnerScope(payload.userId))
 
     const db = prisma as any
     const [deals, total] = await Promise.all([

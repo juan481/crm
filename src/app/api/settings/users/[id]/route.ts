@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'No podés modificar una cuenta de rango mayor al tuyo' }, { status: 403 })
     }
 
-    const { status, role, forcePasswordChange, newPassword } = await req.json()
+    const { status, role, forcePasswordChange, newPassword, verTodoPipeline } = await req.json()
 
     // Sin esto, el ÚNICO SUPER_ADMIN activo de la org podía bajarse su
     // propio rango o suspenderse a sí mismo (DELETE ya bloqueaba
@@ -55,6 +55,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (canAccess(payload.role, 'SUPER_ADMIN')) updateData.role = role
     }
     if (forcePasswordChange !== undefined) updateData.forcePasswordChange = forcePasswordChange
+    // Sólo tiene efecto real en SELLER (ver comentario en schema.prisma) pero
+    // no hace falta restringir el PATCH a ese rol — guardarlo en cualquier
+    // otro rol es inofensivo, simplemente no se lee.
+    if (verTodoPipeline !== undefined) updateData.verTodoPipeline = verTodoPipeline === true
     if (newPassword) {
       if (newPassword.length < 8) {
         return NextResponse.json({ error: 'Mínimo 8 caracteres' }, { status: 400 })
@@ -73,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const user = await prisma.user.update({
       where: { id: params.id },
       data: updateData,
-      select: { id: true, email: true, name: true, role: true, status: true, forcePasswordChange: true },
+      select: { id: true, email: true, name: true, role: true, status: true, forcePasswordChange: true, verTodoPipeline: true },
     })
 
     return NextResponse.json({ data: user })

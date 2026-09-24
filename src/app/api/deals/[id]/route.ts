@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
+import { sellerOwnerScope } from '@/lib/deal-access'
 
 interface Params { params: { id: string } }
 
@@ -24,12 +25,9 @@ export async function GET(_: NextRequest, { params }: Params) {
     if (!canAccess(payload.role, 'SELLER'))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
+    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
     const deal = await prisma.deal.findFirst({
-      where: {
-        id: params.id,
-        organizationId: payload.orgId,
-        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
-      },
+      where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       include: INCLUDE,
     })
     if (!deal) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
@@ -48,12 +46,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (!canAccess(payload.role, 'SELLER'))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
+    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
     const existing = await prisma.deal.findFirst({
-      where: {
-        id: params.id,
-        organizationId: payload.orgId,
-        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
-      },
+      where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
     })
     if (!existing) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })
 

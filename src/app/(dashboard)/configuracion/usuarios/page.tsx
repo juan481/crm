@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, UserCog, Shield, UserX, KeyRound, Trash2 } from 'lucide-react'
+import { Plus, UserCog, Shield, UserX, KeyRound, Trash2, Eye } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -140,7 +140,9 @@ export default function UsuariosPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-[var(--color-text)]">Usuarios</h1>
-            <p className="text-sm text-[var(--color-text-muted)]">{users.length} usuarios en el sistema</p>
+            <p className="text-sm text-[var(--color-text-muted)]">
+              {users.length} usuarios en el sistema · el ícono <Eye size={12} className="inline -mt-0.5" /> en un Vendedor le da/saca ver todo el Pipeline (no sólo lo suyo)
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -202,6 +204,15 @@ export default function UsuariosPage() {
                 </div>
                 {user.id !== me?.id && canManage(user.role) && (
                   <div className="flex gap-1">
+                    {user.role === 'SELLER' && (
+                      <button
+                        onClick={() => updateUser(user.id, { verTodoPipeline: !user.verTodoPipeline })}
+                        className={`p-2 rounded-lg transition-all ${user.verTodoPipeline ? 'text-[var(--color-primary)] bg-[var(--color-primary)]/10' : 'text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-primary)]'}`}
+                        title={user.verTodoPipeline ? 'Ve TODO el Pipeline — click para que vuelva a ver sólo lo suyo' : 'Sólo ve sus propios deals — click para que vea todo el Pipeline'}
+                      >
+                        <Eye size={15} />
+                      </button>
+                    )}
                     {isSuperAdmin && (
                       <button
                         onClick={() => { setActionUser(user); setNewRole(user.role); setAction('role') }}

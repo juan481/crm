@@ -442,6 +442,14 @@ model User {
   // is cross-tenant). Never settable from any in-app UI — only via
   // scripts/set-platform-admin.ts. See getPlatformAdmin() in src/lib/auth.ts.
   isPlatformAdmin     Boolean      @default(false)
+  // Sólo tiene efecto en role === 'SELLER' (los demás roles ya ven todo o
+  // nada del Pipeline por su rango). Un SELLER normal sólo ve/edita los
+  // deals que le pertenecen (ownerId propio) — con este flag en true, ve y
+  // puede trabajar TODO el Pipeline de la org, como un ADMIN, pero sigue
+  // sin poder reasignar el dueño de un deal (eso sigue siendo sólo ADMIN+,
+  // ver deals/[id]/route.ts) — así ningún deal queda "perdido" al ampliar
+  // la visibilidad. Pedido de Abba, 2026-09-24.
+  verTodoPipeline     Boolean      @default(false)
   avatarUrl           String?
   organizationId      String
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

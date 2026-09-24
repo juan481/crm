@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { sellerOwnerScope } from '@/lib/deal-access'
 import type { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -16,8 +17,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     if (!canAccess(payload.role as Role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
+    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
     const deal = await db.deal.findFirst({
-      where: { id: params.id, organizationId: payload.orgId, ...(payload.role === 'SELLER' && { ownerId: payload.userId }) },
+      where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       select: { id: true, currency: true },
     })
     if (!deal) return NextResponse.json({ error: 'Deal no encontrado' }, { status: 404 })

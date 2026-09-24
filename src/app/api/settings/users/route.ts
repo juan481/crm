@@ -16,6 +16,7 @@ export async function GET() {
       select: {
         id: true, email: true, name: true, role: true, status: true,
         onboardingCompleted: true, forcePasswordChange: true, avatarUrl: true,
+        verTodoPipeline: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },

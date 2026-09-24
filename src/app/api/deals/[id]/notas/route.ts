@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { sellerOwnerScope } from '@/lib/deal-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,11 +29,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // otro vendedor vía GET /api/deals/[id] (404) igual podía leer/agregar
     // notas de negociación en ese deal ajeno, si conocía el id. Mismo
     // criterio que ya usa GET /api/deals/[id].
+    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
     const deal = await db.deal.findFirst({
-      where: {
-        id: params.id, organizationId: payload.orgId,
-        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
-      },
+      where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       select: { id: true },
     })
     if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada' }, { status: 404 })
@@ -67,11 +66,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     // otro vendedor vía GET /api/deals/[id] (404) igual podía leer/agregar
     // notas de negociación en ese deal ajeno, si conocía el id. Mismo
     // criterio que ya usa GET /api/deals/[id].
+    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
     const deal = await db.deal.findFirst({
-      where: {
-        id: params.id, organizationId: payload.orgId,
-        ...(payload.role === 'SELLER' && { ownerId: payload.userId }),
-      },
+      where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       select: { id: true },
     })
     if (!deal) return NextResponse.json({ error: 'Oportunidad no encontrada' }, { status: 404 })

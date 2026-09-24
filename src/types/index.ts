@@ -49,6 +49,9 @@ export interface User {
   status: UserStatus
   onboardingCompleted: boolean
   forcePasswordChange: boolean
+  // Sólo tiene efecto real en role === 'SELLER' — ver el pipeline entero de
+  // la org en vez de sólo los deals propios (Configuración → Usuarios).
+  verTodoPipeline?: boolean
   avatarUrl: string | null
   organizationId: string
   organization?: Organization
