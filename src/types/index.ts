@@ -357,6 +357,8 @@ export interface QuoteItem {
   type:          'SERVICE' | 'PRODUCT'
   serviceId?:    string
   productId?:    string
+  sku?:          string | null
+  mpn?:          string | null
   name:          string
   price:         number
   currency:      string

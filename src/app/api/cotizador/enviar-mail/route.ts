@@ -46,10 +46,17 @@ function buildQuoteHtml(opts: {
     + (tt.discriminado && tt.iva.length && tt.descuentoMonto > 0 ? footRow('Neto gravado', money(tt.netoGravado), '#94a3b8') : '')
     + (tt.discriminado ? tt.iva.map(b => footRow(`IVA ${String(b.pct).replace('.', ',')}%`, money(b.monto), '#94a3b8')).join('') : '')
 
-  const rows = items.map(item => `
+  // Mismo criterio que el PDF adjunto (cotizaciones/[id]/page.tsx) — sin
+  // esto el cuerpo del mail mostraba el nombre pelado sin el código de
+  // producto (SKU/MPN), aunque el PDF sí lo traía. Gremio pide el código
+  // para poder pedir por código.
+  const rows = items.map(item => {
+    const itemSku = item.type === 'PRODUCT' ? (item.sku || item.mpn) : null
+    const nameStr = itemSku ? `[${itemSku}] ${item.name}` : item.name
+    return `
     <tr>
       <td style="padding:12px 0;color:#1e293b;font-size:14px;border-bottom:1px solid #f1f5f9">
-        ${item.name}${item.quantity > 1 ? ` <span style="color:#64748b">×${item.quantity}</span>` : ''}
+        ${nameStr}${item.quantity > 1 ? ` <span style="color:#64748b">×${item.quantity}</span>` : ''}
       </td>
       <td style="padding:12px 0;color:#64748b;font-size:13px;border-bottom:1px solid #f1f5f9;text-align:center">
         ${BILLING_LABELS[item.billingCycle ?? ''] ?? (item.unit ?? 'mes')}
@@ -57,7 +64,8 @@ function buildQuoteHtml(opts: {
       ${simple ? '' : `<td style="padding:12px 0;color:#1e293b;font-size:14px;font-weight:600;border-bottom:1px solid #f1f5f9;text-align:right">
         ${formatMoney(item.price * item.quantity, item.currency)}
       </td>`}
-    </tr>`).join('')
+    </tr>`
+  }).join('')
 
   const notesSection = notes
     ? `<div style="background:#f8fafc;border-left:3px solid ${primaryColor};border-radius:0 8px 8px 0;padding:14px 16px;margin:24px 0;font-size:13px;color:#475569;line-height:1.6">
