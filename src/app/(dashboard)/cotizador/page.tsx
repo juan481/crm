@@ -163,6 +163,14 @@ export default function CotizadorPage() {
   const [newContactEmail,         setNewContactEmail]         = useState('')
   const [newContactPhone,         setNewContactPhone]         = useState('')
   const [creatingContact,         setCreatingContact]         = useState(false)
+  // Completar el mail de un contacto EXISTENTE que ya está cargado en el CRM
+  // pero sin mail (pasa seguido con contactos viejos) — antes esos contactos
+  // quedaban directamente escondidos de la búsqueda y de la lista por
+  // empresa, obligando a tipearlo suelto cada vez sin que quedara guardado.
+  // Ahora se completa ahí mismo y se guarda de verdad en Contactos.
+  const [fixingContact,           setFixingContact]           = useState<{ id: string; firstName: string; lastName: string; empresaId: string | null } | null>(null)
+  const [fixEmailValue,           setFixEmailValue]           = useState('')
+  const [savingFixEmail,          setSavingFixEmail]          = useState(false)
   const [manualContactInput,      setManualContactInput]      = useState(false)
   const [manualEmail,             setManualEmail]             = useState('')
   const [manualName,              setManualName]              = useState('')
@@ -314,8 +322,10 @@ export default function CotizadorPage() {
   const productCategories: ProductCategory[] = productCategoriesData?.data ?? []
   const productBrands: ProductBrand[] = productBrandsData?.data ?? []
   const empresas = Array.isArray(empresasData) ? empresasData : []
-  const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
-  const contactSearchResults = (Array.isArray(contactSearchData) ? contactSearchData : []).filter(c => c.email)
+  // Ya NO se filtran los que no tienen mail — se muestran igual, con la
+  // opción de completarlo ahí mismo (ver fixingContact).
+  const contacts = Array.isArray(contactsData) ? contactsData : []
+  const contactSearchResults = Array.isArray(contactSearchData) ? contactSearchData : []
 
   // Alta rápida — crea el Contacto en el CRM (Contactos) y lo deja
   // seleccionado como destinatario, sin salir del cotizador.
@@ -345,6 +355,34 @@ export default function CotizadorPage() {
       setNewContactFirstName(''); setNewContactLastName(''); setNewContactEmail(''); setNewContactPhone('')
       toast.success(`${c.firstName} ${c.lastName} cargado como cliente nuevo`)
     } catch { toast.error('Error de conexión') } finally { setCreatingContact(false) }
+  }
+
+  // Completa el mail de un contacto que YA existe en el CRM pero no lo
+  // tenía cargado — lo guarda de verdad (PUT /api/contactos/[id]), no es un
+  // dato suelto que se pierde al salir del cotizador.
+  const handleSaveFixEmail = async () => {
+    if (!fixingContact || !fixEmailValue.trim()) return
+    setSavingFixEmail(true)
+    try {
+      const r = await fetch(`/api/contactos/${fixingContact.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: fixingContact.firstName, lastName: fixingContact.lastName,
+          email: fixEmailValue.trim(), empresaId: fixingContact.empresaId,
+        }),
+      })
+      const json = await r.json()
+      if (!r.ok) { toast.error(json.error ?? 'No se pudo guardar el mail'); return }
+      const c = json.data
+      setSelectedContactEmail(c.email ?? '')
+      setSelectedContactName(`${c.firstName} ${c.lastName}`.trim())
+      if (c.empresa?.id) setSelectedEmpresaId(c.empresa.id)
+      setManualContactInput(false)
+      setContactSearch('')
+      setFixingContact(null)
+      setFixEmailValue('')
+      toast.success('Mail guardado')
+    } catch { toast.error('Error de conexión') } finally { setSavingFixEmail(false) }
   }
 
   const cartItems  = Object.values(cart)
@@ -1447,7 +1485,7 @@ export default function CotizadorPage() {
                     {contactSearchResults.length === 0 ? (
                       <div className="px-3 py-2 space-y-2">
                         <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
-                          Sin resultados con mail cargado para &quot;{contactSearch}&quot;.
+                          Sin resultados para &quot;{contactSearch}&quot;.
                         </p>
                         <button
                           onClick={() => { setShowNewContactForm(true); setNewContactFirstName(contactSearch.trim()) }}
@@ -1462,7 +1500,8 @@ export default function CotizadorPage() {
                         <button
                           key={c.id}
                           onClick={() => {
-                            setSelectedContactEmail(c.email ?? '')
+                            if (!c.email) { setFixingContact({ id: c.id, firstName: c.firstName, lastName: c.lastName, empresaId: c.empresa?.id ?? null }); setFixEmailValue(''); return }
+                            setSelectedContactEmail(c.email)
                             setSelectedContactName(`${c.firstName} ${c.lastName}`.trim())
                             setSelectedEmpresaId(c.empresa?.id ?? '')
                             setManualContactInput(false)
@@ -1472,8 +1511,8 @@ export default function CotizadorPage() {
                           style={{ borderColor: 'var(--color-border)' }}
                         >
                           <span style={{ color: 'var(--color-text)' }}>{c.firstName} {c.lastName}</span>
-                          <span className="block text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>
-                            {c.empresa?.name ?? 'Particular'} — {c.email}
+                          <span className="block text-[11px]" style={{ color: c.email ? 'var(--color-text-subtle)' : '#f59e0b' }}>
+                            {c.empresa?.name ?? 'Particular'} — {c.email ?? 'sin mail cargado, click para agregarlo'}
                           </span>
                         </button>
                       ))
@@ -1481,6 +1520,21 @@ export default function CotizadorPage() {
                   </div>
                 )}
               </div>
+
+              {fixingContact && (
+                <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid #f59e0b' }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                      {fixingContact.firstName} {fixingContact.lastName} no tiene mail cargado
+                    </p>
+                    <button onClick={() => setFixingContact(null)} className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Cancelar</button>
+                  </div>
+                  <Input type="email" placeholder="email@cliente.com" value={fixEmailValue} onChange={e => setFixEmailValue(e.target.value)} />
+                  <Button size="sm" className="w-full" onClick={handleSaveFixEmail} loading={savingFixEmail} disabled={!fixEmailValue.trim()}>
+                    Guardar y usar como destinatario
+                  </Button>
+                </div>
+              )}
 
               {showNewContactForm && (
                 <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
@@ -1517,13 +1571,21 @@ export default function CotizadorPage() {
                     <Select
                       options={[
                         { value: '', label: 'Seleccionar contacto...' },
-                        ...contacts.map(c => ({ value: `${c.email}||${c.firstName} ${c.lastName}`, label: `${c.firstName} ${c.lastName} — ${c.email}` })),
+                        ...contacts.map(c => ({
+                          value: c.id,
+                          label: c.email ? `${c.firstName} ${c.lastName} — ${c.email}` : `${c.firstName} ${c.lastName} — sin mail, click para cargarlo`,
+                        })),
                         { value: '__manual__', label: '— Ingresar otro email —' },
                       ]}
-                      value={selectedContactEmail ? `${selectedContactEmail}||${selectedContactName}` : ''}
+                      value=""
                       onChange={e => {
                         if (e.target.value === '__manual__') { setManualContactInput(true); setSelectedContactEmail(''); setSelectedContactName('') }
-                        else { const [em, nm] = e.target.value.split('||'); setSelectedContactEmail(em ?? ''); setSelectedContactName(nm ?? '') }
+                        else {
+                          const c = contacts.find(x => x.id === e.target.value)
+                          if (!c) return
+                          if (!c.email) { setFixingContact({ id: c.id, firstName: c.firstName, lastName: c.lastName, empresaId: selectedEmpresaId || null }); setFixEmailValue(''); return }
+                          setSelectedContactEmail(c.email); setSelectedContactName(`${c.firstName} ${c.lastName}`.trim())
+                        }
                       }}
                     />
                   ) : (

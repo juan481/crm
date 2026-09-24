@@ -483,7 +483,7 @@ export default function EmpresaDetailPage() {
                 Enviar Email
               </Button>
             )}
-            {canManage && (
+            {(canManage || canSell) && (
               <Button size="sm" onClick={() => setAddContactoOpen(true)}>
                 <Plus size={13} /> Agregar contacto
               </Button>
@@ -513,7 +513,7 @@ export default function EmpresaDetailPage() {
                 <th className="px-4 py-3 text-left font-semibold hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>Cargo</th>
                 <th className="px-4 py-3 text-left font-semibold hidden md:table-cell" style={{ color: 'var(--color-text-muted)' }}>Mail</th>
                 <th className="px-4 py-3 text-left font-semibold hidden lg:table-cell" style={{ color: 'var(--color-text-muted)' }}>Teléfono</th>
-                {canManage && <th className="px-4 py-3" />}
+                {(canManage || canSell) && <th className="px-4 py-3" />}
               </tr>
             </thead>
             <tbody>
@@ -581,9 +581,13 @@ export default function EmpresaDetailPage() {
                           </div>
                         ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                       </td>
-                      {canManage && (
+                      {(canManage || canSell) && (
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {/* Editar (ej. completar el mail que falta) — un
+                                Vendedor lo necesita seguido para poder cotizar,
+                                no hace falta ser Admin para esto. Eliminar sigue
+                                siendo sólo Admin+. */}
                             <button
                               onClick={() => setEditingContacto(c)}
                               className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
@@ -592,14 +596,16 @@ export default function EmpresaDetailPage() {
                             >
                               <Edit size={13} />
                             </button>
-                            <button
-                              onClick={() => setDeleteContactoId(c.id)}
-                              className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
-                              style={{ color: 'var(--color-text-muted)' }}
-                              title="Eliminar contacto"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {canManage && (
+                              <button
+                                onClick={() => setDeleteContactoId(c.id)}
+                                className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
+                                style={{ color: 'var(--color-text-muted)' }}
+                                title="Eliminar contacto"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       )}
