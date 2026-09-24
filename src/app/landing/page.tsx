@@ -236,25 +236,33 @@ export default function LandingPage() {
 
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto text-left">
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tiempo de Respuesta</span>
-              <p className="text-xl sm:text-2xl font-semibold text-emerald-400 mt-0.5">2 Segundos</p>
-              <p className="text-[11px] text-slate-400">Atención con IA 24/7</p>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tiempo de Respuesta</span>
+                <p className="text-xl sm:text-2xl font-semibold text-emerald-400 mt-0.5">2 Segundos</p>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Atención con IA 24/7</p>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cotización Flash</span>
-              <p className="text-xl sm:text-2xl font-semibold text-cyan-400 mt-0.5">30 Segundos</p>
-              <p className="text-[11px] text-slate-400">PDF White-Clean en vivo</p>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cotización Flash</span>
+                <p className="text-xl sm:text-2xl font-semibold text-cyan-400 mt-0.5">30 Segundos</p>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">PDF White-Clean en vivo</p>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Depósito & Pañol</span>
-              <p className="text-xl sm:text-2xl font-semibold text-amber-400 mt-0.5">Conteo Inicial</p>
-              <p className="text-[11px] text-slate-400">Stock activo sin facturas</p>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Automatización</span>
+                <p className="text-base sm:text-lg font-semibold text-amber-400 mt-0.5 leading-snug">Mejora tu productividad</p>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Automatiza procesos · Centraliza toda tu gestión</p>
             </div>
-            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Operación en Campo</span>
-              <p className="text-xl sm:text-2xl font-semibold text-indigo-400 mt-0.5">App 'Mi Día'</p>
-              <p className="text-[11px] text-slate-400">Checklist, GPS y Firma Digital</p>
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Control & Seguridad</span>
+                <p className="text-base sm:text-lg font-semibold text-indigo-400 mt-0.5 leading-snug">Usuarios y Privilegios</p>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">Permisos granulares por área y jerarquía</p>
             </div>
           </div>
         </div>
