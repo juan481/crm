@@ -108,9 +108,20 @@ export default function ForgotPasswordPage() {
             </>
           )}
 
-          <div className="mt-8 pt-5 flex items-center justify-center gap-2 border-t border-[#f1f4f8]">
-            <span className="text-[11px] text-[#707880] font-normal">powered by</span>
-            <img src="/just-create-logo.png" alt="Just Create" className="h-4 w-auto object-contain" />
+          <div className="mt-8 pt-5 flex items-center justify-center border-t border-[#f1f4f8]">
+            <a
+              href="https://justcreate.com.ar"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-[11px] text-[#707880] hover:text-[#00628e] transition-colors group"
+            >
+              <span className="font-normal">powered by</span>
+              <img
+                src="/just-create-logo.png"
+                alt="Just Create"
+                className="h-4 w-auto object-contain transition-transform group-hover:scale-105"
+              />
+            </a>
           </div>
         </div>
       </div>

@@ -156,10 +156,15 @@ function LoginForm() {
           >
             <span>← Volver a la página principal</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-500 font-normal">powered by</span>
-            <img src="/just-create-logo.png" alt="Just Create" className="h-6 w-auto object-contain brightness-0 invert opacity-80" />
-          </div>
+          <a
+            href="https://justcreate.com.ar"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 transition-opacity hover:opacity-100 opacity-80 group"
+          >
+            <span className="text-[11px] text-slate-500 font-normal group-hover:text-slate-300 transition-colors">powered by</span>
+            <img src="/just-create-logo.png" alt="Just Create" className="h-6 w-auto object-contain brightness-0 invert opacity-80 group-hover:opacity-100 transition-opacity" />
+          </a>
         </div>
       </div>
 
@@ -287,9 +292,20 @@ function LoginForm() {
             </div>
 
             {/* Logo de Just Create en el pie del login */}
-            <div className="mt-6 pt-5 flex items-center justify-center gap-2 border-t border-[#f1f4f8]">
-              <span className="text-[11px] text-[#707880] font-normal">developed by</span>
-              <img src="/just-create-logo.png" alt="Just Create" className="h-5 w-auto object-contain" />
+            <div className="mt-6 pt-5 flex items-center justify-center border-t border-[#f1f4f8]">
+              <a
+                href="https://justcreate.com.ar"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-[11px] text-[#707880] hover:text-[#00628e] transition-colors group"
+              >
+                <span className="font-normal">developed by</span>
+                <img
+                  src="/just-create-logo.png"
+                  alt="Just Create"
+                  className="h-5 w-auto object-contain transition-transform group-hover:scale-105"
+                />
+              </a>
             </div>
           </div>
         </div>
