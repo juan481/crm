@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     template: '%s | JustCRM',
   },
   description:
-    'El CRM y Productivity OS diseñado para empresas de seguridad electrónica, telecomunicaciones e instaladores técnicos. Cotizá en 30s, controlá stock, pañol, cuadrillas y WhatsApp con IA.',
+    'El CRM diseñado para empresas de seguridad electrónica, telecomunicaciones e instaladores técnicos. Cotizá en 30s, controlá pañol, cuadrillas y WhatsApp con IA.',
   applicationName: 'JustCRM',
   authors: [{ name: 'JustCreate', url: 'https://justcreate.com.ar' }],
   creator: 'JustCreate',
@@ -60,7 +60,7 @@ export const metadata: Metadata = {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'JustCRM Productivity OS',
+        alt: 'JustCRM',
       },
     ],
   },

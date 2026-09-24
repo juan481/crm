@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Iniciar Sesión | JustCRM - Productivity OS',
+  title: 'Iniciar Sesión | JustCRM',
   description: 'Ingreso al Sistema Operativo de Gestión, Obras y Servicios Técnicos de JustCRM.',
   icons: {
     icon: [

@@ -125,7 +125,7 @@ function LoginForm() {
           </h1>
 
           <p className="text-slate-300 text-sm leading-relaxed font-normal">
-            Conectá tus ventas, pañol y cuadrillas técnicas en un solo ecosistema. Cotizá en 30s con listas duales, controlá stock físico y despachá órdenes con firma digital en vivo.
+            Conectá tus ventas, operaciones y equipos en un solo ecosistema. Cotizá en 30s con listas duales, automatizá procesos y gestioná permisos de usuarios con máxima seguridad.
           </p>
 
           {/* Tarjetas de Métricas: Glassmorphism oscuro con micro-bordes */}
@@ -133,22 +133,24 @@ function LoginForm() {
             {[
               { val: '2 Seg', label: 'Bot WhatsApp IA', sub: 'Atención 24/7 sin demoras', tagColor: '#38bdf8' },
               { val: '30 Seg', label: 'Cotizador Flash', sub: 'Gremio & Público en PDF', tagColor: '#0ea5e9' },
-              { val: 'Stock & Pañol', label: 'Conteo Físico', sub: 'Carga activa sin facturas', tagColor: '#34d399' },
-              { val: "App 'Mi Día'", label: 'Cuadrillas en Calle', sub: 'GPS, checklist y remitos', tagColor: '#818cf8' },
+              { val: 'Automatización', label: 'Mejora tu productividad', sub: 'Automatiza procesos · Centraliza toda tu gestión', tagColor: '#34d399' },
+              { val: 'Multi-Rol', label: 'Usuarios y Privilegios', sub: 'Permisos granulares por área y jerarquía', tagColor: '#818cf8' },
             ].map((m) => (
               <div
                 key={m.label}
-                className="bg-slate-900/60 backdrop-blur-md rounded-2xl p-4 border border-slate-800/80 shadow-lg transition-all hover:border-cyan-400/40 hover:bg-slate-900/80 hover:-translate-y-0.5 group"
+                className="bg-slate-900/60 backdrop-blur-md rounded-2xl p-4 border border-slate-800/80 shadow-lg transition-all hover:border-cyan-400/40 hover:bg-slate-900/80 hover:-translate-y-0.5 group flex flex-col justify-between"
               >
-                <p className="text-lg font-semibold tracking-tight" style={{ color: m.tagColor }}>{m.val}</p>
-                <p className="text-xs font-semibold text-white mt-0.5">{m.label}</p>
-                <p className="text-[11px] text-slate-400 font-normal">{m.sub}</p>
+                <div>
+                  <p className="text-base sm:text-lg font-semibold tracking-tight" style={{ color: m.tagColor }}>{m.val}</p>
+                  <p className="text-xs font-semibold text-white mt-1 leading-snug">{m.label}</p>
+                </div>
+                <p className="text-[11px] text-slate-400 font-normal mt-1 leading-relaxed">{m.sub}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Footer del Panel Izquierdo: powered by Just Create */}
+        {/* Footer del Panel Izquierdo: Solo navegación limpia sin duplicar Just Create */}
         <div className="flex items-center justify-between pt-6 border-t border-slate-800/80 relative z-10">
           <Link
             href="/landing"
@@ -156,15 +158,7 @@ function LoginForm() {
           >
             <span>← Volver a la página principal</span>
           </Link>
-          <a
-            href="https://justcreate.com.ar"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 transition-opacity hover:opacity-100 opacity-80 group"
-          >
-            <span className="text-[11px] text-slate-500 font-normal group-hover:text-slate-300 transition-colors">powered by</span>
-            <img src="/just-create-logo.png" alt="Just Create" className="h-6 w-auto object-contain brightness-0 invert opacity-80 group-hover:opacity-100 transition-opacity" />
-          </a>
+          <span className="text-xs text-slate-500">© 2026 JustCRM</span>
         </div>
       </div>
 
@@ -177,15 +171,20 @@ function LoginForm() {
 
         <div className="w-full max-w-[440px] relative z-10">
           
-          {/* Logo móvil BIEN GRANDE y sin Productivity OS */}
-          <div className="lg:hidden flex flex-col items-center justify-center mb-8">
-            <Link href="/landing">
-              <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-16 w-auto object-contain shadow-lg" />
-            </Link>
-          </div>
-
           {/* Tarjeta de Inicio de Sesión (Parte Clara / Blanca Pura) */}
           <div className="bg-white rounded-[28px] p-8 sm:p-10 border border-[#d6dde5] shadow-[0_20px_50px_rgba(15,23,42,0.1),0_1px_3px_rgba(15,23,42,0.06)] relative z-10">
+            
+            {/* Logo de JustCRM arriba del login con colores originales sobre fondo blanco */}
+            <div className="flex items-center justify-center mb-6 pb-2">
+              <Link href="/landing" className="inline-block transition-transform hover:scale-[1.02]">
+                <img
+                  src="/Logo-sin-fondo.png"
+                  alt="JustCRM"
+                  className="h-14 sm:h-16 w-auto object-contain"
+                />
+              </Link>
+            </div>
+
             <div className="mb-7">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-4 h-4 text-[#00628e]" />
