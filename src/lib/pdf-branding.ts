@@ -207,11 +207,15 @@ export function drawValidityNote(doc: jsPDF, opts: {
 // se note que es un dato que cambia día a día.
 export function drawTcLegend(doc: jsPDF, opts: {
   mg: number; cw: number; y: number
-  rate: number
+  // null = no se pudo obtener el TC del día (dolarapi caído/lento) — se
+  // dibuja igual con un aviso en vez de omitir la leyenda en silencio
+  // (la leyenda es obligatoria, no opcional — ver comentario en el caller).
+  rate: number | null
 }): number {
   const { mg, cw, y, rate } = opts
-  const rateLabel = rate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const text = `TC BNA VENDEDOR DEL DÍA: $${rateLabel} — a título informativo para calcular el equivalente en pesos.`
+  const text = rate != null
+    ? `TC BNA VENDEDOR DEL DÍA: $${rate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — a título informativo para calcular el equivalente en pesos.`
+    : 'TC BNA VENDEDOR: no se pudo obtener automáticamente — consultar el valor del día antes de operar.'
 
   const h = 9
   doc.setGState(doc.GState({ opacity: 0.08 }))

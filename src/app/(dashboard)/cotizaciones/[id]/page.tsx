@@ -81,8 +81,13 @@ export default function CotizacionDetailPage() {
   })
 
   // Sólo se pide si la cotización está en USD — para la leyenda "TC BNA
-  // Vendedor" obligatoria en el PDF (pedido de Abba).
-  const { data: rateData } = useQuery({
+  // Vendedor" obligatoria en el PDF (pedido de Abba). `isFetched` (no sólo
+  // `data`) es clave: sin esto, si dolarapi tarda o falla, el PDF se
+  // terminaba dibujando SIN la leyenda y sin ningún aviso — justo lo que
+  // esta leyenda tenía que evitar. Ahora se espera a que la consulta
+  // termine (éxito o error) antes de armar el PDF, y si falla se dibuja
+  // igual con un aviso en vez de desaparecer en silencio.
+  const { data: rateData, isFetched: rateFetched } = useQuery({
     queryKey: ['exchange-rate'],
     queryFn: async () => {
       const r = await fetch('/api/exchange-rate')
@@ -91,15 +96,19 @@ export default function CotizacionDetailPage() {
     },
     enabled: data?.currency === 'USD',
     staleTime: 30 * 60_000,
+    retry: 2,
   })
+  const rateReady = data?.currency !== 'USD' || rateFetched
 
   const totals = data
     ? computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
     : null
 
-  // Build PDF when data loads
+  // Build PDF when data loads — espera a que el tipo de cambio haya
+  // terminado de resolverse (éxito o error) si la cotización es en USD,
+  // para no dibujar el PDF sin la leyenda por una carrera con el fetch.
   useEffect(() => {
-    if (!data) return
+    if (!data || !rateReady) return
     let cancelled = false
 
     const build = async () => {
@@ -134,8 +143,8 @@ export default function CotizacionDetailPage() {
       doc.text('A continuación encontrará el detalle de los servicios cotizados.', mg, y); y += 12
 
       y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: data.validityDays ?? 30, fromDate: createdAt })
-      if (data.currency === 'USD' && rateData?.venta) {
-        y = drawTcLegend(doc, { mg, cw, y, rate: rateData.venta })
+      if (data.currency === 'USD') {
+        y = drawTcLegend(doc, { mg, cw, y, rate: rateData?.venta ?? null })
       }
 
       // Table header
@@ -257,7 +266,7 @@ export default function CotizacionDetailPage() {
 
     build().catch(console.error)
     return () => { cancelled = true }
-  }, [data, rateData])
+  }, [data, rateData, rateReady])
 
   // Cleanup blob URL
   useEffect(() => {
