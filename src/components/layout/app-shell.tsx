@@ -136,7 +136,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
       {/* Sidebar — fixed left */}
       <Sidebar
         user={user}
-        crmName={branding?.crmName ?? 'CRM Pro'}
+        crmName={branding?.crmName ?? 'JustCRM'}
         logoUrl={branding?.logoUrl ?? null}
         vertical={branding?.vertical ?? null}
         mobile={false}
@@ -170,7 +170,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
             >
               <Sidebar
                 user={user}
-                crmName={branding?.crmName ?? 'CRM Pro'}
+                crmName={branding?.crmName ?? 'JustCRM'}
                 logoUrl={branding?.logoUrl ?? null}
                 vertical={branding?.vertical ?? null}
                 mobile

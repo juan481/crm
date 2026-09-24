@@ -1,14 +1,14 @@
-// Service worker mínimo — sólo existe para que el navegador considere la
-// app "instalable" (PWA). A propósito NO cachea absolutamente nada bajo
-// /api/* (network-only passthrough): este CRM es multi-tenant con un
-// switcher de organización (ver OrgSwitcher en sidebar.tsx) — cachear una
-// respuesta de API acá adentro podría, en teoría, servir datos viejos de
-// una organización después de cambiar a otra. No vale el riesgo por una
-// ganancia de performance que ya se ataca en otro lado. Sólo precachea
-// assets estáticos versionados por build-id (/_next/static/*) y los pocos
-// archivos públicos que no cambian de contenido por sesión.
-const CACHE_NAME = 'crm-shell-v1'
-const PRECACHE_URLS = ['/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png']
+// Service worker para PWA de JustCRM
+// Precachea assets básicos y sirve /manifest.json network-first para reflejar cambios de marca inmediatamente.
+const CACHE_NAME = 'justcrm-v3'
+const PRECACHE_URLS = [
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icono-justcrm.png',
+  '/favicon.ico',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -31,6 +31,21 @@ self.addEventListener('fetch', (event) => {
 
   // Nunca tocar /api/* — passthrough directo a la red, sin caché.
   if (url.pathname.startsWith('/api/')) return
+
+  // Manifest siempre network-first para que el prompt de instalación de PWA
+  // reciba el nombre JustCRM y los íconos oficiales sin demoras ni datos viejos en caché
+  if (url.pathname === '/manifest.json') {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          const resClone = res.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone)).catch(() => {})
+          return res
+        })
+        .catch(() => caches.match(event.request))
+    )
+    return
+  }
 
   // Sólo cachear (con estrategia cache-first) assets estáticos versionados
   // por Next (_next/static) y los archivos públicos precacheados arriba.
