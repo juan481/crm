@@ -8,7 +8,7 @@ import {
   Plus, Minus, MessageCircle, ChevronRight, ChevronLeft, Trash2, Zap, RefreshCw,
   DollarSign, Download, X, Building2, User, FileText, Mail, Send,
   TrendingUp, CheckCircle, Search, Package, Wrench, Tag, Clock, Boxes,
-  ShoppingCart,
+  ShoppingCart, UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -154,6 +154,15 @@ export default function CotizadorPage() {
   const [contactSearch,           setContactSearch]           = useState('')
   const [selectedContactEmail,    setSelectedContactEmail]    = useState('')
   const [selectedContactName,     setSelectedContactName]     = useState('')
+  // Alta rápida sin salir del cotizador — pedido de Abba: si el cliente no
+  // existe en el CRM (o existe sin mail cargado, ver contactSearchResults
+  // más abajo), antes no había forma de avanzar sin ir a Contactos aparte.
+  const [showNewContactForm,      setShowNewContactForm]      = useState(false)
+  const [newContactFirstName,     setNewContactFirstName]     = useState('')
+  const [newContactLastName,      setNewContactLastName]      = useState('')
+  const [newContactEmail,         setNewContactEmail]         = useState('')
+  const [newContactPhone,         setNewContactPhone]         = useState('')
+  const [creatingContact,         setCreatingContact]         = useState(false)
   const [manualContactInput,      setManualContactInput]      = useState(false)
   const [manualEmail,             setManualEmail]             = useState('')
   const [manualName,              setManualName]              = useState('')
@@ -307,6 +316,36 @@ export default function CotizadorPage() {
   const empresas = Array.isArray(empresasData) ? empresasData : []
   const contacts = (Array.isArray(contactsData) ? contactsData : []).filter(c => c.email)
   const contactSearchResults = (Array.isArray(contactSearchData) ? contactSearchData : []).filter(c => c.email)
+
+  // Alta rápida — crea el Contacto en el CRM (Contactos) y lo deja
+  // seleccionado como destinatario, sin salir del cotizador.
+  const handleCreateContact = async () => {
+    if (!newContactFirstName.trim() || !newContactLastName.trim() || !newContactEmail.trim()) {
+      toast.error('Nombre, apellido y email son obligatorios')
+      return
+    }
+    setCreatingContact(true)
+    try {
+      const r = await fetch('/api/contactos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: newContactFirstName.trim(), lastName: newContactLastName.trim(),
+          email: newContactEmail.trim(), phone: newContactPhone.trim() || undefined,
+          empresaId: selectedEmpresaId || undefined,
+        }),
+      })
+      const json = await r.json()
+      if (!r.ok) { toast.error(json.error ?? 'No se pudo crear el cliente'); return }
+      const c = json.data
+      setSelectedContactEmail(c.email ?? '')
+      setSelectedContactName(`${c.firstName} ${c.lastName}`.trim())
+      if (c.empresa?.id) setSelectedEmpresaId(c.empresa.id)
+      setContactSearch('')
+      setShowNewContactForm(false)
+      setNewContactFirstName(''); setNewContactLastName(''); setNewContactEmail(''); setNewContactPhone('')
+      toast.success(`${c.firstName} ${c.lastName} cargado como cliente nuevo`)
+    } catch { toast.error('Error de conexión') } finally { setCreatingContact(false) }
+  }
 
   const cartItems  = Object.values(cart)
   const ivaRateFor = (ci: CartItem) => ci.type === 'PRODUCT' ? sanitizeIvaPct((ci.item as Product).ivaPct) : DEFAULT_IVA_PCT
@@ -1404,9 +1443,18 @@ export default function CotizadorPage() {
                 {contactSearch.trim().length >= 2 && (
                   <div className="mt-1.5 rounded-xl overflow-hidden border max-h-52 overflow-y-auto" style={{ borderColor: 'var(--color-border)' }}>
                     {contactSearchResults.length === 0 ? (
-                      <p className="text-xs px-3 py-2" style={{ color: 'var(--color-text-subtle)' }}>
-                        Sin resultados con mail cargado — cargalo en Contactos o usá &quot;Email directo&quot;.
-                      </p>
+                      <div className="px-3 py-2 space-y-2">
+                        <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+                          Sin resultados con mail cargado para &quot;{contactSearch}&quot;.
+                        </p>
+                        <button
+                          onClick={() => { setShowNewContactForm(true); setNewContactFirstName(contactSearch.trim()) }}
+                          className="text-xs font-semibold flex items-center gap-1"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          <UserPlus size={13} /> Cargar cliente nuevo
+                        </button>
+                      </div>
                     ) : (
                       contactSearchResults.map(c => (
                         <button
@@ -1431,6 +1479,27 @@ export default function CotizadorPage() {
                   </div>
                 )}
               </div>
+
+              {showNewContactForm && (
+                <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold flex items-center gap-1" style={{ color: 'var(--color-text)' }}>
+                      <UserPlus size={13} /> Cliente nuevo
+                    </p>
+                    <button onClick={() => setShowNewContactForm(false)} className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Cancelar</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Nombre" value={newContactFirstName} onChange={e => setNewContactFirstName(e.target.value)} />
+                    <Input placeholder="Apellido" value={newContactLastName} onChange={e => setNewContactLastName(e.target.value)} />
+                  </div>
+                  <Input type="email" placeholder="email@cliente.com" value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)} />
+                  <Input placeholder="Teléfono (opcional)" value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} />
+                  <Button size="sm" className="w-full" onClick={handleCreateContact} loading={creatingContact}>
+                    Cargar y usar como destinatario
+                  </Button>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}><Building2 size={11} className="inline mr-1" />Empresa</label>
                 <Select
