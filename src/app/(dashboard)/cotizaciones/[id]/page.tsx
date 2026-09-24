@@ -6,10 +6,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Download, Mail, MessageCircle, CheckCircle2,
   Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle, PackageCheck,
+  Copy, Repeat,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoneyExact } from '@/lib/utils'
-import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox, drawTcLegend } from '@/lib/pdf-branding'
 import { computeQuoteTotals } from '@/lib/quote-totals'
 import { sanitizePdfText } from '@/lib/pdf-text'
 import toast from 'react-hot-toast'
@@ -67,6 +68,8 @@ export default function CotizacionDetailPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [preparando, setPreparando] = useState(false)
   const [facturando, setFacturando] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+  const [convertingCurrency, setConvertingCurrency] = useState(false)
 
   const { data, isLoading, error } = useQuery<CotizacionDetail>({
     queryKey: ['cotizacion', id],
@@ -75,6 +78,19 @@ export default function CotizacionDetailPage() {
       if (!res.ok) throw new Error('No encontrado')
       return (await res.json()).data
     },
+  })
+
+  // Sólo se pide si la cotización está en USD — para la leyenda "TC BNA
+  // Vendedor" obligatoria en el PDF (pedido de Abba).
+  const { data: rateData } = useQuery({
+    queryKey: ['exchange-rate'],
+    queryFn: async () => {
+      const r = await fetch('/api/exchange-rate')
+      if (!r.ok) return null
+      return (await r.json()).data as { venta: number } | null
+    },
+    enabled: data?.currency === 'USD',
+    staleTime: 30 * 60_000,
   })
 
   const totals = data
@@ -118,6 +134,9 @@ export default function CotizacionDetailPage() {
       doc.text('A continuación encontrará el detalle de los servicios cotizados.', mg, y); y += 12
 
       y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: data.validityDays ?? 30, fromDate: createdAt })
+      if (data.currency === 'USD' && rateData?.venta) {
+        y = drawTcLegend(doc, { mg, cw, y, rate: rateData.venta })
+      }
 
       // Table header
       const tableStartY = y
@@ -238,7 +257,7 @@ export default function CotizacionDetailPage() {
 
     build().catch(console.error)
     return () => { cancelled = true }
-  }, [data])
+  }, [data, rateData])
 
   // Cleanup blob URL
   useEffect(() => {
@@ -302,6 +321,40 @@ export default function CotizacionDetailPage() {
       toast.error('Error de conexión')
     } finally {
       setPreparando(false)
+    }
+  }
+
+  const handleDuplicate = async () => {
+    setDuplicating(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/duplicar`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo duplicar'); return }
+      toast.success(`Duplicada como ${json.data.ref}`)
+      qc.invalidateQueries({ queryKey: ['cotizaciones'] })
+      router.push(`/cotizaciones/${json.data.id}`)
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
+  const handleConvertCurrency = async (to: 'ARS' | 'USD') => {
+    setConvertingCurrency(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/cambiar-moneda`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo convertir'); return }
+      toast.success(`Convertida a ${to} (TC ${json.data.rateUsed})`)
+      qc.invalidateQueries({ queryKey: ['cotizacion', id] })
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setConvertingCurrency(false)
     }
   }
 
@@ -395,7 +448,17 @@ export default function CotizacionDetailPage() {
         </div>
 
         {/* Status changer */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleDuplicate} loading={duplicating} leftIcon={<Copy size={13} />}>
+            Duplicar
+          </Button>
+          <Button
+            variant="outline" size="sm" loading={convertingCurrency}
+            onClick={() => handleConvertCurrency(data.currency === 'USD' ? 'ARS' : 'USD')}
+            leftIcon={<Repeat size={13} />}
+          >
+            Pasar a {data.currency === 'USD' ? 'ARS' : 'USD'}
+          </Button>
           {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
             <button key={key}
               disabled={updatingStatus || data.status === key}

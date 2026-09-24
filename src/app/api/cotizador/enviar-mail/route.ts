@@ -4,6 +4,7 @@ import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { sendEmail, resolveOrgSmtpConfig } from '@/lib/email'
 import { computeQuoteTotals, type QuoteTotals } from '@/lib/quote-totals'
+import { getOfficialUsdRate } from '@/lib/exchange-rate'
 import type { QuoteItem } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -28,13 +29,16 @@ function buildQuoteHtml(opts: {
   orgName: string; primaryColor: string; recipientName: string
   items: QuoteItem[]; totals: QuoteTotals; currency: string
   notes?: string; quoteRef: string; agentName: string
+  // Leyenda obligatoria en cotizaciones USD (pedido de Abba) — el
+  // integrador necesita el TC del día para calcular el equivalente en $.
+  tcRate?: number | null
   // Público (pedido de Abba): nunca precio por ítem — este es el CUERPO del
   // mail que recibe el cliente, más importante de blindar que el PDF
   // adjunto. Oculta la columna "Precio", el subtotal y el IVA discriminado;
   // deja sólo el Total Final. Gremio mantiene el desglose de siempre.
   simple?: boolean
 }): string {
-  const { orgName, primaryColor, recipientName, items, totals: tt, currency, notes, quoteRef, agentName, simple } = opts
+  const { orgName, primaryColor, recipientName, items, totals: tt, currency, notes, quoteRef, agentName, simple, tcRate } = opts
   const today = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })
   const money = (n: number) => formatMoney(n, currency)
   const footRow = (label: string, value: string, color: string, bold = false) =>
@@ -85,6 +89,12 @@ function buildQuoteHtml(opts: {
       <p style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin:0 0 20px">Ref: ${quoteRef}</p>
       <p style="font-size:15px;color:#1e293b;margin:0 0 6px;font-weight:500">Estimado/a <strong>${recipientName}</strong>,</p>
       <p style="font-size:14px;color:#64748b;margin:0 0 28px;line-height:1.6">A continuación encontrará el detalle de los servicios cotizados. Quedamos a su disposición.</p>
+      ${currency === 'USD' && tcRate ? `
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin:0 0 20px;text-align:center">
+        <p style="font-size:12px;color:#b91c1c;font-weight:700;margin:0">
+          TC BNA VENDEDOR DEL DÍA: $${tcRate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} — a título informativo para calcular el equivalente en pesos.
+        </p>
+      </div>` : ''}
       <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
         <thead>
           <tr>
@@ -164,6 +174,13 @@ export async function POST(req: NextRequest) {
     const primaryColor = org?.primaryColor || '#6366f1'
     const agentName    = agent?.name || 'El equipo'
 
+    // Leyenda obligatoria en cotizaciones USD — si dolarapi falla, se manda
+    // igual sin la leyenda (no vale la pena frenar el envío por esto).
+    let tcRate: number | null = null
+    if (cotizacion.currency === 'USD') {
+      try { tcRate = (await getOfficialUsdRate()).venta } catch { /* sin leyenda si falla */ }
+    }
+
     const html = buildQuoteHtml({
       orgName, primaryColor,
       recipientName: cotizacion.recipientName,
@@ -174,6 +191,7 @@ export async function POST(req: NextRequest) {
       quoteRef:      cotizacion.ref,
       agentName,
       simple:        cotizacion.priceMode === 'PUBLICO',
+      tcRate,
     })
 
     const smtpConfig = resolveOrgSmtpConfig(org)

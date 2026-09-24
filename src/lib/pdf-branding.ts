@@ -199,6 +199,32 @@ export function drawValidityNote(doc: jsPDF, opts: {
   return y + h + 8
 }
 
+// Leyenda obligatoria en cotizaciones en USD — pedido de Abba: el
+// integrador necesita el TC del día para calcular el equivalente en pesos.
+// "BNA Vendedor" = el mismo dólar oficial que ya usa el cotizador
+// (ver src/lib/exchange-rate.ts — BNA es la referencia del oficial en
+// Argentina). Mismo estilo visual que drawValidityNote, en rojo para que
+// se note que es un dato que cambia día a día.
+export function drawTcLegend(doc: jsPDF, opts: {
+  mg: number; cw: number; y: number
+  rate: number
+}): number {
+  const { mg, cw, y, rate } = opts
+  const rateLabel = rate.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const text = `TC BNA VENDEDOR DEL DÍA: $${rateLabel} — a título informativo para calcular el equivalente en pesos.`
+
+  const h = 9
+  doc.setGState(doc.GState({ opacity: 0.08 }))
+  doc.setFillColor(220, 38, 38)
+  doc.roundedRect(mg, y, cw, h, 2, 2, 'F')
+  doc.setGState(doc.GState({ opacity: 1 }))
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(185, 28, 28)
+  doc.text(text, mg + cw / 2, y + h / 2 + 1.4, { align: 'center' })
+
+  return y + h + 8
+}
+
 /**
  * Draws the "Notas:" box, sizing it to however many lines the note wraps to
  * instead of a fixed height — a long note used to spill text out past a
