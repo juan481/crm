@@ -8,7 +8,7 @@ import { sellerOwnerScope } from '@/lib/deal-access'
 interface Params { params: { id: string } }
 
 const INCLUDE = {
-  empresa:  { select: { id: true, name: true, city: true } },
+  empresa:  { select: { id: true, name: true, city: true, isCliente: true } },
   client:   { select: { id: true, name: true, company: true } },
   contacto: { select: { id: true, firstName: true, lastName: true, phone: true } },
   owner:    { select: { id: true, name: true } },

@@ -553,7 +553,7 @@ export interface Deal {
   origen: string | null
   leadReason: string | null
   empresaId: string | null
-  empresa?: { id: string; name: string; city?: string | null } | null
+  empresa?: { id: string; name: string; city?: string | null; isCliente?: boolean } | null
   clientId: string | null
   client?: { id: string; name: string; company: string | null } | null
   contactoId: string | null

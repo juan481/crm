@@ -80,6 +80,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string; tipo: string; ownerId: string } | null>(null)
   const [closing, setClosing] = useState<null | 'GANADO' | 'PERDIDO'>(null)
+  const [markingCliente, setMarkingCliente] = useState(false)
   // Al ganar: paso "¿qué sigue?" — el usuario elige qué crear para la instalación.
   const [followUp, setFollowUp] = useState<{ empresaId: string | null; nombre: string } | null>(null)
   const [followUpBusy, setFollowUpBusy] = useState<string | null>(null)
@@ -173,6 +174,22 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
         nombre: json.cliente?.nombre ?? data?.empresa?.name ?? data?.title ?? 'el cliente',
       })
     } catch { toast.error('Error de conexión') } finally { setClosing(null) }
+  }
+
+  // Marcar cliente a mano, sin esperar a "Ganado" — pedido de Abba: a veces
+  // ya saben que alguien es cliente aunque esa oportunidad puntual siga
+  // abierta. Reusa el mismo criterio de empresa/contacto/consumidor final
+  // que dispara al ganar (marcarClienteAlGanar).
+  const marcarCliente = async () => {
+    setMarkingCliente(true)
+    try {
+      const res = await fetch(`/api/deals/${dealId}/marcar-cliente`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo marcar como cliente'); return }
+      toast.success(`${json.cliente.nombre} quedó marcado como cliente.`)
+      invalidateAll()
+      qc.invalidateQueries({ queryKey: ['empresas'] })
+    } catch { toast.error('Error de conexión') } finally { setMarkingCliente(false) }
   }
 
   const reopenDeal = async () => {
@@ -424,6 +441,15 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
                 Rentabilidad
               </p>
               <DealRentabilidad dealId={dealId} />
+            </div>
+          )}
+
+          {/* Marcar cliente sin esperar a ganar la venta — pedido de Abba */}
+          {!data.empresa?.isCliente && (
+            <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              <Button variant="outline" className="w-full" onClick={marcarCliente} loading={markingCliente}>
+                Marcar como cliente
+              </Button>
             </div>
           )}
 
