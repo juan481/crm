@@ -48,7 +48,7 @@ interface CotizacionDetail {
   entregaGenerada?: boolean
   dealId?:        string | null
   facturaEmitida?: { id: string; numeroInterno: string | null } | null
-  empresa:        { id: string; name: string } | null
+  empresa:        { id: string; name: string; isCliente?: boolean } | null
   user:           { id: string; name: string } | null
   orgName:        string
   primaryColor:   string
@@ -70,6 +70,7 @@ export default function CotizacionDetailPage() {
   const [facturando, setFacturando] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
   const [convertingCurrency, setConvertingCurrency] = useState(false)
+  const [markingCliente, setMarkingCliente] = useState(false)
 
   const { data, isLoading, error } = useQuery<CotizacionDetail>({
     queryKey: ['cotizacion', id],
@@ -336,20 +337,14 @@ export default function CotizacionDetailPage() {
     }
   }
 
-  const handleDuplicate = async () => {
+  // Duplicar manda al Cotizador con el carrito precargado (en vez de crear
+  // directo una copia guardada) — pedido de Abba: la pantalla de acá es
+  // sólo de ver/cambiar estado, no se pueden tocar los ítems. Así el
+  // vendedor corrige lo que esté mal (precio, ítem equivocado, etc.) antes
+  // de generar la cotización nueva. Nunca toca esta cotización original.
+  const handleDuplicate = () => {
     setDuplicating(true)
-    try {
-      const res = await fetch(`/api/cotizaciones/${id}/duplicar`, { method: 'POST' })
-      const json = await res.json()
-      if (!res.ok) { toast.error(json.error ?? 'No se pudo duplicar'); return }
-      toast.success(`Duplicada como ${json.data.ref}`)
-      qc.invalidateQueries({ queryKey: ['cotizaciones'] })
-      router.push(`/cotizaciones/${json.data.id}`)
-    } catch {
-      toast.error('Error de conexión')
-    } finally {
-      setDuplicating(false)
-    }
+    router.push(`/cotizador?duplicarDe=${id}`)
   }
 
   const handleConvertCurrency = async (to: 'ARS' | 'USD') => {
@@ -367,6 +362,22 @@ export default function CotizacionDetailPage() {
       toast.error('Error de conexión')
     } finally {
       setConvertingCurrency(false)
+    }
+  }
+
+  const handleMarcarCliente = async () => {
+    setMarkingCliente(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${id}/marcar-cliente`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo marcar como cliente'); return }
+      toast.success(`${json.cliente.nombre} quedó marcado como cliente.`)
+      qc.invalidateQueries({ queryKey: ['cotizacion', id] })
+      qc.invalidateQueries({ queryKey: ['empresas-clientes'] })
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setMarkingCliente(false)
     }
   }
 
@@ -471,6 +482,11 @@ export default function CotizacionDetailPage() {
           >
             Pasar a {data.currency === 'USD' ? 'ARS' : 'USD'}
           </Button>
+          {!data.empresa?.isCliente && (
+            <Button variant="outline" size="sm" onClick={handleMarcarCliente} loading={markingCliente} leftIcon={<CheckCircle2 size={13} />}>
+              Marcar como cliente
+            </Button>
+          )}
           {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
             <button key={key}
               disabled={updatingStatus || data.status === key}

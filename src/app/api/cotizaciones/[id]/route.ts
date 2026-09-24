@@ -25,7 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         validityDays: true, ivaDiscriminado: true, priceMode: true,
         entregaGenerada: true, dealId: true,
         items: true,
-        empresa: { select: { id: true, name: true } },
+        empresa: { select: { id: true, name: true, isCliente: true } },
         user:    { select: { id: true, name: true } },
       },
     })

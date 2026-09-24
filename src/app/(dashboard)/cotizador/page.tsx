@@ -192,6 +192,56 @@ export default function CotizadorPage() {
 
   useEffect(() => { return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) } }, [pdfBlobUrl])
 
+  // Precarga desde una cotización existente — pedido de Abba: "Duplicar"
+  // (cotizaciones/[id]) armaba una copia, pero esa pantalla es sólo de
+  // ver/cambiar estado, no tiene forma de editar los ítems. Ahora Duplicar
+  // manda para acá con ?duplicarDe=<id>, se trae la cotización, se carga el
+  // carrito con exactamente lo mismo (precio "congelado" al de esa
+  // cotización, no el del catálogo actual) y el vendedor corrige lo que
+  // esté mal antes de generar el presupuesto nuevo.
+  const duplicarDe = searchParams.get('duplicarDe')
+  useEffect(() => {
+    if (!duplicarDe) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch(`/api/cotizaciones/${duplicarDe}`)
+        const json = await r.json()
+        if (!r.ok || cancelled) return
+        const cot = json.data
+        const items = Array.isArray(cot.items) ? cot.items : []
+        const nextCart: Record<string, CartItem> = {}
+        items.forEach((it: any, idx: number) => {
+          const type: ItemType = it.type === 'PRODUCT' ? 'PRODUCT' : 'SERVICE'
+          const id = it.productId || it.serviceId || `dup-${idx}`
+          const item: any = {
+            id, name: it.name, description: it.description ?? null,
+            price: it.price, currency: it.currency, ivaPct: it.ivaPct ?? null,
+            ...(type === 'PRODUCT'
+              ? { sku: it.sku ?? null, mpn: it.mpn ?? null, unit: it.unit ?? 'unidad', isKit: !!it.isKit, kitComponents: it.kitComponents ?? [], precioGremio: null }
+              : { billingCycle: it.billingCycle ?? 'MONTHLY' }),
+          }
+          nextCart[itemKey(type, id)] = { type, item, quantity: it.quantity ?? 1, priceOverride: it.price }
+        })
+        if (cancelled) return
+        setCart(nextCart)
+        setSelectedEmpresaId(cot.empresaId ?? '')
+        setSelectedContactEmail(cot.recipientEmail ?? '')
+        setSelectedContactName(cot.recipientName ?? '')
+        if (!cot.empresaId) { setClientMode('manual'); setManualEmail(cot.recipientEmail ?? ''); setManualName(cot.recipientName ?? '') }
+        setNotes(cot.notes ?? '')
+        setDiscount(cot.discount ?? 0)
+        setPriceMode(cot.priceMode === 'GREMIO' ? 'GREMIO' : 'PUBLICO')
+        setIvaDiscriminado(cot.ivaDiscriminado === true)
+        toast.success(`Cargado desde ${cot.ref} — revisá y corregí antes de generar el nuevo presupuesto.`)
+      } catch {
+        toast.error('No se pudo cargar la cotización para duplicar')
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duplicarDe])
+
   // ── Queries ────────────────────────────────────────────────────────────────
   // Antes: `.json().then(j => j.data as Service[])` sin chequear `r.ok` —
   // si el fetch fallaba (401/500), la promesa igual resolvía OK (con
