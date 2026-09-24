@@ -61,14 +61,14 @@ export default function LandingPage() {
       
       {/* ── Top Navigation: Cápsula Flotante Glass / Floating Island Dock ──── */}
       <header className="sticky top-3 sm:top-5 z-50 px-3 sm:px-6 transition-all">
-        <div className="max-w-5xl mx-auto rounded-full bg-white/95 backdrop-blur-xl border border-white/80 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.5),0_2px_8px_rgba(0,0,0,0.1)] px-3.5 sm:px-6 h-13 sm:h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto rounded-full bg-white/95 backdrop-blur-xl border border-white/90 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.5),0_2px_10px_rgba(0,0,0,0.08)] px-4 sm:px-7 h-16 sm:h-20 flex items-center justify-between">
           {/* Logo Principal Original */}
           <a href="#inicio" className="flex items-center transition-transform hover:scale-[1.02] shrink-0">
-            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-7 sm:h-9 w-auto object-contain" />
+            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-9 sm:h-11 md:h-12 w-auto object-contain" />
           </a>
 
           {/* Menú Principal Limpio & Editorial (Desktop) */}
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8 text-xs font-medium text-slate-700">
+          <nav className="hidden md:flex items-center gap-7 lg:gap-9 text-sm font-medium text-slate-700">
             <a href="#inicio" className="hover:text-[#00628e] transition-colors">
               Inicio
             </a>
@@ -86,28 +86,28 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* INGRESO PARA CLIENTES */}
             <Link
               href="/login"
-              className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-white font-medium text-xs tracking-normal shadow-sm flex items-center gap-1.5 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b]"
+              className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-sm flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b]"
             >
-              <LogIn className="w-3.5 h-3.5 text-cyan-200" />
+              <LogIn className="w-4 h-4 text-cyan-200" />
               <span>Ingreso Clientes</span>
             </Link>
             <a
               href="#contacto"
-              className="hidden sm:inline-flex text-xs font-medium px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition-all transform hover:-translate-y-0.5 items-center gap-1 shrink-0"
+              className="hidden sm:inline-flex text-xs sm:text-sm font-medium px-5 py-2.5 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition-all transform hover:-translate-y-0.5 items-center gap-1.5 shrink-0"
             >
               <span>Solicitar Demo</span>
-              <ArrowRight className="w-3 h-3" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </a>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-1.5 sm:p-2 rounded-full bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 transition-all shrink-0 ml-1"
+              className="md:hidden p-2 sm:p-2.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 transition-all shrink-0 ml-1"
               aria-label="Menú"
             >
-              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
