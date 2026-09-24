@@ -113,7 +113,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // Permisos sólo puede RESTAR dentro de este array, nunca superarlo, así
       // que sin esto un Super Admin jamás podía activarle WhatsApp a RRHH o
       // Técnicos por más que lo prendiera en Configuración → Permisos.
-      { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'conversaciones', requiresPlugin: 'whatsapp-ai-bot', badgeKey: 'whatsapp' },
+      { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'conversaciones', requiresPlugin: 'whatsapp-ai-bot', badgeKey: 'whatsapp' },
       { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'comunicaciones' },
       { label: 'Servicios',      href: '/servicios',      icon: <RefreshCw size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'], moduleId: 'servicios' },
       { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'], badgeKey: 'invoices', moduleId: 'facturas' },
