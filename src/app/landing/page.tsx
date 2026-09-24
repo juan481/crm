@@ -59,19 +59,16 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-indigo-500 selection:text-white font-poppins antialiased overflow-x-hidden">
       
-      {/* ── Top Navigation Bar: Glass Claro con Bordes Abajo y Logo Original ──── */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-gradient-to-b from-white/80 via-white/65 to-white/55 border-b border-slate-200/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.95),0_12px_36px_-6px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.06)] rounded-b-2xl sm:rounded-b-[28px] transition-all relative">
-        {/* Acento sutil en borde inferior con degradado hacia el azul corporativo */}
-        <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#00628e]/35 to-transparent pointer-events-none rounded-b-2xl sm:rounded-b-[28px]" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-[72px] flex items-center justify-between">
-          {/* Logo Principal Original (sin fondo blanco / sin cuadro redondeado) */}
-          <a href="#inicio" className="flex items-center transition-transform hover:scale-[1.02]">
-            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-9 sm:h-11 w-auto object-contain" />
+      {/* ── Top Navigation: Cápsula Flotante Glass / Floating Island Dock ──── */}
+      <header className="sticky top-3 sm:top-5 z-50 px-3 sm:px-6 transition-all">
+        <div className="max-w-5xl mx-auto rounded-full bg-white/95 backdrop-blur-xl border border-white/80 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.5),0_2px_8px_rgba(0,0,0,0.1)] px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+          {/* Logo Principal Original */}
+          <a href="#inicio" className="flex items-center transition-transform hover:scale-[1.02] shrink-0">
+            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-8 sm:h-9 w-auto object-contain" />
           </a>
 
-          {/* Menú Principal Limpio & Editorial sobre fondo claro */}
-          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-700">
+          {/* Menú Principal Limpio & Editorial */}
+          <nav className="hidden md:flex items-center gap-6 lg:gap-8 text-xs font-medium text-slate-700">
             <a href="#inicio" className="hover:text-[#00628e] transition-colors">
               Inicio
             </a>
@@ -89,35 +86,35 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* INGRESO PARA CLIENTES - ELEGANTE Y DESTACADO */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* INGRESO PARA CLIENTES */}
             <Link
               href="/login"
-              className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b] shadow-[#00628e]/20"
+              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-white font-medium text-xs tracking-normal shadow-sm flex items-center gap-1.5 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b]"
             >
-              <LogIn className="w-4 h-4 text-cyan-200" />
+              <LogIn className="w-3.5 h-3.5 text-cyan-200" />
               <span>Ingreso Clientes</span>
             </Link>
             <a
               href="#contacto"
-              className="text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
+              className="text-xs font-medium px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1 shrink-0"
             >
               <span>Solicitar Demo</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3 h-3" />
             </a>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 ml-1 transition-all"
+              className="md:hidden p-1.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 ml-0.5 transition-all"
               aria-label="Menú"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        {/* Drawer Móvil en fondo glass claro */}
+        {/* Drawer Móvil Flotante */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white/95 backdrop-blur-2xl border-b border-slate-200 px-4 py-4 space-y-3 text-sm shadow-xl rounded-b-2xl">
+          <div className="md:hidden max-w-5xl mx-auto mt-2 bg-white/95 backdrop-blur-2xl border border-slate-200 rounded-2xl p-4 space-y-2.5 text-sm shadow-2xl">
             <a
               href="#inicio"
               onClick={() => setMobileMenuOpen(false)}
