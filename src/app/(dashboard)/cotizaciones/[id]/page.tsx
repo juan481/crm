@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { formatMoneyExact } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
 import { computeQuoteTotals } from '@/lib/quote-totals'
+import { sanitizePdfText } from '@/lib/pdf-text'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -146,16 +147,16 @@ export default function CotizacionDetailPage() {
         const incluyeStr = kitComps.length
           ? 'Incluye: ' + kitComps.map((c: any) => `${c.quantity}× ${c.component?.name || 'Componente'}`).join(', ')
           : ''
-        const itemDesc = item.description ? item.description : ''
+        const itemDesc = sanitizePdfText(item.description)
         const itemSku = isProduct ? (item.sku || item.mpn) : null
-        const nameStr = itemSku ? `[${itemSku}] ${item.name}` : item.name
+        const nameStr = sanitizePdfText(itemSku ? `[${itemSku}] ${item.name}` : item.name)
 
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
         const nameLines: string[] = doc.splitTextToSize(nameStr, cw * 0.42)
         doc.setFontSize(7.5)
         const extraLines: string[] = []
         if (itemDesc) extraLines.push(...doc.splitTextToSize(itemDesc, cw * 0.42))
-        if (incluyeStr) extraLines.push(...doc.splitTextToSize(incluyeStr, cw * 0.42))
+        if (incluyeStr) extraLines.push(...doc.splitTextToSize(sanitizePdfText(incluyeStr), cw * 0.42))
 
         const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3.2 + 1 : 0) + 4
 

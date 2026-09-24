@@ -17,6 +17,7 @@ import { Pagination } from '@/components/ui/table'
 import { formatMoneyExact } from '@/lib/utils'
 import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, type QuoteTotals } from '@/lib/quote-totals'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
+import { sanitizePdfText } from '@/lib/pdf-text'
 import { useThemeStore } from '@/store/theme-store'
 import { CatalogFilters } from '@/components/catalogo/catalog-filters'
 import { ProductCard } from '@/components/catalogo/product-card'
@@ -459,16 +460,16 @@ export default function CotizadorPage() {
       const incluyeStr = kitComps.length
         ? 'Incluye: ' + kitComps.map(c => `${c.quantity}× ${c.component.name}`).join(', ')
         : ''
-      const itemDesc = ci.item.description ? ci.item.description : ''
+      const itemDesc = sanitizePdfText(ci.item.description)
       const itemSku = isProduct ? ((ci.item as Product).sku || (ci.item as Product).mpn) : null
-      const nameStr = itemSku ? `[${itemSku}] ${ci.item.name}` : ci.item.name
+      const nameStr = sanitizePdfText(itemSku ? `[${itemSku}] ${ci.item.name}` : ci.item.name)
 
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
       const nameLines: string[] = doc.splitTextToSize(nameStr, cw * 0.42)
-      doc.setFontSize(7.5) 
+      doc.setFontSize(7.5)
       const extraLines: string[] = []
       if (itemDesc) extraLines.push(...doc.splitTextToSize(itemDesc, cw * 0.42))
-      if (incluyeStr) extraLines.push(...doc.splitTextToSize(incluyeStr, cw * 0.42))
+      if (incluyeStr) extraLines.push(...doc.splitTextToSize(sanitizePdfText(incluyeStr), cw * 0.42))
 
       const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3.2 + 1 : 0) + 4
 
