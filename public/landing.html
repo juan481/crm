@@ -187,29 +187,29 @@
 
   
       
-      <!-- ── Top Navigation Bar: Limpio, Conciso y No Sobrecargado ──── -->
-      <header class="sticky top-0 z-50 backdrop-blur-2xl bg-[#070b14]/90 border-b border-slate-800">
+      <!-- ── Top Navigation Bar: Glass Claro con Logo Original sin Contenedor Blanco ──── -->
+      <header class="sticky top-0 z-50 backdrop-blur-2xl bg-white/90 border-b border-slate-200/90 shadow-[0_4px_25px_rgba(0,0,0,0.06)] transition-all">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <!-- Logo Principal Grande (logo-fondo-redondeado) sin texto redundante -->
-          <a href="#inicio" class="flex items-center transition-opacity hover:opacity-90">
-            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" class="h-10 sm:h-12 w-auto object-contain">
+          <!-- Logo Principal Original (sin fondo blanco / sin cuadro redondeado) -->
+          <a href="#inicio" class="flex items-center transition-transform hover:scale-[1.02]">
+            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" class="h-10 sm:h-12 w-auto object-contain">
           </a>
 
-          <!-- Menú Principal Limpio & Editorial -->
-          <nav class="hidden md:flex items-center gap-8 text-xs font-medium text-slate-300">
-            <a href="#inicio" class="hover:text-white transition-colors">
+          <!-- Menú Principal Limpio & Editorial sobre fondo claro -->
+          <nav class="hidden md:flex items-center gap-8 text-xs font-medium text-slate-600">
+            <a href="#inicio" class="hover:text-[#00628e] transition-colors">
               Inicio
             </a>
 
-            <a href="#funciones" class="hover:text-white transition-colors text-cyan-400 hover:text-cyan-300">
+            <a href="#funciones" class="text-[#00628e] font-semibold hover:text-[#00496b] transition-colors">
               Funciones
             </a>
 
-            <a href="#planes" class="hover:text-white transition-colors">
+            <a href="#planes" class="hover:text-[#00628e] transition-colors">
               Planes
             </a>
 
-            <a href="#faq" class="hover:text-white transition-colors">
+            <a href="#faq" class="hover:text-[#00628e] transition-colors">
               Preguntas
             </a>
           </nav>
@@ -217,21 +217,21 @@
           <div class="flex items-center gap-2 sm:gap-3">
             <!-- INGRESO PARA CLIENTES - ELEGANTE Y DESTACADO -->
             <a href="/login"
-              class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/30"
+              class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b] shadow-[#00628e]/20"
             >
-              <i data-lucide="log-in" class="w-4 h-4 text-cyan-300"></i>
+              <i data-lucide="log-in" class="w-4 h-4 text-cyan-200"></i>
               <span>Ingreso Clientes</span>
             </a>
             <a
               href="#contacto"
-              class="text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white text-[#00496b] hover:bg-slate-100 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
+              class="text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
             >
               <span>Solicitar Demo</span>
               <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
             </a>
             <button
               onclick="toggleMobileMenu()"
-              class="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white ml-1 transition-all"
+              class="md:hidden p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 ml-1 transition-all"
               aria-label="Menú"
             >
               <i data-lucide="menu" id="menu-icon-bars" class="w-5 h-5"></i>
@@ -240,60 +240,60 @@
           </div>
         </div>
 
-        <!-- Drawer Móvil -->
-        <div id="mobile-drawer" class="hidden md:hidden bg-slate-950/95 border-b border-slate-800 px-4 py-4 space-y-3 text-sm animate-landing-fade-in">
+        <!-- Drawer Móvil en fondo claro -->
+        <div id="mobile-drawer" class="hidden md:hidden bg-white/95 backdrop-blur-2xl border-b border-slate-200 px-4 py-4 space-y-3 text-sm shadow-xl">
             <a
               href="#inicio"
               onclick="toggleMobileMenu()"
-              class="block font-medium text-slate-200 hover:text-white py-1"
+              class="block font-medium text-slate-700 hover:text-[#00628e] py-1"
             >
               Inicio
             </a>
             <a
               href="#funciones"
               onclick="toggleMobileMenu()"
-              class="block font-medium text-cyan-400 hover:text-cyan-300 py-1"
+              class="block font-medium text-[#00628e] hover:text-[#00496b] py-1"
             >
               Funciones del CRM (Resumen por Área)
             </a>
             <a
               href="#dashboard"
               onclick="toggleMobileMenu()"
-              class="block text-xs text-slate-400 hover:text-white pl-3 py-0.5"
+              class="block text-xs text-slate-500 hover:text-[#00628e] pl-3 py-0.5"
             >
               → Ver la Sábana de 25 Módulos
             </a>
             <a
               href="#planes"
               onclick="toggleMobileMenu()"
-              class="block font-medium text-slate-200 hover:text-white py-1"
+              class="block font-medium text-slate-700 hover:text-[#00628e] py-1"
             >
               Planes de Suscripción
             </a>
             <a
               href="#faq"
               onclick="toggleMobileMenu()"
-              class="block font-medium text-slate-200 hover:text-white py-1"
+              class="block font-medium text-slate-700 hover:text-[#00628e] py-1"
             >
               Preguntas Frecuentes
             </a>
-            <div class="pt-2 border-t border-slate-800 space-y-2">
+            <div class="pt-2 border-t border-slate-200 space-y-2">
               <a href="/login" onclick="toggleMobileMenu()"
-                class="w-full text-center py-3.5 rounded-full text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/30"
+                class="w-full text-center py-3.5 rounded-full text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md bg-[#00628e] hover:bg-[#00496b]"
               >
-                <i data-lucide="log-in" class="w-4 h-4 text-cyan-300"></i>
+                <i data-lucide="log-in" class="w-4 h-4 text-cyan-200"></i>
                 <span>Ingreso Clientes</span>
               </a>
               <a
                 href="#contacto"
                 onclick="toggleMobileMenu()"
-                class="w-full text-center py-3 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300 flex items-center justify-center gap-2 hover:bg-slate-800"
+                class="w-full text-center py-3 rounded-full bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center justify-center gap-2 hover:bg-slate-200"
               >
                 <span>Solicitar Demo en Vivo</span>
                 <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
               </a>
             </div>
-          </div>
+        </div>
       </header>
 
       <!-- ── SECCIÓN 1: INICIO & PROPUESTA DE VALOR ───────────────────────── -->
@@ -3331,122 +3331,136 @@
       </section>
 
       <!-- ── Contact Form ──────────────────────────────────────────────── -->
-      <section id="contacto" class="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4">
-        <div class="max-w-xl mx-auto">
-          <div class="flex justify-center mb-6">
-            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" class="h-12 sm:h-14 w-auto object-contain">
-          </div>
-          <h2 class="text-3xl sm:text-4xl font-semibold text-white mb-3">Terminá con el Caos Operativo Hoy</h2>
-          <p class="text-slate-400 text-sm mb-8 font-normal">
-            Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para coordinar una demo guiada de 15 minutos.
-          </p>
+      <section id="contacto" class="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4 relative overflow-hidden">
+        <!-- Glow ambiental suave detrás -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#00628e]/15 blur-[130px] pointer-events-none rounded-full"></div>
 
-          <div id="contact-success-box" class="hidden bg-slate-900 border border-emerald-500/40 rounded-3xl p-8 text-center space-y-5 shadow-2xl shadow-emerald-500/10 animate-landing-fade-in">
-            <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-              <i data-lucide="check-circle-2" class="w-9 h-9"></i>
+        <div class="max-w-xl mx-auto relative z-10">
+          
+          <!-- Contenedor Claro Elegante (Tarjetón Blanco Arquitectónico) -->
+          <div class="bg-white rounded-[32px] p-8 sm:p-12 border border-[#d6dde5] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] text-left relative">
+            
+            <!-- Logo de JustCRM original sin fondo, sobre el contenedor blanco -->
+            <div class="flex justify-center mb-6">
+              <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" class="h-12 sm:h-14 w-auto object-contain">
             </div>
-            <div>
-              <h3 class="text-2xl font-semibold text-white">¡Solicitud Recibida con Éxito!</h3>
-              <p class="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed" id="contact-success-msg">
-                Muchas gracias. La información fue enviada a nuestro equipo en <span class="text-cyan-400 font-mono">contacto@justcreate.com.ar</span>. Te contactaremos hoy mismo a tu WhatsApp.
+
+            <div class="text-center mb-8">
+              <h2 class="text-2xl sm:text-3xl lg:text-4xl font-semibold text-slate-900 mb-2.5">
+                Terminá con el Caos Operativo Hoy
+              </h2>
+              <p class="text-slate-600 text-xs sm:text-sm font-normal max-w-md mx-auto leading-relaxed">
+                Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para coordinar una demo guiada de 15 minutos.
               </p>
             </div>
 
-            <div class="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <a
-                id="contact-success-wa-btn"
-                href="https://wa.me/5491124527669"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="w-full sm:w-auto px-6 py-3.5 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white font-medium text-xs shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
-              >
-                <i data-lucide="message-square" class="w-4 h-4"></i>
-                <span>Hablar por WhatsApp Ahora Directo</span>
-              </a>
-              <button
-                type="button"
-                onclick="resetLandingContact()"
-                class="w-full sm:w-auto px-5 py-3.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
-              >
-                Enviar otra consulta
-              </button>
-            </div>
-          </div>
-
-          <form
-            id="landing-contact-form"
-            onsubmit="handleLandingContactSubmit(event)"
-            class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-left space-y-4 shadow-2xl relative"
-          >
-            <div id="contact-error-box" class="hidden p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs"></div>
-
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">
-                Nombre y Apellido <span class="text-red-400">*</span>
-              </label>
-              <input
-                id="contact-name"
-                type="text"
-                required
-                placeholder="Ej. Juan Pérez"
-                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Empresa o Razón Social</label>
-              <input
-                id="contact-company"
-                type="text"
-                placeholder="Ej. Seguridad & Alarmas SRL"
-                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">
-                  Email Corporativo <span class="text-red-400">*</span>
-                </label>
-                <input
-                  id="contact-email"
-                  type="email"
-                  required
-                  placeholder="juan@empresa.com"
-                  class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+            <div id="contact-success-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-landing-fade-in">
+              <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                <i data-lucide="check-circle-2" class="w-8 h-8"></i>
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">
-                  WhatsApp / Teléfono <span class="text-red-400">*</span>
-                </label>
-                <input
-                  id="contact-phone"
-                  type="tel"
-                  required
-                  placeholder="+54 9 11 ..."
-                  class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                />
+                <h3 class="text-xl sm:text-2xl font-semibold text-slate-900">¡Solicitud Recibida con Éxito!</h3>
+                <p class="text-slate-600 text-xs sm:text-sm mt-2 leading-relaxed" id="contact-success-msg">
+                  Muchas gracias. La información fue enviada a nuestro equipo en <span class="text-[#00628e] font-medium">contacto@justcreate.com.ar</span>. Te contactaremos hoy mismo a tu WhatsApp.
+                </p>
+              </div>
+
+              <div class="pt-3 border-t border-emerald-200/60 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a
+                  id="contact-success-wa-btn"
+                  href="https://wa.me/5491124527669"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="w-full sm:w-auto px-6 py-3 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white font-medium text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
+                >
+                  <i data-lucide="message-square" class="w-4 h-4"></i>
+                  <span>Hablar por WhatsApp Ahora Directo</span>
+                </a>
+                <button
+                  type="button"
+                  onclick="resetLandingContact()"
+                  class="w-full sm:w-auto px-5 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                >
+                  Enviar otra consulta
+                </button>
               </div>
             </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">
-                ¿Qué proceso u operación te gustaría optimizar? (Opcional)
-              </label>
-              <input
-                id="contact-message"
-                type="text"
-                placeholder="Ej. Cotizaciones más rápidas, WhatsApp con IA, remitos de obra..."
-                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-            <button
-              id="contact-submit-btn"
-              type="submit"
-              class="w-full mt-4 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-sm shadow-md transition-all flex items-center justify-center gap-2 border border-cyan-400/30"
+
+            <form
+              id="landing-contact-form"
+              onsubmit="handleLandingContactSubmit(event)"
+              class="space-y-4"
             >
-              <span>Agendar Demostración Personalizada</span>
-              <i data-lucide="arrow-right" class="w-4 h-4"></i>
-            </button>
-          </form>
+              <div id="contact-error-box" class="hidden p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium"></div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Nombre y Apellido <span class="text-red-500">*</span>
+                </label>
+                <input
+                  id="contact-name"
+                  type="text"
+                  required
+                  placeholder="Ej. Juan Pérez"
+                  class="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Empresa o Razón Social</label>
+                <input
+                  id="contact-company"
+                  type="text"
+                  placeholder="Ej. Seguridad & Alarmas SRL"
+                  class="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Email Corporativo <span class="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    required
+                    placeholder="juan@empresa.com"
+                    class="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">
+                    WhatsApp / Teléfono <span class="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="contact-phone"
+                    type="tel"
+                    required
+                    placeholder="+54 9 11 ..."
+                    class="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                  />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">
+                  ¿Qué proceso u operación te gustaría optimizar? (Opcional)
+                </label>
+                <input
+                  id="contact-message"
+                  type="text"
+                  placeholder="Ej. Cotizaciones más rápidas, WhatsApp con IA, remitos de obra..."
+                  class="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                />
+              </div>
+              <button
+                id="contact-submit-btn"
+                type="submit"
+                class="w-full mt-2 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-sm shadow-md shadow-[#00628e]/20 transition-all flex items-center justify-center gap-2 border border-cyan-400/30"
+              >
+                <span>Agendar Demostración Personalizada</span>
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </button>
+            </form>
+          </div>
         </div>
       </section>
 

@@ -59,29 +59,29 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-indigo-500 selection:text-white font-poppins antialiased overflow-x-hidden">
       
-      {/* ── Top Navigation Bar: Limpio, Conciso y No Sobrecargado ──── */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#070b14]/90 border-b border-slate-800">
+      {/* ── Top Navigation Bar: Glass Claro con Logo Original sin Contenedor Blanco ──── */}
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/90 border-b border-slate-200/90 shadow-[0_4px_25px_rgba(0,0,0,0.06)] transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          {/* Logo Principal Grande (logo-fondo-redondeado) sin texto redundante */}
-          <a href="#inicio" className="flex items-center transition-opacity hover:opacity-90">
-            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-10 sm:h-12 w-auto object-contain" />
+          {/* Logo Principal Original (sin fondo blanco / sin cuadro redondeado) */}
+          <a href="#inicio" className="flex items-center transition-transform hover:scale-[1.02]">
+            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-10 sm:h-12 w-auto object-contain" />
           </a>
 
-          {/* Menú Principal Limpio & Editorial */}
-          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-300">
-            <a href="#inicio" className="hover:text-white transition-colors">
+          {/* Menú Principal Limpio & Editorial sobre fondo claro */}
+          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-600">
+            <a href="#inicio" className="hover:text-[#00628e] transition-colors">
               Inicio
             </a>
 
-            <a href="#funciones" className="hover:text-white transition-colors text-cyan-400 hover:text-cyan-300">
+            <a href="#funciones" className="text-[#00628e] font-semibold hover:text-[#00496b] transition-colors">
               Funciones
             </a>
 
-            <a href="#planes" className="hover:text-white transition-colors">
+            <a href="#planes" className="hover:text-[#00628e] transition-colors">
               Planes
             </a>
 
-            <a href="#faq" className="hover:text-white transition-colors">
+            <a href="#faq" className="hover:text-[#00628e] transition-colors">
               Preguntas
             </a>
           </nav>
@@ -90,21 +90,21 @@ export default function LandingPage() {
             {/* INGRESO PARA CLIENTES - ELEGANTE Y DESTACADO */}
             <Link
               href="/login"
-              className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/30"
+              className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b] shadow-[#00628e]/20"
             >
-              <LogIn className="w-4 h-4 text-cyan-300" />
+              <LogIn className="w-4 h-4 text-cyan-200" />
               <span>Ingreso Clientes</span>
             </Link>
             <a
               href="#contacto"
-              className="text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white text-[#00496b] hover:bg-slate-100 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
+              className="text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
             >
               <span>Solicitar Demo</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white ml-1"
+              className="md:hidden p-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-950 ml-1 transition-all"
               aria-label="Menú"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -112,57 +112,57 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Drawer Móvil */}
+        {/* Drawer Móvil en fondo claro */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-slate-950/95 border-b border-slate-800 px-4 py-4 space-y-3 text-sm">
+          <div className="md:hidden bg-white/95 backdrop-blur-2xl border-b border-slate-200 px-4 py-4 space-y-3 text-sm shadow-xl">
             <a
               href="#inicio"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-medium text-slate-200 hover:text-white py-1"
+              className="block font-medium text-slate-700 hover:text-[#00628e] py-1"
             >
               Inicio
             </a>
             <a
               href="#funciones"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-medium text-cyan-400 hover:text-cyan-300 py-1"
+              className="block font-medium text-[#00628e] hover:text-[#00496b] py-1"
             >
               Funciones del CRM (Resumen por Área)
             </a>
             <a
               href="#dashboard"
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-xs text-slate-400 hover:text-white pl-3 py-0.5"
+              className="block text-xs text-slate-500 hover:text-[#00628e] pl-3 py-0.5"
             >
               → Ver los 18 Módulos del Sistema
             </a>
             <a
               href="#planes"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-medium text-slate-200 hover:text-white py-1"
+              className="block font-medium text-slate-700 hover:text-[#00628e] py-1"
             >
               Planes de Suscripción
             </a>
             <a
               href="#faq"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-medium text-slate-200 hover:text-white py-1"
+              className="block font-medium text-slate-700 hover:text-[#00628e] py-1"
             >
               Preguntas Frecuentes
             </a>
-            <div className="pt-2 border-t border-slate-800 space-y-2">
+            <div className="pt-2 border-t border-slate-200 space-y-2">
               <Link
                 href="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-3.5 rounded-full text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/30"
+                className="w-full text-center py-3.5 rounded-full text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md bg-[#00628e] hover:bg-[#00496b]"
               >
-                <LogIn className="w-4 h-4 text-cyan-300" />
+                <LogIn className="w-4 h-4 text-cyan-200" />
                 <span>Ingreso Clientes</span>
               </Link>
               <a
                 href="#contacto"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-3 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300 flex items-center justify-center gap-2 hover:bg-slate-800"
+                className="w-full text-center py-3 rounded-full bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700 flex items-center justify-center gap-2 hover:bg-slate-200"
               >
                 <span>Solicitar Demo en Vivo</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -3123,183 +3123,197 @@ export default function LandingPage() {
       </section>
 
       {/* ── Contact Form ──────────────────────────────────────────────── */}
-      <section id="contacto" className="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4">
-        <div className="max-w-xl mx-auto">
-          <div className="flex justify-center mb-6">
-            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-12 sm:h-14 w-auto object-contain" />
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-semibold text-white mb-3">Terminá con el Caos Operativo Hoy</h2>
-          <p className="text-slate-400 text-sm mb-8 font-normal">
-            Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para coordinar una demo guiada de 15 minutos.
-          </p>
+      <section id="contacto" className="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4 relative overflow-hidden">
+        {/* Glow ambiental suave detrás */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#00628e]/15 blur-[130px] pointer-events-none rounded-full" />
 
-          {isSubmitted ? (
-            <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-8 text-center space-y-5 shadow-2xl shadow-emerald-500/10 animate-landing-fade-in">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-9 h-9" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-semibold text-white">¡Solicitud Recibida con Éxito!</h3>
-                <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed">
-                  Muchas gracias <strong>{contactName}</strong>. La información fue enviada a nuestro equipo en <span className="text-cyan-400 font-mono">contacto@justcreate.com.ar</span>. Te contactaremos hoy mismo a tu WhatsApp (<strong className="text-white">{contactPhone}</strong>).
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <a
-                  href={`https://wa.me/5491124527669?text=${encodeURIComponent(`Hola JustCRM, acabo de solicitar una demo para ${contactCompany || contactName}. Mi email es ${contactEmail}.`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white font-medium text-xs shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Hablar por WhatsApp Ahora Directo</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSubmitted(false)
-                    setContactName('')
-                    setContactCompany('')
-                    setContactEmail('')
-                    setContactPhone('')
-                    setContactMessage('')
-                  }}
-                  className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
-                >
-                  Enviar otra consulta
-                </button>
-              </div>
+        <div className="max-w-xl mx-auto relative z-10">
+          
+          {/* Contenedor Claro Elegante (Tarjetón Blanco Arquitectónico) */}
+          <div className="bg-white rounded-[32px] p-8 sm:p-12 border border-[#d6dde5] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] text-left relative">
+            
+            {/* Logo de JustCRM original sin fondo, sobre el contenedor blanco */}
+            <div className="flex justify-center mb-6">
+              <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-12 sm:h-14 w-auto object-contain" />
             </div>
-          ) : (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault()
-                setIsSubmitting(true)
-                setSubmitError(null)
 
-                try {
-                  const res = await fetch('/api/contacto', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      name: contactName,
-                      company: contactCompany,
-                      email: contactEmail,
-                      phone: contactPhone,
-                      message: contactMessage,
-                    }),
-                  })
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-slate-900 mb-2.5">
+                Terminá con el Caos Operativo Hoy
+              </h2>
+              <p className="text-slate-600 text-xs sm:text-sm font-normal max-w-md mx-auto leading-relaxed">
+                Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para coordinar una demo guiada de 15 minutos.
+              </p>
+            </div>
 
-                  const data = await res.json()
-                  if (!res.ok) {
-                    throw new Error(data.error || 'Ocurrió un error al enviar el formulario.')
+            {isSubmitted ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-landing-fade-in">
+                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-semibold text-slate-900">¡Solicitud Recibida con Éxito!</h3>
+                  <p className="text-slate-600 text-xs sm:text-sm mt-2 leading-relaxed">
+                    Muchas gracias <strong>{contactName}</strong>. La información fue enviada a nuestro equipo en <span className="text-[#00628e] font-medium">contacto@justcreate.com.ar</span>. Te contactaremos hoy mismo a tu WhatsApp (<strong className="text-slate-900">{contactPhone}</strong>).
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-emerald-200/60 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <a
+                    href={`https://wa.me/5491124527669?text=${encodeURIComponent(`Hola JustCRM, acabo de solicitar una demo para ${contactCompany || contactName}. Mi email es ${contactEmail}.`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white font-medium text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Hablar por WhatsApp Ahora Directo</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSubmitted(false)
+                      setContactName('')
+                      setContactCompany('')
+                      setContactEmail('')
+                      setContactPhone('')
+                      setContactMessage('')
+                    }}
+                    className="w-full sm:w-auto px-5 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                  >
+                    Enviar otra consulta
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  setIsSubmitting(true)
+                  setSubmitError(null)
+
+                  try {
+                    const res = await fetch('/api/contacto', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: contactName,
+                        company: contactCompany,
+                        email: contactEmail,
+                        phone: contactPhone,
+                        message: contactMessage,
+                      }),
+                    })
+
+                    const data = await res.json()
+                    if (!res.ok) {
+                      throw new Error(data.error || 'Ocurrió un error al enviar el formulario.')
+                    }
+
+                    setIsSubmitted(true)
+                  } catch (err: any) {
+                    console.error('Error submitting contact form:', err)
+                    setSubmitError(err.message || 'No se pudo enviar. Podés contactarnos directo por WhatsApp.')
+                  } finally {
+                    setIsSubmitting(false)
                   }
-
-                  setIsSubmitted(true)
-                } catch (err: any) {
-                  console.error('Error submitting contact form:', err)
-                  setSubmitError(err.message || 'No se pudo enviar. Podés contactarnos directo por WhatsApp.')
-                } finally {
-                  setIsSubmitting(false)
-                }
-              }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-left space-y-4 shadow-2xl relative"
-            >
-              {submitError && (
-                <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs">
-                  {submitError}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Nombre y Apellido <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  placeholder="Ej. Juan Pérez"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Empresa o Razón Social
-                </label>
-                <input
-                  type="text"
-                  value={contactCompany}
-                  onChange={(e) => setContactCompany(e.target.value)}
-                  placeholder="Ej. Seguridad & Alarmas SRL"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Email Corporativo <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={contactEmail}
-                    onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="juan@empresa.com"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    WhatsApp / Teléfono <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    placeholder="+54 9 11 ..."
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  ¿Qué proceso u operación te gustaría optimizar? (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={contactMessage}
-                  onChange={(e) => setContactMessage(e.target.value)}
-                  placeholder="Ej. Cotizaciones más rápidas, WhatsApp con IA, remitos de obra..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full mt-4 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-sm shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-cyan-400/30"
+                }}
+                className="space-y-4"
               >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Enviando solicitud a contacto@justcreate.com.ar...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Agendar Demostración Personalizada</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
+                {submitError && (
+                  <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
+                    {submitError}
+                  </div>
                 )}
-              </button>
-            </form>
-          )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Nombre y Apellido <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="Ej. Juan Pérez"
+                    className="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Empresa o Razón Social
+                  </label>
+                  <input
+                    type="text"
+                    value={contactCompany}
+                    onChange={(e) => setContactCompany(e.target.value)}
+                    placeholder="Ej. Seguridad & Alarmas SRL"
+                    className="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      Email Corporativo <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={contactEmail}
+                      onChange={(e) => setContactEmail(e.target.value)}
+                      placeholder="juan@empresa.com"
+                      className="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      WhatsApp / Teléfono <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={contactPhone}
+                      onChange={(e) => setContactPhone(e.target.value)}
+                      placeholder="+54 9 11 ..."
+                      className="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    ¿Qué proceso u operación te gustaría optimizar? (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={contactMessage}
+                    onChange={(e) => setContactMessage(e.target.value)}
+                    placeholder="Ej. Cotizaciones más rápidas, WhatsApp con IA, remitos de obra..."
+                    className="w-full px-4 py-3 rounded-xl bg-[#f8fafc] border border-slate-200 text-slate-900 text-xs placeholder-slate-400 focus:outline-none focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 transition-all font-normal"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full mt-2 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-sm shadow-md shadow-[#00628e]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-cyan-400/30"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Enviando solicitud a contacto@justcreate.com.ar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Agendar Demostración Personalizada</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </section>
 
