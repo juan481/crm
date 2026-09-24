@@ -2,11 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { Search, FileText, Building2, Calendar, DollarSign, CheckCircle2, Clock, Send, AlertTriangle } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Search, FileText, Building2, Calendar, DollarSign, CheckCircle2, Clock, Send, AlertTriangle, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Modal, ModalFooter } from '@/components/ui/modal'
 import { Pagination } from '@/components/ui/table'
 import { formatMoneyExact } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth-store'
+import toast from 'react-hot-toast'
 
 interface CotizacionItem {
   id:            string
@@ -35,10 +39,15 @@ const STATUS_LABELS: Record<string, { label: string; color: string; icon: React.
 
 export default function CotizacionesPage() {
   const router = useRouter()
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(1)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [deleting, setDeleting] = useState<CotizacionItem | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   useEffect(() => {
     debounceRef.current = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
@@ -60,6 +69,19 @@ export default function CotizacionesPage() {
   const cotizaciones: CotizacionItem[] = data?.data ?? []
   const total: number      = data?.total ?? 0
   const totalPages: number = data?.totalPages ?? 1
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    setDeleteBusy(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${deleting.id}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo borrar'); return }
+      toast.success('Cotización borrada')
+      setDeleting(null)
+      qc.invalidateQueries({ queryKey: ['cotizaciones'] })
+    } catch { toast.error('Error de conexión') } finally { setDeleteBusy(false) }
+  }
 
   return (
     <div className="space-y-6">
@@ -109,6 +131,7 @@ export default function CotizacionesPage() {
               <th className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--color-text-muted)' }}>Total</th>
               <th className="px-4 py-3 text-center font-semibold hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>Estado</th>
               <th className="px-4 py-3 text-left font-semibold hidden xl:table-cell" style={{ color: 'var(--color-text-muted)' }}>Fecha</th>
+              {isSuperAdmin && <th className="px-4 py-3" />}
             </tr>
           </thead>
           <tbody>
@@ -124,7 +147,7 @@ export default function CotizacionesPage() {
               ))
             ) : cotizaciones.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                <td colSpan={isSuperAdmin ? 7 : 6} className="px-4 py-12 text-center" style={{ color: 'var(--color-text-muted)' }}>
                   <FileText size={32} className="mx-auto mb-3 opacity-30" />
                   <p className="font-medium">No hay cotizaciones {debouncedSearch ? 'que coincidan con la búsqueda' : 'aún'}</p>
                   <p className="text-xs mt-1">
@@ -184,6 +207,17 @@ export default function CotizacionesPage() {
                         <Calendar size={11} />{date}
                       </span>
                     </td>
+                    {isSuperAdmin && (
+                      <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => setDeleting(c)}
+                          className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                          title="Borrar cotización"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })
@@ -195,6 +229,16 @@ export default function CotizacionesPage() {
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} total={total} limit={20} onPageChange={setPage} />
       )}
+
+      <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Borrar cotización" size="sm">
+        <p className="text-sm text-[var(--color-text-muted)] mb-6">
+          ¿Borrar <strong className="text-[var(--color-text)] font-mono">{deleting?.ref}</strong> ({deleting?.recipientName})? Esta acción no se puede deshacer — no se puede borrar si ya tiene una factura emitida.
+        </p>
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setDeleting(null)}>Cancelar</Button>
+          <Button variant="danger" loading={deleteBusy} onClick={handleDelete}>Borrar</Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }

@@ -175,7 +175,10 @@ export default function CotizacionDetailPage() {
         const incluyeStr = kitComps.length
           ? 'Incluye: ' + kitComps.map((c: any) => `${c.quantity}× ${c.component?.name || 'Componente'}`).join(', ')
           : ''
-        const itemDesc = sanitizePdfText(item.description)
+        // Pedido de Abba: la ficha técnica cruda del proveedor (specs largas
+        // copiadas del datasheet) no va en el presupuesto — sólo el título.
+        // "Incluye:" de los kits sí se mantiene, es otra cosa.
+        const itemDesc = ''
         const itemSku = isProduct ? (item.sku || item.mpn) : null
         const nameStr = sanitizePdfText(itemSku ? `[${itemSku}] ${item.name}` : item.name)
 

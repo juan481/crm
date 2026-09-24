@@ -122,3 +122,34 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
+
+// Borrar cotizaciones — pedido de Abba: sólo Super Admin, para limpiar
+// rechazadas/guardadas viejas que ya no sirven. Ni ADMIN ni SELLER pueden
+// (a diferencia del resto de este archivo, que sí acepta ADMIN/SELLER vía
+// roleHasModule) — es intencionalmente más restrictivo que el resto del
+// módulo Cotizaciones.
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const payload = await getCurrentUser()
+    if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Sólo un Super Admin puede borrar cotizaciones' }, { status: 403 })
+
+    const db = prisma as any
+    const existing = await db.cotizacion.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: { id: true },
+    })
+    if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+
+    // No se borra si ya generó una factura real — ahí no es "un guardado al
+    // pedo", es un comprobante con historia. Primero desvincular a mano.
+    const factura = await db.invoice.findFirst({ where: { organizationId: payload.orgId, cotizacionId: params.id }, select: { id: true } })
+    if (factura) return NextResponse.json({ error: 'Esta cotización ya tiene una factura emitida — no se puede borrar.' }, { status: 409 })
+
+    await db.cotizacion.delete({ where: { id: params.id } })
+    return NextResponse.json({ message: 'Cotización borrada' })
+  } catch (error) {
+    console.error('[COTIZACION DELETE]', error)
+    return NextResponse.json({ error: 'Error al borrar' }, { status: 500 })
+  }
+}
