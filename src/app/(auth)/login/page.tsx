@@ -86,89 +86,101 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#f7f9fe] text-[#181c1f] font-poppins antialiased">
+    <div className="min-h-screen flex bg-[#070b14] text-[#181c1f] font-poppins antialiased">
       {TURNSTILE_SITE_KEY && (
         <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer onLoad={renderTurnstile} />
       )}
 
-      {/* ── Panel Izquierdo: Presentación Limpia & Editorial (Aura Studio OS) ── */}
-      <div className="hidden lg:flex lg:w-[48%] flex-col justify-between p-12 lg:p-16 bg-[#f1f4f8] border-r border-[#e0e3e7] relative overflow-hidden">
-        {/* Marca Superior: Logo Grande JustCRM sin fondo */}
-        <div className="flex items-center justify-between">
-          <Link href="/landing" className="inline-block transition-transform hover:scale-[1.02]">
-            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-11 w-auto object-contain" />
+      {/* ── Panel Izquierdo (Parte Negra & Animada): Presentación Editorial con Fondo de Amor & JustCRM Grande ── */}
+      <div className="hidden lg:flex lg:w-[50%] flex-col justify-between p-12 lg:p-16 bg-[#070b14] border-r border-slate-800/80 relative overflow-hidden text-white">
+        
+        {/* Capa de textura de rejilla sutil para profundidad técnica */}
+        <div className="absolute inset-0 bg-[radial-gradient(rgba(56,189,248,0.12)_1px,transparent_1px)] [background-size:28px_28px] opacity-40 pointer-events-none" />
+
+        {/* Orbes de luz ambiental animados ("amor al fondo") */}
+        <div className="absolute -top-28 -left-28 w-[520px] h-[520px] rounded-full bg-gradient-to-tr from-[#00496b]/40 via-[#00628e]/30 to-cyan-500/20 blur-[130px] pointer-events-none animate-pulse-glow" />
+        <div className="absolute -bottom-28 -right-28 w-[480px] h-[480px] rounded-full bg-gradient-to-bl from-indigo-900/35 via-[#00496b]/25 to-cyan-400/20 blur-[120px] pointer-events-none animate-landing-float" />
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[320px] h-[320px] rounded-full bg-cyan-400/10 blur-[100px] pointer-events-none" />
+
+        {/* Marca Superior: JustCRM BIEN GRANDE (Sin Productivity OS) */}
+        <div className="relative z-10 flex items-center justify-between">
+          <Link href="/landing" className="inline-block transition-transform hover:scale-[1.03] group">
+            <img
+              src="/logo-fondo-redondeado.png"
+              alt="JustCRM Logo"
+              className="h-14 sm:h-16 lg:h-20 w-auto object-contain drop-shadow-[0_12px_28px_rgba(0,98,142,0.4)] transition-all group-hover:drop-shadow-[0_16px_36px_rgba(56,189,248,0.5)]"
+            />
           </Link>
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-white text-[#00628e] border border-[#e0e3e7] shadow-sm">
-            Productivity OS
-          </span>
         </div>
 
-        {/* Mensaje Editorial con trazos suaves de Poppins */}
-        <div className="space-y-6 my-auto max-w-lg">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-white text-[#00628e] border border-[#e0e3e7] shadow-sm">
-            <Sparkles className="w-3.5 h-3.5 text-[#00628e]" />
+        {/* Mensaje Editorial con trazos finos y elegantes de Poppins */}
+        <div className="space-y-6 my-auto max-w-lg relative z-10">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-900/90 text-cyan-300 border border-slate-700/80 shadow-inner">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             <span>Sistema Operativo de Gestión & Servicios Técnicos</span>
           </div>
 
-          <h1 className="text-3xl lg:text-4xl font-semibold text-[#181c1f] leading-snug tracking-[-0.02em]">
-            Gestioná tu negocio con la calma y precisión de una plataforma integral.
+          <h1 className="text-3xl lg:text-4xl xl:text-5xl font-semibold text-white leading-tight tracking-tight">
+            Gestioná tu negocio con la <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-sky-200 to-white">calma y precisión</span> de una plataforma integral.
           </h1>
 
-          <p className="text-[#40484f] text-sm leading-relaxed font-normal">
+          <p className="text-slate-300 text-sm leading-relaxed font-normal">
             Conectá tus ventas, pañol y cuadrillas técnicas en un solo ecosistema. Cotizá en 30s con listas duales, controlá stock físico y despachá órdenes con firma digital en vivo.
           </p>
 
-          {/* Tarjetas de Métricas: Suaves, táctiles y limpias */}
+          {/* Tarjetas de Métricas: Glassmorphism oscuro con micro-bordes */}
           <div className="grid grid-cols-2 gap-3.5 pt-2">
             {[
-              { val: '2 Seg', label: 'Bot WhatsApp IA', sub: 'Atención 24/7 sin demoras', tagColor: '#00628e' },
-              { val: '30 Seg', label: 'Cotizador Flash', sub: 'Gremio & Público en PDF', tagColor: '#076490' },
-              { val: 'Stock & Pañol', label: 'Conteo Físico', sub: 'Carga activa sin facturas', tagColor: '#5f5e5e' },
-              { val: "App 'Mi Día'", label: 'Cuadrillas en Calle', sub: 'GPS, checklist y remitos', tagColor: '#00496b' },
+              { val: '2 Seg', label: 'Bot WhatsApp IA', sub: 'Atención 24/7 sin demoras', tagColor: '#38bdf8' },
+              { val: '30 Seg', label: 'Cotizador Flash', sub: 'Gremio & Público en PDF', tagColor: '#0ea5e9' },
+              { val: 'Stock & Pañol', label: 'Conteo Físico', sub: 'Carga activa sin facturas', tagColor: '#34d399' },
+              { val: "App 'Mi Día'", label: 'Cuadrillas en Calle', sub: 'GPS, checklist y remitos', tagColor: '#818cf8' },
             ].map((m) => (
               <div
                 key={m.label}
-                className="bg-white rounded-2xl p-4 border border-[#e0e3e7] shadow-sm transition-all hover:border-[#00628e]/40 hover:shadow-md"
+                className="bg-slate-900/60 backdrop-blur-md rounded-2xl p-4 border border-slate-800/80 shadow-lg transition-all hover:border-cyan-400/40 hover:bg-slate-900/80 hover:-translate-y-0.5 group"
               >
-                <p className="text-lg font-semibold" style={{ color: m.tagColor }}>{m.val}</p>
-                <p className="text-xs font-semibold text-[#181c1f] mt-0.5">{m.label}</p>
-                <p className="text-[11px] text-[#5f5e5e] font-normal">{m.sub}</p>
+                <p className="text-lg font-semibold tracking-tight" style={{ color: m.tagColor }}>{m.val}</p>
+                <p className="text-xs font-semibold text-white mt-0.5">{m.label}</p>
+                <p className="text-[11px] text-slate-400 font-normal">{m.sub}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Footer del Panel Izquierdo: Logo Just Create */}
-        <div className="flex items-center justify-between pt-6 border-t border-[#e0e3e7]">
+        {/* Footer del Panel Izquierdo: powered by Just Create */}
+        <div className="flex items-center justify-between pt-6 border-t border-slate-800/80 relative z-10">
           <Link
             href="/landing"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#40484f] hover:text-[#00628e] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors"
           >
             <span>← Volver a la página principal</span>
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[#707880]">powered by</span>
-            <img src="/just-create-logo.png" alt="Just Create" className="h-6 w-auto object-contain" />
+            <span className="text-[11px] text-slate-500 font-normal">powered by</span>
+            <img src="/just-create-logo.png" alt="Just Create" className="h-6 w-auto object-contain brightness-0 invert opacity-80" />
           </div>
         </div>
       </div>
 
-      {/* ── Panel Derecho: Formulario de Acceso Blanco Puro ─────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-[#f7f9fe]">
-        <div className="w-full max-w-[440px]">
+      {/* ── Panel Derecho (Parte Gris & Clara): Canvas arquitectónico con Tarjeta Blanca Flotante ── */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-gradient-to-br from-[#f1f4f8] via-[#e8edf4] to-[#dfe5ed] relative overflow-hidden">
+        
+        {/* Resplandor ambiental suave en el fondo gris */}
+        <div className="absolute w-[500px] h-[500px] rounded-full bg-white/70 blur-[90px] pointer-events-none top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute -bottom-20 -left-20 w-[300px] h-[300px] rounded-full bg-[#00628e]/10 blur-[80px] pointer-events-none" />
+
+        <div className="w-full max-w-[440px] relative z-10">
           
-          {/* Logo móvil */}
-          <div className="lg:hidden flex items-center justify-between mb-8">
+          {/* Logo móvil BIEN GRANDE y sin Productivity OS */}
+          <div className="lg:hidden flex flex-col items-center justify-center mb-8">
             <Link href="/landing">
-              <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-9 w-auto object-contain" />
+              <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-16 w-auto object-contain shadow-lg" />
             </Link>
-            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-white text-[#00628e] border border-[#e0e3e7]">
-              Productivity OS
-            </span>
           </div>
 
-          {/* Tarjeta de Inicio de Sesión */}
-          <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#e0e3e7] shadow-sm">
+          {/* Tarjeta de Inicio de Sesión (Parte Clara / Blanca Pura) */}
+          <div className="bg-white rounded-[28px] p-8 sm:p-10 border border-[#d6dde5] shadow-[0_20px_50px_rgba(15,23,42,0.1),0_1px_3px_rgba(15,23,42,0.06)] relative z-10">
             <div className="mb-7">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-4 h-4 text-[#00628e]" />
@@ -195,7 +207,7 @@ function LoginForm() {
                   placeholder="usuario@empresa.com"
                   autoComplete="email"
                   required
-                  className="w-full bg-[#f8fafc] border border-[#e0e3e7] focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 text-[#181c1f] placeholder-[#707880] rounded-xl px-4 py-3 text-sm outline-none transition-all font-normal"
+                  className="w-full bg-[#f8fafc] border border-[#d6dde5] focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 text-[#181c1f] placeholder-[#707880] rounded-xl px-4 py-3 text-sm outline-none transition-all font-normal"
                 />
               </div>
 
@@ -218,7 +230,7 @@ function LoginForm() {
                     placeholder="••••••••••••"
                     autoComplete="current-password"
                     required
-                    className="w-full bg-[#f8fafc] border border-[#e0e3e7] focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 text-[#181c1f] placeholder-[#707880] rounded-xl px-4 py-3 pr-11 text-sm outline-none transition-all font-normal"
+                    className="w-full bg-[#f8fafc] border border-[#d6dde5] focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 text-[#181c1f] placeholder-[#707880] rounded-xl px-4 py-3 pr-11 text-sm outline-none transition-all font-normal"
                   />
                   <button
                     type="button"

@@ -27,11 +27,15 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[#f7f9fe] text-[#181c1f] font-poppins antialiased">
-      <div className="w-full max-w-[440px]">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-[#f1f4f8] via-[#e8edf4] to-[#dfe5ed] relative overflow-hidden text-[#181c1f] font-poppins antialiased">
+      {/* Resplandor ambiental suave en el fondo */}
+      <div className="absolute w-[500px] h-[500px] rounded-full bg-white/70 blur-[90px] pointer-events-none top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+      <div className="absolute -bottom-20 -left-20 w-[300px] h-[300px] rounded-full bg-[#00628e]/10 blur-[80px] pointer-events-none" />
+
+      <div className="w-full max-w-[440px] relative z-10">
         <div className="flex items-center justify-between mb-8">
-          <Link href="/login" className="transition-transform hover:scale-[1.02]">
-            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-9 w-auto object-contain" />
+          <Link href="/login" className="transition-transform hover:scale-[1.03]">
+            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-14 sm:h-16 w-auto object-contain shadow-lg" />
           </Link>
           <Link
             href="/login"
@@ -41,10 +45,10 @@ export default function ForgotPasswordPage() {
           </Link>
         </div>
 
-        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#e0e3e7] shadow-sm">
+        <div className="bg-white rounded-[28px] p-8 sm:p-10 border border-[#d6dde5] shadow-[0_20px_50px_rgba(15,23,42,0.1),0_1px_3px_rgba(15,23,42,0.06)]">
           {sent ? (
             <div className="text-center py-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-[#f1f4f8] border border-[#e0e3e7]">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-[#f1f4f8] border border-[#d6dde5]">
                 <Mail size={24} className="text-[#00628e]" />
               </div>
               <h2 className="text-2xl font-semibold text-[#181c1f] mb-2 tracking-tight">Revisá tu email</h2>
@@ -78,7 +82,7 @@ export default function ForgotPasswordPage() {
                     placeholder="usuario@empresa.com"
                     autoComplete="email"
                     required
-                    className="w-full bg-[#f8fafc] border border-[#e0e3e7] focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 text-[#181c1f] placeholder-[#707880] rounded-xl px-4 py-3 text-sm outline-none transition-all font-normal"
+                    className="w-full bg-[#f8fafc] border border-[#d6dde5] focus:border-[#00628e] focus:bg-white focus:ring-2 focus:ring-[#00628e]/15 text-[#181c1f] placeholder-[#707880] rounded-xl px-4 py-3 text-sm outline-none transition-all font-normal"
                   />
                 </div>
 
