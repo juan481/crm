@@ -380,8 +380,13 @@ export default function CotizadorPage() {
   // Alta rápida — crea el Contacto en el CRM (Contactos) y lo deja
   // seleccionado como destinatario, sin salir del cotizador.
   const handleCreateContact = async () => {
-    if (!newContactFirstName.trim() || !newContactLastName.trim() || !newContactEmail.trim()) {
-      toast.error('Nombre, apellido y email son obligatorios')
+    // Mail opcional — pedido de Abba: un cliente real (ej. un adulto mayor)
+    // puede no tener mail, y eso no tiene por qué frenar la venta. Antes
+    // esto era obligatorio y terminaba forzando mails inventados tipo
+    // "sin@mail.com" cargados de verdad en el CRM, que después ensuciaban
+    // el directorio y encima seguían sin poder mandarse por mail de verdad.
+    if (!newContactFirstName.trim() || !newContactLastName.trim()) {
+      toast.error('Nombre y apellido son obligatorios')
       return
     }
     setCreatingContact(true)
@@ -390,7 +395,7 @@ export default function CotizadorPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firstName: newContactFirstName.trim(), lastName: newContactLastName.trim(),
-          email: newContactEmail.trim(), phone: newContactPhone.trim() || undefined,
+          email: newContactEmail.trim() || undefined, phone: newContactPhone.trim() || undefined,
           empresaId: selectedEmpresaId || undefined,
         }),
       })
@@ -674,7 +679,11 @@ export default function CotizadorPage() {
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (cartItems.length === 0) { toast.error('Seleccioná al menos un ítem'); return }
-    if (!recipientEmail)        { toast.error('Ingresá el email del destinatario'); return }
+    // El mail ya NO es obligatorio — pasa con clientes reales que no tienen
+    // (pedido de Abba: un adulto mayor sin mail no tiene por qué frenar la
+    // venta). Sin mail, la cotización se puede mandar igual por WhatsApp;
+    // "Enviar por mail" queda deshabilitado en el paso siguiente.
+    if (!recipientName.trim())  { toast.error('Ingresá el nombre del destinatario'); return }
 
     setSaving(true)
     try {
@@ -907,7 +916,13 @@ export default function CotizadorPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { onClick: downloadPdf, bg: 'var(--color-primary)', icon: <Download size={18} className="text-white" />, label: 'Descargar Presupuesto', sub: `${savedQuote.ref}.pdf` },
-            { onClick: sendByEmail, disabled: sendingEmail, bg: '#6366f1', icon: <Mail size={18} className="text-white" />, label: sendingEmail ? 'Enviando...' : 'Enviar por Mail', sub: 'Con PDF adjunto' },
+            {
+              onClick: sendByEmail,
+              disabled: sendingEmail || !savedQuote.recipientEmail,
+              bg: '#6366f1', icon: <Mail size={18} className="text-white" />,
+              label: sendingEmail ? 'Enviando...' : 'Enviar por Mail',
+              sub: savedQuote.recipientEmail ? 'Con PDF adjunto' : 'Sin mail cargado — usá WhatsApp',
+            },
           ].map((btn, i) => (
             <button key={i} onClick={btn.onClick} disabled={(btn as any).disabled}
               className="flex items-center gap-3 px-4 py-4 rounded-2xl border transition-all hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 disabled:opacity-60"
@@ -1747,7 +1762,7 @@ export default function CotizadorPage() {
                     </Button>
                   )}
                   {currentStep === 2 && (
-                    <Button className="flex-1" onClick={() => setCurrentStep(3)} disabled={!recipientEmail} rightIcon={<ChevronRight size={15} />}>
+                    <Button className="flex-1" onClick={() => setCurrentStep(3)} disabled={!recipientName.trim()} rightIcon={<ChevronRight size={15} />}>
                       Siguiente: Confirmar
                     </Button>
                   )}

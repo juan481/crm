@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
     const priceModeFinal = priceMode === 'GREMIO' ? 'GREMIO' : 'PUBLICO'
 
     if (!items?.length)  return NextResponse.json({ error: 'Sin servicios seleccionados' }, { status: 400 })
-    if (!recipientEmail) return NextResponse.json({ error: 'Email destinatario requerido' },  { status: 400 })
+    if (!recipientName?.trim()) return NextResponse.json({ error: 'Nombre destinatario requerido' }, { status: 400 })
+    // Mail opcional — un cliente real puede no tener (pedido de Abba). Sin
+    // mail, la cotización se manda igual por WhatsApp; "Enviar por mail"
+    // queda deshabilitado del lado del cliente cuando no hay a quién.
 
     const db = prisma as any
     const discriminarIva = ivaDiscriminado === true

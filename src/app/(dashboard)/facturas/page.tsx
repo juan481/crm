@@ -135,7 +135,11 @@ export default function FacturasPage() {
   const [showRecurring, setShowRecurring] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRow | null>(null)
-  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // ADMINISTRATIVO ya tiene permiso real a nivel API (puedeVerFacturacion,
+  // ver src/lib/finance-access.ts) desde que se armó ese rol — acá faltaba
+  // sumarlo, así que veía la pantalla (el módulo estaba prendido) pero sin
+  // "+ Nueva Factura" ni ninguna acción, aunque el backend igual la dejara.
+  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'ADMINISTRATIVO'
   const { enabled: exportEnabled } = usePlugin('export-data')
   const [exporting, setExporting] = useState(false)
 

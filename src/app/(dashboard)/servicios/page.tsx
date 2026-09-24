@@ -44,7 +44,10 @@ const ESTADO_VARIANT: Record<string, 'success' | 'warning' | 'neutral'> = {
 export default function ServiciosPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
-  const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN')
+  // ADMINISTRATIVO ya tiene permiso real a nivel API (puedeVerServicios, ver
+  // src/lib/finance-access.ts) -- acá faltaba sumarlo, esta pantalla ni
+  // siquiera cargaba los datos para ese rol aunque tuviera el módulo prendido.
+  const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'ADMINISTRATIVO')
 
   const [q, setQ] = useState('')
   const [estado, setEstado] = useState('')
