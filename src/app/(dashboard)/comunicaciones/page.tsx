@@ -128,7 +128,7 @@ export default function ComunicacionesPage() {
     queryFn: async () => {
       const res = await fetch('/api/communications/usage')
       if (!res.ok) throw new Error('Error al cargar uso')
-      return (await res.json()).data as { used: number; limit: number; remaining: number; daysUntilReset: number }
+      return (await res.json()).data as { used: number; limit: number; remaining: number; daysUntilReset: number; isUnlimited?: boolean }
     },
     enabled: canManage,
   })
@@ -207,19 +207,27 @@ export default function ComunicacionesPage() {
         <div className="surface rounded-2xl p-5 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-[var(--color-text)]">Uso mensual de emails (campañas)</p>
-            <p className="text-sm text-[var(--color-text-muted)]">{usage.used} / {usage.limit}</p>
+            <p className="text-sm text-[var(--color-text-muted)]">
+              {usage.isUnlimited ? (
+                <span className="font-semibold text-emerald-400">
+                  {usage.used.toLocaleString()} enviados / Ilimitado (Cuenta Propietario)
+                </span>
+              ) : (
+                `${usage.used.toLocaleString()} / ${usage.limit.toLocaleString()}`
+              )}
+            </p>
           </div>
           <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
             <div className="h-full rounded-full transition-all" style={{
-              width: `${Math.min(100, (usage.used / usage.limit) * 100)}%`,
-              background: usage.used >= usage.limit ? '#ef4444' : usage.used / usage.limit >= 0.9 ? '#f59e0b' : 'var(--color-primary)',
+              width: usage.isUnlimited ? '100%' : `${Math.min(100, (usage.used / usage.limit) * 100)}%`,
+              background: usage.isUnlimited ? 'var(--color-primary)' : usage.used >= usage.limit ? '#ef4444' : usage.used / usage.limit >= 0.9 ? '#f59e0b' : 'var(--color-primary)',
             }} />
           </div>
           <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-subtle)]">
             <Clock size={12} />
             Este contador se reinicia todos los meses — quedan {usage.daysUntilReset} día{usage.daysUntilReset === 1 ? '' : 's'} para el próximo reinicio.
           </p>
-          {usage.used / usage.limit >= 0.9 && (
+          {!usage.isUnlimited && usage.used / usage.limit >= 0.9 && (
             <a href={EMAIL_LIMIT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline">
               <MessageCircle size={13} /> Solicitar aumento

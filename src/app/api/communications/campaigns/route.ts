@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       }
 
       const quota = await getEmailUsage(payload.orgId)
-      if (quota.remaining <= 0) {
+      if (!quota.isUnlimited && quota.remaining <= 0) {
         return NextResponse.json({
           error: 'Alcanzaste el límite mensual de envíos de email. Solicitá un aumento para seguir enviando campañas.',
           quotaExceeded: true,
@@ -119,15 +119,25 @@ export async function POST(req: NextRequest) {
         body,
         status:         sendNow ? 'SENDING' : 'DRAFT',
         organizationId: payload.orgId,
-        recipients: {
-          create: allowed.map(r => ({ email: r.email.trim(), name: r.name.trim() })),
-        },
       },
-      select: { id: true, name: true, status: true, _count: { select: { recipients: true } } },
+      select: { id: true, name: true, status: true },
     })
 
+    // Inserción en lotes de 1000 para evitar límites de parámetros de Postgres en listas masivas (+18.000)
+    const CHUNK_SIZE = 1000
+    for (let i = 0; i < allowed.length; i += CHUNK_SIZE) {
+      const chunk = allowed.slice(i, i + CHUNK_SIZE)
+      await db.campaignRecipient.createMany({
+        data: chunk.map((r: { email: string; name: string }) => ({
+          campaignId: campaign.id,
+          email: r.email.trim(),
+          name: r.name.trim(),
+        })),
+      })
+    }
+
     return NextResponse.json({
-      data: campaign,
+      data: { ...campaign, _count: { recipients: allowed.length } },
       skippedUnsubscribed: suppressed.length,
     }, { status: 201 })
   } catch (error) {

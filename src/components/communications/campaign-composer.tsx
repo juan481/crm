@@ -83,7 +83,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
 
   const { data: clientsData } = useQuery({
     queryKey: ['clients-all'],
-    queryFn:  async () => ((await (await fetch('/api/clients?limit=2000')).json()).data ?? []) as Client[],
+    queryFn:  async () => ((await (await fetch('/api/clients?limit=50000')).json()).data ?? []) as Client[],
     enabled:  source === 'clients' || source === 'todos',
     staleTime: 0,
     refetchOnMount: 'always',
@@ -92,7 +92,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const { data: contactosData } = useQuery({
     queryKey: ['directorio-all'],
     queryFn:  async () => {
-      const r = await fetch('/api/contactos?limit=2000')
+      const r = await fetch('/api/contactos?limit=50000')
       if (!r.ok) return []
       return ((await r.json()).data ?? []) as Array<{
         id: string; firstName: string; lastName: string
@@ -575,32 +575,39 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
                 {(empresasData ?? []).length === 0 ? 'No hay empresas en el directorio' : 'Sin resultados para ese filtro'}
               </p>
             ) : (
-              filteredEmpresas.map(empresa => {
-                const emailCount = contactsPerEmpresa[empresa.id] ?? 0
-                return (
-                  <label key={empresa.id}
-                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-surface-overlay)] cursor-pointer transition-colors">
-                    <input type="checkbox" checked={selectedIds.has(empresa.id)}
-                      onChange={() => toggleItem(empresa.id)}
-                      className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                        {empresa.name}
-                      </p>
-                      <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                        {[empresa.activity, empresa.city].filter(Boolean).join(' · ') || '—'}
-                      </p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                      emailCount > 0
-                        ? 'bg-emerald-500/10 text-emerald-400'
-                        : 'bg-[var(--color-surface)] text-[var(--color-text-subtle)]'
-                    }`}>
-                      {emailCount} email{emailCount !== 1 ? 's' : ''}
-                    </span>
-                  </label>
-                )
-              })
+              <>
+                {filteredEmpresas.slice(0, 300).map(empresa => {
+                  const emailCount = contactsPerEmpresa[empresa.id] ?? 0
+                  return (
+                    <label key={empresa.id}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-surface-overlay)] cursor-pointer transition-colors">
+                      <input type="checkbox" checked={selectedIds.has(empresa.id)}
+                        onChange={() => toggleItem(empresa.id)}
+                        className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                          {empresa.name}
+                        </p>
+                        <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                          {[empresa.activity, empresa.city].filter(Boolean).join(' · ') || '—'}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                        emailCount > 0
+                          ? 'bg-emerald-500/10 text-emerald-400'
+                          : 'bg-[var(--color-surface)] text-[var(--color-text-subtle)]'
+                      }`}>
+                        {emailCount} email{emailCount !== 1 ? 's' : ''}
+                      </span>
+                    </label>
+                  )
+                })}
+                {filteredEmpresas.length > 300 && (
+                  <p className="p-3 text-xs text-center font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                    Mostrando los primeros 300 de {filteredEmpresas.length.toLocaleString()} empresas. Podés usar el buscador o seleccionarlas todas arriba.
+                  </p>
+                )}
+              </>
             )
           ) : (
             /* Contact rows */
@@ -609,39 +616,46 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
                 {allContacts.length === 0 ? 'No hay contactos en esta fuente' : 'Sin resultados para ese filtro'}
               </p>
             ) : (
-              filteredContacts.map(contact => (
-                <label key={contact.id}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-surface-overlay)] cursor-pointer transition-colors">
-                  <input type="checkbox" checked={selectedIds.has(contact.id)}
-                    onChange={() => toggleItem(contact.id)}
-                    className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                        {contact.name}
+              <>
+                {filteredContacts.slice(0, 300).map(contact => (
+                  <label key={contact.id}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-surface-overlay)] cursor-pointer transition-colors">
+                    <input type="checkbox" checked={selectedIds.has(contact.id)}
+                      onChange={() => toggleItem(contact.id)}
+                      className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                          {contact.name}
+                        </p>
+                        {contact.source === 'directorio' ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full"
+                            style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)' }}>
+                            Directorio
+                          </span>
+                        ) : (
+                          (() => {
+                            const client = (clientsData ?? []).find(c => `c:${c.id}` === contact.id)
+                            return client ? (
+                              <Badge variant={STATUS_BADGE[client.status] ?? 'neutral'} size="sm">
+                                {CLIENT_STATUS_LABELS[client.status] ?? client.status}
+                              </Badge>
+                            ) : null
+                          })()
+                        )}
+                      </div>
+                      <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+                        {contact.subtitle}
                       </p>
-                      {contact.source === 'directorio' ? (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full"
-                          style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)' }}>
-                          Directorio
-                        </span>
-                      ) : (
-                        (() => {
-                          const client = (clientsData ?? []).find(c => `c:${c.id}` === contact.id)
-                          return client ? (
-                            <Badge variant={STATUS_BADGE[client.status] ?? 'neutral'} size="sm">
-                              {CLIENT_STATUS_LABELS[client.status] ?? client.status}
-                            </Badge>
-                          ) : null
-                        })()
-                      )}
                     </div>
-                    <p className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                      {contact.subtitle}
-                    </p>
-                  </div>
-                </label>
-              ))
+                  </label>
+                ))}
+                {filteredContacts.length > 300 && (
+                  <p className="p-3 text-xs text-center font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                    Mostrando los primeros 300 de {filteredContacts.length.toLocaleString()} contactos. Podés usar el buscador o hacer click arriba en &ldquo;Seleccionar los {filteredContacts.length.toLocaleString()} contactos&rdquo;.
+                  </p>
+                )}
+              </>
             )
           )}
         </div>

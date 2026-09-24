@@ -7,7 +7,7 @@ import { getEmailUsage, incrementEmailUsage } from '@/lib/email-usage'
 
 export const dynamic = 'force-dynamic'
 
-const BATCH = 5 // emails per call — stays well within Vercel's timeout
+const BATCH = 10 // emails per call — safe for timeouts while accelerating bulk sends
 
 function mergeVars(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '')
@@ -48,7 +48,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     // Quota check — only campaign sends count toward this. If there's no
     // room left at all, stop before touching anything else in this batch.
     const quota = await getEmailUsage(payload.orgId)
-    if (quota.remaining <= 0) {
+    if (!quota.isUnlimited && quota.remaining <= 0) {
       const remainingPending = await db.campaignRecipient.count({
         where: { campaignId: params.id, status: 'pending' },
       })
@@ -72,7 +72,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     })
 
     // Fetch next batch of pending recipients, capped to whatever quota allows
-    const takeCount = Math.min(BATCH, quota.remaining)
+    const takeCount = quota.isUnlimited ? BATCH : Math.min(BATCH, quota.remaining)
     const candidates = await db.campaignRecipient.findMany({
       where:   { campaignId: params.id, status: 'pending' },
       take:    takeCount,
@@ -177,7 +177,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     // Ran out of quota mid-batch: there's still pending work, but no room left
     // this month. Campaign stays SENDING — "Reenviar pendientes" already
     // picks it back up once the limit resets or the agency raises it.
-    const quotaExceeded = remaining > 0 && (quota.remaining - sent) <= 0
+    const quotaExceeded = !quota.isUnlimited && remaining > 0 && (quota.remaining - sent) <= 0
 
     return NextResponse.json({
       sent, failed, suppressed, remaining, done: remaining === 0,

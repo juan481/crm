@@ -11,6 +11,7 @@ export interface EmailUsage {
   remaining: number
   /** Days left (UTC) until the counter resets back to 0 on the 1st of next month. */
   daysUntilReset: number
+  isUnlimited: boolean
 }
 
 function daysUntilNextMonth(d = new Date()): number {
@@ -31,9 +32,13 @@ export async function getEmailUsage(orgId: string): Promise<EmailUsage> {
       select: { count: true },
     }),
   ])
-  const limit = org?.emailMonthlyLimit ?? 9000
+  const rawLimit = org?.emailMonthlyLimit ?? 9000
   const used  = usage?.count ?? 0
-  return { used, limit, remaining: Math.max(0, limit - used), daysUntilReset: daysUntilNextMonth() }
+  const isUnlimited = rawLimit >= 500000 || rawLimit === 0
+  const limit = isUnlimited ? 1000000 : rawLimit
+  const remaining = isUnlimited ? 1000000 : Math.max(0, limit - used)
+
+  return { used, limit, remaining, daysUntilReset: daysUntilNextMonth(), isUnlimited }
 }
 
 /** Increments this month's campaign-send usage counter. Call once per successfully-sent email. */
