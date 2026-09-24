@@ -94,11 +94,18 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* INGRESO PARA CLIENTES - BIEN GRANDE Y DESTACADO */}
             <Link
               href="/login"
-              className="text-xs font-bold px-3.5 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-all hidden sm:block"
+              className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 border"
+              style={{
+                background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
+                borderColor: 'rgba(56, 189, 248, 0.5)',
+                boxShadow: '0 4px 16px rgba(3, 91, 126, 0.4)',
+              }}
             >
-              Ingresar
+              <LogIn className="w-4 h-4 text-white" />
+              <span>INGRESO CLIENTES</span>
             </Link>
             <a
               href="#contacto"
@@ -155,19 +162,27 @@ export default function LandingPage() {
             >
               Preguntas Frecuentes
             </a>
-            <div className="pt-2 border-t border-slate-800 flex gap-2">
+            <div className="pt-2 border-t border-slate-800 space-y-2">
               <Link
                 href="/login"
-                className="w-1/2 text-center py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-white"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full text-center py-3.5 rounded-xl text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg border"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
+                  borderColor: 'rgba(56, 189, 248, 0.5)',
+                  boxShadow: '0 4px 16px rgba(3, 91, 126, 0.4)',
+                }}
               >
-                Ingresar
+                <LogIn className="w-4 h-4" />
+                <span>INGRESO PARA CLIENTES</span>
               </Link>
               <a
                 href="#contacto"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-1/2 text-center py-2.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 text-xs font-black text-white"
+                className="w-full text-center py-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 flex items-center justify-center gap-2"
               >
-                Solicitar Demo
+                <span>Solicitar Demo en Vivo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </div>
           </div>
@@ -176,7 +191,7 @@ export default function LandingPage() {
 
       {/* ── SECCIÓN 1: INICIO & PROPUESTA DE VALOR ───────────────────────── */}
       <section id="inicio" className="relative pt-16 pb-20 md:pt-24 md:pb-24 overflow-hidden text-center">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-red-600/15 via-indigo-600/20 to-cyan-400/15 blur-[140px] pointer-events-none rounded-full" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-[#035b7e]/30 via-indigo-600/20 to-[#05a3e1]/25 blur-[140px] pointer-events-none rounded-full" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           
@@ -192,9 +207,39 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          <p className="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
+          <p className="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-8 font-normal">
             El ecosistema todo-en-uno que conecta tus <strong className="text-white font-semibold">ventas</strong>, tus <strong className="text-white font-semibold">técnicos en obra</strong> y tu <strong className="text-white font-semibold">administración</strong>. Cotizaciones en 30 segundos, WhatsApp con IA 24/7, catálogo mayorista, compras con OCR, remitos de entrega y control milimétrico de tareas y depósito.
           </p>
+
+          {/* Banner de Acceso Rápido para Clientes Existentes - BIEN GRANDE Y DESTACADO */}
+          <div
+            className="inline-flex items-center gap-3 px-6 sm:px-8 py-3.5 rounded-2xl border backdrop-blur-xl mb-10 shadow-2xl flex-wrap justify-center animate-landing-fade-in"
+            style={{
+              background: 'linear-gradient(180deg, rgba(3, 91, 126, 0.28) 0%, rgba(1, 22, 30, 0.5) 100%)',
+              borderColor: 'rgba(5, 163, 225, 0.6)',
+              boxShadow: '0 8px 32px rgba(3, 91, 126, 0.35)',
+            }}
+          >
+            <span className="flex h-3.5 w-3.5 relative shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-cyan-400"></span>
+            </span>
+            <span className="text-sm sm:text-base text-slate-100 font-bold">
+              ¿Ya sos cliente o usuario de JustCRM?
+            </span>
+            <Link
+              href="/login"
+              className="px-5 py-2 rounded-xl text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-2 transition-all transform hover:scale-105 border shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
+                borderColor: 'rgba(56, 189, 248, 0.6)',
+                boxShadow: '0 4px 18px rgba(3, 91, 126, 0.6)',
+              }}
+            >
+              <LogIn className="w-4 h-4 text-white" />
+              <span>INGRESO PARA CLIENTES →</span>
+            </Link>
+          </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <a

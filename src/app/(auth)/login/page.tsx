@@ -3,7 +3,7 @@
 import { Suspense, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Script from 'next/script'
-import { Eye, EyeOff, LogIn, Shield } from 'lucide-react'
+import { Eye, EyeOff, LogIn, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useThemeStore } from '@/store/theme-store'
@@ -18,6 +18,11 @@ declare global {
 }
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+
+// Color corporativo oficial extraído del logo: hsl(197.07deg 95.35% 25.29%) = #035b7e
+const BRAND_PRIMARY = 'hsl(197.07deg 95.35% 25.29%)'
+const BRAND_ACCENT  = '#05a3e1'
+const BRAND_CYAN    = '#06b4f9'
 
 export default function LoginPage() {
   return (
@@ -80,156 +85,216 @@ function LoginForm() {
         return
       }
 
-      // Log de acceso real — server-side, no se puede falsear (a diferencia
-      // del fichaje). Pedido explícito: "el dueño quiere saber cuándo entra
-      // y sale cada usuario, por si le dicen 'no fiché'". Se espera (rápido,
-      // una sola llamada) ANTES del redirect para que no se cancele a mitad
-      // de camino por la navegación de página completa de acá abajo; si
-      // falla no bloquea el login en sí.
+      // Log de acceso real — server-side, no se puede falsear
       await fetch('/api/auth/log-login', { method: 'POST' }).catch(() => {})
 
-      // Full page reload so the middleware and Server Components read the
-      // new Supabase session cookie from scratch (router.push alone no alcanza en SSR)
+      // Full page reload so the middleware and Server Components read the new session
       window.location.href = '/dashboard'
     })
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#f8fafc' }}>
+    <div className="min-h-screen flex bg-[#070b14] text-slate-100 font-poppins relative overflow-hidden">
       {TURNSTILE_SITE_KEY && (
         <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer onLoad={renderTurnstile} />
       )}
-      {/* ── Left panel: dark navy ─────────────────────────────────────── */}
+
+      {/* ── Glows ambientales usando el color corporativo hsl(197.07, 95.35%, 25.29%) ── */}
       <div
-        className="hidden lg:flex lg:w-[42%] flex-col justify-between p-14 relative overflow-hidden"
-        style={{ background: '#0f172a' }}
+        className="absolute top-0 left-0 w-[550px] h-[550px] rounded-full blur-[140px] pointer-events-none opacity-40"
+        style={{ background: 'radial-gradient(circle, hsl(197.07deg 95.35% 25.29%), transparent 70%)' }}
+      />
+      <div
+        className="absolute bottom-0 right-0 w-[600px] h-[600px] rounded-full blur-[150px] pointer-events-none opacity-25"
+        style={{ background: 'radial-gradient(circle, #05a3e1, transparent 70%)' }}
+      />
+      <div
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
+
+      {/* ── Left panel: Presentación Corporativa JustCRM ─────────────────── */}
+      <div
+        className="hidden lg:flex lg:w-[46%] flex-col justify-between p-12 lg:p-16 relative z-10 border-r border-slate-800/80"
+        style={{ background: 'linear-gradient(180deg, rgba(7,14,26,0.85) 0%, rgba(5,11,20,0.95) 100%)' }}
       >
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
-        <div className="absolute top-32 -left-16 w-72 h-72 rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #6366f1, transparent)' }} />
-        <div className="absolute bottom-24 right-8 w-56 h-56 rounded-full opacity-15"
-          style={{ background: 'radial-gradient(circle, #8b5cf6, transparent)' }} />
-
-        <div className="relative z-10 flex items-center gap-3">
+        {/* Logo Superior */}
+        <div className="flex items-center gap-3.5">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+            className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-900 border p-1 flex items-center justify-center shrink-0 shadow-lg"
+            style={{ borderColor: 'rgba(5, 163, 225, 0.35)', boxShadow: '0 8px 24px rgba(3, 91, 126, 0.3)' }}
           >
-            <Shield size={20} />
+            <img src="/app-icon.png" alt="JustCRM Icon" className="w-full h-full object-contain" />
           </div>
-          <span className="text-white font-bold text-lg tracking-tight">{crmName}</span>
-        </div>
-
-        <div className="relative z-10">
-          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
-            Gestiona tu<br />negocio de forma<br />
-            <span style={{ color: '#818cf8' }}>inteligente.</span>
-          </h1>
-          <p style={{ color: 'rgba(148,163,184,0.9)' }} className="text-base leading-relaxed">
-            CRM profesional para agencias y empresas. Clientes, pipeline, facturación y soporte en un solo lugar.
-          </p>
-        </div>
-
-        <div className="relative z-10 space-y-6">
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { value: '∞', label: 'Clientes' },
-              { value: '24/7', label: 'Disponible' },
-              { value: 'WL', label: 'White Label' },
-              { value: '100%', label: 'Mobile-first' },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="rounded-2xl p-4"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-black tracking-tight text-white">JustCRM</span>
+              <span
+                className="text-[10px] font-bold px-2.5 py-0.5 rounded-full text-cyan-300 border"
+                style={{ background: 'rgba(3, 91, 126, 0.35)', borderColor: 'rgba(5, 163, 225, 0.4)' }}
               >
-                <p className="text-2xl font-bold text-white">{s.value}</p>
-                <p className="text-sm" style={{ color: 'rgba(148,163,184,0.8)' }}>{s.label}</p>
+                Productivity OS
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium">by JustCreate</p>
+          </div>
+        </div>
+
+        {/* Propuesta de valor central */}
+        <div className="space-y-5 my-auto max-w-lg">
+          <div
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border backdrop-blur-md"
+            style={{
+              background: 'rgba(3, 91, 126, 0.25)',
+              borderColor: 'rgba(5, 163, 225, 0.35)',
+              color: '#38bdf8',
+            }}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Sistema Operativo de Gestión & Servicios Técnicos</span>
+          </div>
+
+          <h1 className="text-4xl lg:text-5xl font-black text-white leading-[1.1] tracking-tight">
+            Gestioná tu negocio de forma{' '}
+            <span
+              className="bg-clip-text text-transparent"
+              style={{ backgroundImage: 'linear-gradient(135deg, #38bdf8 0%, #05a3e1 50%, #ffffff 100%)' }}
+            >
+              inteligente.
+            </span>
+          </h1>
+
+          <p className="text-slate-300 text-sm leading-relaxed">
+            Plataforma integral para empresas de seguridad electrónica, telecomunicaciones e instaladores técnicos. Cotizá en 30s, controlá tu pañol y despachá cuadrillas con firma digital.
+          </p>
+
+          {/* Grid de Métricas */}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            {[
+              { title: '2 Segundos', label: 'Bot WhatsApp IA', desc: 'Atención 24/7 sin demoras', color: '#10b981' },
+              { title: '30 Segundos', label: 'Cotizador Flash', desc: 'Gremio & Público en PDF', color: '#06b4f9' },
+              { title: 'Stock & Pañol', label: 'Conteo Físico', desc: 'Carga activa sin facturas', color: '#f59e0b' },
+              { title: "App 'Mi Día'", label: 'Cuadrillas Técnicas', desc: 'GPS, checklist y fotos', color: '#38bdf8' },
+            ].map((m) => (
+              <div
+                key={m.label}
+                className="rounded-2xl p-4 border backdrop-blur-md transition-all hover:border-cyan-500/40"
+                style={{ background: 'rgba(15, 23, 42, 0.65)', borderColor: 'rgba(255, 255, 255, 0.08)' }}
+              >
+                <p className="text-xl font-black" style={{ color: m.color }}>{m.title}</p>
+                <p className="text-xs font-bold text-white mt-0.5">{m.label}</p>
+                <p className="text-[11px] text-slate-400">{m.desc}</p>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Footer del panel izquierdo */}
+        <div className="flex items-center justify-between pt-6 border-t border-slate-800/80">
+          <Link
+            href="/landing"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+          >
+            <span>← Volver a JustCRM Landing</span>
+          </Link>
           <JustCreateCredit tone="dark" />
         </div>
       </div>
 
-      {/* ── Right panel: form ──────────────────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12" style={{ background: '#f8fafc' }}>
-        <div className="w-full max-w-[420px]">
+      {/* ── Right panel: Formulario de Login ────────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative z-10">
+        <div className="w-full max-w-[440px]">
+          
+          {/* Header Móvil */}
           <div className="lg:hidden flex items-center gap-3 mb-8">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+              className="w-11 h-11 rounded-2xl overflow-hidden bg-slate-900 border p-1 flex items-center justify-center shadow-lg"
+              style={{ borderColor: 'rgba(5, 163, 225, 0.35)', boxShadow: '0 4px 16px rgba(3, 91, 126, 0.3)' }}
             >
-              <Shield size={18} />
+              <img src="/app-icon.png" alt="JustCRM Logo" className="w-full h-full object-contain" />
             </div>
-            <span className="font-bold text-xl" style={{ color: '#1e293b' }}>{crmName}</span>
+            <div>
+              <span className="font-black text-xl text-white flex items-center gap-2">
+                JustCRM <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/30">Productivity OS</span>
+              </span>
+              <p className="text-[10px] text-slate-400 font-medium">by JustCreate</p>
+            </div>
           </div>
 
+          {/* Tarjeta de Inicio de Sesión */}
           <div
-            className="rounded-3xl p-8 lg:p-10"
-            style={{ background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
+            className="rounded-3xl p-8 sm:p-10 border backdrop-blur-2xl shadow-2xl relative"
+            style={{
+              background: 'linear-gradient(180deg, rgba(13, 22, 38, 0.92) 0%, rgba(7, 13, 24, 0.96) 100%)',
+              borderColor: 'rgba(5, 163, 225, 0.25)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(3, 91, 126, 0.2)',
+            }}
           >
             <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-1.5" style={{ color: '#1e293b' }}>Iniciar sesión</h2>
-              <p className="text-sm" style={{ color: '#64748b' }}>
-                Ingresá tus credenciales para continuar.
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">Acceso Seguro</span>
+              </div>
+              <h2 className="text-3xl font-black text-white tracking-tight">Iniciar sesión</h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Ingresá tus credenciales para acceder al CRM.
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#475569' }}>Email</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-2">
+                  Correo Electrónico
+                </label>
                 <input
                   name="email"
                   type="email"
-                  placeholder="tu@email.com"
+                  placeholder="usuario@empresa.com"
                   autoComplete="email"
                   required
-                  className="form-input"
+                  className="w-full bg-[#070e1a] border border-slate-700/80 focus:border-[#05a3e1] focus:ring-2 focus:ring-[#05a3e1]/25 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 text-sm outline-none transition-all font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#475569' }}>Contraseña</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Contraseña
+                  </label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </Link>
+                </div>
                 <div className="relative">
                   <input
                     name="password"
                     type={showPass ? 'text' : 'password'}
-                    placeholder="••••••••"
+                    placeholder="••••••••••••"
                     autoComplete="current-password"
                     required
-                    className="form-input pr-12"
+                    className="w-full bg-[#070e1a] border border-slate-700/80 focus:border-[#05a3e1] focus:ring-2 focus:ring-[#05a3e1]/25 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 pr-12 text-sm outline-none transition-all font-medium"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
                   >
-                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
-                </div>
-                <div className="flex justify-end mt-1.5">
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs font-medium"
-                    style={{ color: 'var(--color-primary)' }}
-                  >
-                    ¿Olvidaste tu contraseña?
-                  </Link>
                 </div>
               </div>
 
               {suspended && (
                 <div
-                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm"
-                  style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-medium border"
+                  style={{ background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)', color: '#fbbf24' }}
                 >
                   Cuenta suspendida, contactá a contacto@justcreate.com.ar
                 </div>
@@ -237,11 +302,11 @@ function LoginForm() {
 
               {error && (
                 <div
-                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm"
-                  style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}
+                  className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-medium border"
+                  style={{ background: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171' }}
                 >
-                  <span className="shrink-0">✕</span>
-                  {error}
+                  <span className="shrink-0 font-bold">✕</span>
+                  <span>{error}</span>
                 </div>
               )}
 
@@ -250,23 +315,41 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={isPending || (!!TURNSTILE_SITE_KEY && !captchaToken)}
-                className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-60"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl font-black text-sm text-white transition-all transform hover:-translate-y-0.5 disabled:opacity-60 cursor-pointer shadow-xl"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
+                  boxShadow: '0 8px 24px rgba(3, 91, 126, 0.45)',
+                }}
               >
                 {isPending ? (
-                  <span className="w-4 h-4 border-2 rounded-full animate-spin"
-                    style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} />
-                ) : <LogIn size={16} />}
-                {isPending ? 'Ingresando...' : 'Iniciar sesión'}
+                  <span
+                    className="w-4 h-4 border-2 rounded-full animate-spin"
+                    style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }}
+                  />
+                ) : (
+                  <LogIn size={18} />
+                )}
+                <span>{isPending ? 'Ingresando al sistema...' : 'Iniciar sesión'}</span>
               </button>
             </form>
 
-            <p className="mt-6 text-center text-xs" style={{ color: '#94a3b8' }}>
-              ¿Problemas para acceder? Contactá a tu administrador.
-            </p>
+            <div className="mt-8 pt-6 border-t border-slate-800 text-center space-y-3">
+              <p className="text-xs text-slate-400">
+                ¿Problemas para acceder? Contactá a tu administrador.
+              </p>
+              <div className="flex items-center justify-center gap-2 text-xs">
+                <span className="text-slate-400">¿Aún no tenés JustCRM?</span>
+                <Link
+                  href="/landing#contacto"
+                  className="font-bold text-cyan-400 hover:text-cyan-300 underline transition-colors"
+                >
+                  Solicitá tu demo aquí
+                </Link>
+              </div>
+            </div>
 
-            <div className="mt-4 pt-4 flex justify-center" style={{ borderTop: '1px solid #f1f5f9' }}>
-              <JustCreateCredit tone="light" />
+            <div className="mt-6 pt-4 flex justify-center border-t border-slate-800/60">
+              <JustCreateCredit tone="dark" />
             </div>
           </div>
         </div>
@@ -290,7 +373,7 @@ function JustCreateCredit({ tone }: { tone: 'dark' | 'light' }) {
       <span className="inline-flex items-center gap-1 font-bold" style={{ color: strong }}>
         <span
           className="w-4 h-4 rounded-[5px] flex items-center justify-center text-[9px] font-black text-white"
-          style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+          style={{ background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%), #05a3e1)' }}
         >
           J
         </span>

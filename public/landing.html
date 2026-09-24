@@ -221,11 +221,14 @@
             </a>
           </nav>
 
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <!-- INGRESO PARA CLIENTES - BIEN GRANDE Y DESTACADO -->
             <a href="/login"
-              class="text-xs font-bold px-3.5 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-all hidden sm:block"
+              class="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 border"
+              style="background: linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%); border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 4px 16px rgba(3, 91, 126, 0.4);"
             >
-              Ingresar
+              <i data-lucide="log-in" class="w-4 h-4 text-white"></i>
+              <span>INGRESO CLIENTES</span>
             </a>
             <a
               href="#contacto"
@@ -282,18 +285,21 @@
             >
               Preguntas Frecuentes
             </a>
-            <div class="pt-2 border-t border-slate-800 flex gap-2">
-              <a href="/login"
-                class="w-1/2 text-center py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-white"
+            <div class="pt-2 border-t border-slate-800 space-y-2">
+              <a href="/login" onclick="toggleMobileMenu()"
+                class="w-full text-center py-3.5 rounded-xl text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg border"
+                style="background: linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%); border-color: rgba(56, 189, 248, 0.5); box-shadow: 0 4px 16px rgba(3, 91, 126, 0.4);"
               >
-                Ingresar
+                <i data-lucide="log-in" class="w-4 h-4"></i>
+                <span>INGRESO PARA CLIENTES</span>
               </a>
               <a
                 href="#contacto"
                 onclick="toggleMobileMenu()"
-                class="w-1/2 text-center py-2.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 text-xs font-black text-white"
+                class="w-full text-center py-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 flex items-center justify-center gap-2"
               >
-                Solicitar Demo
+                <span>Solicitar Demo en Vivo</span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
               </a>
             </div>
           </div>
@@ -301,7 +307,7 @@
 
       <!-- ── SECCIÓN 1: INICIO & PROPUESTA DE VALOR ───────────────────────── -->
       <section id="inicio" class="relative pt-16 pb-20 md:pt-24 md:pb-24 overflow-hidden text-center">
-        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-red-600/15 via-indigo-600/20 to-cyan-400/15 blur-[140px] pointer-events-none rounded-full"></div>
+        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-[#035b7e]/30 via-indigo-600/20 to-[#05a3e1]/25 blur-[140px] pointer-events-none rounded-full"></div>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           
@@ -317,9 +323,31 @@
             </span>
           </h1>
 
-          <p class="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-10 font-normal">
+          <p class="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-8 font-normal">
             El ecosistema todo-en-uno que conecta tus <strong class="text-white font-semibold">ventas</strong>, tus <strong class="text-white font-semibold">técnicos en obra</strong> y tu <strong class="text-white font-semibold">administración</strong>. Cotizaciones en 30 segundos, WhatsApp con IA 24/7, catálogo mayorista, compras con OCR, remitos de entrega y control milimétrico de tareas y depósito.
           </p>
+
+          <!-- Banner de Acceso Rápido para Clientes Existentes - BIEN GRANDE Y DESTACADO -->
+          <div
+            class="inline-flex items-center gap-3 px-6 sm:px-8 py-3.5 rounded-2xl border backdrop-blur-xl mb-10 shadow-2xl flex-wrap justify-center animate-landing-fade-in"
+            style="background: linear-gradient(180deg, rgba(3, 91, 126, 0.28) 0%, rgba(1, 22, 30, 0.5) 100%); border-color: rgba(5, 163, 225, 0.6); box-shadow: 0 8px 32px rgba(3, 91, 126, 0.35);"
+          >
+            <span class="flex h-3.5 w-3.5 relative shrink-0">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-cyan-400"></span>
+            </span>
+            <span class="text-sm sm:text-base text-slate-100 font-bold">
+              ¿Ya sos cliente o usuario de JustCRM?
+            </span>
+            <a
+              href="/login"
+              class="px-5 py-2 rounded-xl text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-2 transition-all transform hover:scale-105 border shrink-0"
+              style="background: linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%); border-color: rgba(56, 189, 248, 0.6); box-shadow: 0 4px 18px rgba(3, 91, 126, 0.6);"
+            >
+              <i data-lucide="log-in" class="w-4 h-4 text-white"></i>
+              <span>INGRESO PARA CLIENTES →</span>
+            </a>
+          </div>
 
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <a
