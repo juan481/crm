@@ -62,25 +62,18 @@ export default function LandingPage() {
       {/* ── Top Navigation Bar: Limpio, Conciso y No Sobrecargado ──── */}
       <header className="sticky top-0 z-50 backdrop-blur-2xl bg-[#070b14]/90 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <a href="#inicio" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 border border-slate-700/80 flex items-center justify-center shadow-lg shadow-indigo-600/20 shrink-0">
-              <img src="/logo.png" alt="JustCRM Logo" className="w-full h-full object-contain p-0.5" />
-            </div>
-            <div>
-              <span className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-                JustCRM <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden sm:inline-block">Productivity OS</span>
-              </span>
-              <p className="text-[10px] text-slate-400 font-medium -mt-0.5">by JustCreate</p>
-            </div>
+          {/* Logo Principal Grande (logo-fondo-redondeado) sin texto redundante */}
+          <a href="#inicio" className="flex items-center transition-opacity hover:opacity-90">
+            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-10 sm:h-12 w-auto object-contain" />
           </a>
 
-          {/* Menú Principal Conciso y Directo */}
-          <nav className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-300">
+          {/* Menú Principal Limpio & Editorial */}
+          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-300">
             <a href="#inicio" className="hover:text-white transition-colors">
               Inicio
             </a>
 
-            <a href="#funciones" className="hover:text-white transition-colors text-indigo-300 hover:text-indigo-200">
+            <a href="#funciones" className="hover:text-white transition-colors text-cyan-400 hover:text-cyan-300">
               Funciones
             </a>
 
@@ -94,22 +87,17 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* INGRESO PARA CLIENTES - BIEN GRANDE Y DESTACADO */}
+            {/* INGRESO PARA CLIENTES - ELEGANTE Y DESTACADO */}
             <Link
               href="/login"
-              className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 border"
-              style={{
-                background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
-                borderColor: 'rgba(56, 189, 248, 0.5)',
-                boxShadow: '0 4px 16px rgba(3, 91, 126, 0.4)',
-              }}
+              className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:-translate-y-0.5 shrink-0 bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/30"
             >
-              <LogIn className="w-4 h-4 text-white" />
-              <span>INGRESO CLIENTES</span>
+              <LogIn className="w-4 h-4 text-cyan-300" />
+              <span>Ingreso Clientes</span>
             </Link>
             <a
               href="#contacto"
-              className="text-xs font-black px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
+              className="text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 sm:py-2.5 rounded-full bg-white text-[#00496b] hover:bg-slate-100 shadow-sm transition-all transform hover:-translate-y-0.5 flex items-center gap-1.5 shrink-0"
             >
               <span>Solicitar Demo</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -130,14 +118,14 @@ export default function LandingPage() {
             <a
               href="#inicio"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-bold text-slate-200 hover:text-white py-1"
+              className="block font-medium text-slate-200 hover:text-white py-1"
             >
               Inicio
             </a>
             <a
               href="#funciones"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-bold text-indigo-400 hover:text-indigo-300 py-1"
+              className="block font-medium text-cyan-400 hover:text-cyan-300 py-1"
             >
               Funciones del CRM (Resumen por Área)
             </a>
@@ -151,14 +139,14 @@ export default function LandingPage() {
             <a
               href="#planes"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-bold text-slate-200 hover:text-white py-1"
+              className="block font-medium text-slate-200 hover:text-white py-1"
             >
               Planes de Suscripción
             </a>
             <a
               href="#faq"
               onClick={() => setMobileMenuOpen(false)}
-              className="block font-bold text-slate-200 hover:text-white py-1"
+              className="block font-medium text-slate-200 hover:text-white py-1"
             >
               Preguntas Frecuentes
             </a>
@@ -166,20 +154,15 @@ export default function LandingPage() {
               <Link
                 href="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-3.5 rounded-xl text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg border"
-                style={{
-                  background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
-                  borderColor: 'rgba(56, 189, 248, 0.5)',
-                  boxShadow: '0 4px 16px rgba(3, 91, 126, 0.4)',
-                }}
+                className="w-full text-center py-3.5 rounded-full text-white font-medium text-sm flex items-center justify-center gap-2 shadow-md bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/30"
               >
-                <LogIn className="w-4 h-4" />
-                <span>INGRESO PARA CLIENTES</span>
+                <LogIn className="w-4 h-4 text-cyan-300" />
+                <span>Ingreso Clientes</span>
               </Link>
               <a
                 href="#contacto"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-bold text-slate-300 flex items-center justify-center gap-2"
+                className="w-full text-center py-3 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300 flex items-center justify-center gap-2 hover:bg-slate-800"
               >
                 <span>Solicitar Demo en Vivo</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -191,67 +174,57 @@ export default function LandingPage() {
 
       {/* ── SECCIÓN 1: INICIO & PROPUESTA DE VALOR ───────────────────────── */}
       <section id="inicio" className="relative pt-16 pb-20 md:pt-24 md:pb-24 overflow-hidden text-center">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-[#035b7e]/30 via-indigo-600/20 to-[#05a3e1]/25 blur-[140px] pointer-events-none rounded-full" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-[#035b7e]/30 via-[#00496b]/20 to-[#05a3e1]/25 blur-[140px] pointer-events-none rounded-full" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-bold text-indigo-300 mb-8 shadow-inner">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 text-xs font-medium text-cyan-300 mb-8 shadow-inner">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block shrink-0"></span>
             <span>Optimizá la gestión interna y pulverizá los tiempos de respuesta</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-5xl mx-auto leading-[1.05] mb-6">
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-semibold tracking-tight text-white max-w-5xl mx-auto leading-[1.05] mb-6">
             Achicá el caos operativo. <br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-indigo-300 to-cyan-300">
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-sky-300 to-white">
               Dispará la productividad de tu equipo.
             </span>
           </h1>
 
           <p className="text-base sm:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed mb-8 font-normal">
-            El ecosistema todo-en-uno que conecta tus <strong className="text-white font-semibold">ventas</strong>, tus <strong className="text-white font-semibold">técnicos en obra</strong> y tu <strong className="text-white font-semibold">administración</strong>. Cotizaciones en 30 segundos, WhatsApp con IA 24/7, catálogo mayorista, compras con OCR, remitos de entrega y control milimétrico de tareas y depósito.
+            El ecosistema todo-en-uno que conecta tus <strong className="text-white font-medium">ventas</strong>, tus <strong className="text-white font-medium">técnicos en obra</strong> y tu <strong className="text-white font-medium">administración</strong>. Cotizaciones en 30 segundos, WhatsApp con IA 24/7, catálogo mayorista, compras con OCR, remitos de entrega y control milimétrico de tareas y depósito.
           </p>
 
           {/* Banner de Acceso Rápido para Clientes Existentes - BIEN GRANDE Y DESTACADO */}
           <div
-            className="inline-flex items-center gap-3 px-6 sm:px-8 py-3.5 rounded-2xl border backdrop-blur-xl mb-10 shadow-2xl flex-wrap justify-center animate-landing-fade-in"
-            style={{
-              background: 'linear-gradient(180deg, rgba(3, 91, 126, 0.28) 0%, rgba(1, 22, 30, 0.5) 100%)',
-              borderColor: 'rgba(5, 163, 225, 0.6)',
-              boxShadow: '0 8px 32px rgba(3, 91, 126, 0.35)',
-            }}
+            className="inline-flex items-center gap-3 px-6 sm:px-8 py-3.5 rounded-full border backdrop-blur-xl mb-10 shadow-lg flex-wrap justify-center animate-landing-fade-in bg-[#00496b]/30 border-cyan-400/30"
           >
-            <span className="flex h-3.5 w-3.5 relative shrink-0">
+            <span className="flex h-3 w-3 relative shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-cyan-400"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400"></span>
             </span>
-            <span className="text-sm sm:text-base text-slate-100 font-bold">
+            <span className="text-sm sm:text-base text-slate-100 font-medium">
               ¿Ya sos cliente o usuario de JustCRM?
             </span>
             <Link
               href="/login"
-              className="px-5 py-2 rounded-xl text-white font-black text-xs sm:text-sm tracking-wide shadow-lg flex items-center gap-2 transition-all transform hover:scale-105 border shrink-0"
-              style={{
-                background: 'linear-gradient(135deg, hsl(197.07deg 95.35% 25.29%) 0%, #05a3e1 100%)',
-                borderColor: 'rgba(56, 189, 248, 0.6)',
-                boxShadow: '0 4px 18px rgba(3, 91, 126, 0.6)',
-              }}
+              className="px-5 py-2 rounded-full text-white font-medium text-xs sm:text-sm tracking-normal shadow-md flex items-center gap-2 transition-all transform hover:scale-105 bg-[#00628e] hover:bg-[#00496b] border border-cyan-400/40 shrink-0"
             >
-              <LogIn className="w-4 h-4 text-white" />
-              <span>INGRESO PARA CLIENTES →</span>
+              <LogIn className="w-4 h-4 text-cyan-300" />
+              <span>Ingreso para Clientes →</span>
             </Link>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
             <a
               href="#contacto"
-              className="w-full sm:w-auto px-9 py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-base shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-base shadow-lg shadow-[#00628e]/25 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-3 border border-cyan-400/30"
             >
               <span>Agendar Demostración Personalizada</span>
               <ArrowRight className="w-5 h-5" />
             </a>
             <a
               href="#funciones"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-bold text-base border border-slate-700 transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-base border border-slate-800 transition-all flex items-center justify-center gap-2"
             >
               <Eye className="w-4 h-4 text-cyan-400" />
               <span>Ver Funciones Principales</span>
@@ -262,22 +235,22 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto text-left">
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tiempo de Respuesta</span>
-              <p className="text-xl sm:text-2xl font-black text-emerald-400 mt-0.5">2 Segundos</p>
+              <p className="text-xl sm:text-2xl font-semibold text-emerald-400 mt-0.5">2 Segundos</p>
               <p className="text-[11px] text-slate-400">Atención con IA 24/7</p>
             </div>
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cotización Flash</span>
-              <p className="text-xl sm:text-2xl font-black text-cyan-400 mt-0.5">30 Segundos</p>
+              <p className="text-xl sm:text-2xl font-semibold text-cyan-400 mt-0.5">30 Segundos</p>
               <p className="text-[11px] text-slate-400">PDF White-Clean en vivo</p>
             </div>
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Depósito & Pañol</span>
-              <p className="text-xl sm:text-2xl font-black text-amber-400 mt-0.5">Conteo Inicial</p>
+              <p className="text-xl sm:text-2xl font-semibold text-amber-400 mt-0.5">Conteo Inicial</p>
               <p className="text-[11px] text-slate-400">Stock activo sin facturas</p>
             </div>
             <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Operación en Campo</span>
-              <p className="text-xl sm:text-2xl font-black text-indigo-400 mt-0.5">App 'Mi Día'</p>
+              <p className="text-xl sm:text-2xl font-semibold text-indigo-400 mt-0.5">App 'Mi Día'</p>
               <p className="text-[11px] text-slate-400">Checklist, GPS y Firma Digital</p>
             </div>
           </div>
@@ -293,7 +266,7 @@ export default function LandingPage() {
               <Sparkles className="w-4 h-4 text-cyan-400" />
               Introducción Breve · Qué hace JustCRM
             </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white leading-tight">
+            <h2 className="text-3xl sm:text-5xl font-semibold text-white leading-tight">
               Las funciones que transforman cada área, <span className="text-cyan-400">una debajo de la otra</span>.
             </h2>
             <p className="text-slate-400 mt-3 text-sm sm:text-base leading-relaxed">
@@ -308,12 +281,12 @@ export default function LandingPage() {
             <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-semibold shrink-0">
                     <Zap className="w-5 h-5" />
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">Área Comercial · Para Vendedores</span>
-                    <h3 className="text-lg sm:text-xl font-black text-white">Cotizador Flash en 30s, Catálogo Propio Dual & Pipeline Kanban</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-white">Cotizador Flash en 30s, Catálogo Propio Dual & Pipeline Kanban</h3>
                   </div>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-300 text-xs font-bold border border-amber-500/20 self-start sm:self-center">
@@ -348,12 +321,12 @@ export default function LandingPage() {
             <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-semibold shrink-0">
                     <Bot className="w-5 h-5" />
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Atención al Cliente · Para Prospectos & Consultas</span>
-                    <h3 className="text-lg sm:text-xl font-black text-white">WhatsApp Oficial con IA NISSI (Gemini 2.5) & Bandeja Compartida</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-white">WhatsApp Oficial con IA NISSI (Gemini 2.5) & Bandeja Compartida</h3>
                   </div>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-xs font-bold border border-emerald-500/20 self-start sm:self-center">
@@ -388,12 +361,12 @@ export default function LandingPage() {
             <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-black shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-semibold shrink-0">
                     <Smartphone className="w-5 h-5" />
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block">Operaciones & Obras · Para Instaladores y Pañol</span>
-                    <h3 className="text-lg sm:text-xl font-black text-white">App Móvil 'Mi Día', Remitos de Entrega y Conteo Físico sin Factura</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-white">App Móvil 'Mi Día', Remitos de Entrega y Conteo Físico sin Factura</h3>
                   </div>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-300 text-xs font-bold border border-cyan-500/20 self-start sm:self-center">
@@ -428,12 +401,12 @@ export default function LandingPage() {
             <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition-all shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-black shrink-0">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-semibold shrink-0">
                     <Building2 className="w-5 h-5" />
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 block">Gerencia & Dirección · Para Propietarios y Socios</span>
-                    <h3 className="text-lg sm:text-xl font-black text-white">Dashboard Ejecutivo en Vivo, Ficha 360° y Matriz de Roles</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-white">Dashboard Ejecutivo en Vivo, Ficha 360° y Matriz de Roles</h3>
                   </div>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-300 text-xs font-bold border border-purple-500/20 self-start sm:self-center">
@@ -467,23 +440,23 @@ export default function LandingPage() {
           </div>
 
           {/* Caja de Conversión: Solicitar una Demo o Contacto */}
-          <div className="mt-12 p-8 sm:p-10 rounded-3xl bg-gradient-to-b from-indigo-950/70 via-slate-900 to-slate-900 border-2 border-indigo-500 text-center shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 blur-[100px] pointer-events-none rounded-full" />
+          <div className="mt-12 p-8 sm:p-10 rounded-3xl bg-slate-900/90 border border-slate-800 text-center shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 blur-[100px] pointer-events-none rounded-full" />
             
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 block mb-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-cyan-400 block mb-2">
               Paso Siguiente · Demostración en Vivo
             </span>
-            <h3 className="text-2xl sm:text-4xl font-black text-white max-w-2xl mx-auto leading-tight mb-3">
+            <h3 className="text-2xl sm:text-4xl font-semibold text-white max-w-2xl mx-auto leading-tight mb-3">
               ¿Querés ver cómo funciona todo esto en vivo para tu empresa?
             </h3>
-            <p className="text-slate-300 text-sm max-w-xl mx-auto leading-relaxed mb-8">
+            <p className="text-slate-300 text-sm max-w-xl mx-auto leading-relaxed mb-8 font-normal">
               Agendá una demostración guiada de 15 minutos con un especialista de JustCreate. Te mostramos cómo cargar tu catálogo, cómo atiende el bot de WhatsApp y cómo cotizar en 30 segundos.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
                 href="#contacto"
-                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-sm shadow-xl shadow-indigo-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-sm shadow-lg shadow-[#00628e]/25 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 border border-cyan-400/30"
               >
                 <span>Solicitar una Demo o Contacto</span>
                 <ArrowRight className="w-4 h-4" />
@@ -491,7 +464,7 @@ export default function LandingPage() {
 
               <a
                 href="#dashboard"
-                className="w-full sm:w-auto px-7 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-bold text-sm border border-slate-700 transition-all flex items-center justify-center gap-2"
+                className="w-full sm:w-auto px-7 py-3.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-medium text-sm border border-slate-700 transition-all flex items-center justify-center gap-2"
               >
                 <span>Explorar los 18 Módulos en Detalle ↓</span>
               </a>
@@ -503,7 +476,7 @@ export default function LandingPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Plataforma Completa</span>
-                <h4 className="text-sm sm:text-base font-black text-white">Navegación Rápida por los 18 Módulos del Sistema</h4>
+                <h4 className="text-sm sm:text-base font-semibold text-white">Navegación Rápida por los 18 Módulos del Sistema</h4>
               </div>
               <span className="text-xs text-indigo-400 font-bold">Clic para ir a la pantalla ↓</span>
             </div>
@@ -561,7 +534,7 @@ export default function LandingPage() {
                   <BarChart3 className="w-4 h-4 text-red-400" />
                   Módulo 01 · Dashboard Ejecutivo en Vivo
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   El pulso financiero y operativo de tu empresa, <span className="text-red-400">al segundo</span>.
                 </h2>
               </div>
@@ -620,7 +593,7 @@ export default function LandingPage() {
               <div className="rounded-3xl border border-slate-800 bg-[#0d1322] p-4 sm:p-6 shadow-2xl">
                 <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-800">
                   <div>
-                    <h3 className="text-lg font-black text-white">Dashboard Ejecutivo</h3>
+                    <h3 className="text-lg font-semibold text-white">Dashboard Ejecutivo</h3>
                     <p className="text-xs text-slate-400">Resumen integral en tiempo real</p>
                   </div>
                   <span className="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 flex items-center gap-1.5">
@@ -630,22 +603,22 @@ export default function LandingPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   <div className="p-4 rounded-2xl bg-white text-slate-900 shadow-sm">
-                    <span className="text-2xl font-black block">34</span>
+                    <span className="text-2xl font-semibold block">34</span>
                     <span className="text-[11px] text-slate-500 font-bold mt-0.5 block">Clientes Activos</span>
                   </div>
                   <div className="p-4 rounded-2xl bg-white text-slate-900 shadow-sm relative">
                     <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
                       ↗ 100%
                     </span>
-                    <span className="text-xl font-black text-emerald-600 block mt-1">$ 1.934.400</span>
+                    <span className="text-xl font-semibold text-emerald-600 block mt-1">$ 1.934.400</span>
                     <span className="text-[11px] text-slate-500 font-bold mt-0.5 block">Ingresos del Mes</span>
                   </div>
                   <div className="p-4 rounded-2xl bg-white text-slate-900 shadow-sm">
-                    <span className="text-2xl font-black text-amber-500 block">0</span>
+                    <span className="text-2xl font-semibold text-amber-500 block">0</span>
                     <span className="text-[11px] text-slate-500 font-bold mt-0.5 block">Pagos Pendientes</span>
                   </div>
                   <div className="p-4 rounded-2xl bg-white text-slate-900 shadow-sm">
-                    <span className="text-2xl font-black text-red-500 block">0</span>
+                    <span className="text-2xl font-semibold text-red-500 block">0</span>
                     <span className="text-[11px] text-slate-500 font-bold mt-0.5 block">Facturas Vencidas</span>
                   </div>
                 </div>
@@ -676,7 +649,7 @@ export default function LandingPage() {
                     <div>
                       <h4 className="font-bold text-xs text-slate-900 mb-1">Efectividad de Cobro</h4>
                       <div className="w-20 h-20 mx-auto rounded-full border-8 border-emerald-500 flex items-center justify-center my-2">
-                        <span className="text-[10px] font-black text-emerald-600">100%</span>
+                        <span className="text-[10px] font-semibold text-emerald-600">100%</span>
                       </div>
                     </div>
                     <span className="text-[11px] font-bold text-slate-600">Cobranzas al día</span>
@@ -712,12 +685,12 @@ export default function LandingPage() {
                 <div className="p-5 rounded-2xl bg-white text-slate-900 mb-4 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-red-500 text-white flex items-center justify-center font-black text-xl shadow">
+                      <div className="w-12 h-12 rounded-xl bg-red-500 text-white flex items-center justify-center font-semibold text-xl shadow">
                         EC
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="text-lg font-black text-slate-900">Empresa de Servicios Corporativos</h3>
+                          <h3 className="text-lg font-semibold text-slate-900">Empresa de Servicios Corporativos</h3>
                           <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold text-[10px]">Cliente Activo</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">contacto@empresa-cliente.com · Eduardo Castex, La Pampa</p>
@@ -735,10 +708,10 @@ export default function LandingPage() {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 text-center">
-                    <div><span className="text-lg font-black text-slate-900">2</span><span className="text-[10px] text-slate-400 block font-bold">Deals activos</span></div>
-                    <div><span className="text-lg font-black text-emerald-600 font-mono">US$ 1.840</span><span className="text-[10px] text-slate-400 block font-bold">Valor esperado</span></div>
-                    <div><span className="text-lg font-black text-slate-900">0</span><span className="text-[10px] text-slate-400 block font-bold">Tickets abiertos</span></div>
-                    <div><span className="text-lg font-black text-slate-900">1</span><span className="text-[10px] text-slate-400 block font-bold">Tareas pending</span></div>
+                    <div><span className="text-lg font-semibold text-slate-900">2</span><span className="text-[10px] text-slate-400 block font-bold">Deals activos</span></div>
+                    <div><span className="text-lg font-semibold text-emerald-600 font-mono">US$ 1.840</span><span className="text-[10px] text-slate-400 block font-bold">Valor esperado</span></div>
+                    <div><span className="text-lg font-semibold text-slate-900">0</span><span className="text-[10px] text-slate-400 block font-bold">Tickets abiertos</span></div>
+                    <div><span className="text-lg font-semibold text-slate-900">1</span><span className="text-[10px] text-slate-400 block font-bold">Tareas pending</span></div>
                   </div>
                 </div>
 
@@ -778,7 +751,7 @@ export default function LandingPage() {
                   <Users className="w-4 h-4 text-cyan-400" />
                   Módulo 02 · Ficha 360° del Cliente
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Toda la relación con tu cliente en una <span className="text-cyan-400">línea de tiempo inmutable</span>.
                 </h2>
               </div>
@@ -849,7 +822,7 @@ export default function LandingPage() {
                   <Package className="w-4 h-4 text-amber-400" />
                   Módulo 03 · Catálogo Propio de Productos y Servicios
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Cargá tu catálogo propio con <span className="text-amber-400">listas duales de Gremio y Público</span>.
                 </h2>
               </div>
@@ -933,7 +906,7 @@ export default function LandingPage() {
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">FIBRA ÓPTICA</span>
                       <p className="font-bold text-[11px] text-slate-900 mt-1 leading-tight line-clamp-2">(0135501080) TP-LINK SFP 1.25G</p>
                     </div>
-                    <span className="mt-2 pt-2 border-t border-slate-100 font-black text-emerald-700 font-mono">Gremio US$ 22,84</span>
+                    <span className="mt-2 pt-2 border-t border-slate-100 font-semibold text-emerald-700 font-mono">Gremio US$ 22,84</span>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-white text-slate-900 shadow-sm flex flex-col justify-between">
@@ -942,7 +915,7 @@ export default function LandingPage() {
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">MONITOREO</span>
                       <p className="font-bold text-[11px] text-slate-900 mt-1 leading-tight line-clamp-2">Transmisor 4G FRS Alarma</p>
                     </div>
-                    <span className="mt-2 pt-2 border-t border-slate-100 font-black text-emerald-700 font-mono">Gremio US$ 140,00</span>
+                    <span className="mt-2 pt-2 border-t border-slate-100 font-semibold text-emerald-700 font-mono">Gremio US$ 140,00</span>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-white text-slate-900 shadow-sm flex flex-col justify-between">
@@ -951,7 +924,7 @@ export default function LandingPage() {
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">DETECTOR</span>
                       <p className="font-bold text-[11px] text-slate-900 mt-1 leading-tight line-clamp-2">Garrett Super Scanner</p>
                     </div>
-                    <span className="mt-2 pt-2 border-t border-slate-100 font-black text-emerald-700 font-mono">Gremio US$ 434,30</span>
+                    <span className="mt-2 pt-2 border-t border-slate-100 font-semibold text-emerald-700 font-mono">Gremio US$ 434,30</span>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-white text-slate-900 shadow-sm flex flex-col justify-between">
@@ -960,7 +933,7 @@ export default function LandingPage() {
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">XVR 16CH</span>
                       <p className="font-bold text-[11px] text-slate-900 mt-1 leading-tight line-clamp-2">16 Ch Penta-Brid 5M-N</p>
                     </div>
-                    <span className="mt-2 pt-2 border-t border-slate-100 font-black text-emerald-700 font-mono">Gremio US$ 215,00</span>
+                    <span className="mt-2 pt-2 border-t border-slate-100 font-semibold text-emerald-700 font-mono">Gremio US$ 215,00</span>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-white text-slate-900 shadow-sm flex flex-col justify-between">
@@ -969,7 +942,7 @@ export default function LandingPage() {
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700">ACCESOS</span>
                       <p className="font-bold text-[11px] text-slate-900 mt-1 leading-tight line-clamp-2">16 Puertas TCP/IP Soyal</p>
                     </div>
-                    <span className="mt-2 pt-2 border-t border-slate-100 font-black text-emerald-700 font-mono">Gremio US$ 320,00</span>
+                    <span className="mt-2 pt-2 border-t border-slate-100 font-semibold text-emerald-700 font-mono">Gremio US$ 320,00</span>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-white text-slate-900 shadow-sm flex flex-col justify-between">
@@ -978,7 +951,7 @@ export default function LandingPage() {
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">PORTERÍA</span>
                       <p className="font-bold text-[11px] text-slate-900 mt-1 leading-tight line-clamp-2">Accesorio Montaje Empotrable</p>
                     </div>
-                    <span className="mt-2 pt-2 border-t border-slate-100 font-black text-emerald-700 font-mono">Gremio US$ 72,96</span>
+                    <span className="mt-2 pt-2 border-t border-slate-100 font-semibold text-emerald-700 font-mono">Gremio US$ 72,96</span>
                   </div>
                 </div>
               </div>
@@ -1038,11 +1011,11 @@ export default function LandingPage() {
                 <div className="rounded-2xl bg-white text-slate-900 p-5 shadow-inner border border-slate-200">
                   <div className="flex items-center justify-between border-b-2 border-indigo-600 pb-3 mb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-black text-base">
+                      <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-semibold text-base">
                         ST
                       </div>
                       <div>
-                        <h4 className="text-base font-black text-slate-900 leading-tight">SECURETECH SEGURIDAD ELECTRÓNICA</h4>
+                        <h4 className="text-base font-semibold text-slate-900 leading-tight">SECURETECH SEGURIDAD ELECTRÓNICA</h4>
                         <p className="text-[10px] text-slate-500 font-medium">CCTV · Alarmas · Redes · Control de Accesos</p>
                       </div>
                     </div>
@@ -1100,7 +1073,7 @@ export default function LandingPage() {
                         <span>IVA (21%):</span>
                         <span className="font-mono">{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 127,05' : '$ 162.624') : (currency === 'USD' ? 'US$ 177,45' : '$ 227.136')}</span>
                       </div>
-                      <div className="pt-1.5 border-t border-slate-200 flex justify-between text-sm font-black text-indigo-700">
+                      <div className="pt-1.5 border-t border-slate-200 flex justify-between text-sm font-semibold text-indigo-700">
                         <span>TOTAL:</span>
                         <span className="font-mono">{priceMode === 'GREMIO' ? (currency === 'USD' ? 'US$ 732,05' : '$ 937.024') : (currency === 'USD' ? 'US$ 1.022,45' : '$ 1.308.736')}</span>
                       </div>
@@ -1124,7 +1097,7 @@ export default function LandingPage() {
                   <FileText className="w-4 h-4 text-emerald-400" />
                   Módulo 04 · Cotizador Flash en 30 Segundos
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Presupuestos corporativos en PDF <span className="text-emerald-400">mientras hablás por teléfono</span>.
                 </h2>
               </div>
@@ -1195,7 +1168,7 @@ export default function LandingPage() {
                   <Layers className="w-4 h-4 text-cyan-400" />
                   Módulo 05 · Pipeline Comercial Kanban
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Embudo de oportunidades drag & drop: <span className="text-cyan-400">cero tratos olvidados</span>.
                 </h2>
               </div>
@@ -1417,7 +1390,7 @@ export default function LandingPage() {
                   <ClipboardList className="w-4 h-4 text-purple-400" />
                   Módulo 06 · Tareas Operativas & Órdenes de Trabajo
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Coordinación milimétrica entre ventas, pañol y campo: <span className="text-purple-400">cero malentendidos</span>.
                 </h2>
               </div>
@@ -1488,7 +1461,7 @@ export default function LandingPage() {
                   <Truck className="w-4 h-4 text-amber-400" />
                   Módulo 07 · Remitos de Entrega & Pañol Central
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Despiece exacto de kits y control de materiales: <span className="text-amber-400">ni un tornillo de menos</span>.
                 </h2>
               </div>
@@ -1597,7 +1570,7 @@ export default function LandingPage() {
                     <button className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 border border-slate-700">
                       <Download className="w-3.5 h-3.5" /> Descargar PDF
                     </button>
-                    <button className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow">
+                    <button className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 shadow">
                       <Send className="w-3.5 h-3.5" /> Confirmar Entrega
                     </button>
                   </div>
@@ -1621,7 +1594,7 @@ export default function LandingPage() {
                 <div className="p-4 rounded-2xl bg-white text-slate-900 shadow-sm mb-4">
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-200">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
                         <Camera className="w-5 h-5" />
                       </div>
                       <div>
@@ -1683,7 +1656,7 @@ export default function LandingPage() {
                   <ShoppingCart className="w-4 h-4 text-cyan-400" />
                   Módulo 08 · Compras Mayoristas & OCR Inteligente
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Ingreso de comprobantes de proveedores con IA: <span className="text-cyan-400">cero tipeo manual</span>.
                 </h2>
               </div>
@@ -1754,7 +1727,7 @@ export default function LandingPage() {
                   <RefreshCw className="w-4 h-4 text-emerald-400" />
                   Módulo 09 · Servicios Recurrentes (MRR & ARR)
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Cobro recurrente de monitoreo 24/7 y mantenimiento: <span className="text-emerald-400">ingresos previsibles</span>.
                 </h2>
               </div>
@@ -1814,17 +1787,17 @@ export default function LandingPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
                     <span className="text-[10px] font-bold uppercase text-slate-400 block">MRR Total Mensual</span>
-                    <p className="text-xl font-black text-emerald-400 mt-1 font-mono">$ 14.850.000</p>
+                    <p className="text-xl font-semibold text-emerald-400 mt-1 font-mono">$ 14.850.000</p>
                     <p className="text-[10px] text-slate-400">+ US$ 4.200 USD</p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
                     <span className="text-[10px] font-bold uppercase text-slate-400 block">Abonados Activos</span>
-                    <p className="text-xl font-black text-white mt-1">182 Cuentas</p>
+                    <p className="text-xl font-semibold text-white mt-1">182 Cuentas</p>
                     <p className="text-[10px] text-emerald-400">99.2% Cobranza al día</p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
                     <span className="text-[10px] font-bold uppercase text-slate-400 block">A Vencer (30 Días)</span>
-                    <p className="text-xl font-black text-amber-400 mt-1">14 Contratos</p>
+                    <p className="text-xl font-semibold text-amber-400 mt-1">14 Contratos</p>
                     <p className="text-[10px] text-slate-400">Renovación automática</p>
                   </div>
                 </div>
@@ -1846,7 +1819,7 @@ export default function LandingPage() {
 
                 <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex flex-wrap justify-between items-center gap-3">
                   <span className="text-[11px]">⚡ <strong>Liquidación Masiva en 1 Clic:</strong> Procesa todos los abonos recurrentes y envía resúmenes por WhatsApp.</span>
-                  <button className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow">
+                  <button className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs shadow">
                     Ejecutar Lote Mensual
                   </button>
                 </div>
@@ -1925,7 +1898,7 @@ export default function LandingPage() {
                   <AlertTriangle className="w-4 h-4 text-red-400" />
                   Módulo 10 · Mesa de Ayuda Técnica & SLAs
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Control estricto de tiempos de respuesta: <span className="text-red-400">cada reclamo tiene dueño</span>.
                 </h2>
               </div>
@@ -1996,7 +1969,7 @@ export default function LandingPage() {
                   <Package className="w-4 h-4 text-amber-400" />
                   Módulo 11 · Depósito & Stock Real
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Conteo físico inicial sin factura: <span className="text-amber-400">empezá a cotizar ya</span>.
                 </h2>
               </div>
@@ -2058,7 +2031,7 @@ export default function LandingPage() {
                     <h3 className="text-sm font-bold text-white">Inventario Físico · Depósito Central</h3>
                     <p className="text-[11px] text-slate-400">Balance en vivo entre físico, comprometido y disponible</p>
                   </div>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 shadow">
                     <Sparkles className="w-3.5 h-3.5" /> Conteo Inicial (Sin Factura)
                   </button>
                 </div>
@@ -2081,7 +2054,7 @@ export default function LandingPage() {
                         <td className="p-3 font-bold text-white text-[11px]">Domo IP Hikvision AcuSense 2MP</td>
                         <td className="p-3 text-center font-bold">24</td>
                         <td className="p-3 text-center text-amber-400 font-bold">4</td>
-                        <td className="p-3 text-center text-emerald-400 font-black text-sm">20</td>
+                        <td className="p-3 text-center text-emerald-400 font-semibold text-sm">20</td>
                         <td className="p-3 text-right"><span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Stock Óptimo</span></td>
                       </tr>
                       <tr>
@@ -2089,7 +2062,7 @@ export default function LandingPage() {
                         <td className="p-3 font-bold text-white text-[11px]">NVR Grabador 8 Ch PoE 4K</td>
                         <td className="p-3 text-center font-bold">6</td>
                         <td className="p-3 text-center text-amber-400 font-bold">1</td>
-                        <td className="p-3 text-center text-emerald-400 font-black text-sm">5</td>
+                        <td className="p-3 text-center text-emerald-400 font-semibold text-sm">5</td>
                         <td className="p-3 text-right"><span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Stock Óptimo</span></td>
                       </tr>
                       <tr>
@@ -2097,7 +2070,7 @@ export default function LandingPage() {
                         <td className="p-3 font-bold text-white text-[11px]">Disco Western Digital Purple 2TB</td>
                         <td className="p-3 text-center font-bold">8</td>
                         <td className="p-3 text-center text-amber-400 font-bold">1</td>
-                        <td className="p-3 text-center text-emerald-400 font-black text-sm">7</td>
+                        <td className="p-3 text-center text-emerald-400 font-semibold text-sm">7</td>
                         <td className="p-3 text-right"><span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">Stock Óptimo</span></td>
                       </tr>
                     </tbody>
@@ -2156,7 +2129,7 @@ export default function LandingPage() {
                     <div>
                       <div className="flex justify-between items-center pb-2.5 border-b border-slate-800 mb-3">
                         <span className="text-xs font-bold text-white">NISSI (Gemini 2.5 Flash)</span>
-                        <button className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-black text-[10px] hover:bg-emerald-400 shadow">
+                        <button className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-semibold text-[10px] hover:bg-emerald-400 shadow">
                           Tomar Conversación
                         </button>
                       </div>
@@ -2186,7 +2159,7 @@ export default function LandingPage() {
                   <Bot className="w-4 h-4 text-emerald-400" />
                   Módulo 12 · WhatsApp Oficial con IA (NISSI)
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Respuesta técnica en 2 segundos: <span className="text-emerald-400">el prospecto nunca más espera</span>.
                 </h2>
               </div>
@@ -2257,7 +2230,7 @@ export default function LandingPage() {
                   <CalendarDays className="w-4 h-4 text-cyan-400" />
                   Módulo 13 · Operación de Campo & Fichaje GPS
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Control de cuadrillas y geolocalización: <span className="text-cyan-400">saber dónde está cada técnico</span>.
                 </h2>
               </div>
@@ -2436,7 +2409,7 @@ export default function LandingPage() {
                   <Folder className="w-4 h-4 text-purple-400" />
                   Módulo 14 · Gestor Documental Centralizado
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Toda la documentación técnica y legal: <span className="text-purple-400">al alcance en 1 clic</span>.
                 </h2>
               </div>
@@ -2507,7 +2480,7 @@ export default function LandingPage() {
                   <Lock className="w-4 h-4 text-indigo-400" />
                   Módulo 15 · Blindaje & Permisos Granulares
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Privacidad absoluta y control total: <span className="text-indigo-400">cada quien ve lo suyo</span>.
                 </h2>
               </div>
@@ -2649,7 +2622,7 @@ export default function LandingPage() {
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-100">
                       <span className="text-[10px] text-slate-400 line-through block">Púb: US$ 120,00</span>
-                      <strong className="text-xs font-black text-emerald-700 font-mono">Gremio: US$ 85,00</strong>
+                      <strong className="text-xs font-semibold text-emerald-700 font-mono">Gremio: US$ 85,00</strong>
                     </div>
                   </div>
 
@@ -2663,7 +2636,7 @@ export default function LandingPage() {
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-100">
                       <span className="text-[10px] text-slate-400 line-through block">Púb: US$ 270,00</span>
-                      <strong className="text-xs font-black text-emerald-700 font-mono">Gremio: US$ 195,00</strong>
+                      <strong className="text-xs font-semibold text-emerald-700 font-mono">Gremio: US$ 195,00</strong>
                     </div>
                   </div>
 
@@ -2677,14 +2650,14 @@ export default function LandingPage() {
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-100">
                       <span className="text-[10px] text-slate-400 line-through block">Púb: US$ 130,00</span>
-                      <strong className="text-xs font-black text-emerald-700 font-mono">Gremio: US$ 88,00</strong>
+                      <strong className="text-xs font-semibold text-emerald-700 font-mono">Gremio: US$ 88,00</strong>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
                   <span className="text-slate-400 text-[11px]">Reserva de mercadería directa en pañol sin llamado previo.</span>
-                  <button className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow">
+                  <button className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs shadow">
                     Confirmar Pedido de Obra
                   </button>
                 </div>
@@ -2698,7 +2671,7 @@ export default function LandingPage() {
                   <Briefcase className="w-4 h-4 text-amber-400" />
                   Módulo 16 · Portal B2B Mayorista para Gremio
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Canal e-commerce para instaladores: <span className="text-amber-400">pedidos en 30 segundos</span>.
                 </h2>
               </div>
@@ -2775,7 +2748,7 @@ export default function LandingPage() {
                 {/* Header App Técnico */}
                 <div className="p-4 rounded-2xl bg-indigo-600 text-white mb-3 shadow">
                   <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Mi Día · Miércoles 23 de Septiembre</span>
-                  <h3 className="text-base font-black">Lucas Martínez</h3>
+                  <h3 className="text-base font-semibold">Lucas Martínez</h3>
                   <p className="text-xs text-indigo-100 flex items-center gap-1 mt-1">
                     <MapPin className="w-3 h-3 text-emerald-300" /> Jornada Iniciada: 08:31 hs (GPS OK)
                   </p>
@@ -2837,7 +2810,7 @@ export default function LandingPage() {
                   <Smartphone className="w-4 h-4 text-emerald-400" />
                   Módulo 17 · Panel Operativo Móvil 'Mi Día'
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   La hoja de ruta del técnico en su celular: <span className="text-emerald-400">cero llamadas, máxima autonomía</span>.
                 </h2>
               </div>
@@ -2908,7 +2881,7 @@ export default function LandingPage() {
                   <Zap className="w-4 h-4 text-emerald-400" />
                   Módulo 18 · Setup Ágil & Migración Sin Fricción
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Tu CRM listo y cotizando en 15 minutos: <span className="text-emerald-400">sin consultorías de meses</span>.
                 </h2>
               </div>
@@ -2976,7 +2949,7 @@ export default function LandingPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 relative">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">✓</span>
+                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-semibold flex items-center justify-center text-[10px]">✓</span>
                       <span className="text-[10px] text-emerald-400 font-bold">2 minutos</span>
                     </div>
                     <h4 className="font-bold text-white text-xs">1. Razón Social & Logo</h4>
@@ -2985,7 +2958,7 @@ export default function LandingPage() {
 
                   <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 relative">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">✓</span>
+                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-semibold flex items-center justify-center text-[10px]">✓</span>
                       <span className="text-[10px] text-emerald-400 font-bold">Inmediato</span>
                     </div>
                     <h4 className="font-bold text-white text-xs">2. Catálogo Propio Dual</h4>
@@ -2994,7 +2967,7 @@ export default function LandingPage() {
 
                   <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 relative">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">✓</span>
+                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-semibold flex items-center justify-center text-[10px]">✓</span>
                       <span className="text-[10px] text-emerald-400 font-bold">3 minutos</span>
                     </div>
                     <h4 className="font-bold text-white text-xs">3. WhatsApp Oficial con IA</h4>
@@ -3003,7 +2976,7 @@ export default function LandingPage() {
 
                   <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 relative">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">✓</span>
+                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-semibold flex items-center justify-center text-[10px]">✓</span>
                       <span className="text-[10px] text-emerald-400 font-bold">5 minutos</span>
                     </div>
                     <h4 className="font-bold text-white text-xs">4. Invitaciones al Equipo</h4>
@@ -3029,7 +3002,7 @@ export default function LandingPage() {
           
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="text-xs font-bold uppercase tracking-wider text-cyan-400">Inversión Transparente</span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white mt-2">
+            <h2 className="text-3xl sm:text-5xl font-semibold text-white mt-2">
               Planes claros y adaptados a tu escala
             </h2>
             <p className="text-slate-400 mt-3 text-base">
@@ -3043,7 +3016,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-bold text-white">Starter Instalador</h3>
                 <p className="text-xs text-slate-400 mt-1">Para técnicos independientes y equipos chicos de hasta 3 personas.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-3xl font-black text-white">Consultar</span>
+                  <span className="text-3xl font-semibold text-white">Consultar</span>
                   <span className="text-xs text-slate-400 block mt-1">Planes a medida en pesos o dólares</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-300">
@@ -3056,22 +3029,22 @@ export default function LandingPage() {
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs text-center transition-all"
+                className="mt-8 w-full py-3.5 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs text-center transition-all block"
               >
                 Solicitar Cotización Starter
               </a>
             </div>
 
-            <div className="rounded-3xl bg-gradient-to-b from-indigo-950/60 via-slate-900 to-slate-900 border-2 border-indigo-500 p-8 flex flex-col justify-between shadow-2xl relative">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-red-500 via-indigo-500 to-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider shadow">
+            <div className="rounded-3xl bg-[#00496b]/20 border border-cyan-400/40 p-8 flex flex-col justify-between shadow-2xl relative">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-[#00628e] text-white font-medium text-[11px] uppercase tracking-wider shadow border border-cyan-400/40">
                 MÁS ELEGIDO POR EMPRESAS
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">Security Pro & Bot IA</h3>
+                <h3 className="text-xl font-semibold text-white">Security Pro & Bot IA</h3>
                 <p className="text-xs text-slate-300 mt-1">Para empresas de seguridad, monitoreo y CCTV que quieren escalar.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-3xl font-black text-white">Plan Pro</span>
-                  <span className="text-xs text-indigo-300 block mt-1">Con Bot de WhatsApp NISSI Gemini 2.5</span>
+                  <span className="text-3xl font-semibold text-white">Plan Pro</span>
+                  <span className="text-xs text-cyan-300 block mt-1">Con Bot de WhatsApp NISSI Gemini 2.5</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-200">
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> <strong>Usuarios ilimitados</strong> para todo el equipo</li>
@@ -3085,7 +3058,7 @@ export default function LandingPage() {
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-xs text-center shadow-lg transition-all"
+                className="mt-8 w-full py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-xs text-center shadow-md transition-all border border-cyan-400/30 block"
               >
                 Comenzar con Plan Pro
               </a>
@@ -3093,10 +3066,10 @@ export default function LandingPage() {
 
             <div className="rounded-3xl bg-slate-900/60 border border-slate-800 p-8 flex flex-col justify-between hover:border-slate-700 transition-all">
               <div>
-                <h3 className="text-xl font-bold text-white">Enterprise White-Label</h3>
+                <h3 className="text-xl font-semibold text-white">Enterprise White-Label</h3>
                 <p className="text-xs text-slate-400 mt-1">Para grandes integradores, franquicias o múltiples depósitos.</p>
                 <div className="mt-6 mb-6">
-                  <span className="text-3xl font-black text-white">A Medida</span>
+                  <span className="text-3xl font-semibold text-white">A Medida</span>
                   <span className="text-xs text-slate-400 block mt-1">Servidor privado dedicado + Marca blanca total</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-300">
@@ -3109,7 +3082,7 @@ export default function LandingPage() {
               </div>
               <a
                 href="#contacto"
-                className="mt-8 w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs text-center transition-all"
+                className="mt-8 w-full py-3.5 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs text-center transition-all block"
               >
                 Contactar a Ventas Enterprise
               </a>
@@ -3123,7 +3096,7 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Preguntas Frecuentes</span>
-            <h2 className="text-3xl font-black text-white mt-2">
+            <h2 className="text-3xl font-semibold text-white mt-2">
               Todo lo que necesitás saber antes de dar el salto
             </h2>
           </div>
@@ -3152,13 +3125,11 @@ export default function LandingPage() {
       {/* ── Contact Form ──────────────────────────────────────────────── */}
       <section id="contacto" className="py-24 bg-gradient-to-b from-[#070b14] to-slate-950 border-t border-slate-800 text-center px-4">
         <div className="max-w-xl mx-auto">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-500 via-indigo-600 to-cyan-400 p-0.5 mx-auto mb-5 shadow-xl shadow-indigo-600/20">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center p-2.5">
-              <img src="/logo.png" alt="JustCRM Logo" className="w-full h-full object-contain" />
-            </div>
+          <div className="flex justify-center mb-6">
+            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-12 sm:h-14 w-auto object-contain" />
           </div>
-          <h2 className="text-3xl sm:text-4xl font-black text-white mb-3">Terminá con el Caos Operativo Hoy</h2>
-          <p className="text-slate-400 text-sm mb-8">
+          <h2 className="text-3xl sm:text-4xl font-semibold text-white mb-3">Terminá con el Caos Operativo Hoy</h2>
+          <p className="text-slate-400 text-sm mb-8 font-normal">
             Completá tus datos y un especialista técnico de JustCreate te contactará hoy mismo para coordinar una demo guiada de 15 minutos.
           </p>
 
@@ -3168,7 +3139,7 @@ export default function LandingPage() {
                 <CheckCircle2 className="w-9 h-9" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white">¡Solicitud Recibida con Éxito!</h3>
+                <h3 className="text-2xl font-semibold text-white">¡Solicitud Recibida con Éxito!</h3>
                 <p className="text-slate-300 text-xs sm:text-sm mt-2 leading-relaxed">
                   Muchas gracias <strong>{contactName}</strong>. La información fue enviada a nuestro equipo en <span className="text-cyan-400 font-mono">contacto@justcreate.com.ar</span>. Te contactaremos hoy mismo a tu WhatsApp (<strong className="text-white">{contactPhone}</strong>).
                 </p>
@@ -3179,7 +3150,7 @@ export default function LandingPage() {
                   href={`https://wa.me/5491124527669?text=${encodeURIComponent(`Hola JustCRM, acabo de solicitar una demo para ${contactCompany || contactName}. Mi email es ${contactEmail}.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white font-black text-xs shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-full bg-[#25D366] hover:bg-[#20ba59] text-white font-medium text-xs shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5"
                 >
                   <MessageSquare className="w-4 h-4" />
                   <span>Hablar por WhatsApp Ahora Directo</span>
@@ -3313,7 +3284,7 @@ export default function LandingPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-4 py-4 rounded-xl bg-gradient-to-r from-red-500 via-indigo-600 to-cyan-500 hover:from-red-600 hover:to-indigo-600 text-white font-black text-xs shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mt-4 py-3.5 rounded-full bg-[#00628e] hover:bg-[#00496b] text-white font-medium text-sm shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-cyan-400/30"
               >
                 {isSubmitting ? (
                   <>
@@ -3336,10 +3307,8 @@ export default function LandingPage() {
       <footer className="py-10 bg-slate-950 border-t border-slate-900 text-slate-500 text-xs text-center sm:text-left">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg overflow-hidden bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0">
-              <img src="/logo.png" alt="JustCRM Logo" className="w-full h-full object-contain p-0.5" />
-            </div>
-            <p>JustCRM · Desarrollado con orgullo por <a href="https://justcreate.com.ar" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-white underline">JustCreate</a></p>
+            <img src="/logo-fondo-redondeado.png" alt="JustCRM Logo" className="h-8 w-auto object-contain" />
+            <p className="text-slate-400">JustCRM · Desarrollado con orgullo por <a href="https://justcreate.com.ar" target="_blank" rel="noreferrer" className="text-slate-300 hover:text-white underline">JustCreate</a></p>
           </div>
           <p>© 2026 JustCRM. Todos los derechos reservados.</p>
         </div>

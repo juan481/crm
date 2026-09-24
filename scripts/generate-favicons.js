@@ -1,26 +1,13 @@
 const sharp = require('sharp');
 const fs = require('fs');
-const path = require('path');
 
 async function generate() {
-  console.log('Generating crisp favicons from logo.png...');
+  console.log('Generating crisp favicons from icono-justcrm.png...');
 
-  // The squircle icon is inside public/logo.png at [left: 98, top: 367, width: 290, height: 290]
-  // Extract with a round squircle mask (rx=64) so corners are fully transparent
-  const maskSvg = Buffer.from(
-    `<svg width="290" height="290"><rect x="0" y="0" width="290" height="290" rx="64" ry="64" fill="white"/></svg>`
-  );
-
-  const baseIcon = await sharp('public/logo.png')
-    .extract({ left: 98, top: 367, width: 290, height: 290 })
-    .composite([{ input: maskSvg, blend: 'dest-in' }])
+  const baseIcon = await sharp('public/icono-justcrm.png')
     .png()
     .toBuffer();
 
-  // Save the master icon
-  fs.writeFileSync('public/app-icon.png', baseIcon);
-
-  // Generate PNG sizes
   const sizes = [16, 32, 48, 64, 128, 180, 192, 512];
   const pngBuffers = {};
 
@@ -41,7 +28,6 @@ async function generate() {
   fs.writeFileSync('public/icons/icon-512.png', pngBuffers[512]);
 
   // Build standard multi-resolution ICO file containing 16x16, 32x32, 48x48
-  // ICO file format with embedded PNGs:
   const icoSizes = [16, 32, 48];
   const headerSize = 6;
   const dirEntrySize = 16;
@@ -78,7 +64,7 @@ async function generate() {
   fs.writeFileSync('public/favicon.ico', icoBuffer);
   fs.writeFileSync('src/app/favicon.ico', icoBuffer);
 
-  console.log('Successfully generated public/favicon.ico and src/app/favicon.ico (multi-res 16/32/48)');
+  console.log('Successfully generated public/favicon.ico and src/app/favicon.ico from icono-justcrm.png');
 }
 
 generate().catch(console.error);
