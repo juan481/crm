@@ -59,16 +59,19 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-indigo-500 selection:text-white font-poppins antialiased overflow-x-hidden">
       
-      {/* ── Top Navigation Bar: Glass Claro con Logo Original sin Contenedor Blanco ──── */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/90 border-b border-slate-200/90 shadow-[0_4px_25px_rgba(0,0,0,0.06)] transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      {/* ── Top Navigation Bar: Glass Claro con Bordes Abajo y Logo Original ──── */}
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-gradient-to-b from-white/80 via-white/65 to-white/55 border-b border-slate-200/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.95),0_12px_36px_-6px_rgba(0,0,0,0.18),0_2px_8px_rgba(0,0,0,0.06)] rounded-b-2xl sm:rounded-b-[28px] transition-all relative">
+        {/* Acento sutil en borde inferior con degradado hacia el azul corporativo */}
+        <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#00628e]/35 to-transparent pointer-events-none rounded-b-2xl sm:rounded-b-[28px]" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-[72px] flex items-center justify-between">
           {/* Logo Principal Original (sin fondo blanco / sin cuadro redondeado) */}
           <a href="#inicio" className="flex items-center transition-transform hover:scale-[1.02]">
-            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-10 sm:h-12 w-auto object-contain" />
+            <img src="/Logo-sin-fondo.png" alt="JustCRM Logo" className="h-9 sm:h-11 w-auto object-contain" />
           </a>
 
           {/* Menú Principal Limpio & Editorial sobre fondo claro */}
-          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-600">
+          <nav className="hidden md:flex items-center gap-8 text-xs font-medium text-slate-700">
             <a href="#inicio" className="hover:text-[#00628e] transition-colors">
               Inicio
             </a>
@@ -112,9 +115,9 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Drawer Móvil en fondo claro */}
+        {/* Drawer Móvil en fondo glass claro */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white/95 backdrop-blur-2xl border-b border-slate-200 px-4 py-4 space-y-3 text-sm shadow-xl">
+          <div className="md:hidden bg-white/95 backdrop-blur-2xl border-b border-slate-200 px-4 py-4 space-y-3 text-sm shadow-xl rounded-b-2xl">
             <a
               href="#inicio"
               onClick={() => setMobileMenuOpen(false)}
