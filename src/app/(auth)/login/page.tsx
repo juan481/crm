@@ -102,17 +102,6 @@ function LoginForm() {
         <div className="absolute -bottom-28 -right-28 w-[480px] h-[480px] rounded-full bg-gradient-to-bl from-indigo-900/35 via-[#00496b]/25 to-cyan-400/20 blur-[120px] pointer-events-none animate-landing-float" />
         <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-[320px] h-[320px] rounded-full bg-cyan-400/10 blur-[100px] pointer-events-none" />
 
-        {/* Marca Superior: JustCRM BIEN GRANDE (Sin Productivity OS) */}
-        <div className="relative z-10 flex items-center justify-between">
-          <Link href="/landing" className="inline-block transition-transform hover:scale-[1.03] group">
-            <img
-              src="/logo-fondo-redondeado.png"
-              alt="JustCRM Logo"
-              className="h-14 sm:h-16 lg:h-20 w-auto object-contain drop-shadow-[0_12px_28px_rgba(0,98,142,0.4)] transition-all group-hover:drop-shadow-[0_16px_36px_rgba(56,189,248,0.5)]"
-            />
-          </Link>
-        </div>
-
         {/* Mensaje Editorial con trazos finos y elegantes de Poppins */}
         <div className="space-y-6 my-auto max-w-lg relative z-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-slate-900/90 text-cyan-300 border border-slate-700/80 shadow-inner">

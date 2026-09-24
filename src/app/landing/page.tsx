@@ -35,12 +35,12 @@ export default function LandingPage() {
       a: 'Los CRMs tradicionales (HubSpot, Zoho, Salesforce) son genéricos y no entienden la operativa real: no cotizan kits con componentes desglosados para pañol, no manejan listas duales de Gremio vs Público, no permiten cargar stock físico sin factura previa, y no gestionan remitos de entrega ni órdenes de trabajo en vivo para tus cuadrillas. Con JustCRM tenés todo resuelto en una sola plataforma.'
     },
     {
-      q: '¿Cómo funciona el Bot de WhatsApp NISSI y cómo interactúa con el catálogo?',
-      a: 'NISSI corre sobre el motor Gemini 2.5 Flash de Google, conectado a la API oficial de WhatsApp de Meta. El bot comprende lenguaje natural, conoce todo tu catálogo técnico (cámaras IP vs analógicas, analítica AcuSense, distancias infrarrojas, centrales de alarma). Jamás inventa un precio: cuando detecta intención de compra o soporte, califica al cliente y lo deriva de inmediato con todo el historial de la conversación pegado en la ficha del Pipeline o Mesa de Ayuda.'
+      q: '¿Cómo funciona el Bot de WhatsApp con IA y cómo interactúa con el catálogo?',
+      a: 'El Bot con IA corre sobre el motor Gemini 2.5 Flash de Google, conectado a la API oficial de WhatsApp de Meta. El bot comprende lenguaje natural, conoce todo tu catálogo técnico (cámaras IP vs analógicas, analítica AcuSense, distancias infrarrojas, centrales de alarma). Jamás inventa un precio: cuando detecta intención de compra o soporte, califica al cliente y lo deriva de inmediato con todo el historial de la conversación pegado en la ficha del Pipeline o Mesa de Ayuda.'
     },
     {
       q: '¿Qué pasa si un vendedor o asesor quiere responder en vivo por WhatsApp?',
-      a: 'El CRM cuenta con una bandeja de entrada compartida oficial. Con un solo clic en "Tomar conversación", el humano toma el control total del chat y NISSI se silencia automáticamente para ese hilo. Cuando el operador termina, puede devolver el control al bot con un botón o el sistema lo reactiva automáticamente a las 24 horas.'
+      a: 'El CRM cuenta con una bandeja de entrada compartida oficial. Con un solo clic en "Tomar conversación", el humano toma el control total del chat y la IA se silencia automáticamente para ese hilo. Cuando el operador termina, puede devolver el control al bot con un botón o el sistema lo reactiva automáticamente a las 24 horas.'
     },
     {
       q: '¿Puedo cargar mi stock actual si no tengo las facturas de compra anteriores a mano?',
@@ -326,7 +326,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Atención al Cliente · Para Prospectos & Consultas</span>
-                    <h3 className="text-lg sm:text-xl font-semibold text-white">WhatsApp Oficial con IA NISSI (Gemini 2.5) & Bandeja Compartida</h3>
+                    <h3 className="text-lg sm:text-xl font-semibold text-white">WhatsApp Oficial con IA (Gemini 2.5) & Bandeja Compartida</h3>
                   </div>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-xs font-bold border border-emerald-500/20 self-start sm:self-center">
@@ -338,7 +338,7 @@ export default function LandingPage() {
                 <div>
                   <strong className="text-white block mb-1">¿Qué función cumple en el día a día?</strong>
                   <p>
-                    Conectado directamente a la <strong>API Oficial de Meta</strong>, nuestro agente inteligente <strong>NISSI comprende consultas técnicas complejas</strong> (distingue cámaras IP vs HDCVI, centrales de alarma, distancias infrarrojas). <strong>Responde en 2 segundos las 24 horas</strong>, asesora con productos de tu catálogo, califica el interés de compra y <strong>deriva al cliente al vendedor adecuado con todo el transcript de la charla pegado en su ficha</strong>. Además, permite <strong>tomar control humano instantáneo</strong> con 1 clic.
+                    Conectado directamente a la <strong>API Oficial de Meta</strong>, nuestro agente inteligente <strong>con IA comprende consultas técnicas complejas</strong> (distingue cámaras IP vs HDCVI, centrales de alarma, distancias infrarrojas). <strong>Responde en 2 segundos las 24 horas</strong>, asesora con productos de tu catálogo, califica el interés de compra y <strong>deriva al cliente al vendedor adecuado con todo el transcript de la charla pegado en su ficha</strong>. Además, permite <strong>tomar control humano instantáneo</strong> con 1 clic.
                   </p>
                 </div>
                 <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
@@ -494,7 +494,7 @@ export default function LandingPage() {
                 { id: 'servicios', n: '09', t: 'Abonos MRR Monitoreo', c: 'text-emerald-400 border-emerald-500/20' },
                 { id: 'tickets', n: '10', t: 'Tickets SLA & Mesa', c: 'text-red-400 border-red-500/20' },
                 { id: 'stock', n: '11', t: 'Stock & Conteo Inicial', c: 'text-amber-400 border-amber-500/20' },
-                { id: 'whatsapp', n: '12', t: 'WhatsApp IA (NISSI)', c: 'text-emerald-400 border-emerald-500/20' },
+                { id: 'whatsapp', n: '12', t: 'WhatsApp Oficial con IA', c: 'text-emerald-400 border-emerald-500/20' },
                 { id: 'campo', n: '13', t: 'Visitas Técnicas & GPS', c: 'text-cyan-400 border-cyan-500/20' },
                 { id: 'documentos', n: '14', t: 'Gestor Documental', c: 'text-purple-400 border-purple-500/20' },
                 { id: 'roles', n: '15', t: 'Matriz de Permisos', c: 'text-indigo-400 border-indigo-500/20' },
@@ -1174,7 +1174,7 @@ export default function LandingPage() {
               </div>
 
               <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                El <strong>Pipeline Comercial Kanban de JustCRM</strong> ofrece una panorámica visual de cada operación en curso. Desde que un prospecto entra atendido por el <strong>bot de WhatsApp NISSI</strong> hasta que la instalación se concreta, cada tarjeta representa dinero real en juego.
+                El <strong>Pipeline Comercial Kanban de JustCRM</strong> ofrece una panorámica visual de cada operación en curso. Desde que un prospecto entra atendido por el <strong>bot de WhatsApp con IA</strong> hasta que la instalación se concreta, cada tarjeta representa dinero real en juego.
               </p>
 
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
@@ -1199,7 +1199,7 @@ export default function LandingPage() {
                 <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
                   <div className="flex items-center gap-2 text-emerald-400 mb-1">
                     <Bot className="w-4 h-4" />
-                    <span className="font-bold text-xs">Leads de NISSI</span>
+                    <span className="font-bold text-xs">Leads de WhatsApp IA</span>
                   </div>
                   <p className="text-[11px] text-slate-400">Los prospectos de WhatsApp entran <strong>automáticamente a la etapa 1</strong> sin tipear.</p>
                 </div>
@@ -1237,7 +1237,7 @@ export default function LandingPage() {
                   <div className="bg-slate-950 rounded-2xl p-3 border border-slate-800">
                     <span className="font-bold text-slate-400 block mb-2 text-[11px]">1. Nuevo Lead (IA)</span>
                     <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-[9px] font-bold text-emerald-400 uppercase">WhatsApp NISSI</span>
+                      <span className="text-[9px] font-bold text-emerald-400 uppercase">WhatsApp IA</span>
                       <p className="font-bold text-white mt-1">Galpón Logística 8 Cámaras</p>
                       <p className="text-[10px] text-slate-400">Distribuidora San Martín</p>
                       <div className="mt-2 pt-2 border-t border-slate-800 flex justify-between font-bold text-[10px]">
@@ -1867,7 +1867,7 @@ export default function LandingPage() {
                         <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 font-bold text-[10px]">Crítico</span>
                         <span className="px-2 py-0.5 rounded bg-red-500 text-white font-bold text-[10px] font-mono">SLA Vencido (00:45)</span>
                       </div>
-                      <p className="text-slate-500 text-xs">Consorcio Las Torres · Origen: Reportado automáticamente por NISSI en WhatsApp.</p>
+                      <p className="text-slate-500 text-xs">Consorcio Las Torres · Origen: Reportado automáticamente por la IA en WhatsApp.</p>
                     </div>
                     <span className="text-xs font-bold text-red-700 bg-red-50 px-3 py-1 rounded-xl border border-red-200">
                       Técnico: David N.
@@ -1881,7 +1881,7 @@ export default function LandingPage() {
                         <strong className="text-slate-900 text-sm">Consulta de Estado de Cuenta y Abono</strong>
                         <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">Resuelto</span>
                       </div>
-                      <p className="text-slate-500 text-xs">Fábrica Metalúrgica Sur · NISSI envió automáticamente el estado de cuenta y comprobante al cliente.</p>
+                      <p className="text-slate-500 text-xs">Fábrica Metalúrgica Sur · El Bot con IA envió automáticamente el estado de cuenta y comprobante al cliente.</p>
                     </div>
                     <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
                       Auto-Resuelto IA
@@ -1904,7 +1904,7 @@ export default function LandingPage() {
               </div>
 
               <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                La <strong>Mesa de Ayuda Técnica de JustCRM</strong> convierte los reclamos caóticos en un flujo estructurado con <strong>acuerdos de nivel de servicio (SLA)</strong> rigurosos. Ya sea que el ticket ingrese por el portal de autogestión, por el <strong>bot inteligente NISSI en WhatsApp</strong> o por vía telefónica, el sistema le asigna un número de caso único, un nivel de criticidad y un técnico de guardia responsable.
+                La <strong>Mesa de Ayuda Técnica de JustCRM</strong> convierte los reclamos caóticos en un flujo estructurado con <strong>acuerdos de nivel de servicio (SLA)</strong> rigurosos. Ya sea que el ticket ingrese por el portal de autogestión, por el <strong>bot inteligente con IA en WhatsApp</strong> o por vía telefónica, el sistema le asigna un número de caso único, un nivel de criticidad y un técnico de guardia responsable.
               </p>
 
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
@@ -1931,7 +1931,7 @@ export default function LandingPage() {
                     <Bot className="w-4 h-4" />
                     <span className="font-bold text-xs">Tickets de WhatsApp</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">NISSI genera el ticket y asocia los audios y fotos recibidos de inmediato.</p>
+                  <p className="text-[11px] text-slate-400">El Bot con IA genera el ticket y asocia los audios y fotos recibidos de inmediato.</p>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col justify-between">
@@ -2128,7 +2128,7 @@ export default function LandingPage() {
                   <div className="lg:col-span-7 bg-slate-950 rounded-2xl p-4 border border-slate-800 flex flex-col justify-between h-[340px]">
                     <div>
                       <div className="flex justify-between items-center pb-2.5 border-b border-slate-800 mb-3">
-                        <span className="text-xs font-bold text-white">NISSI (Gemini 2.5 Flash)</span>
+                        <span className="text-xs font-bold text-white">Bot WhatsApp IA (Gemini 2.5)</span>
                         <button className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 font-semibold text-[10px] hover:bg-emerald-400 shadow">
                           Tomar Conversación
                         </button>
@@ -2139,7 +2139,7 @@ export default function LandingPage() {
                         </div>
                         <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl rounded-tr-none ml-auto max-w-[90%] text-emerald-200 text-[11px]">
                           "¡Buenas tardes! Para galpones te recomendamos cámaras <strong>IP Varifocales Hikvision de 4MP</strong> para lectura de patentes más domos fijos internos. Ya derivo tu requerimiento a nuestro especialista comercial junto al proyecto."
-                          <span className="text-[9px] text-emerald-400/60 block text-right mt-1">NISSI (IA) · 18:42:02 ✓✓</span>
+                          <span className="text-[9px] text-emerald-400/60 block text-right mt-1">Bot IA · 18:42:02 ✓✓</span>
                         </div>
                       </div>
                     </div>
@@ -2157,7 +2157,7 @@ export default function LandingPage() {
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-2">
                   <Bot className="w-4 h-4 text-emerald-400" />
-                  Módulo 12 · WhatsApp Oficial con IA (NISSI)
+                  Módulo 12 · WhatsApp Oficial con IA
                 </span>
                 <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight">
                   Respuesta técnica en 2 segundos: <span className="text-emerald-400">el prospecto nunca más espera</span>.
@@ -2165,7 +2165,7 @@ export default function LandingPage() {
               </div>
 
               <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-                <strong>NISSI</strong> es el agente de Inteligencia Artificial de JustCRM, impulsado por el modelo <strong>Google Gemini 2.5 Flash</strong> y conectado a la <strong>API Oficial de WhatsApp de Meta</strong>. Atiende las 24 horas del día, los 365 días del año, comprendiendo las necesidades técnicas específicas de seguridad electrónica: <strong>diferencia cámaras térmicas de varifocales, analiza distancias infrarrojas y conoce zonas de centrales de alarma</strong>.
+                El <strong>Bot Inteligente de WhatsApp con IA</strong> de JustCRM, impulsado por el modelo <strong>Google Gemini 2.5 Flash</strong> y conectado a la <strong>API Oficial de WhatsApp de Meta</strong>, atiende las 24 horas del día, los 365 días del año, comprendiendo las necesidades técnicas específicas de seguridad electrónica: <strong>diferencia cámaras térmicas de varifocales, analiza distancias infrarrojas y conoce zonas de centrales de alarma</strong>.
               </p>
 
               <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
@@ -2174,7 +2174,7 @@ export default function LandingPage() {
 
               <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 text-xs text-slate-300 leading-relaxed">
                 <strong className="text-emerald-400 block mb-1">El dolor que elimina de raíz:</strong>
-                Prospectos calificados que escriben un sábado a las 20:00 hs solicitando cámaras para un galpón y, para cuando el vendedor les responde el lunes a media mañana, <strong>ya le compraron e instalaron con la competencia</strong>. NISSI responde en caliente en menos de 2 segundos.
+                Prospectos calificados que escriben un sábado a las 20:00 hs solicitando cámaras para un galpón y, para cuando el vendedor les responde el lunes a media mañana, <strong>ya le compraron e instalaron con la competencia</strong>. El Bot con IA responde en caliente en menos de 2 segundos.
               </div>
 
               {/* Cuadraditos con los Beneficios Directos */}
@@ -2971,7 +2971,7 @@ export default function LandingPage() {
                       <span className="text-[10px] text-emerald-400 font-bold">3 minutos</span>
                     </div>
                     <h4 className="font-bold text-white text-xs">3. WhatsApp Oficial con IA</h4>
-                    <p className="text-slate-400 text-[11px] mt-1">Línea de Meta vinculada y Bot NISSI Gemini 2.5 activado 24/7.</p>
+                    <p className="text-slate-400 text-[11px] mt-1">Línea de Meta vinculada y Bot con IA Gemini 2.5 activado 24/7.</p>
                   </div>
 
                   <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 relative">
@@ -3044,11 +3044,11 @@ export default function LandingPage() {
                 <p className="text-xs text-slate-300 mt-1">Para empresas de seguridad, monitoreo y CCTV que quieren escalar.</p>
                 <div className="mt-6 mb-6">
                   <span className="text-3xl font-semibold text-white">Plan Pro</span>
-                  <span className="text-xs text-cyan-300 block mt-1">Con Bot de WhatsApp NISSI Gemini 2.5</span>
+                  <span className="text-xs text-cyan-300 block mt-1">Con Bot de WhatsApp con IA (Gemini 2.5)</span>
                 </div>
                 <ul className="space-y-3 text-xs text-slate-200">
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> <strong>Usuarios ilimitados</strong> para todo el equipo</li>
-                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> <strong>Bot NISSI WhatsApp con IA (Meta Oficial)</strong></li>
+                  <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> <strong>Bot de WhatsApp con IA (Meta Oficial)</strong></li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Derivación automática con transcript a Ventas/Soporte</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Inbox compartido de WhatsApp con Takeover humano</li>
                   <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-400" /> Gestión de Servicios Recurrentes (MRR / ARR)</li>
