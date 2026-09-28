@@ -68,7 +68,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
   {
     label: 'Ventas',
     items: [
-      { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'clientes' },
+      { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'clientes' },
       { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'pipeline' },
       // TECHNICIAN incluido en `roles` a propósito: NO lo ve por default (el
       // permiso del módulo lo tiene en SELLER+), sólo si un Super Admin lo

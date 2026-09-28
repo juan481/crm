@@ -27,7 +27,11 @@ export interface ModuleDefinition {
 export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'dashboard',      label: 'Dashboard',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'mi-dia',         label: 'Mi Día',          defaultRoles: ['TECHNICIAN'],                                              minRole: 'TECHNICIAN' },
-  { id: 'clientes',       label: 'Clientes',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
+  // Piso bajado a TECHNICIAN para que un Super Admin pueda activarle
+  // Clientes a un Técnico puntual desde Permisos (pedido de Abba, caso
+  // Kevin) — el default sigue siendo Vendedor+, ningún Técnico lo ve hasta
+  // que alguien lo prenda a mano. Mismo criterio que Stock/Cotizador.
+  { id: 'clientes',       label: 'Clientes',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'TECHNICIAN' },
   { id: 'pipeline',       label: 'Pipeline',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
   { id: 'tareas',         label: 'Tareas',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
   // Técnico puede ganar Cotizador / Cotizaciones / Catálogo desde el panel de

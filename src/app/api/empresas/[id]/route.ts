@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { relinkContactos } from '@/lib/directorio-link'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // GET /api/empresas (lista) ya está abierto a cualquier rol autenticado
+    // (Tickets/Mi Día lo necesitan) — esta ficha puntual se había quedado
+    // más restrictiva sin motivo, bloqueando a un Técnico al que un Super
+    // Admin le prendió el módulo "Clientes" en Permisos (piso bajado en
+    // modules.ts, caso Kevin/Abba).
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'clientes'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const db = prisma as any
     const empresa = await db.empresa.findFirst({
