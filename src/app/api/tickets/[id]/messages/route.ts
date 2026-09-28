@@ -21,11 +21,18 @@ export async function POST(req: NextRequest, { params }: Params) {
         id: true, status: true, assignedToId: true, title: true, number: true,
         recipientEmail: true, recipientName: true,
         client: { select: { email: true, name: true } },
+        collaborators: { select: { userId: true } },
       },
     })
     if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
-    // A technician can only post on tickets assigned to them, same as PATCH.
-    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId) {
+    // A technician can post on tickets assigned to them O donde sea
+    // colaborador — igual criterio que GET/PATCH en tickets/[id]/route.ts.
+    // Faltaba acá: un técnico colaborador (no el asignado principal) podía
+    // VER y cambiar el estado del ticket, pero no dejarle una nota — bug
+    // reportado por Abba (Kevin, colaborador en varios tickets sin ser el
+    // asignado).
+    const isCollaborator = ticket.collaborators.some((c) => c.userId === payload.userId)
+    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId && !isCollaborator) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
