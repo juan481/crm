@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { roleHasModule } from '@/lib/module-access'
 import { canReplyToConversations } from '@/lib/whatsapp-bot/permissions'
+import { getWhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,6 +75,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const windowExpiresAt = conv.lastInboundAt ? new Date(new Date(conv.lastInboundAt).getTime() + WINDOW_MS) : null
     const windowOpen = !!windowExpiresAt && windowExpiresAt.getTime() > Date.now()
     const canReply = await canReplyToConversations(payload.orgId, payload.role)
+    // Para el selector de "reabrir con plantilla" cuando la ventana está
+    // cerrada (ver .../reabrir/route.ts) — sólo nombre/idioma, no hace
+    // falta ADMIN para verlas, cualquiera con acceso a la bandeja puede
+    // usarlas para responder.
+    const botConfig = await getWhatsAppBotConfig(payload.orgId)
+    const templates = botConfig?.templates ?? []
 
     return NextResponse.json({
       data: {
@@ -88,6 +95,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         canReply,
         windowOpen,
         windowExpiresAt,
+        templates,
         deal: deal ? { id: deal.id, title: deal.title, stage: deal.stage } : null,
         ticket: ticket ? { id: ticket.id, number: ticket.number, title: ticket.title, status: ticket.status } : null,
         contacto,

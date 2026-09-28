@@ -6,6 +6,7 @@ import {
   DEFAULT_GEMINI_MODEL, DEFAULT_REPLY_ROLE, NISSI_DEFAULT_INSTRUCTIONS, NISSI_INSTRUCTIONS_MAX,
   DEFAULT_FOLLOWUP_MINUTES, DEFAULT_FOLLOWUP_MESSAGE,
 } from '@/lib/whatsapp-bot/nissi-shared'
+import type { WhatsAppTemplateConfig } from '@/lib/whatsapp-bot/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,19 @@ const REPLY_ROLES = ['SELLER', 'ADMIN', 'SUPER_ADMIN', 'HR', 'TECHNICIAN']
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : ''
+}
+
+function parseTemplatesInput(raw: unknown): WhatsAppTemplateConfig[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((t) => {
+      if (!t || typeof t !== 'object') return null
+      const name = str((t as any).name)
+      const language = str((t as any).language)
+      if (!name || !language) return null
+      return { name, label: str((t as any).label) || name, language }
+    })
+    .filter((t): t is WhatsAppTemplateConfig => t !== null)
 }
 
 export async function GET() {
@@ -72,6 +86,7 @@ export async function GET() {
     const followUpMinutesNum = Number(cfg.followUpMinutes)
     publicCfg.followUpMinutes = Number.isFinite(followUpMinutesNum) && followUpMinutesNum >= 1 ? Math.round(followUpMinutesNum) : null
     publicCfg.followUpMessage = str(cfg.followUpMessage) || null
+    publicCfg.templates = parseTemplatesInput(cfg.templates)
 
     return NextResponse.json({
       data: {
@@ -136,6 +151,7 @@ export async function POST(req: NextRequest) {
       }
       next.followUpMinutes = Math.round(n)
     }
+    if ('templates' in patch) next.templates = parseTemplatesInput(patch.templates)
     if ('instructions' in patch) {
       const ins = str(patch.instructions)
       if (ins.length > NISSI_INSTRUCTIONS_MAX) {

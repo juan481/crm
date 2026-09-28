@@ -70,6 +70,7 @@ interface ConvThread {
   canReply: boolean
   windowOpen: boolean
   windowExpiresAt: string | null
+  templates: { name: string; label: string; language: string }[]
   deal: { id: string; title: string; stage: string } | null
   ticket: { id: string; number: number; title: string; status: string } | null
   contacto: { id: string; firstName: string; lastName: string; empresa: { id: string; name: string } | null } | null
@@ -228,6 +229,8 @@ function Inbox() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  const [reopenTemplate, setReopenTemplate] = useState('')
+  const [reopening, setReopening] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignQuery, setAssignQuery] = useState('')
   const [assignBusy, setAssignBusy] = useState('') // '' | 'crear-contacto' | 'crear-empresa'
@@ -512,6 +515,26 @@ function Inbox() {
       toast.error('Error de conexión')
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleReopen = async () => {
+    if (!selectedId || !reopenTemplate || reopening) return
+    setReopening(true)
+    try {
+      const r = await fetch(`/api/conversaciones/${selectedId}/reabrir`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateName: reopenTemplate }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(json.error ?? 'No se pudo mandar la plantilla'); return }
+      toast.success('Plantilla enviada')
+      setReopenTemplate('')
+      threadQuery.refetch()
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setReopening(false)
     }
   }
 
@@ -809,9 +832,33 @@ function Inbox() {
                   Tu rol puede ver la bandeja pero no responder. Un administrador lo habilita en Configuración → NISSI.
                 </div>
               ) : !thread.windowOpen ? (
-                <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 rounded-xl p-3 border border-amber-200">
-                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                  Fuera de la ventana de 24&nbsp;h de WhatsApp — el cliente tiene que volver a escribir primero para poder mandarle un mensaje de texto libre. Escribirle sin que te haya escrito antes puede hacer que te reporte como spam.
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 rounded-xl p-3 border border-amber-200">
+                    <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                    Fuera de la ventana de 24&nbsp;h de WhatsApp — el cliente tiene que volver a escribir primero para poder mandarle un mensaje de texto libre. Escribirle sin que te haya escrito antes puede hacer que te reporte como spam.
+                  </div>
+                  {thread.templates.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={reopenTemplate}
+                        onChange={(e) => setReopenTemplate(e.target.value)}
+                        className="flex-1 rounded-xl px-3 py-2.5 text-sm outline-none"
+                        style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text)' }}
+                      >
+                        <option value="">Elegir plantilla para reabrir…</option>
+                        {thread.templates.map((t) => (
+                          <option key={t.name} value={t.name}>{t.label}</option>
+                        ))}
+                      </select>
+                      <Button onClick={handleReopen} loading={reopening} disabled={!reopenTemplate} className="shrink-0">
+                        Reabrir
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-[var(--color-text-subtle)]">
+                      No hay plantillas cargadas — un Super Admin puede agregarlas en Configuración → NISSI, una vez que Meta las apruebe.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">

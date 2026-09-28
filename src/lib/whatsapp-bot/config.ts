@@ -67,6 +67,21 @@ export interface WhatsAppBotConfig {
   followUpEnabled: boolean
   followUpMinutes: number
   followUpMessage: string
+
+  // ── Plantillas de WhatsApp (HSM) aprobadas por Meta ─────────────────────
+  // Para reabrir una charla fuera de la ventana de 24hs hace falta mandar
+  // una plantilla pre-aprobada (WhatsApp no deja texto libre ahí) — cada
+  // entrada es una plantilla que un Super Admin cargó y Meta aprobó del
+  // lado de afuera (WhatsApp Manager). `name`/`language` tienen que
+  // coincidir EXACTO con lo aprobado en Meta. El cuerpo tiene que tener
+  // exactamente una variable {{1}} = nombre del cliente (ver reply/route.ts).
+  templates: WhatsAppTemplateConfig[]
+}
+
+export interface WhatsAppTemplateConfig {
+  name: string       // nombre técnico exacto cargado en Meta (ej. "reapertura_conversacion")
+  label: string       // como se ve en el selector del CRM (ej. "Reabrir conversación")
+  language: string    // código de idioma exacto de Meta (ej. "es_AR")
 }
 
 function str(v: unknown): string {
@@ -145,5 +160,21 @@ export function parseWhatsAppBotConfig(raw: Record<string, unknown> | null): Wha
       return Number.isFinite(n) && n >= 1 ? Math.round(n) : DEFAULT_FOLLOWUP_MINUTES
     })(),
     followUpMessage: strOrNull(raw.followUpMessage) ?? DEFAULT_FOLLOWUP_MESSAGE,
+
+    templates: parseTemplates(raw.templates),
   }
+}
+
+function parseTemplates(raw: unknown): WhatsAppTemplateConfig[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((t) => {
+      if (!t || typeof t !== 'object') return null
+      const name = str((t as any).name)
+      const language = str((t as any).language)
+      if (!name || !language) return null
+      const label = str((t as any).label) || name
+      return { name, label, language }
+    })
+    .filter((t): t is WhatsAppTemplateConfig => t !== null)
 }

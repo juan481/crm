@@ -116,6 +116,56 @@ export async function sendWhatsAppBotMedia(
   }
 }
 
+// Mandar una plantilla (HSM) aprobada por Meta — el único tipo de mensaje
+// que WhatsApp deja mandar FUERA de la ventana de 24hs (texto libre está
+// bloqueado ahí, ver reply/route.ts). `name`/`language` tienen que
+// coincidir EXACTO con lo cargado y aprobado en WhatsApp Manager.
+// `bodyParams` son las variables {{1}}, {{2}}... en orden.
+export async function sendWhatsAppTemplate(
+  apiToken: string,
+  phoneNumberId: string,
+  toDigitsOnly: string,
+  templateName: string,
+  languageCode: string,
+  bodyParams: string[],
+): Promise<SendResult> {
+  if (!toDigitsOnly) return { ok: false, error: 'Número de destino vacío' }
+  if (!templateName) return { ok: false, error: 'Falta el nombre de la plantilla' }
+
+  const to = normalizeWhatsAppTo(toDigitsOnly)
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/v23.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          ...(bodyParams.length > 0 && {
+            components: [{ type: 'body', parameters: bodyParams.map((p) => ({ type: 'text', text: p })) }],
+          }),
+        },
+      }),
+    })
+    const json = await res.json().catch(() => null) as
+      | { messages?: { id?: string }[]; error?: { message?: string } }
+      | null
+    if (!res.ok) {
+      const error = json?.error?.message || `WhatsApp devolvió un error (HTTP ${res.status})`
+      console.error('[NISSI SEND TEMPLATE] WhatsApp Cloud API respondió error', { status: res.status, error, phoneNumberId, to, templateName })
+      return { ok: false, error }
+    }
+    return { ok: true, messageId: json?.messages?.[0]?.id }
+  } catch (err) {
+    console.error('[NISSI SEND TEMPLATE]', err)
+    return { ok: false, error: 'Error de conexión con la API de WhatsApp' }
+  }
+}
+
 /** Marca un mensaje entrante como leído (el doble check azul) — puramente
  *  cosmético para el cliente, no afecta la lógica del bot; se ignora
  *  cualquier error (no vale la pena reintentar ni loguear ruido por esto). */

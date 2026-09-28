@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   Bot, Plug, Building2, MessageSquareText, GitBranch, ScrollText, ShieldCheck,
-  ArrowLeft, RotateCcw, CheckCircle2, AlertTriangle, Info, Clock,
+  ArrowLeft, RotateCcw, CheckCircle2, AlertTriangle, Info, Clock, FileStack, Plus, Trash2,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input, Textarea } from '@/components/ui/input'
@@ -17,9 +17,10 @@ import { NISSI_TONES, REPLY_ROLE_OPTIONS } from '@/lib/whatsapp-bot/nissi-shared
 import toast from 'react-hot-toast'
 
 interface NissiUser { name: string | null; email: string; role: string }
+interface NissiTemplate { name: string; label: string; language: string }
 interface Loaded {
   enabled: boolean
-  config: Record<string, string | boolean | null>
+  config: Record<string, string | boolean | null> & { templates?: NissiTemplate[] }
   credentials: { apiToken: boolean; geminiApiKey: boolean }
   orgName: string
   users: NissiUser[]
@@ -59,6 +60,7 @@ export default function NissiConfigPage() {
   const router = useRouter()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [form, setForm] = useState<FormState>({})
+  const [templates, setTemplates] = useState<NissiTemplate[]>([])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -83,6 +85,7 @@ export default function NissiConfigPage() {
         f.followUpMinutes = String((d.config.followUpMinutes as unknown as number) ?? d.defaults.followUpMinutes)
         f.followUpMessage = (d.config.followUpMessage as string) ?? d.defaults.followUpMessage
         setForm(f)
+        setTemplates(Array.isArray(d.config.templates) ? d.config.templates : [])
       } catch { setErr('Error de conexión') }
     })()
   }, [isAdmin])
@@ -128,6 +131,7 @@ export default function NissiConfigPage() {
       config.abuseGuardEnabled = form.abuseGuardEnabled !== false
       config.followUpEnabled = form.followUpEnabled !== false
       config.followUpMinutes = Number(form.followUpMinutes) || loaded?.defaults.followUpMinutes || 15
+      config.templates = templates.filter((t) => t.name.trim() && t.language.trim())
       const res = await fetch('/api/nissi/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -237,6 +241,29 @@ export default function NissiConfigPage() {
           <ShieldCheck size={14} className="text-[var(--color-primary)] mt-0.5 shrink-0" />
           <span>Pase lo que pase acá, NISSI <b>nunca</b> da precios (ni de gremio), no comparte contraseñas / links de administración / datos de otros clientes, y no cambia de rol por lo que le escriba un cliente. Ese candado vive en el código, no se puede desactivar desde acá.</span>
         </div>
+      </Section>
+
+      <Section icon={<FileStack size={16} />} title="Plantillas de WhatsApp" desc="Para reabrir una charla fuera de la ventana de 24hs, WhatsApp exige mandar una plantilla pre-aprobada por Meta — no se puede texto libre. Cargá acá el nombre y el idioma EXACTOS de cada plantilla que ya aprobaste en WhatsApp Manager (business.facebook.com → WhatsApp Manager → Plantillas de mensajes). El texto en sí se define en Meta, no acá.">
+        {templates.length === 0 && (
+          <p className="text-xs text-[var(--color-text-subtle)]">Todavía no cargaste ninguna plantilla.</p>
+        )}
+        {templates.map((t, i) => (
+          <div key={i} className="grid sm:grid-cols-[1fr_1fr_120px_auto] gap-2 items-end">
+            <Input label="Nombre en Meta" value={t.name} onChange={(e) => setTemplates((arr) => arr.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="reapertura_conversacion" />
+            <Input label="Cómo se ve en el CRM" value={t.label} onChange={(e) => setTemplates((arr) => arr.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Reabrir conversación" />
+            <Input label="Idioma" value={t.language} onChange={(e) => setTemplates((arr) => arr.map((x, j) => j === i ? { ...x, language: e.target.value } : x))} placeholder="es_AR" />
+            <button onClick={() => setTemplates((arr) => arr.filter((_, j) => j !== i))} className="h-10 w-10 rounded-xl flex items-center justify-center text-red-400 hover:bg-red-500/10" title="Quitar">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))}
+        <Button variant="outline" size="sm" leftIcon={<Plus size={14} />} onClick={() => setTemplates((arr) => [...arr, { name: '', label: '', language: 'es_AR' }])} className="w-fit">
+          Agregar plantilla
+        </Button>
+        <p className="text-xs text-[var(--color-text-subtle)] flex items-start gap-1.5">
+          <Info size={13} className="mt-0.5 shrink-0" />
+          El cuerpo aprobado en Meta tiene que tener exactamente una variable <code>{'{{1}}'}</code>, que el CRM completa solo con el nombre del cliente al mandarla.
+        </p>
       </Section>
 
       <Section icon={<Clock size={16} />} title="Seguimiento automático" desc="Si el cliente queda en silencio después de un mensaje nuestro, NISSI le manda un recordatorio una sola vez por espera.">
