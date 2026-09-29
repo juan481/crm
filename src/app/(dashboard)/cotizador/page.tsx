@@ -1059,7 +1059,11 @@ export default function CotizadorPage() {
           { n: 2 as const, label: 'Destinatario' },
           { n: 3 as const, label: 'Confirmar' },
         ]).map((s, i) => {
-          const reached = s.n === 1 || (s.n === 2 && cartItems.length > 0) || (s.n === 3 && cartItems.length > 0 && !!recipientEmail)
+          // El mail dejó de ser obligatorio (ver Step 2 más abajo) — este
+          // stepper se había quedado exigiéndolo igual, así que con un
+          // cliente sin mail el paso 3 quedaba inalcanzable en la UI aunque
+          // el botón "Siguiente" ya lo permitiera.
+          const reached = s.n === 1 || (s.n === 2 && cartItems.length > 0) || (s.n === 3 && cartItems.length > 0 && !!recipientName.trim())
           const active = currentStep === s.n
           return (
             <div key={s.n} className="flex items-center gap-2 flex-1 min-w-0">
