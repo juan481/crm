@@ -16,7 +16,7 @@ import { Select } from '@/components/ui/select'
 import { Pagination } from '@/components/ui/table'
 import { formatMoneyExact } from '@/lib/utils'
 import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, type QuoteTotals } from '@/lib/quote-totals'
-import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox } from '@/lib/pdf-branding'
+import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox, drawTcLegend } from '@/lib/pdf-branding'
 import { sanitizePdfText } from '@/lib/pdf-text'
 import { useThemeStore } from '@/store/theme-store'
 import { CatalogFilters } from '@/components/catalogo/catalog-filters'
@@ -563,6 +563,14 @@ export default function CotizadorPage() {
     doc.text('A continuación encontrará el detalle de los ítems cotizados.', mg, y); y += 12
 
     y = drawValidityNote(doc, { mg, cw, y, pr, pg, pb, validityDays: quote.validityDays, fromDate: today })
+    // Leyenda obligatoria en USD (pedido de Abba) — BUG real encontrado:
+    // esto sólo estaba en cotizaciones/[id]/page.tsx (ver una cotización
+    // YA guardada), nunca en este builder, que es el que corre al crear y
+    // mandar una cotización nueva por primera vez (el camino normal). El
+    // PDF que el cliente recibía en el momento nunca tenía la leyenda.
+    if (quote.currency === 'USD') {
+      y = drawTcLegend(doc, { mg, cw, y, rate: arsRate })
+    }
 
     // Table header
     const tableStartY = y
