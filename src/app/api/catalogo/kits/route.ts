@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
-import { KIT_SELECT, withKitMetrics, resolveComponents, type ComponentInput } from '@/lib/kits'
+import { KIT_SELECT, withKitMetrics, resolveComponents, computeSuggestedGremioPrice, type ComponentInput } from '@/lib/kits'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +58,11 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
+    // Precio Gremio del KIT: se calcula solo a partir de los componentes — el
+    // usuario no lo carga a mano (pedido explícito de Abba). Server-side
+    // siempre, nunca se confía en un valor que mande el cliente.
+    const precioGremio = computeSuggestedGremioPrice(resolved, Number(price))
+
     const db = prisma as any
     const kit = await db.$transaction(async (tx: any) => {
       const created = await tx.product.create({
@@ -66,6 +71,7 @@ export async function POST(req: NextRequest) {
           name: name.trim(),
           description: description?.trim() || null,
           price: Number(price),
+          precioGremio,
           currency,
           unit: unit?.trim() || 'kit',
           isKit: true,

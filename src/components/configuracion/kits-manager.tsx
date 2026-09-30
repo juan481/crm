@@ -19,6 +19,7 @@ import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { useModuleAccess } from '@/hooks/use-module-access'
 import type { Kit, Product } from '@/types'
+import { computeSuggestedGremioPrice } from '@/lib/kit-pricing'
 import toast from 'react-hot-toast'
 
 const CURRENCY_OPTIONS = [
@@ -32,6 +33,7 @@ interface DraftComponent {
   name: string
   sku: string | null
   price: number | null
+  precioGremio: number | null
   currency: string | null
   quantity: number
   error?: string | null // sólo para códigos pegados que no matchearon
@@ -102,9 +104,12 @@ export function KitsManager() {
     const componentsCurrency = monedas.length === 1 ? monedas[0] : null
     const mixedCurrency = monedas.length > 1
     const currencyMismatch = componentsCurrency != null && componentsCurrency !== form.currency
+    // Precio Gremio del KIT: automático a partir de los componentes, misma
+    // marcación que el Público — el usuario no lo carga a mano.
+    const precioGremio = computeSuggestedGremioPrice(matched, price)
     return {
       subtotal, price, margen, margenPct, marcacionPct, unresolved, count: matched.length,
-      componentsCurrency, mixedCurrency, currencyMismatch, monedas,
+      componentsCurrency, mixedCurrency, currencyMismatch, monedas, precioGremio,
     }
   }, [form.components, form.price, form.currency])
 
@@ -147,6 +152,7 @@ export function KitsManager() {
         name: c.component.name,
         sku: c.component.sku,
         price: c.component.price,
+        precioGremio: c.component.precioGremio,
         currency: c.component.currency,
         quantity: c.quantity,
       })),
@@ -188,7 +194,7 @@ export function KitsManager() {
       if (!res.ok) { toast.error(json.error ?? 'Error al resolver'); return }
       const rows: DraftComponent[] = (json.data ?? []).map((r: any) => ({
         productId: r.productId, name: r.name ?? r.sku ?? '(sin nombre)', sku: r.sku,
-        price: r.price, currency: r.currency ?? null, quantity: r.quantity, error: r.error,
+        price: r.price, precioGremio: r.precioGremio ?? null, currency: r.currency ?? null, quantity: r.quantity, error: r.error,
       }))
       if (rows.length === 0) { toast.error('No se detectaron códigos en el texto'); return }
       // Mergea: los que matchearon se agregan/actualizan; los que no, quedan como fila roja.
@@ -333,6 +339,11 @@ export function KitsManager() {
                 </td>
                 <td className="px-4 py-3 text-right font-bold" style={{ color: 'var(--color-text)' }}>
                   {formatCurrency(k.price, k.currency)}
+                  {k.precioGremio != null && (
+                    <span className="block text-[10px] font-normal" style={{ color: 'var(--color-text-subtle)' }}>
+                      Gremio: {formatCurrency(k.precioGremio, k.currency)}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right hidden md:table-cell font-semibold" style={{ color: k.monedaDesalineada ? '#d97706' : k.margen >= 0 ? '#10b981' : '#ef4444' }}>
                   {k.monedaDesalineada ? (
@@ -400,7 +411,7 @@ export function KitsManager() {
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => { addComponent({ productId: p.id, name: p.name, sku: p.sku ?? null, price: p.price, currency: p.currency, quantity: 1 }); setCompSearch('') }}
+                    onClick={() => { addComponent({ productId: p.id, name: p.name, sku: p.sku ?? null, price: p.price, precioGremio: p.precioGremio ?? null, currency: p.currency, quantity: 1 }); setCompSearch('') }}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
                     style={{ color: 'var(--color-text)' }}
                   >
@@ -559,6 +570,14 @@ export function KitsManager() {
             <div className="flex justify-between" style={{ color: 'var(--color-text)' }}>
               <span>Precio final del KIT (lo que ve el cliente)</span>
               <span className="font-semibold">{formatCurrency(totals.price, form.currency)}</span>
+            </div>
+            <div className="flex justify-between" style={{ color: 'var(--color-text-muted)' }}>
+              <span>
+                Precio Gremio del KIT <span style={{ color: 'var(--color-text-subtle)' }}>(automático, misma marcación)</span>
+              </span>
+              <span className="font-semibold">
+                {totals.precioGremio != null ? formatCurrency(totals.precioGremio, form.currency) : 'sin dual-pricing'}
+              </span>
             </div>
             <div className="flex justify-between font-semibold pt-0.5" style={{ color: totals.margen >= 0 ? '#10b981' : '#ef4444' }}>
               <span>Ganancia</span>

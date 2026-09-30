@@ -314,14 +314,15 @@ export interface KitComponent {
   quantity:    number
   componentId: string
   component: {
-    id:         string
-    name:       string
-    sku:        string | null
-    price:      number
-    currency:   string
-    costo:      number | null
-    stock:      number
-    trackStock: boolean
+    id:           string
+    name:         string
+    sku:          string | null
+    price:        number
+    currency:     string
+    costo:        number | null
+    stock:        number
+    trackStock:   boolean
+    precioGremio: number | null
   }
 }
 
@@ -330,7 +331,8 @@ export interface KitComponent {
 export interface Kit extends Product {
   isKit:          true
   kitComponents:  KitComponent[]
-  componentesSubtotal: number  // Σ component.price × qty (precio público)
+  componentesSubtotal:      number  // Σ component.price × qty (precio público)
+  componentesSubtotalGremio: number  // Σ (component.precioGremio ?? component.price) × qty
   componentesCosto:    number  // Σ component.costo  × qty
   margen:              number  // price − componentesSubtotal
   margenPct:           number  // margen ÷ precio de venta

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+export { computeSuggestedGremioPrice } from '@/lib/kit-pricing'
 
 // Lógica compartida de productos KIT (Product.isKit=true + ProductComponent[]).
 // Un KIT se cotiza como UNA línea con UN precio (Product.price, editable a
@@ -8,25 +9,31 @@ import { prisma } from '@/lib/db'
 export const KIT_COMPONENT_SELECT = {
   id: true, quantity: true, componentId: true,
   component: {
-    select: { id: true, name: true, sku: true, price: true, currency: true, costo: true, stock: true, trackStock: true },
+    select: { id: true, name: true, sku: true, price: true, currency: true, costo: true, stock: true, trackStock: true, precioGremio: true },
   },
 } as const
 
 export const KIT_SELECT = {
-  id: true, name: true, description: true, price: true, currency: true, unit: true,
+  id: true, name: true, description: true, price: true, currency: true, unit: true, precioGremio: true,
   isKit: true, active: true, trackStock: true, stock: true, organizationId: true, createdAt: true,
   kitComponents: { select: KIT_COMPONENT_SELECT, orderBy: { createdAt: 'asc' as const } },
 } as const
 
 interface RawKit {
   id: string; name: string; price: number; currency: string
-  kitComponents: { quantity: number; component: { price: number; currency: string; costo: number | null; stock: number; trackStock: boolean } }[]
+  kitComponents: { quantity: number; component: { price: number; currency: string; costo: number | null; stock: number; trackStock: boolean; precioGremio: number | null } }[]
   [k: string]: unknown
 }
 
 /** Agrega subtotal de componentes, costo y margen a un KIT ya traído con KIT_SELECT. */
 export function withKitMetrics<T extends RawKit>(kit: T) {
   const componentesSubtotal = kit.kitComponents.reduce((s, c) => s + c.component.price * c.quantity, 0)
+  // Subtotal Gremio: para el componente que no tiene precioGremio propio (no
+  // maneja dual-pricing) se usa su precio Público — no todo el catálogo tiene
+  // ambos precios cargados.
+  const componentesSubtotalGremio = kit.kitComponents.reduce(
+    (s, c) => s + (c.component.precioGremio ?? c.component.price) * c.quantity, 0,
+  )
   const componentesCosto = kit.kitComponents.reduce((s, c) => s + (c.component.costo ?? 0) * c.quantity, 0)
   const margen = kit.price - componentesSubtotal
   // Margen = ganancia sobre el PRECIO DE VENTA (definición contable estándar).
@@ -43,7 +50,7 @@ export function withKitMetrics<T extends RawKit>(kit: T) {
   const monedaDesalineada = monedas.length > 1 || (componentesMoneda != null && componentesMoneda !== kit.currency)
   return {
     ...kit,
-    componentesSubtotal, componentesCosto, margen, margenPct, marcacionPct,
+    componentesSubtotal, componentesSubtotalGremio, componentesCosto, margen, margenPct, marcacionPct,
     algunComponenteSinStock, componentesMoneda, monedaDesalineada,
   }
 }
@@ -60,6 +67,7 @@ export interface ResolvedComponent {
   name: string | null
   sku: string | null
   price: number | null
+  precioGremio: number | null
   currency: string | null
   quantity: number
   error: string | null
@@ -78,10 +86,10 @@ export async function resolveComponents(orgId: string, inputs: ComponentInput[])
 
   const [byId, bySku] = await Promise.all([
     ids.length
-      ? db.product.findMany({ where: { id: { in: ids }, organizationId: orgId }, select: { id: true, name: true, sku: true, price: true, currency: true, isKit: true } })
+      ? db.product.findMany({ where: { id: { in: ids }, organizationId: orgId }, select: { id: true, name: true, sku: true, price: true, currency: true, isKit: true, precioGremio: true } })
       : [],
     skus.length
-      ? db.product.findMany({ where: { organizationId: orgId, sku: { in: skus } }, select: { id: true, name: true, sku: true, price: true, currency: true, isKit: true } })
+      ? db.product.findMany({ where: { organizationId: orgId, sku: { in: skus } }, select: { id: true, name: true, sku: true, price: true, currency: true, isKit: true, precioGremio: true } })
       : [],
   ])
   const idMap = new Map<string, any>(byId.map((p: any) => [p.id, p]))
@@ -96,12 +104,12 @@ export async function resolveComponents(orgId: string, inputs: ComponentInput[])
         : null
 
     if (!p) {
-      return { input, productId: null, name: null, sku: input.sku ?? null, price: null, currency: null, quantity, error: 'No se encontró en el catálogo' }
+      return { input, productId: null, name: null, sku: input.sku ?? null, price: null, precioGremio: null, currency: null, quantity, error: 'No se encontró en el catálogo' }
     }
     if (p.isKit) {
-      return { input, productId: null, name: p.name, sku: p.sku, price: null, currency: null, quantity, error: 'Es un KIT — no se puede anidar dentro de otro KIT' }
+      return { input, productId: null, name: p.name, sku: p.sku, price: null, precioGremio: null, currency: null, quantity, error: 'Es un KIT — no se puede anidar dentro de otro KIT' }
     }
-    return { input, productId: p.id, name: p.name, sku: p.sku, price: p.price, currency: p.currency, quantity, error: null }
+    return { input, productId: p.id, name: p.name, sku: p.sku, price: p.price, precioGremio: p.precioGremio ?? null, currency: p.currency, quantity, error: null }
   })
 }
 

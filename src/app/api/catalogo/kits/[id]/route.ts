@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { KIT_SELECT, withKitMetrics, resolveComponents, type ComponentInput } from '@/lib/kits'
+import { KIT_SELECT, withKitMetrics, resolveComponents, computeSuggestedGremioPrice, type ComponentInput } from '@/lib/kits'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,6 +64,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }
     }
 
+    // Precio Gremio: se recalcula server-side cada vez que cambia el precio
+    // Público o la receta de componentes — nunca lo carga el usuario a mano.
+    // Si ninguno de los dos cambió, no hace falta tocarlo.
+    let precioGremio: number | undefined
+    if (resolved || price !== undefined) {
+      const finalPrice = price !== undefined ? Number(price) : existing.price
+      const componentesParaCalculo = resolved ?? existing.kitComponents.map((c: any) => ({
+        price: c.component.price, precioGremio: c.component.precioGremio, quantity: c.quantity,
+      }))
+      precioGremio = computeSuggestedGremioPrice(componentesParaCalculo, finalPrice) ?? undefined
+    }
+
     const kit = await db.$transaction(async (tx: any) => {
       await tx.product.update({
         where: { id: params.id },
@@ -74,6 +86,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           ...(currency !== undefined && { currency }),
           ...(unit !== undefined && { unit: unit?.trim() || 'kit' }),
           ...(active !== undefined && { active: !!active }),
+          ...((resolved || price !== undefined) && { precioGremio: precioGremio ?? null }),
         },
       })
       if (resolved) {
