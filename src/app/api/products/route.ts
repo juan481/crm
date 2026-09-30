@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
+import { KIT_COMPONENT_SELECT } from '@/lib/kits'
 
 // Product.currency es String libre en el schema (sin enum/check en la DB).
 // Intl.NumberFormat tira un RangeError síncrono ante cualquier código no
@@ -77,14 +78,14 @@ export async function GET(req: NextRequest) {
       skip,
       select: {
         id: true, name: true, sku: true, mpn: true, price: true, currency: true, trackStock: true, stock: true, brand: true, categoryId: true, isKit: true, unit: true,
+        // precioGremio: en un producto simple siempre es null (dual-pricing
+        // sólo lo carga el importador de catálogo), PERO un KIT (que también
+        // vive acá, sku=null) sí puede tenerlo — se calcula solo a partir de
+        // sus componentes (ver /api/catalogo/kits). Sin este campo, el modo
+        // GREMIO del cotizador nunca lo ve.
+        precioGremio: true,
         ...(scope === 'simple' && {
-          kitComponents: {
-            select: {
-              id: true, quantity: true, componentId: true,
-              component: { select: { id: true, name: true, sku: true, price: true, currency: true, costo: true, stock: true, trackStock: true } },
-            },
-            orderBy: { createdAt: 'asc' },
-          },
+          kitComponents: { select: KIT_COMPONENT_SELECT, orderBy: { createdAt: 'asc' } },
         }),
       }
     })

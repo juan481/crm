@@ -539,6 +539,10 @@ model Service {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // Un Service puede ser componente de un KIT (mano de obra/instalación
+  // dentro de un combo) — ver comentario en ProductComponent.
+  usedInKits ProductComponent[] @relation("ServiceComponentToKits")
+
   @@index([organizationId])
 }
 
@@ -1669,29 +1673,41 @@ model Product {
 }
 
 // Un renglón de la receta de un KIT: "el KIT `kit` lleva `quantity` unidades
-// del producto `component`". Sólo existe para Product.isKit=true. El precio
-// del componente se lee en vivo del Product referenciado y SÓLO alimenta la
-// vista interna de margen del KIT — nunca lo que paga el cliente (eso es
-// Product.price del KIT). onDelete Cascade del lado del KIT (borrar el KIT
-// se lleva su receta); Restrict del lado del componente (no se puede hard-
-// borrar un producto que está dentro de un KIT sin sacarlo antes — el
-// endpoint DELETE de productos devuelve 409 con el detalle).
+// del producto `component`" O, desde que Abba pidió poder meter mano de obra
+// (instalación, mantenimiento) adentro de un KIT, `quantity` unidades del
+// servicio `serviceComponent`. Sólo existe para Product.isKit=true. Cada
+// renglón usa EXACTAMENTE UNO de los dos (nunca ambos, nunca ninguno) —
+// validado en código (resolveComponents/las rutas de kits), no hay chequeo a
+// nivel de columna porque Postgres no tiene un CHECK "exactly one of" simple
+// para dos FKs nullable. El precio se lee en vivo del Product/Service
+// referenciado y SÓLO alimenta la vista interna de margen del KIT — nunca lo
+// que paga el cliente (eso es Product.price del KIT). onDelete Cascade del
+// lado del KIT (borrar el KIT se lleva su receta); Restrict del lado del
+// componente (no se puede hard-borrar un producto/servicio que está dentro
+// de un KIT sin sacarlo antes).
 model ProductComponent {
-  id             String       @id @default(cuid())
-  kitId          String
-  kit            Product      @relation("KitToComponents", fields: [kitId], references: [id], onDelete: Cascade)
-  componentId    String
-  component      Product      @relation("ComponentToKits", fields: [componentId], references: [id], onDelete: Restrict)
-  quantity       Int          @default(1)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
+  id                 String       @id @default(cuid())
+  kitId              String
+  kit                Product      @relation("KitToComponents", fields: [kitId], references: [id], onDelete: Cascade)
+  componentId        String?
+  component          Product?     @relation("ComponentToKits", fields: [componentId], references: [id], onDelete: Restrict)
+  serviceComponentId String?
+  serviceComponent   Service?     @relation("ServiceComponentToKits", fields: [serviceComponentId], references: [id], onDelete: Restrict)
+  quantity           Int          @default(1)
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime     @default(now())
 
-  // Un producto no puede figurar dos veces en el mismo KIT — se ajusta la
-  // cantidad, no se agrega otro renglón.
+  // Un producto (o un servicio) no puede figurar dos veces en el mismo KIT —
+  // se ajusta la cantidad, no se agrega otro renglón. Postgres no colisiona
+  // múltiples NULL en un unique, así que las filas de servicio (componentId
+  // null) y las filas de producto (serviceComponentId null) no chocan entre
+  // constraints distintos.
   @@unique([kitId, componentId])
+  @@unique([kitId, serviceComponentId])
   @@index([kitId])
   @@index([componentId])
+  @@index([serviceComponentId])
   @@index([organizationId])
 }
 

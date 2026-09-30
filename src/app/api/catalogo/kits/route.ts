@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (bad.length) {
       return NextResponse.json({
         error: 'Hay componentes que no se pudieron resolver',
-        detalle: bad.map((b) => ({ codigo: b.sku ?? b.input.productId, motivo: b.error })),
+        detalle: bad.map((b) => ({ codigo: b.sku ?? b.input.productId ?? b.input.serviceId, motivo: b.error })),
       }, { status: 400 })
     }
 
@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
       await tx.productComponent.createMany({
         data: resolved.map((r) => ({
           kitId: created.id,
-          componentId: r.productId!,
+          componentId: r.kind === 'PRODUCT' ? r.productId! : null,
+          serviceComponentId: r.kind === 'SERVICE' ? r.serviceId! : null,
           quantity: r.quantity,
           organizationId: payload.orgId,
         })),

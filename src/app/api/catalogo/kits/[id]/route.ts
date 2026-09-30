@@ -59,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (bad.length) {
         return NextResponse.json({
           error: 'Hay componentes que no se pudieron resolver',
-          detalle: bad.map((b) => ({ codigo: b.sku ?? b.input.productId, motivo: b.error })),
+          detalle: bad.map((b) => ({ codigo: b.sku ?? b.input.productId ?? b.input.serviceId, motivo: b.error })),
         }, { status: 400 })
       }
     }
@@ -71,7 +71,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (resolved || price !== undefined) {
       const finalPrice = price !== undefined ? Number(price) : existing.price
       const componentesParaCalculo = resolved ?? existing.kitComponents.map((c: any) => ({
-        price: c.component.price, precioGremio: c.component.precioGremio, quantity: c.quantity,
+        price: c.component?.price ?? c.serviceComponent?.price ?? 0,
+        precioGremio: c.component?.precioGremio ?? null,
+        quantity: c.quantity,
       }))
       precioGremio = computeSuggestedGremioPrice(componentesParaCalculo, finalPrice) ?? undefined
     }
@@ -92,7 +94,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       if (resolved) {
         await tx.productComponent.deleteMany({ where: { kitId: params.id } })
         await tx.productComponent.createMany({
-          data: resolved.map((r) => ({ kitId: params.id, componentId: r.productId!, quantity: r.quantity, organizationId: payload.orgId })),
+          data: resolved.map((r) => ({
+            kitId: params.id,
+            componentId: r.kind === 'PRODUCT' ? r.productId! : null,
+            serviceComponentId: r.kind === 'SERVICE' ? r.serviceId! : null,
+            quantity: r.quantity,
+            organizationId: payload.orgId,
+          })),
         })
       }
       return tx.product.findUnique({ where: { id: params.id }, select: KIT_SELECT })

@@ -52,7 +52,10 @@ export async function expandirItemsCotizacion(
     const prod = byId.get(it.productId)
     if (!prod) { add(it.productId, it.name ?? 'Producto', qty, null); continue }
     if (prod.isKit && prod.kitComponents.length > 0) {
+      // Un componente Service (mano de obra/instalación) no genera línea de
+      // entrega física — no hay nada que remitir/stockear.
       for (const kc of prod.kitComponents) {
+        if (!kc.component) continue
         add(kc.component.id, kc.component.name, qty * (kc.quantity || 1), kc.component.costo ?? null)
       }
     } else {

@@ -53,6 +53,22 @@ export async function DELETE(_: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
+    // Un servicio que es componente de algún KIT no se puede hard-borrar
+    // (ProductComponent.serviceComponent es onDelete: Restrict) — Postgres
+    // tiraría un P2003 y la request moría con 500. Mismo criterio que
+    // products/[id] (DELETE): se avisa cuál/es KIT lo usan.
+    const db = prisma as any
+    const enKits = await db.productComponent.findMany({
+      where: { serviceComponentId: params.id, organizationId: payload.orgId },
+      select: { kit: { select: { name: true } } },
+    })
+    if (enKits.length > 0) {
+      const nombres = Array.from(new Set(enKits.map((c: any) => c.kit?.name).filter(Boolean)))
+      return NextResponse.json({
+        error: `Este servicio es componente de ${enKits.length === 1 ? 'un KIT' : 'varios KITs'}: ${nombres.join(', ')}. Sacalo de ${enKits.length === 1 ? 'ese KIT' : 'esos KITs'} primero.`,
+      }, { status: 409 })
+    }
+
     await prisma.service.deleteMany({
       where: { id: params.id, organizationId: payload.orgId },
     })

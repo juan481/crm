@@ -31,7 +31,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       data: resolved.map((r) => ({
+        kind: r.kind,
         productId: r.productId,
+        serviceId: r.serviceId,
         name: r.name,
         sku: r.sku,
         price: r.price,

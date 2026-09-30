@@ -174,7 +174,7 @@ export default function CotizacionDetailPage() {
         const isProduct = item.type === 'PRODUCT'
         const kitComps = isProduct && item.isKit ? (item.kitComponents ?? []) : []
         const incluyeStr = kitComps.length
-          ? 'Incluye: ' + kitComps.map((c: any) => `${c.quantity}× ${c.component?.name || 'Componente'}`).join(', ')
+          ? 'Incluye: ' + kitComps.map((c: any) => `${c.quantity}× ${c.component?.name || c.serviceComponent?.name || 'Componente'}`).join(', ')
           : ''
         // Pedido de Abba: la ficha técnica cruda del proveedor (specs largas
         // copiadas del datasheet) no va en el presupuesto — sólo el título.

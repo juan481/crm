@@ -9,7 +9,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Pencil, Trash2, Package, Boxes, AlertTriangle, X, ClipboardPaste,
-  Search, PackagePlus, TriangleAlert,
+  Search, PackagePlus, TriangleAlert, Wrench,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,7 @@ import { Modal, ModalFooter } from '@/components/ui/modal'
 import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { useModuleAccess } from '@/hooks/use-module-access'
-import type { Kit, Product } from '@/types'
+import type { Kit, Product, Service } from '@/types'
 import { computeSuggestedGremioPrice } from '@/lib/kit-pricing'
 import toast from 'react-hot-toast'
 
@@ -28,8 +28,11 @@ const CURRENCY_OPTIONS = [
   { value: 'EUR', label: 'EUR — Euro' },
 ]
 
+// Un componente de KIT es un Product O un Service (mano de obra/instalación
+// — pedido de Abba). Exactamente uno de productId/serviceId va cargado.
 interface DraftComponent {
   productId: string | null
+  serviceId: string | null
   name: string
   sku: string | null
   price: number | null
@@ -89,9 +92,21 @@ export function KitsManager() {
   })
   const searchResults = (searchData?.data ?? []).filter((p) => !p.isKit)
 
+  // Servicios: no hay endpoint de búsqueda server-side (la lista es chica,
+  // mismo criterio que ya usa el Cotizador) — se trae una vez y se filtra acá.
+  const { data: servicesData } = useQuery<{ data: Service[] }>({
+    queryKey: ['kit-services'],
+    queryFn: async () => (await fetch('/api/services')).json(),
+    enabled: showModal,
+    staleTime: 60_000,
+  })
+  const serviceResults = compSearch.trim().length >= 2
+    ? (servicesData?.data ?? []).filter((s) => s.name.toLowerCase().includes(compSearch.trim().toLowerCase()))
+    : []
+
   // ── Totales internos (margen / marcación) ────────────────────────────────
   const totals = useMemo(() => {
-    const matched = form.components.filter((c) => c.productId && c.price != null)
+    const matched = form.components.filter((c) => (c.productId || c.serviceId) && c.price != null)
     const subtotal = matched.reduce((s, c) => s + (c.price ?? 0) * c.quantity, 0)
     const price = Number(form.price) || 0
     const margen = price - subtotal
@@ -147,15 +162,19 @@ export function KitsManager() {
       price: String(k.price),
       currency: k.currency,
       unit: k.unit || 'kit',
-      components: (k.kitComponents ?? []).map((c) => ({
-        productId: c.component.id,
-        name: c.component.name,
-        sku: c.component.sku,
-        price: c.component.price,
-        precioGremio: c.component.precioGremio,
-        currency: c.component.currency,
-        quantity: c.quantity,
-      })),
+      components: (k.kitComponents ?? []).map((c) => c.serviceComponent
+        ? {
+            productId: null, serviceId: c.serviceComponent.id,
+            name: c.serviceComponent.name, sku: null,
+            price: c.serviceComponent.price, precioGremio: null,
+            currency: c.serviceComponent.currency, quantity: c.quantity,
+          }
+        : {
+            productId: c.component!.id, serviceId: null,
+            name: c.component!.name, sku: c.component!.sku,
+            price: c.component!.price, precioGremio: c.component!.precioGremio,
+            currency: c.component!.currency, quantity: c.quantity,
+          }),
     })
     // Ya tiene moneda propia elegida — respetarla, no auto-adoptar.
     setCurrencyTouched(true); setMarkupDraft('')
@@ -166,7 +185,8 @@ export function KitsManager() {
   const addComponent = (c: DraftComponent) => {
     setForm((f) => {
       // si ya está, suma cantidad
-      const i = f.components.findIndex((x) => x.productId && x.productId === c.productId)
+      const i = f.components.findIndex((x) =>
+        (c.productId && x.productId === c.productId) || (c.serviceId && x.serviceId === c.serviceId))
       if (i >= 0) {
         const next = [...f.components]
         next[i] = { ...next[i], quantity: next[i].quantity + c.quantity }
@@ -193,7 +213,7 @@ export function KitsManager() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al resolver'); return }
       const rows: DraftComponent[] = (json.data ?? []).map((r: any) => ({
-        productId: r.productId, name: r.name ?? r.sku ?? '(sin nombre)', sku: r.sku,
+        productId: r.productId, serviceId: null, name: r.name ?? r.sku ?? '(sin nombre)', sku: r.sku,
         price: r.price, precioGremio: r.precioGremio ?? null, currency: r.currency ?? null, quantity: r.quantity, error: r.error,
       }))
       if (rows.length === 0) { toast.error('No se detectaron códigos en el texto'); return }
@@ -224,7 +244,7 @@ export function KitsManager() {
     e.preventDefault()
     if (!form.name.trim()) { toast.error('Poné un nombre al KIT'); return }
     if (priceInvalid) { toast.error('Cargá el precio final del KIT (arriba del botón está el aviso)'); return }
-    const matched = form.components.filter((c) => c.productId)
+    const matched = form.components.filter((c) => c.productId || c.serviceId)
     if (matched.length === 0) { toast.error('Agregá al menos un componente válido'); return }
     if (totals.unresolved > 0 && !confirm(`Hay ${totals.unresolved} código(s) sin match en el catálogo. Se van a ignorar. ¿Guardar igual?`)) return
 
@@ -236,7 +256,9 @@ export function KitsManager() {
         price: Number(form.price),
         currency: form.currency,
         unit: form.unit.trim() || 'kit',
-        components: matched.map((c) => ({ productId: c.productId, quantity: c.quantity })),
+        components: matched.map((c) => c.serviceId
+          ? { serviceId: c.serviceId, quantity: c.quantity }
+          : { productId: c.productId, quantity: c.quantity }),
       }
       const url = editing ? `/api/catalogo/kits/${editing.id}` : '/api/catalogo/kits'
       const res = await fetch(url, { method: editing ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -332,7 +354,7 @@ export function KitsManager() {
                   </div>
                 </td>
                 <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>
-                  {(k.kitComponents ?? []).map((c) => `${c.quantity}× ${c.component.name}`).join(' · ') || '—'}
+                  {(k.kitComponents ?? []).map((c) => `${c.quantity}× ${c.component?.name ?? c.serviceComponent?.name ?? '?'}`).join(' · ') || '—'}
                 </td>
                 <td className="px-4 py-3 text-right hidden md:table-cell" style={{ color: 'var(--color-text-subtle)' }}>
                   {formatCurrency(k.componentesSubtotal, k.currency)}
@@ -396,22 +418,22 @@ export function KitsManager() {
             />
           </div>
 
-          {/* Agregar productos: buscador (forma principal) */}
+          {/* Agregar productos o servicios (mano de obra/instalación): buscador (forma principal) */}
           <div className="space-y-1.5">
             <Input
-              label="Agregá los productos que lleva el KIT *"
+              label="Agregá los productos o servicios que lleva el KIT *"
               leftIcon={<Search size={14} />}
               placeholder="Buscá por nombre, SKU o marca y hacé clic para sumarlo..."
               value={compSearch}
               onChange={(e) => setCompSearch(e.target.value)}
             />
-            {compSearch.trim().length >= 2 && searchResults.length > 0 && (
-              <div className="rounded-lg max-h-40 overflow-y-auto" style={{ border: '1px solid var(--color-border)' }}>
+            {compSearch.trim().length >= 2 && (searchResults.length > 0 || serviceResults.length > 0) && (
+              <div className="rounded-lg max-h-52 overflow-y-auto" style={{ border: '1px solid var(--color-border)' }}>
                 {searchResults.map((p) => (
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => { addComponent({ productId: p.id, name: p.name, sku: p.sku ?? null, price: p.price, precioGremio: p.precioGremio ?? null, currency: p.currency, quantity: 1 }); setCompSearch('') }}
+                    onClick={() => { addComponent({ productId: p.id, serviceId: null, name: p.name, sku: p.sku ?? null, price: p.price, precioGremio: p.precioGremio ?? null, currency: p.currency, quantity: 1 }); setCompSearch('') }}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
                     style={{ color: 'var(--color-text)' }}
                   >
@@ -423,6 +445,22 @@ export function KitsManager() {
                     <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>{formatCurrency(p.price, p.currency)}</span>
                   </button>
                 ))}
+                {serviceResults.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => { addComponent({ productId: null, serviceId: s.id, name: s.name, sku: null, price: s.price, precioGremio: null, currency: s.currency, quantity: 1 }); setCompSearch('') }}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--color-surface-raised)] transition-colors"
+                    style={{ color: 'var(--color-text)', borderTop: '1px solid var(--color-border)' }}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Wrench size={13} className="shrink-0" style={{ color: '#d97706' }} />
+                      <span className="truncate">{s.name}</span>
+                      <span className="text-[10px] shrink-0 px-1 py-0.5 rounded" style={{ background: 'rgba(217,119,6,0.12)', color: '#d97706' }}>Servicio</span>
+                    </span>
+                    <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>{formatCurrency(s.price, s.currency)}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -432,12 +470,14 @@ export function KitsManager() {
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
               {form.components.map((c, i) => (
                 <div
-                  key={c.productId ?? `x-${c.sku}-${i}`}
+                  key={c.productId ?? c.serviceId ?? `x-${c.sku}-${i}`}
                   className="flex items-center gap-2 px-3 py-2 text-sm"
                   style={{ borderTop: i ? '1px solid var(--color-border)' : undefined, background: c.error ? 'rgba(239,68,68,0.06)' : 'var(--color-surface)' }}
                 >
                   {c.error ? (
                     <TriangleAlert size={13} className="shrink-0 text-red-400" />
+                  ) : c.serviceId ? (
+                    <Wrench size={13} className="shrink-0" style={{ color: '#d97706' }} />
                   ) : (
                     <Package size={13} className="shrink-0" style={{ color: 'var(--color-text-subtle)' }} />
                   )}
@@ -596,7 +636,7 @@ export function KitsManager() {
             )}
           </div>
 
-          {priceInvalid && form.components.some((c) => c.productId) && (
+          {priceInvalid && form.components.some((c) => c.productId || c.serviceId) && (
             <p className="text-xs text-red-500 flex items-center gap-1.5">
               <TriangleAlert size={13} className="shrink-0" /> Falta el <b>precio final del KIT</b> — cargalo (o poné una marcación) para poder crear el KIT.
             </p>

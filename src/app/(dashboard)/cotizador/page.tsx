@@ -598,7 +598,7 @@ export default function CotizadorPage() {
       const isProduct = ci.type === 'PRODUCT'
       const kitComps = isProduct && (ci.item as Product).isKit ? ((ci.item as Product).kitComponents ?? []) : []
       const incluyeStr = kitComps.length
-        ? 'Incluye: ' + kitComps.map(c => `${c.quantity}× ${c.component.name}`).join(', ')
+        ? 'Incluye: ' + kitComps.map(c => `${c.quantity}× ${c.component?.name ?? c.serviceComponent?.name ?? '?'}`).join(', ')
         : ''
       // Pedido de Abba: la ficha técnica cruda del proveedor no va en el
       // presupuesto — sólo el título. "Incluye:" de los kits se mantiene.
@@ -1236,7 +1236,7 @@ export default function CotizadorPage() {
                             <p className="text-xs font-medium leading-snug line-clamp-2 flex-1" style={{ color: 'var(--color-text)' }}>{p.name}</p>
                             {kitComps.length > 0 && (
                               <p className="text-[10px] leading-tight line-clamp-2" style={{ color: 'var(--color-text-subtle)' }}>
-                                Incluye: {kitComps.map(c => `${c.quantity}× ${c.component.name}`).join(', ')}
+                                Incluye: {kitComps.map(c => `${c.quantity}× ${c.component?.name ?? c.serviceComponent?.name ?? '?'}`).join(', ')}
                               </p>
                             )}
                             <p className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
@@ -1331,7 +1331,7 @@ export default function CotizadorPage() {
                       </p>
                       {ci.type === 'PRODUCT' && (ci.item as Product).isKit && ((ci.item as Product).kitComponents?.length ?? 0) > 0 && (
                         <p className="text-[10px] mt-0.5 line-clamp-1" style={{ color: 'var(--color-text-subtle)' }}>
-                          Incluye: {(ci.item as Product).kitComponents!.map(c => `${c.quantity}× ${c.component.name}`).join(', ')}
+                          Incluye: {(ci.item as Product).kitComponents!.map(c => `${c.quantity}× ${c.component?.name ?? c.serviceComponent?.name ?? '?'}`).join(', ')}
                         </p>
                       )}
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">

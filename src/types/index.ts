@@ -309,10 +309,13 @@ export interface Product {
   kitComponents?:        KitComponent[]
 }
 
+// Un renglón de KIT es un Product O un Service (mano de obra/instalación) —
+// exactamente uno de component/serviceComponent viene no-null.
 export interface KitComponent {
-  id:          string
-  quantity:    number
-  componentId: string
+  id:                 string
+  quantity:           number
+  componentId:        string | null
+  serviceComponentId: string | null
   component: {
     id:           string
     name:         string
@@ -323,7 +326,14 @@ export interface KitComponent {
     stock:        number
     trackStock:   boolean
     precioGremio: number | null
-  }
+  } | null
+  serviceComponent: {
+    id:           string
+    name:         string
+    price:        number
+    currency:     string
+    billingCycle: string
+  } | null
 }
 
 // Un KIT es un Product con isKit=true. Se cotiza como 1 línea / 1 precio
