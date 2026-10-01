@@ -22,8 +22,20 @@ export async function GET(req: NextRequest) {
     if (!month || !MONTH_RE.test(month)) return NextResponse.json({ error: 'Mes inválido (YYYY-MM)' }, { status: 400 })
 
     const db = prisma as any
+
+    // Un vendedor/técnico sólo ve SU propio objetivo, nunca el del resto del
+    // equipo — sólo ADMIN+ (quien reparte) ve la tabla completa, salvo que
+    // tenga "verTodoPipeline" prendido (mismo criterio que el scope del
+    // Pipeline, ver sellerOwnerScope en deal-access.ts). Pedido de Abba,
+    // reportado por Juan: a Kevin le aparecían los objetivos de todo el equipo.
+    let userScope: { userId?: string } = {}
+    if (!canAccess(payload.role, 'ADMIN')) {
+      const me = await db.user.findUnique({ where: { id: payload.userId }, select: { verTodoPipeline: true } })
+      if (!me?.verTodoPipeline) userScope = { userId: payload.userId }
+    }
+
     const targets = await db.salesTarget.findMany({
-      where: { organizationId: payload.orgId, month },
+      where: { organizationId: payload.orgId, month, ...userScope },
       select: { id: true, userId: true, amount: true, currency: true, user: { select: { id: true, name: true } } },
       orderBy: { amount: 'desc' },
     })

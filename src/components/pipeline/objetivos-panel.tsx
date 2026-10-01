@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Target } from 'lucide-react'
 import { formatMoneyExact } from '@/lib/utils'
+import { useAuthStore } from '@/store/auth-store'
 import type { Deal } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -36,16 +37,24 @@ const ROLES_VENTA = ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNI
 
 export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boolean }) {
   const qc = useQueryClient()
+  const { user: me } = useAuthStore()
   const [month, setMonth] = useState(currentMonth())
   const [editing, setEditing] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
 
+  // La lista completa del equipo sólo hace falta para repartir (ADMIN+) — un
+  // vendedor/técnico no necesita ni debe traerse el roster entero, sólo ve su
+  // propia fila. Reportado por Abba: a Kevin (Técnico) le aparecían los
+  // objetivos de todo el equipo.
   const { data: usuariosData } = useQuery({
     queryKey: ['usuarios-objetivos'],
     queryFn: async () => (await fetch('/api/usuarios')).json(),
     staleTime: 5 * 60_000,
+    enabled: isAdmin,
   })
-  const usuarios: Usuario[] = (usuariosData?.data ?? []).filter((u: Usuario) => ROLES_VENTA.includes(u.role))
+  const usuarios: Usuario[] = isAdmin
+    ? (usuariosData?.data ?? []).filter((u: Usuario) => ROLES_VENTA.includes(u.role))
+    : me ? [{ id: me.id, name: me.name, role: me.role }] : []
 
   const { data: targetsData, isLoading } = useQuery({
     queryKey: ['sales-targets', month],
@@ -132,7 +141,9 @@ export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boo
       </div>
 
       <div className="flex items-center justify-between text-sm px-1">
-        <span style={{ color: 'var(--color-text-muted)' }}>Objetivo general del mes (suma de lo repartido)</span>
+        <span style={{ color: 'var(--color-text-muted)' }}>
+          {isAdmin ? 'Objetivo general del mes (suma de lo repartido)' : 'Tu objetivo de este mes'}
+        </span>
         <span className="font-bold" style={{ color: 'var(--color-text)' }}>
           {formatMoneyExact(totalReal, 'USD')} / {formatMoneyExact(totalObjetivo, 'USD')}
         </span>
