@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, argentinaTimeToInstant } from '@/lib/timezone'
-import { findOpenBlock, etiquetaDefault, mirrorAsistencia, MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
+import { findOpenBlock, etiquetaDefault, mirrorAsistencia, getHorarioEsperado, MODALIDADES_FICHAJE } from '@/lib/asistencia-turnos'
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,29 +41,42 @@ export async function POST(req: NextRequest) {
     }
 
     // ¿Ya existe el bloque "principal" de hoy? Si no, este es — si sí, este
-    // es un extra/adicional (o el propio empleado reabre después de un
-    // corte). Se decide UNA vez al crear el bloque, nunca se recalcula.
+    // es un bloque posterior (ver más abajo si matchea un tramo del horario
+    // partido o es un extra/adicional de verdad). Se decide UNA vez al
+    // crear el bloque, nunca se recalcula. esPrincipal SIGUE siendo
+    // literalmente "primer bloque del día" — gobierna sólo el espejo hacia
+    // Asistencia (ausente/% presentismo), independiente de a qué tramo
+    // matchea (ver abajo).
     const yaHayPrincipalHoy = await db.turnoAsistencia.findFirst({
       where: { userId: payload.userId, organizationId: payload.orgId, fecha: hoy, esPrincipal: true },
       select: { id: true },
     })
     const esPrincipal = !yaHayPrincipalHoy
-    const etiqueta = etiquetaDefault(hoy, esPrincipal)
 
-    // Tardanza: sólo tiene sentido para el turno Regular — un extra o un
-    // fin de semana/feriado no se evalúa contra el horario de entrada de
-    // la org. Mismo cálculo de siempre, configurable por HR desde RRHH
-    // (attendanceStartTime/attendanceToleranceMinutes), armado con
+    // Nº de tramo esperado para ESTA entrada: cuántos bloques "Regular"
+    // tiene hoy + 1. Así, con un horario partido (2 tramos cargados), la
+    // 2da entrada del día matchea el tramo 2 y sigue siendo 'Regular' — no
+    // cae en 'Extra/Adicional' como antes (que sólo miraba "es el primer
+    // bloque del día"). Alguien SIN horario individual cargado tiene un
+    // único tramo (el horario general de la org, ver getHorarioEsperado) —
+    // mismo comportamiento de siempre: sólo la 1ra entrada es Regular.
+    const regularesHoy = await db.turnoAsistencia.count({
+      where: { userId: payload.userId, organizationId: payload.orgId, fecha: hoy, etiqueta: 'Regular' },
+    })
+    const numeroTramo = regularesHoy + 1
+    const horario = await getHorarioEsperado(db, payload.userId, payload.orgId)
+    const tramoEsperado = horario.find((t) => t.orden === numeroTramo) ?? null
+
+    const etiqueta = etiquetaDefault(hoy, tramoEsperado != null)
+
+    // Tardanza: sólo tiene sentido para un bloque que matchea un tramo
+    // Regular — un extra o un fin de semana/feriado no se evalúa contra
+    // ningún horario esperado. Mismo cálculo de siempre, armado con
     // argentinaTimeToInstant — nunca con setHours "local" (ese bug ya se
-    // encontró y arregló una vez, ver comentario original de este archivo
-    // en el historial de git).
+    // encontró y arregló una vez).
     let tardanza = false
-    if (etiqueta === 'Regular') {
-      const org = await prisma.organization.findUnique({
-        where: { id: payload.orgId },
-        select: { attendanceStartTime: true, attendanceToleranceMinutes: true },
-      })
-      const [rawH, rawM] = (org?.attendanceStartTime ?? '09:00').split(':').map(Number)
+    if (etiqueta === 'Regular' && tramoEsperado) {
+      const [rawH, rawM] = tramoEsperado.horaInicio.split(':').map(Number)
       // Bug real encontrado en auditoría: `startH || 9` reemplazaba
       // silenciosamente un horario configurado como "00:xx" (turno que
       // arranca a medianoche — plausible para guardias) por las 9am,
@@ -71,8 +84,7 @@ export async function POST(req: NextRequest) {
       // válido y sólo se usa el default si el valor es NaN de verdad.
       const startH = Number.isFinite(rawH) ? rawH : 9
       const startM = Number.isFinite(rawM) ? rawM : 0
-      const toleranceMin = org?.attendanceToleranceMinutes ?? 15
-      const horaCut = argentinaTimeToInstant(hoy, startH, startM + toleranceMin)
+      const horaCut = argentinaTimeToInstant(hoy, startH, startM + tramoEsperado.toleranciaMinutos)
       tardanza = now > horaCut
     }
 

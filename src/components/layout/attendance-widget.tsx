@@ -123,7 +123,7 @@ export function AttendanceWidget({ userId }: { userId: string }) {
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshEverywhere(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error al fichar entrada'); return }
-      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : json.esPrincipal ? '✅ Entrada registrada' : '✅ Turno adicional registrado')
+      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : json.data?.etiqueta === 'Extra/Adicional' ? '✅ Turno adicional registrado' : '✅ Entrada registrada')
       refreshEverywhere()
     } catch { toast.error('Error de conexión') }
     finally { setBusy(false) }
@@ -234,7 +234,7 @@ export function AttendanceWidget({ userId }: { userId: string }) {
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-muted)' }}>
             {state === 'loading' && 'Cargando...'}
             {state === 'none' && 'Todavía no fichaste tu entrada.'}
-            {state === 'in' && `Entrada ${formatHora(openBlock?.horaEntrada ?? hoy?.horaEntrada ?? null)}${openBlock?.esPrincipal && hoy?.tardanza ? ' (con tardanza)' : ''} — jornada en curso${openBlock && !openBlock.esPrincipal ? ' (turno adicional)' : ''}.`}
+            {state === 'in' && `Entrada ${formatHora(openBlock?.horaEntrada ?? hoy?.horaEntrada ?? null)}${openBlock?.esPrincipal && hoy?.tardanza ? ' (con tardanza)' : ''} — jornada en curso${openBlock && openBlock.etiqueta === 'Extra/Adicional' ? ' (turno adicional)' : ''}.`}
             {state === 'done' && `Entrada ${formatHora(hoy?.horaEntrada ?? null)} · Salida ${formatHora(hoy?.horaSalida ?? null)}.`}
           </p>
 

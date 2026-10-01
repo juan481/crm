@@ -291,6 +291,7 @@ model Organization {
   asistencias             Asistencia[]
   loginEvents             LoginEvent[]
   turnosAsistencia        TurnoAsistencia[]
+  horarioTramos           HorarioTramo[]
   suppressions            EmailSuppression[]
   emailUsage              EmailUsageMonthly[]
   memberships             OrganizationMembership[]
@@ -490,6 +491,7 @@ model User {
   asistencias             Asistencia[]
   loginEvents             LoginEvent[]
   turnosAsistencia        TurnoAsistencia[]
+  horarioTramos           HorarioTramo[]
   quickActionUsage        QuickActionUsage[]
   memberships             OrganizationMembership[]
   pedidosComoAutor        Pedido[]                 @relation("PedidoAutor")
@@ -2187,6 +2189,37 @@ model TurnoAsistencia {
   @@index([organizationId, userId, fecha])
   @@index([userId, horaSalida])
   @@index([organizationId, etiqueta])
+}
+
+// Horario laboral INDIVIDUAL de un empleado — pedido de Abba (Gabriel entra
+// a las 16hs, el horario general de la org lo marcaba tardanza todos los
+// días). Si un usuario no tiene filas acá, sigue usando el horario general
+// de Organization.attendanceStartTime/attendanceToleranceMinutes como único
+// tramo — 100% retrocompatible, cero usuarios afectados hasta que RRHH le
+// cargue un horario a alguien puntual.
+//
+// Varios tramos por usuario (`orden` 1, 2, 3...) permiten horario partido
+// (mañana + tarde, con un bache en el medio) — ver getHorarioEsperado() en
+// src/lib/asistencia-turnos.ts: la Nº-ésima entrada "Regular" del día se
+// evalúa contra el tramo de ese mismo número. Un turno nocturno se carga
+// con horaInicio/horaFin que cruzan medianoche (ej. 22:00→06:00) sin nada
+// especial — horaFin es sólo informativo, no se usa para calcular tardanza.
+model HorarioTramo {
+  id                String       @id @default(cuid())
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orden             Int
+  horaInicio        String // "HH:MM" — hora esperada de entrada de este tramo
+  horaFin           String? // "HH:MM" — hora esperada de salida, sólo informativo
+  toleranciaMinutos Int          @default(15)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([userId, orden])
+  @@index([userId])
+  @@index([organizationId])
 }
 
 // ─── Idempotencia de cron ──────────────────────────────────────────────────

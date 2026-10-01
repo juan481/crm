@@ -399,6 +399,16 @@ export interface Asistencia {
   updatedAt:      string
 }
 
+// Horario laboral individual de un empleado — ver HorarioTramo en
+// prisma/schema.prisma. orden 1 = primera entrada esperada del día.
+export interface HorarioTramo {
+  id:                string
+  orden:             number
+  horaInicio:        string
+  horaFin:           string | null
+  toleranciaMinutos: number
+}
+
 // ─── Plugin System ────────────────────────────────────────────────────────
 export interface PluginDefinition {
   id: string

@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, CheckCircle, AlertCircle, Clock, AlertTriangle, Pencil, Calendar, LogIn, LogOut, ShieldCheck,
+  Settings2, Plus, X, Sunrise, Moon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +16,7 @@ import { getRoleLabel } from '@/lib/role-labels'
 import { timeAgo } from '@/lib/utils'
 import { argentinaDayKey, argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
 import { invalidateFichaje } from '@/lib/asistencia-query-keys'
-import type { Asistencia } from '@/types'
+import type { Asistencia, HorarioTramo } from '@/types'
 
 interface LoginEventRow {
   id: string
@@ -98,6 +99,60 @@ export default function EmpleadoRrhhPage() {
     staleTime: 30_000,
   })
   const loginEvents = loginEventsData ?? []
+
+  // Horario laboral individual — pedido de Abba (Gabriel entra a las 16hs,
+  // el horario general de la org lo marcaba tardanza todos los días). Si
+  // no tiene tramos cargados, sigue usando el horario general (ver
+  // getHorarioEsperado en src/lib/asistencia-turnos.ts) — esto sólo
+  // muestra/edita el override puntual.
+  const { data: horarioData } = useQuery({
+    queryKey: ['horario-empleado', userId],
+    queryFn: async () => {
+      const r = await fetch(`/api/rrhh/${userId}/horario`)
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as HorarioTramo[]
+    },
+    staleTime: 30_000,
+  })
+  const tramos = horarioData ?? []
+
+  const [horarioOpen, setHorarioOpen] = useState(false)
+  const [horarioForm, setHorarioForm] = useState<{ horaInicio: string; horaFin: string; toleranciaMinutos: number }[]>([])
+  const [savingHorario, setSavingHorario] = useState(false)
+
+  const openHorario = () => {
+    setHorarioForm(
+      tramos.length > 0
+        ? tramos.map(t => ({ horaInicio: t.horaInicio, horaFin: t.horaFin ?? '', toleranciaMinutos: t.toleranciaMinutos }))
+        : [{ horaInicio: '09:00', horaFin: '', toleranciaMinutos: 15 }]
+    )
+    setHorarioOpen(true)
+  }
+  const addTramo = () => setHorarioForm(f => (f.length >= 4 ? f : [...f, { horaInicio: '', horaFin: '', toleranciaMinutos: 15 }]))
+  const removeTramo = (i: number) => setHorarioForm(f => f.filter((_, idx) => idx !== i))
+
+  const saveHorario = async (tramosPayload: { horaInicio: string; horaFin: string | null; toleranciaMinutos: number }[]) => {
+    setSavingHorario(true)
+    try {
+      const res = await fetch(`/api/rrhh/${userId}/horario`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tramos: tramosPayload }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success(json.message ?? 'Horario actualizado')
+      qc.invalidateQueries({ queryKey: ['horario-empleado', userId] })
+      setHorarioOpen(false)
+    } catch { toast.error('Error de conexión') }
+    finally { setSavingHorario(false) }
+  }
+
+  const handleSaveHorario = () => {
+    if (horarioForm.some(t => !t.horaInicio)) { toast.error('Cada tramo necesita una hora de entrada'); return }
+    saveHorario(horarioForm.map(t => ({ horaInicio: t.horaInicio, horaFin: t.horaFin || null, toleranciaMinutos: t.toleranciaMinutos })))
+  }
+  const handleUsarHorarioGeneral = () => saveHorario([])
 
   const records  = (data ?? []).sort((a, b) => b.fecha.localeCompare(a.fecha))
   const empleado = records[0]?.user
@@ -239,6 +294,37 @@ export default function EmpleadoRrhhPage() {
         ))}
       </div>
 
+      {/* Horario laboral individual — qué se usó para calcular las
+          tardanzas de arriba. Si no tiene nada cargado, se calculan contra
+          el horario general de la organización. */}
+      <div className="rounded-2xl p-4 flex items-start justify-between gap-4 flex-wrap"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div>
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <Clock size={15} /> Horario laboral
+          </h2>
+          {tramos.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              Usa el horario general de la organización — las tardanzas de arriba se calculan contra ese horario.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2 mt-1">
+              {tramos.map(t => (
+                <span key={t.id} className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5"
+                  style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text)' }}>
+                  {t.orden === 1 ? <Sunrise size={11} style={{ color: '#f59e0b' }} /> : <Moon size={11} style={{ color: 'var(--color-primary)' }} />}
+                  {t.horaInicio}{t.horaFin ? `–${t.horaFin}` : ''}
+                  <span style={{ color: 'var(--color-text-subtle)' }}>(tolerancia {t.toleranciaMinutos}m)</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button size="sm" variant="outline" leftIcon={<Settings2 size={14} />} onClick={openHorario}>
+          {tramos.length === 0 ? 'Configurar horario individual' : 'Editar horario'}
+        </Button>
+      </div>
+
       {isError && (
         <div className="flex items-center gap-3 p-4 rounded-xl text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
           <AlertTriangle size={16} />
@@ -370,6 +456,50 @@ export default function EmpleadoRrhhPage() {
           </div>
         )}
       </div>
+
+      {/* Horario individual modal */}
+      <Modal open={horarioOpen} onClose={() => setHorarioOpen(false)} title="Horario laboral individual" size="sm">
+        <div className="space-y-4">
+          <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+            Hasta 4 tramos por día — sirve para horario partido (mañana + tarde, con un bache en el medio) o un turno nocturno.
+            Cada entrada del día se evalúa contra el tramo que le corresponde según el orden en que fichan (la 1ª entrada contra el Tramo 1, la 2ª contra el Tramo 2, etc.).
+          </p>
+          {horarioForm.map((t, i) => (
+            <div key={i} className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-text-muted)' }}>Tramo {i + 1}</span>
+                {horarioForm.length > 1 && (
+                  <button type="button" onClick={() => removeTramo(i)}
+                    className="p-1 rounded hover:text-red-400 transition-colors" style={{ color: 'var(--color-text-subtle)' }}>
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <Input label="Entrada" type="time" value={t.horaInicio}
+                  onChange={e => setHorarioForm(f => f.map((x, idx) => (idx === i ? { ...x, horaInicio: e.target.value } : x)))} />
+                <Input label="Salida (opc.)" type="time" value={t.horaFin}
+                  onChange={e => setHorarioForm(f => f.map((x, idx) => (idx === i ? { ...x, horaFin: e.target.value } : x)))} />
+                <Input label="Tolerancia (min)" type="number" min={0} max={120} value={t.toleranciaMinutos}
+                  onChange={e => setHorarioForm(f => f.map((x, idx) => (idx === i ? { ...x, toleranciaMinutos: e.target.value === '' ? 0 : Number(e.target.value) } : x)))} />
+              </div>
+            </div>
+          ))}
+          {horarioForm.length < 4 && (
+            <button type="button" onClick={addTramo}
+              className="flex items-center gap-1.5 text-xs font-medium hover:underline" style={{ color: 'var(--color-primary)' }}>
+              <Plus size={13} /> Agregar tramo (horario partido)
+            </button>
+          )}
+          <ModalFooter>
+            {tramos.length > 0 && (
+              <Button variant="ghost" onClick={handleUsarHorarioGeneral} loading={savingHorario}>Usar horario general</Button>
+            )}
+            <Button variant="ghost" onClick={() => setHorarioOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveHorario} loading={savingHorario}>Guardar</Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
       {/* Edit modal */}
       <Modal open={!!editRecord} onClose={() => setEditRecord(null)} title="Editar registro" size="sm">

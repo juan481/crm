@@ -174,7 +174,7 @@ export default function MiAsistenciaPage() {
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
-      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : json.esPrincipal ? '✅ ¡Buenos días! Entrada registrada' : '✅ Turno adicional registrado')
+      toast.success(json.tardanza ? '⚠️ Entrada registrada con tardanza' : json.data?.etiqueta === 'Extra/Adicional' ? '✅ Turno adicional registrado' : '✅ ¡Buenos días! Entrada registrada')
       refreshAsistencia()
     } catch { toast.error('Error de conexión') }
     finally { setCheckingIn(false) }
@@ -258,7 +258,7 @@ export default function MiAsistenciaPage() {
                 <span className="flex items-center gap-1.5">
                   <LogIn size={13} /> Entrada: <strong style={{ color: 'var(--color-text)' }}>{formatHora(openBlock?.horaEntrada ?? hoyRecord?.horaEntrada ?? null)}</strong>
                 </span>
-                {openBlock && !openBlock.esPrincipal && (
+                {openBlock && openBlock.etiqueta === 'Extra/Adicional' && (
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)' }}>
                     Turno adicional
                   </span>

@@ -157,7 +157,7 @@ export default function MiDiaPage() {
       const json = await res.json()
       if (res.status === 409) { toast.error(json.error); refreshAsistencia(); return }
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
-      toast.success(json.tardanza ? '⚠️ Entrada con tardanza' : json.esPrincipal ? '✅ Entrada registrada' : '✅ Turno adicional registrado')
+      toast.success(json.tardanza ? '⚠️ Entrada con tardanza' : json.data?.etiqueta === 'Extra/Adicional' ? '✅ Turno adicional registrado' : '✅ Entrada registrada')
       refreshAsistencia()
     } catch { toast.error('Error de conexión') }
     finally { setCheckingIn(false) }
@@ -340,7 +340,7 @@ export default function MiDiaPage() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
-            {openBlock ? (openBlock.esPrincipal ? 'En jornada' : 'En turno adicional') : asistenciaHoy?.horaSalida ? '¡Jornada completa!' : 'Asistencia'}
+            {openBlock ? (openBlock.etiqueta === 'Extra/Adicional' ? 'En turno adicional' : 'En jornada') : asistenciaHoy?.horaSalida ? '¡Jornada completa!' : 'Asistencia'}
           </p>
           <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
             {openBlock

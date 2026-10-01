@@ -22,9 +22,52 @@ export function esFinDeSemana(fecha: Date): boolean {
 // punto de partida razonable. Limitación conocida y aceptada: sólo
 // detecta sábado/domingo, no feriados entre semana (no existe calendario
 // de feriados en el sistema) — esos casos se reasignan a mano.
-export function etiquetaDefault(fecha: Date, esPrincipal: boolean): string {
+//
+// `matcheaTramo`: true si esta entrada corresponde a un tramo esperado del
+// horario de la persona (ver getHorarioEsperado más abajo) — antes esto era
+// literalmente "es el primer bloque del día" (esPrincipal), que sigue
+// siendo el caso cuando nadie tiene horario partido configurado (el tramo 1
+// siempre existe, aunque sea el horario general de la org). Con un horario
+// partido, la 2da entrada del día TAMBIÉN matchea (su propio tramo 2) y
+// sigue siendo 'Regular', no 'Extra/Adicional'.
+export function etiquetaDefault(fecha: Date, matcheaTramo: boolean): string {
   if (esFinDeSemana(fecha)) return 'Fin de Semana/Feriado'
-  return esPrincipal ? 'Regular' : 'Extra/Adicional'
+  return matcheaTramo ? 'Regular' : 'Extra/Adicional'
+}
+
+export interface TramoEsperado {
+  orden:             number
+  horaInicio:        string
+  horaFin:           string | null
+  toleranciaMinutos: number
+}
+
+// Horario esperado de un empleado, en tramos ordenados (1 = primera entrada
+// del día, 2 = segunda, etc. — soporta horario partido/nocturno, pedido de
+// Abba por el caso de Gabriel: entra a las 16hs pero el horario general de
+// la org lo marcaba tardanza siempre). Si RRHH no le cargó un horario
+// individual (HorarioTramo vacío para este usuario), se usa el horario
+// general de la organización como tramo único — exactamente el
+// comportamiento de siempre, cero usuarios afectados hasta que alguien le
+// cargue un horario puntual.
+export async function getHorarioEsperado(db: any, userId: string, orgId: string): Promise<TramoEsperado[]> {
+  const tramos = await db.horarioTramo.findMany({
+    where: { userId, organizationId: orgId },
+    orderBy: { orden: 'asc' },
+    select: { orden: true, horaInicio: true, horaFin: true, toleranciaMinutos: true },
+  })
+  if (tramos.length > 0) return tramos
+
+  const org = await db.organization.findUnique({
+    where: { id: orgId },
+    select: { attendanceStartTime: true, attendanceToleranceMinutes: true },
+  })
+  return [{
+    orden: 1,
+    horaInicio: org?.attendanceStartTime ?? '09:00',
+    horaFin: null,
+    toleranciaMinutos: org?.attendanceToleranceMinutes ?? 15,
+  }]
 }
 
 // Bloque abierto (sin salida) más reciente de un usuario — reemplaza el
@@ -81,6 +124,12 @@ export interface TurnoBasico {
   horaEntrada: string | null
   horaSalida: string | null
   esPrincipal: boolean
+  // 'Regular' | 'Extra/Adicional' | 'Fin de Semana/Feriado' — con horario
+  // partido, un bloque NO-principal puede seguir siendo 'Regular' (su
+  // propio tramo esperado), así que "turno adicional" en la UI se decide
+  // por esto, NO por esPrincipal (que sólo significa "primer bloque del
+  // día", ver comentario en check-in/route.ts).
+  etiqueta: string
 }
 
 // Trae los turnos del mes actual + el anterior — usado por los 4 lugares
