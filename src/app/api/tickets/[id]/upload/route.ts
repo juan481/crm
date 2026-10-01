@@ -24,10 +24,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const ticket = await prisma.ticket.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true, assignedToId: true },
+      select: { id: true, assignedToId: true, collaborators: { select: { userId: true } } },
     })
     if (!ticket) return NextResponse.json({ error: 'Ticket no encontrado' }, { status: 404 })
-    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId) {
+    // Mismo criterio que tickets/[id]/messages/route.ts: un técnico
+    // colaborador (no el asignado principal) también puede adjuntar un
+    // archivo — si no, podía dejar una nota pero no la foto que la acompaña.
+    const isCollaborator = ticket.collaborators.some((c) => c.userId === payload.userId)
+    if (payload.role === 'TECHNICIAN' && ticket.assignedToId !== payload.userId && !isCollaborator) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
