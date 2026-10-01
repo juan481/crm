@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { ModalFooter } from '@/components/ui/modal'
 import { ProductoPicker } from '@/components/shared/producto-picker'
+import { RetiraInput } from '@/components/entregas/retira-input'
 import toast from 'react-hot-toast'
 
 interface Row {
@@ -81,7 +82,7 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Retira <span className="text-red-400">*</span></label>
-          <Input value={retiradoPor} onChange={(e) => setRetiradoPor(e.target.value)} placeholder="Técnico, flete, nombre..." />
+          <RetiraInput value={retiradoPor} onChange={setRetiradoPor} autoFocus />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Fecha</label>

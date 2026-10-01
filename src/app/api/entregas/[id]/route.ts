@@ -57,8 +57,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-// PATCH — sólo BORRADOR. Reemplaza ítems + cabecera y reajusta las reservas
-// (Product.stockReservado) por la diferencia entre lo reservado antes y ahora.
+// PATCH — cabecera (retiradoPor/motivo/fecha/dealId) se puede editar en
+// BORRADOR o ENTREGADA (ej: corregir "A definir" después de confirmar la
+// entrega — pedido de Abba). Los ítems/cantidades sólo se tocan en BORRADOR
+// porque reajustan Product.stockReservado.
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
@@ -73,12 +75,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       include: { items: true },
     })
     if (!entrega) return NextResponse.json({ error: 'Entrega no encontrada' }, { status: 404 })
-    if (entrega.estado !== 'BORRADOR') {
-      return NextResponse.json({ error: 'Sólo se puede editar una entrega en borrador' }, { status: 409 })
+    if (entrega.estado === 'ANULADA') {
+      return NextResponse.json({ error: 'La entrega está anulada' }, { status: 409 })
     }
 
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
+    if (Array.isArray(body.items) && entrega.estado !== 'BORRADOR') {
+      return NextResponse.json({ error: 'Sólo se puede editar el material de una entrega en borrador' }, { status: 409 })
+    }
 
     const header: Record<string, unknown> = {}
     if (body.retiradoPor !== undefined) {

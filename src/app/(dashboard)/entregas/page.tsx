@@ -134,7 +134,7 @@ export default function EntregasPage() {
                       {e.motivo || (e.empresa?.name ?? 'Entrega')} · {e.itemsCount} ítem{e.itemsCount !== 1 ? 's' : ''}
                     </div>
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell text-xs" style={{ color: 'var(--color-text-muted)' }}>{e.retiradoPor}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-xs" style={{ color: e.retiradoPor === 'A definir' ? '#f59e0b' : 'var(--color-text-muted)' }}>{e.retiradoPor}</td>
                   <td className="px-4 py-3 hidden sm:table-cell text-xs" style={{ color: 'var(--color-text-muted)' }}>
                     {new Date(e.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })}
                   </td>

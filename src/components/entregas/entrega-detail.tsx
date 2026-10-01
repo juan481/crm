@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2, Ban, CheckCircle2, Download, FileText, Save } from 'lucide-react'
+import { Trash2, Ban, CheckCircle2, Download, FileText, Save, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { RetiraInput } from '@/components/entregas/retira-input'
 import { formatMoneyExact } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawBrandedFooter } from '@/lib/pdf-branding'
 import toast from 'react-hot-toast'
@@ -20,7 +20,8 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
 }) {
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
-  const [edit, setEdit] = useState<{ retiradoPor: string; items: Record<string, string> } | null>(null)
+  const [edit, setEdit] = useState<{ items: Record<string, string> } | null>(null)
+  const [editRetira, setEditRetira] = useState<string | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['entrega', entregaId],
@@ -40,7 +41,6 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
   }
 
   const startEdit = () => setEdit({
-    retiradoPor: e.retiradoPor,
     items: Object.fromEntries(e.items.map((it: any) => [it.id, String(it.cantidad)])),
   })
 
@@ -55,12 +55,29 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
       })).filter((it: any) => it.productId)
       const res = await fetch(`/api/entregas/${entregaId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ retiradoPor: edit.retiradoPor, items }),
+        body: JSON.stringify({ items }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success('Guardado')
       setEdit(null)
+      invalidate()
+    } catch { toast.error('Error de conexión') } finally { setBusy(false) }
+  }
+
+  const saveRetira = async () => {
+    if (editRetira === null) return
+    if (!editRetira.trim()) { toast.error('Indicá quién retira'); return }
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/entregas/${entregaId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retiradoPor: editRetira.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success('Guardado')
+      setEditRetira(null)
       invalidate()
     } catch { toast.error('Error de conexión') } finally { setBusy(false) }
   }
@@ -100,6 +117,8 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
     } catch { toast.error('Error de conexión') } finally { setBusy(false) }
   }
 
+  // Imprime el remito por duplicado (pedido de Abba, Seba): una copia para
+  // archivo interno de ABBA y otra para que se la lleve el técnico/retira.
   const descargarRemito = async () => {
     try {
       const { jsPDF } = await import('jspdf')
@@ -109,43 +128,49 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
       const pr = parseInt(hex.slice(0, 2), 16), pg = parseInt(hex.slice(2, 4), 16), pb = parseInt(hex.slice(4, 6), 16)
       const logo = await loadLogoForPdf(e.org.logoUrl)
 
-      const headerH = drawPdfHeader(doc, {
-        pw, mg, pr, pg, pb, logo, orgName: e.org.name,
-        kicker: 'Remito interno',
-        dateLabel: new Date(e.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
-      })
-      let y = headerH + 14
-      doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
-      doc.text(e.numero ? `Remito N° ${e.numero}` : 'Remito (borrador)', mg, y); y += 8
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 116, 139)
-      doc.text(`Retira: ${e.retiradoPor}`, mg, y); y += 5
-      if (e.motivo) { doc.text(`Motivo: ${e.motivo}`, mg, y); y += 5 }
-      if (e.empresa?.name) { doc.text(`Empresa: ${e.empresa.name}`, mg, y); y += 5 }
-      if (e.cotizacion?.ref) { doc.text(`Presupuesto: ${e.cotizacion.ref}`, mg, y); y += 5 }
-      y += 4
+      const dibujarCopia = (etiqueta: string) => {
+        const headerH = drawPdfHeader(doc, {
+          pw, mg, pr, pg, pb, logo, orgName: e.org.name,
+          kicker: `Remito interno · ${etiqueta}`,
+          dateLabel: new Date(e.fecha).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }),
+        })
+        let y = headerH + 14
+        doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
+        doc.text(e.numero ? `Remito N° ${e.numero}` : 'Remito (borrador)', mg, y); y += 8
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 116, 139)
+        doc.text(`Retira: ${e.retiradoPor}`, mg, y); y += 5
+        if (e.motivo) { doc.text(`Motivo: ${e.motivo}`, mg, y); y += 5 }
+        if (e.empresa?.name) { doc.text(`Empresa: ${e.empresa.name}`, mg, y); y += 5 }
+        if (e.cotizacion?.ref) { doc.text(`Presupuesto: ${e.cotizacion.ref}`, mg, y); y += 5 }
+        y += 4
 
-      doc.setFillColor(241, 245, 249); doc.rect(mg, y, cw, 8, 'F')
-      doc.setTextColor(148, 163, 184); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
-      doc.text('PRODUCTO', mg + 2, y + 5.5)
-      doc.text('CANTIDAD', mg + cw - 2, y + 5.5, { align: 'right' })
-      y += 8
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
-      e.items.forEach((it: any, idx: number) => {
-        if (y > 268) { doc.addPage(); y = 20 }
-        if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 8, 'F') }
-        doc.setTextColor(30, 41, 59)
-        doc.text(String(it.nombre).slice(0, 70), mg + 2, y + 5.5)
-        doc.text(String(it.cantidad), mg + cw - 2, y + 5.5, { align: 'right' })
+        doc.setFillColor(241, 245, 249); doc.rect(mg, y, cw, 8, 'F')
+        doc.setTextColor(148, 163, 184); doc.setFontSize(7.5); doc.setFont('helvetica', 'bold')
+        doc.text('PRODUCTO', mg + 2, y + 5.5)
+        doc.text('CANTIDAD', mg + cw - 2, y + 5.5, { align: 'right' })
         y += 8
-      })
-      if (y > 250) { doc.addPage(); y = 20 }
-      y += 12
-      doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw * 0.4, y)
-      doc.line(mg + cw * 0.6, y, mg + cw, y); y += 5
-      doc.setTextColor(148, 163, 184); doc.setFontSize(8)
-      doc.text('Entregó', mg, y); doc.text('Recibió', mg + cw * 0.6, y)
-      y += 14
-      drawBrandedFooter(doc, { pw, mg, y, pr, pg, pb, leftText: e.org.name })
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+        e.items.forEach((it: any, idx: number) => {
+          if (y > 268) { doc.addPage(); y = 20 }
+          if (idx % 2 === 1) { doc.setFillColor(248, 250, 252); doc.rect(mg, y, cw, 8, 'F') }
+          doc.setTextColor(30, 41, 59)
+          doc.text(String(it.nombre).slice(0, 70), mg + 2, y + 5.5)
+          doc.text(String(it.cantidad), mg + cw - 2, y + 5.5, { align: 'right' })
+          y += 8
+        })
+        if (y > 250) { doc.addPage(); y = 20 }
+        y += 12
+        doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw * 0.4, y)
+        doc.line(mg + cw * 0.6, y, mg + cw, y); y += 5
+        doc.setTextColor(148, 163, 184); doc.setFontSize(8)
+        doc.text('Entregó', mg, y); doc.text('Recibió', mg + cw * 0.6, y)
+        y += 14
+        drawBrandedFooter(doc, { pw, mg, y, pr, pg, pb, leftText: e.org.name })
+      }
+
+      dibujarCopia('ORIGINAL (archivo ABBA)')
+      doc.addPage()
+      dibujarCopia('DUPLICADO (técnico)')
 
       doc.save(`remito-${e.numero ?? 'borrador'}.pdf`)
     } catch (err) {
@@ -170,9 +195,26 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div>
           <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Retira</p>
-          {edit ? (
-            <Input value={edit.retiradoPor} onChange={(ev) => setEdit({ ...edit, retiradoPor: ev.target.value })} />
-          ) : <p style={{ color: 'var(--color-text)' }}>{e.retiradoPor}</p>}
+          {editRetira !== null ? (
+            <div className="flex items-center gap-1.5">
+              <RetiraInput value={editRetira} onChange={setEditRetira} autoFocus />
+              <button onClick={saveRetira} disabled={busy} className="p-1.5 rounded shrink-0" style={{ color: 'var(--color-primary)' }} title="Guardar">
+                <Save size={14} />
+              </button>
+              <button onClick={() => setEditRetira(null)} className="p-1.5 rounded shrink-0" style={{ color: 'var(--color-text-muted)' }} title="Cancelar">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <p style={{ color: e.retiradoPor === 'A definir' ? '#f59e0b' : 'var(--color-text)' }}>{e.retiradoPor}</p>
+              {e.estado !== 'ANULADA' && (
+                <button onClick={() => setEditRetira(e.retiradoPor === 'A definir' ? '' : e.retiradoPor)} className="p-1 rounded hover:opacity-70 shrink-0" style={{ color: 'var(--color-text-subtle)' }} title="Cambiar quién retira">
+                  <Pencil size={11} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <div><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Fecha</p><p style={{ color: 'var(--color-text)' }}>{new Date(e.fecha).toLocaleDateString('es-AR')}</p></div>
         {e.motivo && <div className="col-span-2"><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Motivo</p><p style={{ color: 'var(--color-text)' }}>{e.motivo}</p></div>}
