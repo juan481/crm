@@ -6,6 +6,7 @@ import { fireWebhook } from '@/lib/webhooks'
 import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
 import { notifyTicketCreated } from '@/lib/ticket-notifications'
 import { ticketInvolvesUser } from '@/lib/assignment-scope'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,11 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // HR no entra por default (no hace soporte a clientes), pero si un Super
+    // Admin le prende el módulo "Tickets" en Permisos tiene que entrar de
+    // verdad — antes este bloqueo era incondicional e ignoraba el toggle.
+    if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
     const search    = searchParams.get('search')    ?? ''
@@ -81,7 +86,8 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { title, description, priority, category, clientId, empresaId, assignedToId, recipientEmail, recipientName, collaboratorIds, ccEmails } = await req.json()
     if (!title?.trim())       return NextResponse.json({ error: 'El título es requerido' },       { status: 400 })

@@ -62,32 +62,29 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
     label: null,
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard size={17} />, exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'dashboard' },
-      { label: 'Mi Día',    href: '/mi-dia',    icon: <CalendarCheck size={17} />,   exact: true, roles: ['TECHNICIAN'], moduleId: 'mi-dia' },
+      { label: 'Mi Día',    href: '/mi-dia',    icon: <CalendarCheck size={17} />,   exact: true, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'mi-dia' },
     ],
   },
   {
     label: 'Ventas',
     items: [
-      { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'clientes' },
-      // TECHNICIAN incluido en `roles` a propósito en Pipeline/Empresas de acá
-      // abajo: NO las ve por default (el piso del módulo bajó a TECHNICIAN
-      // pero el default sigue en SELLER+), sólo si un Super Admin las habilita
-      // en Configuración → Permisos. Ver isModuleAllowed. Sin este TECHNICIAN
-      // en `roles`, el toggle de Permisos queda cosmético: este filtro estático
-      // corre ANTES que isModuleAllowed y lo tapa (bug real, Abba/Kevin,
-      // 2026-10-01 — se arregló acá el mismo día que se bajó el piso en
-      // modules.ts, por no haber tocado este archivo también).
-      { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'pipeline' },
-      // ADMINISTRATIVO a propósito AFUERA de Cotizador/Cotizaciones — pedido
-      // explícito de Abba (Norma no cotiza).
-      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'cotizador' },
-      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'cotizaciones' },
-      { label: 'Catálogo',     href: '/catalogo',     icon: <Boxes size={17} />,           roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'catalogo' },
+      { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'clientes' },
+      // El `roles` de cada ítem es el TECHO de lo que el toggle de Permisos
+      // puede llegar a habilitar — tiene que incluir TODO rol que pase
+      // roleAtLeast(rol, minRole) en modules.ts, si no el toggle queda
+      // cosmético (este filtro corre ANTES que isModuleAllowed y lo tapa;
+      // bug real, Abba/Kevin, 2026-10-01 — auditado módulo por módulo ese
+      // mismo día). ADMINISTRATIVO a propósito AFUERA de Cotizador/
+      // Cotizaciones más abajo — pedido explícito de Abba (Norma no cotiza).
+      { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'pipeline' },
+      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'cotizador' },
+      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'cotizaciones' },
+      { label: 'Catálogo',     href: '/catalogo',     icon: <Boxes size={17} />,           roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'catalogo' },
       // Sólo para roles que no tienen la Configuración (ADMIN/SUPER_ADMIN usan
-      // Configuración → Catálogo). Aparece únicamente si un Super Admin habilita
-      // "Catálogo · cargar productos y stock" para ese rol.
-      { label: 'Gestionar catálogo', href: '/catalogo/gestion', icon: <Package size={17} />, roles: ['TECHNICIAN', 'SELLER'], moduleId: 'catalogo-gestion' },
-      { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'empresas' },
+      // Configuración → Catálogo). ADMINISTRATIVO a propósito AFUERA (ver
+      // comentario de arriba del archivo: nunca tiene Catálogo·gestión).
+      { label: 'Gestionar catálogo', href: '/catalogo/gestion', icon: <Package size={17} />, roles: ['TECHNICIAN', 'SELLER', 'HR'], moduleId: 'catalogo-gestion' },
+      { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'empresas' },
       { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'contactos' },
     ],
   },
@@ -95,8 +92,8 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
     label: 'Operaciones',
     items: [
       { label: 'Tareas',  href: '/tareas',  icon: <CheckSquare size={17} />,   roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR'], badgeKey: 'tasks', moduleId: 'tareas' },
-      { label: 'Tickets', href: '/tickets', icon: <LifeBuoy size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], badgeKey: 'tickets', moduleId: 'tickets' },
-      { label: 'Eventos', href: '/eventos', icon: <CalendarDays size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'eventos' },
+      { label: 'Tickets', href: '/tickets', icon: <LifeBuoy size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], badgeKey: 'tickets', moduleId: 'tickets' },
+      { label: 'Eventos', href: '/eventos', icon: <CalendarDays size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'eventos' },
     ],
   },
   {
@@ -105,9 +102,9 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // TECHNICIAN en `roles` a propósito: NO lo ve por default (módulo en
       // ADMIN+), sólo si un Super Admin le habilita "Depósito · Stock" en
       // Configuración → Permisos. Ver isModuleAllowed.
-      { label: 'Stock',       href: '/stock',       icon: <Warehouse size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'TECHNICIAN'], moduleId: 'stock' },
-      { label: 'Entregas',    href: '/entregas',    icon: <PackageCheck size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'TECHNICIAN'], moduleId: 'entregas' },
-      { label: 'Compras',     href: '/compras',     icon: <ShoppingCart size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],               moduleId: 'compras' },
+      { label: 'Stock',       href: '/stock',       icon: <Warehouse size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'stock' },
+      { label: 'Entregas',    href: '/entregas',    icon: <PackageCheck size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'entregas' },
+      { label: 'Compras',     href: '/compras',     icon: <ShoppingCart size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],               moduleId: 'compras' },
       { label: 'Proveedores', href: '/proveedores', icon: <Truck size={17} />,         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],     moduleId: 'empresas' },
     ],
   },
@@ -120,8 +117,8 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // Técnicos por más que lo prendiera en Configuración → Permisos.
       { label: 'WhatsApp',       href: '/conversaciones', icon: <MessageCircle size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'conversaciones', requiresPlugin: 'whatsapp-ai-bot', badgeKey: 'whatsapp' },
       { label: 'Comunicaciones', href: '/comunicaciones', icon: <Mail size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'comunicaciones' },
-      { label: 'Servicios',      href: '/servicios',      icon: <RefreshCw size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'], moduleId: 'servicios' },
-      { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'], badgeKey: 'invoices', moduleId: 'facturas' },
+      { label: 'Servicios',      href: '/servicios',      icon: <RefreshCw size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'servicios' },
+      { label: 'Facturación',    href: '/facturas',       icon: <CreditCard size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], badgeKey: 'invoices', moduleId: 'facturas' },
       { label: 'Portal clientes', href: '/portal-clientes', icon: <UserCircle2 size={17} />, roles: ['SUPER_ADMIN', 'ADMIN'], moduleId: 'facturas' },
       { label: 'Documentos',     href: '/documentos',     icon: <FolderOpen size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'documentos' },
     ],
@@ -130,7 +127,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
     label: 'RRHH',
     items: [
       { label: 'RRHH',          href: '/rrhh',          icon: <ClipboardList size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'HR'], moduleId: 'rrhh' },
-      { label: 'Mi Asistencia', href: '/mi-asistencia', icon: <ClipboardCheck size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'], moduleId: 'mi-asistencia' },
+      { label: 'Mi Asistencia', href: '/mi-asistencia', icon: <ClipboardCheck size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR'], moduleId: 'mi-asistencia' },
     ],
   },
 ]
@@ -199,7 +196,9 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
       const json = await res.json()
       return json.data ?? []
     },
-    staleTime: 5 * 60 * 1000,
+    // Bajado de 5 min a 1 — un Super Admin que acaba de tocar un permiso
+    // espera que se note pronto, no en la próxima recarga casual de página.
+    staleTime: 60 * 1000,
   })
 
   // Plugins activados de la org — para ítems con `requiresPlugin` (ej.

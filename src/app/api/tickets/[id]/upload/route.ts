@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/db'
+import { roleHasModule } from '@/lib/module-access'
 
 interface Params { params: { id: string } }
 
@@ -20,7 +21,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const ticket = await prisma.ticket.findFirst({
       where: { id: params.id, organizationId: payload.orgId },

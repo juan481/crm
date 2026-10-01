@@ -97,6 +97,16 @@ export function AppShell({ user, branding, children }: AppShellProps) {
   // cotizador…) — amplían la lista de rutas permitidas de abajo.
   const modulePerms = useModulePermissions()
   const permsResolved = modulePerms.length > 0
+  // Firma de SOLO lo que le importa a este usuario (su propio rol, por
+  // módulo) — se recalcula en cada refetch de useModulePermissions (cada 5
+  // min, o antes si invalida la query) y sirve de dependencia real del
+  // efecto de abajo. Sin esto, el efecto sólo corría una vez que
+  // `permsResolved` pasaba a true y nunca de nuevo — si un Super Admin le
+  // SACABA un permiso a alguien que ya estaba parado en esa pantalla, se
+  // quedaba ahí para siempre hasta que navegara solo a otro lado. Pedido de
+  // Juan: un permiso que se saca tiene que sacar de verdad, no sólo ocultar
+  // el link del menú.
+  const permsSignature = modulePerms.map(r => `${r.id}:${r.roles[user.role]}`).join('|')
 
   // Protect restricted roles from accessing routes outside their allowed list
   useEffect(() => {
@@ -116,7 +126,7 @@ export function AppShell({ user, branding, children }: AppShellProps) {
     // PODRÍA tener habilitada — se re-evalúa cuando cargan (fail-open).
     const maybeEarnable = !permsResolved && EARNABLE_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
     if (!ok && !maybeEarnable) router.replace(fallback)
-  }, [pathname, user.role, permsResolved]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pathname, user.role, permsResolved, permsSignature]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Uso real para la Barra Rápida (v2, ver src/lib/quick-actions.ts) — cada
   // navegación a una pantalla candidata cuenta como "uso", sin importar si

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
@@ -8,9 +9,9 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // Ver comentario en api/eventos/route.ts — Técnico ve Eventos por
-    // default. PATCH/DELETE de este archivo quedan en piso ADMIN, sin tocar.
-    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+    // Ver comentario en api/eventos/route.ts. PATCH/DELETE de este archivo
+    // quedan en piso ADMIN, sin tocar.
+    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'eventos')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const event = await prisma.event.findFirst({

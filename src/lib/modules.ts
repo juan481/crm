@@ -93,8 +93,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // Tickets/Mi Día), pero el directorio completo (/empresas) seguía sin
   // poder habilitarse acá por este piso — un Técnico no podía ni ver la
   // ficha completa de la empresa que estaba visitando. Comparte moduleId con
-  // "Proveedores" en el sidebar: al prender este toggle, un Técnico también
-  // gana esa pestaña (no hay forma de separarlas sin tocar el sidebar).
+  // "Proveedores" en el sidebar, PERO ese ítem tiene su propio `roles` sin
+  // TECHNICIAN/ADMINISTRATIVO/HR a propósito — prender este toggle NO le da
+  // Proveedores a un Técnico, sólo Empresas (ver sidebar.tsx).
   { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'TECHNICIAN' },
   { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
   { id: 'rrhh',           label: 'RRHH',            defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'HR'],                              minRole: 'HR' },
@@ -106,20 +107,33 @@ export function getModule(id: string): ModuleDefinition | undefined {
 }
 
 // Prefijo de ruta de cada módulo — para que app-shell.tsx pueda dejar entrar
-// a un TECHNICIAN a las rutas de los módulos que un Super Admin le habilitó
-// (por default TECHNICIAN sólo puede /mi-dia, /tareas, /tickets, /eventos…).
-// Sólo se listan los módulos que un rol restringido puede llegar a ganar.
+// a un TECHNICIAN/HR a las rutas de los módulos que un Super Admin le
+// habilitó (por default TECHNICIAN sólo puede /mi-dia, /tareas, /tickets,
+// /eventos…, HR sólo /rrhh, /mi-asistencia, /tareas, /ayuda, /mi-perfil — ver
+// ROLE_ALLOWED_PREFIXES en app-shell.tsx). Se listan TODOS los módulos con
+// minRole TECHNICIAN o HR, incluidos los que ya están en el baseline de esos
+// roles — es defensa en profundidad: si el día de mañana cambia el baseline,
+// el guard de rutas sigue sabiendo adónde puede entrar alguien con el
+// permiso prendido, sin depender de que nadie se acuerde de tocar acá
+// también (exactamente el bug que faltaba acá para "clientes" — minRole
+// TECHNICIAN desde el caso Kevin, pero nunca se agregó esta entrada).
 export const MODULE_ROUTES: Record<string, string> = {
+  'mi-dia': '/mi-dia',
+  clientes: '/clientes',
   catalogo: '/catalogo',
   'catalogo-gestion': '/catalogo/gestion',
   cotizador: '/cotizador',
   cotizaciones: '/cotizaciones',
   pipeline: '/pipeline',
   empresas: '/empresas',
+  tareas: '/tareas',
+  tickets: '/tickets',
+  eventos: '/eventos',
   stock: '/stock',
   compras: '/compras',
   entregas: '/entregas',
   conversaciones: '/conversaciones',
+  'mi-asistencia': '/mi-asistencia',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

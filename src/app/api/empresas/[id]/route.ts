@@ -14,8 +14,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     // (Tickets/Mi Día lo necesitan) — esta ficha puntual se había quedado
     // más restrictiva sin motivo, bloqueando a un Técnico al que un Super
     // Admin le prendió el módulo "Clientes" en Permisos (piso bajado en
-    // modules.ts, caso Kevin/Abba).
-    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'clientes'))) {
+    // modules.ts, caso Kevin/Abba). También acepta el módulo "Empresas" —
+    // un Super Admin puede habilitar cualquiera de los dos por separado
+    // (2026-10-01: alguien con sólo "Empresas" habilitado se encontraba con
+    // "Sin permisos" al abrir la ficha, porque acá sólo se chequeaba "Clientes").
+    if (
+      !canAccess(payload.role, 'SELLER') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'clientes')) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'empresas'))
+    ) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 

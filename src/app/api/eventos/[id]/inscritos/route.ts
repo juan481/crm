@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 
 interface Params { params: { id: string } }
@@ -8,12 +9,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // TECHNICIAN también, igual que GET/POST /api/eventos y GET
-    // /api/eventos/[id] — antes esta ruta se había quedado en SELLER+ nada
-    // más, así que un técnico que sí puede crear un evento se encontraba
-    // con un 403 al intentar cargarle un inscrito manual desde el mismo
-    // evento que acababa de crear.
-    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+    // Mismo criterio que GET/POST /api/eventos — antes esta ruta se había
+    // quedado en un bypass literal de SELLER+/TECHNICIAN nada más, así que
+    // un técnico que sí puede crear un evento se encontraba con un 403 al
+    // intentar cargarle un inscrito manual desde el mismo evento que
+    // acababa de crear.
+    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'eventos')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const event = await prisma.event.findFirst({
@@ -59,12 +60,8 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // TECHNICIAN también, igual que GET/POST /api/eventos y GET
-    // /api/eventos/[id] — antes esta ruta se había quedado en SELLER+ nada
-    // más, así que un técnico que sí puede crear un evento se encontraba
-    // con un 403 al intentar cargarle un inscrito manual desde el mismo
-    // evento que acababa de crear.
-    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+    // Ver comentario en el POST de este archivo.
+    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'eventos')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl

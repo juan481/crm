@@ -5,6 +5,7 @@ import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured }
 import { SLA_HOURS } from '@/lib/tickets'
 import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
 import { notifyTicketCreated } from '@/lib/ticket-notifications'
+import { roleHasModule } from '@/lib/module-access'
 
 interface Params { params: { id: string } }
 
@@ -33,7 +34,8 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (payload.role === 'HR') return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
     const ticket = await db.ticket.findFirst({ where: { id: params.id, organizationId: payload.orgId }, include: INCLUDE_DETAIL })
@@ -58,8 +60,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // HR no puede editar tickets
-    if (payload.role === 'HR')
+    // HR no edita tickets por default, salvo que un Super Admin le prenda el
+    // módulo "Tickets" en Permisos.
+    if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any

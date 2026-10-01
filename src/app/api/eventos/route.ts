@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // Técnico ve+crea Eventos por default desde el panel de permisos (ver
-    // src/lib/modules.ts) — sin este OR el piso real seguía en SELLER y el
-    // default del panel no tenía ningún efecto.
-    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+    // Piso real en ADMIN+; todo lo demás (SELLER/ADMINISTRATIVO/TECHNICIAN/HR)
+    // pasa por el permiso de módulo configurable en Permisos. Antes el "o
+    // TECHNICIAN" era un bypass literal — de paso dejaba pasar a
+    // ADMINISTRATIVO también (canAccess('SELLER') le da true por jerarquía,
+    // 2.5 ≥ 2) aunque el módulo estuviera apagado para ese rol: el toggle no
+    // podía revocarle Eventos a Norma. Ahora si está apagado, se corta.
+    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'eventos')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     // Ver mismo comentario en el GET de este archivo.
-    if (!canAccess(payload.role, 'SELLER') && payload.role !== 'TECHNICIAN')
+    if (!canAccess(payload.role, 'ADMIN') && !(await roleHasModule(payload.orgId, payload.role, 'eventos')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { name, description, eventDate, location } = await req.json()

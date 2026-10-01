@@ -19,7 +19,10 @@ export function useModulePermissions(): ModulePermissionRow[] {
       if (!res.ok) return []
       return (await res.json()).data ?? []
     },
-    staleTime: 5 * 60 * 1000,
+    // Bajado de 5 min a 1 — mismo criterio que sidebar.tsx (misma query key):
+    // un permiso que se saca tiene que notarse pronto, no recién en la
+    // próxima recarga casual de página.
+    staleTime: 60 * 1000,
   })
   return data
 }
