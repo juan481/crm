@@ -279,6 +279,7 @@ model Organization {
   folders                 Folder[]
   documents               Document[]
   deals                   Deal[]
+  salesTargets            SalesTarget[]
   tasks                   Task[]
   tickets                 Ticket[]
   empresas                Empresa[]
@@ -498,6 +499,7 @@ model User {
   pedidosAsignados        Pedido[]                 @relation("PedidoAsignado")
   whatsAppConvsAssigned   WhatsAppConversation[]   @relation("WhatsAppAssignee")
   whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
+  salesTargets            SalesTarget[]
 
   @@index([organizationId])
   @@index([empresaId])
@@ -1266,6 +1268,28 @@ model DealNota {
 
   @@index([dealId])
   @@index([organizationId])
+}
+
+// Objetivo de venta mensual por vendedor/técnico — pedido de Abba (Seba,
+// 2026-10-01): define un objetivo general (ej. USD 60k) repartiéndolo a mano
+// entre el equipo (ej. él se asigna 30k) y lo ajusta sobre la marcha según el
+// rendimiento de cada uno. El "objetivo general" de la org para un mes NO se
+// guarda aparte — es la suma de los SalesTarget de ese mes, así nunca queda
+// desincronizado de lo repartido (ver ObjetivosPanel).
+model SalesTarget {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month          String // "YYYY-MM"
+  currency       String       @default("USD")
+  amount         Float
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, userId, month, currency])
+  @@index([organizationId, month])
 }
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
-import { sellerOwnerScope } from '@/lib/deal-access'
+import { sellerOwnerScope, isScopedPipelineRole } from '@/lib/deal-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER'))
+    // SELLER+, o un TECHNICIAN al que le habilitaron el módulo Pipeline
+    // (Configuración → Permisos) — pedido de Abba/Seba, 2026-10-01.
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { searchParams } = req.nextUrl
@@ -35,12 +37,12 @@ export async function GET(req: NextRequest) {
     // La ficha de cliente (/clientes/[id]) pide ?empresaId= — sin esto el
     // endpoint devolvía TODOS los deals de la org como si fueran del cliente.
     if (empresaId) where.empresaId = empresaId
-    // SELLER sólo ve lo suyo, SALVO que un admin le haya prendido
-    // "verTodoPipeline" (Configuración → Usuarios) — pedido de Abba
-    // 2026-09-24: un vendedor puede necesitar ver/hablar con TODOS los
-    // clientes del Pipeline sin que eso implique que se le reasignen (eso
-    // sigue siendo sólo ADMIN+, ver deals/[id]/route.ts).
-    if (payload.role === 'SELLER') Object.assign(where, await sellerOwnerScope(payload.userId))
+    // SELLER (o un TECHNICIAN con Pipeline habilitado) sólo ve lo suyo, SALVO
+    // que un admin le haya prendido "verTodoPipeline" (Configuración →
+    // Usuarios) — pedido de Abba 2026-09-24: un vendedor puede necesitar
+    // ver/hablar con TODOS los clientes del Pipeline sin que eso implique que
+    // se le reasignen (eso sigue siendo sólo ADMIN+, ver deals/[id]/route.ts).
+    if (isScopedPipelineRole(payload.role)) Object.assign(where, await sellerOwnerScope(payload.userId))
 
     const db = prisma as any
     const [deals, total] = await Promise.all([
@@ -59,9 +61,14 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    // SELLER+ o un rol al que le habilitaron el Cotizador (así la cotización
-    // que arma se puede enganchar sola a una oportunidad del Pipeline).
-    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'cotizador')))
+    // SELLER+, o un rol al que le habilitaron Cotizador (así la cotización
+    // que arma se puede enganchar sola a una oportunidad del Pipeline) o
+    // directamente Pipeline (técnico/IT habilitado a vender — Abba/Seba).
+    if (
+      !canAccess(payload.role, 'SELLER') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'cotizador')) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'pipeline'))
+    )
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { title, amount, currency, probability, stage, expectedCloseDate, notes, empresaId, clientId, contactoId, ownerId } = await req.json()

@@ -32,7 +32,14 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // Kevin) — el default sigue siendo Vendedor+, ningún Técnico lo ve hasta
   // que alguien lo prenda a mano. Mismo criterio que Stock/Cotizador.
   { id: 'clientes',       label: 'Clientes',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'TECHNICIAN' },
-  { id: 'pipeline',       label: 'Pipeline',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'SELLER' },
+  // Piso bajado a TECHNICIAN para que un Super Admin pueda activarle Pipeline
+  // a un Técnico puntual desde Permisos — pedido de Abba (Seba, 2026-10-01):
+  // deriva clientes directo a perfiles técnicos/IT para que vendan. El
+  // default sigue siendo Vendedor+, ninguna org cambia hasta que un Super
+  // Admin prenda el toggle. Las APIs de /api/deals/* y /api/documentos/upload
+  // chequean canAccess('SELLER') || roleHasModule(orgId, role, 'pipeline') —
+  // sin eso el toggle sería sólo cosmético, mismo criterio que Cotizador/Stock.
+  { id: 'pipeline',       label: 'Pipeline',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],                          minRole: 'TECHNICIAN' },
   { id: 'tareas',         label: 'Tareas',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
   // Técnico puede ganar Cotizador / Cotizaciones / Catálogo desde el panel de
   // permisos (piso bajado a TECHNICIAN). El default sigue siendo SELLER+, así
@@ -99,6 +106,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   'catalogo-gestion': '/catalogo/gestion',
   cotizador: '/cotizador',
   cotizaciones: '/cotizaciones',
+  pipeline: '/pipeline',
   stock: '/stock',
   compras: '/compras',
   entregas: '/entregas',

@@ -18,6 +18,7 @@ import { DealMateriales } from '@/components/pipeline/deal-materiales'
 import { DealRentabilidad } from '@/components/pipeline/deal-rentabilidad'
 import { ForecastPanel } from '@/components/pipeline/forecast-panel'
 import { DerivacionesPanel } from '@/components/pipeline/derivaciones-panel'
+import { ObjetivosPanel } from '@/components/pipeline/objetivos-panel'
 import { RecurrentesPanel } from '@/components/pipeline/recurrentes-panel'
 import { ContactoPicker } from '@/components/pipeline/contacto-picker'
 import type { Deal, DealStage } from '@/types'
@@ -707,6 +708,7 @@ export default function PipelinePage() {
       )}
 
       {!isLoading && !isError && deals.length > 0 && <ForecastPanel deals={deals} />}
+      {!isLoading && !isError && <ObjetivosPanel deals={deals} isAdmin={canDelete} />}
       {!isLoading && !isError && deals.length > 0 && <DerivacionesPanel deals={deals} />}
       <RecurrentesPanel />
 

@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { EmpresaNotas } from '@/components/directorio/empresa-notas'
 import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizaciones'
+import { ClienteActividadReciente } from '@/components/directorio/cliente-actividad-reciente'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { formatCurrency, formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
@@ -315,6 +316,11 @@ export default function ClienteDetailPage() {
               </div>
             ))}
           </div>
+          <ClienteActividadReciente
+            empresaId={id}
+            onVerActividad={() => setTab('actividad')}
+            onVerCotizaciones={() => setTab('cotizaciones')}
+          />
         </div>
       )}
 

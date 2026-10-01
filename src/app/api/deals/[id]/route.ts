@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
-import { sellerOwnerScope } from '@/lib/deal-access'
+import { sellerOwnerScope, isScopedPipelineRole } from '@/lib/deal-access'
 
 interface Params { params: { id: string } }
 
@@ -22,10 +23,10 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER'))
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
+    const ownerScope = isScopedPipelineRole(payload.role) ? await sellerOwnerScope(payload.userId) : {}
     const deal = await prisma.deal.findFirst({
       where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       include: INCLUDE,
@@ -43,10 +44,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER'))
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
+    const ownerScope = isScopedPipelineRole(payload.role) ? await sellerOwnerScope(payload.userId) : {}
     const existing = await prisma.deal.findFirst({
       where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
     })

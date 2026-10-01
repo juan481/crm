@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     //         | 'derivadas' (HANDED_OFF) | 'cerradas' (CLOSED)
     const filter = searchParams.get('filter') ?? 'all'
     const q = (searchParams.get('q') ?? '').trim()
+    const empresaId = searchParams.get('empresaId')
     const unreadOnly = searchParams.get('unread') === '1'
     const page = Math.max(1, Number(searchParams.get('page') ?? 1))
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 30)))
@@ -27,6 +28,9 @@ export async function GET(req: NextRequest) {
 
     const db = prisma as any
     const where: Record<string, unknown> = { organizationId: payload.orgId }
+    // Ficha de cliente (vista 360°, Resumen) pide ?empresaId= para traer sus
+    // chats de WhatsApp reales — pedido de Abba/Seba, 2026-10-01.
+    if (empresaId) where.empresaId = empresaId
     if (filter === 'nissi') Object.assign(where, { status: 'ACTIVE', humanTakeoverAt: null })
     else if (filter === 'humano') where.humanTakeoverAt = { not: null }
     else if (filter === 'derivadas') where.status = 'HANDED_OFF'

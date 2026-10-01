@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
-import { sellerOwnerScope } from '@/lib/deal-access'
+import { sellerOwnerScope, isScopedPipelineRole } from '@/lib/deal-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,15 +22,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // usuario autenticado de la org (HR, TECHNICIAN) podía leer notas
     // privadas de negociación de un deal con sólo conocer su id, aunque no
     // pudiera ver el deal en sí vía /api/deals/[id].
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
 
-    // ownerId para SELLER — sin esto, un SELLER que no puede ver el deal de
-    // otro vendedor vía GET /api/deals/[id] (404) igual podía leer/agregar
-    // notas de negociación en ese deal ajeno, si conocía el id. Mismo
-    // criterio que ya usa GET /api/deals/[id].
-    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
+    // ownerId para SELLER (y TECHNICIAN con Pipeline habilitado) — sin esto,
+    // alguien que no puede ver el deal de otro vendedor vía GET
+    // /api/deals/[id] (404) igual podía leer/agregar notas de negociación en
+    // ese deal ajeno, si conocía el id. Mismo criterio que GET /api/deals/[id].
+    const ownerScope = isScopedPipelineRole(payload.role) ? await sellerOwnerScope(payload.userId) : {}
     const deal = await db.deal.findFirst({
       where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       select: { id: true },
@@ -58,15 +60,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     // Faltaba — /api/deals exige SELLER+, esta ruta se había salteado ese piso.
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
 
-    // ownerId para SELLER — sin esto, un SELLER que no puede ver el deal de
-    // otro vendedor vía GET /api/deals/[id] (404) igual podía leer/agregar
-    // notas de negociación en ese deal ajeno, si conocía el id. Mismo
-    // criterio que ya usa GET /api/deals/[id].
-    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
+    // ownerId para SELLER (y TECHNICIAN con Pipeline habilitado) — sin esto,
+    // alguien que no puede ver el deal de otro vendedor vía GET
+    // /api/deals/[id] (404) igual podía leer/agregar notas de negociación en
+    // ese deal ajeno, si conocía el id. Mismo criterio que GET /api/deals/[id].
+    const ownerScope = isScopedPipelineRole(payload.role) ? await sellerOwnerScope(payload.userId) : {}
     const deal = await db.deal.findFirst({
       where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       select: { id: true },

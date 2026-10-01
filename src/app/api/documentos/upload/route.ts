@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { prisma } from '@/lib/db'
 
@@ -17,7 +18,11 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // SELLER+, o un TECHNICIAN con Pipeline habilitado — lo necesita para
+    // poder adjuntar una imagen a una nota de un deal (ver DealNotas, que
+    // sube acá) sin tener acceso al repositorio general de Documentos.
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error('[DOC UPLOAD] SUPABASE_SERVICE_ROLE_KEY not set')

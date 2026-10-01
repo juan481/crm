@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
-import { sellerOwnerScope } from '@/lib/deal-access'
+import { sellerOwnerScope, isScopedPipelineRole } from '@/lib/deal-access'
 import { marcarClienteAlGanar } from '@/lib/deal-won'
 
 interface Params { params: { id: string } }
@@ -15,10 +16,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER'))
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'pipeline')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const ownerScope = payload.role === 'SELLER' ? await sellerOwnerScope(payload.userId) : {}
+    const ownerScope = isScopedPipelineRole(payload.role) ? await sellerOwnerScope(payload.userId) : {}
     const deal = await prisma.deal.findFirst({
       where: { id: params.id, organizationId: payload.orgId, ...ownerScope },
       select: { id: true, empresaId: true, contactoId: true, ownerId: true },
