@@ -69,10 +69,15 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
     label: 'Ventas',
     items: [
       { label: 'Clientes',     href: '/clientes',     icon: <Users size={17} />,          roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'clientes' },
-      { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'pipeline' },
-      // TECHNICIAN incluido en `roles` a propósito: NO lo ve por default (el
-      // permiso del módulo lo tiene en SELLER+), sólo si un Super Admin lo
-      // habilita en Configuración → Permisos. Ver isModuleAllowed.
+      // TECHNICIAN incluido en `roles` a propósito en Pipeline/Empresas de acá
+      // abajo: NO las ve por default (el piso del módulo bajó a TECHNICIAN
+      // pero el default sigue en SELLER+), sólo si un Super Admin las habilita
+      // en Configuración → Permisos. Ver isModuleAllowed. Sin este TECHNICIAN
+      // en `roles`, el toggle de Permisos queda cosmético: este filtro estático
+      // corre ANTES que isModuleAllowed y lo tapa (bug real, Abba/Kevin,
+      // 2026-10-01 — se arregló acá el mismo día que se bajó el piso en
+      // modules.ts, por no haber tocado este archivo también).
+      { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'pipeline' },
       // ADMINISTRATIVO a propósito AFUERA de Cotizador/Cotizaciones — pedido
       // explícito de Abba (Norma no cotiza).
       { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN'], moduleId: 'cotizador' },
@@ -82,7 +87,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // Configuración → Catálogo). Aparece únicamente si un Super Admin habilita
       // "Catálogo · cargar productos y stock" para ese rol.
       { label: 'Gestionar catálogo', href: '/catalogo/gestion', icon: <Package size={17} />, roles: ['TECHNICIAN', 'SELLER'], moduleId: 'catalogo-gestion' },
-      { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'empresas' },
+      { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN'], moduleId: 'empresas' },
       { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'contactos' },
     ],
   },
