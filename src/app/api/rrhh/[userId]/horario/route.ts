@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { isValidHoraStr } from '@/lib/asistencia-turnos'
+import { isValidHoraStr, canManageAttendance } from '@/lib/asistencia-turnos'
 
 interface Params { params: { userId: string } }
-
-// Mismo gate que /api/asistencia/config — es RRHH quien define horarios en
-// la práctica, no sólo un Admin comercial.
-const canManageAttendance = (role: string) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(role)
 
 // Horario laboral INDIVIDUAL de un empleado — hasta 4 tramos (cubre
 // mañana+tarde con bache, o un único tramo nocturno). Vacío = el empleado

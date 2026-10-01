@@ -9,6 +9,15 @@ import { argentinaDayStart } from '@/lib/timezone'
 export const MODALIDADES_FICHAJE = ['Presencial', 'Pasivo (Remoto)']
 export const ETIQUETAS_TURNO = ['Regular', 'Extra/Adicional', 'Fin de Semana/Feriado']
 
+// Quién puede ver/ajustar horario laboral (general o individual) — a
+// propósito gateado a HR (no sólo ADMIN+) porque es RRHH quien define y
+// ajusta este dato en la práctica, no necesariamente un Admin comercial. HR
+// ya tiene piso de acceso propio en canAccess (nivel 1), por eso el chequeo
+// es explícito por rol en vez de canAccess(role,'ADMIN'). Compartido entre
+// /api/asistencia/config (horario general) y /api/rrhh/[userId]/horario
+// (horario individual) — antes estaba duplicado en los dos archivos.
+export const canManageAttendance = (role: string) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(role)
+
 export function esFinDeSemana(fecha: Date): boolean {
   // `fecha` ya es un argentinaDayStart (medianoche UTC que representa el
   // día argentino) — getUTCDay() sobre esa fecha ya refleja el día de la

@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-
-// Horario laboral usado para calcular tardanza en check-in — a propósito
-// gateado a HR (no sólo ADMIN+) porque es RRHH quien define y ajusta este
-// dato en la práctica, no necesariamente un Admin comercial. HR ya tiene
-// piso de acceso propio en canAccess (nivel 1), por eso el chequeo es
-// explícito por rol en vez de canAccess(role,'ADMIN').
-const canManageAttendance = (role: string) => ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(role)
+import { canManageAttendance } from '@/lib/asistencia-turnos'
 
 export async function GET() {
   try {
