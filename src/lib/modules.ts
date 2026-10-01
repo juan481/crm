@@ -87,7 +87,15 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // Piso TECHNICIAN (el depósito prepara y entrega); default ADMIN+.
   { id: 'entregas',       label: 'Depósito · Entregas', defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],              minRole: 'TECHNICIAN' },
   { id: 'documentos',     label: 'Documentos',      defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
-  { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
+  // Piso bajado a TECHNICIAN — mismo caso Kevin que Clientes/Pipeline: las
+  // APIs de lectura (/api/empresas, /api/empresas/options) ya estaban
+  // abiertas a cualquier rol autenticado (las necesita el picker de
+  // Tickets/Mi Día), pero el directorio completo (/empresas) seguía sin
+  // poder habilitarse acá por este piso — un Técnico no podía ni ver la
+  // ficha completa de la empresa que estaba visitando. Comparte moduleId con
+  // "Proveedores" en el sidebar: al prender este toggle, un Técnico también
+  // gana esa pestaña (no hay forma de separarlas sin tocar el sidebar).
+  { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'TECHNICIAN' },
   { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
   { id: 'rrhh',           label: 'RRHH',            defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'HR'],                              minRole: 'HR' },
   { id: 'mi-asistencia',  label: 'Mi Asistencia',   defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
@@ -107,6 +115,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   cotizador: '/cotizador',
   cotizaciones: '/cotizaciones',
   pipeline: '/pipeline',
+  empresas: '/empresas',
   stock: '/stock',
   compras: '/compras',
   entregas: '/entregas',
