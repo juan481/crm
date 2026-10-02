@@ -124,15 +124,17 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
     staleTime: 30 * 1000,
   })
 
-  // 60s: alimenta el sonido de alerta y el badge. Antes eran 20s (y 10 min
-  // antes de eso) — bajado de nuevo al revisar consumo de Vercel, 2026-10-02:
-  // esto corre en TODA pantalla del dashboard, para TODO usuario logueado,
-  // todo el tiempo que tenga la pestaña abierta — con ~17 usuarios activos
-  // en la base y 8hs de jornada, a 20s eran ~14.000 requests/día sólo de
-  // este polling. 60s sigue sintiéndose "al toque" para avisos de tareas/
-  // tickets/leads (nadie necesita saberlo en menos de un minuto) y corta
-  // ese volumen a un tercio. Sigue siendo polling, no push real (no hay
-  // websockets en el proyecto).
+  // 5 min: alimenta el sonido de alerta y el badge. Antes 20s, bajado a 60s
+  // y ahora a 5 min — pedido explícito de Juan al ver el aviso de consumo
+  // de Vercel (75% de las 4hs incluidas de Fluid Active CPU), para cortar
+  // el riesgo de que pause los proyectos mientras se nota el efecto del
+  // primer ajuste. Esto corre en TODA pantalla del dashboard, para TODO
+  // usuario logueado, todo el tiempo que tenga la pestaña abierta — con
+  // ~17 usuarios activos y 8hs de jornada, a 20s eran ~14.000 requests/día
+  // sólo de este polling; a 5 min quedan ~1.600. Es un avisador de
+  // tareas/tickets/leads nuevos, no algo que necesite frescura al segundo
+  // — nadie lo mira fijo esperando. Sigue siendo polling, no push real (no
+  // hay websockets en el proyecto).
   const { data: notifData } = useQuery<{ data: AppNotification[] }>({
     queryKey: ['notifications'],
     queryFn: async () => {
@@ -140,8 +142,8 @@ export function AppHeader({ user, onMenuToggle }: AppHeaderProps) {
       if (!res.ok) return { data: [] }
       return res.json()
     },
-    staleTime: 45 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
   })
   const qc = useQueryClient()
 

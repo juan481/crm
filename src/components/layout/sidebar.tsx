@@ -171,10 +171,12 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
   const pathname = usePathname()
   const { logout } = useAuthStore()
 
-  // 120s (antes 60s) — mismo motivo que AppHeader.tsx: corre en toda
-  // pantalla, para todo usuario, todo el tiempo, y son 5 queries de conteo
-  // por tick. Sólo alimenta un numerito de badge, no hace falta más
-  // frecuencia que esto (revisión de consumo de Vercel, 2026-10-02).
+  // 5 min (antes 60s, después 120s) — mismo motivo que AppHeader.tsx,
+  // pedido explícito de Juan para cortar el riesgo de que Vercel pause los
+  // proyectos por consumo. Corre en toda pantalla, para todo usuario, todo
+  // el tiempo, y son 5 queries de conteo por tick. Sólo alimenta un
+  // numerito de badge, no hace falta más frecuencia que esto (revisión de
+  // consumo de Vercel, 2026-10-02).
   const { data: counts } = useQuery<NotificationCounts>({
     queryKey: ['notification-counts'],
     queryFn: async () => {
@@ -182,8 +184,8 @@ export function Sidebar({ user, crmName, logoUrl, vertical = null, mobile = fals
       const json = await res.json()
       return json.data ?? { tasks: 0, tickets: 0, invoices: 0, whatsapp: 0 }
     },
-    staleTime: 60 * 1000,
-    refetchInterval: 120 * 1000,
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
   })
 
   // Sólo pega este fetch a la red para gente con más de una organización —
