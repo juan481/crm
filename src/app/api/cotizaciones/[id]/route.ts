@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'cotizaciones'))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { status, dealId } = await req.json()
+    const { status, dealId, sellerId } = await req.json()
     const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA']
     if (status !== undefined && !allowed.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
 
@@ -85,9 +85,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         organizationId: payload.orgId,
         ...(payload.role === 'SELLER' && { userId: payload.userId }),
       },
-      select: { id: true },
+      select: { id: true, dealId: true },
     })
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+
+    // "¿Quién vendió esto?" — mismo criterio que Pipeline y el Cotizador
+    // (pedido de Abba, Seba 2026-10-02): marcar una cotización ya cargada
+    // como Aceptada es, conceptualmente, lo mismo que ganar un deal — tiene
+    // que poder reasignarse al vendedor real en el mismo paso, no aparte.
+    // Sólo Admin+ puede tocar esto (mismo piso que /api/deals). Si la
+    // cotización tiene un deal vinculado, se reasigna también para no
+    // desincronizar cartera entre los dos registros.
+    let resolvedSellerId: string | undefined
+    if (sellerId) {
+      if (!canAccess(payload.role, 'ADMIN')) {
+        return NextResponse.json({ error: 'Sólo un admin puede reasignar a otro vendedor' }, { status: 403 })
+      }
+      const seller = await db.user.findFirst({ where: { id: sellerId, organizationId: payload.orgId }, select: { id: true } })
+      if (!seller) return NextResponse.json({ error: 'Vendedor no encontrado en esta organización' }, { status: 400 })
+      resolvedSellerId = seller.id
+    }
 
     // Vincular a un deal existente (ej. al agregar una cotización ad-hoc al
     // Pipeline) — valida que el deal sea de esta org (y, para SELLER, suyo).
@@ -114,8 +131,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       data: {
         ...(status !== undefined && { status }),
         ...(resolvedDealId !== undefined && { dealId: resolvedDealId }),
+        ...(resolvedSellerId && { userId: resolvedSellerId }),
       },
     })
+
+    // Deal vinculado (el que ya tenía, o el que se acaba de vincular en
+    // este mismo PATCH) — se reasigna junto, no queda la cotización a
+    // nombre de Leonel y la oportunidad de Pipeline a nombre de Seba.
+    const dealToSync = resolvedDealId !== undefined ? resolvedDealId : existing.dealId
+    if (resolvedSellerId && dealToSync) {
+      await db.deal.updateMany({
+        where: { id: dealToSync, organizationId: payload.orgId },
+        data: { ownerId: resolvedSellerId },
+      })
+    }
+
     return NextResponse.json({ message: 'Cotización actualizada' })
   } catch (error) {
     console.error('[COTIZACION PATCH]', error)

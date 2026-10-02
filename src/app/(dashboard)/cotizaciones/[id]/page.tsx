@@ -6,13 +6,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Download, Mail, MessageCircle, CheckCircle2,
   Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle, PackageCheck,
-  Copy, Repeat,
+  Copy, Repeat, User,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Select } from '@/components/ui/select'
 import { formatMoneyExact } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox, drawTcLegend } from '@/lib/pdf-branding'
 import { computeQuoteTotals } from '@/lib/quote-totals'
 import { sanitizePdfText } from '@/lib/pdf-text'
+import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -71,6 +73,24 @@ export default function CotizacionDetailPage() {
   const [duplicating, setDuplicating] = useState(false)
   const [convertingCurrency, setConvertingCurrency] = useState(false)
   const [markingCliente, setMarkingCliente] = useState(false)
+
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // "¿Quién vendió esto?" — mismo criterio que Pipeline y el Cotizador
+  // (pedido de Abba, Seba 2026-10-02). Vacío = no se toca el vendedor
+  // actual; se manda junto con el próximo cambio de estado.
+  const [sellerId, setSellerId] = useState('')
+  const { data: orgSellers } = useQuery<{ id: string; name: string; role: string }[]>({
+    queryKey: ['org-sellers-cotizacion'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/users')
+      const json = await res.json()
+      return (json.data ?? []).filter((u: { role: string; status: string }) =>
+        ['SELLER', 'TECHNICIAN', 'ADMINISTRATIVO', 'ADMIN', 'SUPER_ADMIN'].includes(u.role) && u.status === 'ACTIVE')
+    },
+    enabled: isAdmin,
+    staleTime: 5 * 60 * 1000,
+  })
 
   const { data, isLoading, error } = useQuery<CotizacionDetail>({
     queryKey: ['cotizacion', id],
@@ -388,12 +408,14 @@ export default function CotizacionDetailPage() {
       const res = await fetch(`/api/cotizaciones/${id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ status }),
+        body:    JSON.stringify({ status, ...(isAdmin && sellerId && { sellerId }) }),
       })
       if (!res.ok) { toast.error('Error al actualizar'); return }
-      toast.success('Estado actualizado')
+      toast.success(isAdmin && sellerId ? 'Estado actualizado y venta reasignada' : 'Estado actualizado')
+      setSellerId('')
       qc.invalidateQueries({ queryKey: ['cotizacion', id] })
       qc.invalidateQueries({ queryKey: ['cotizaciones'] })
+      qc.invalidateQueries({ queryKey: ['deals'] })
     } catch {
       toast.error('Error de conexión')
     } finally {
@@ -472,6 +494,20 @@ export default function CotizacionDetailPage() {
 
         {/* Status changer */}
         <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (orgSellers?.length ?? 0) > 0 && (
+            <div className="w-44">
+              <Select
+                value={sellerId}
+                onChange={e => setSellerId(e.target.value)}
+                options={[
+                  { value: '', label: data.user ? `Vendedor: ${data.user.name}` : 'Vendedor: —' },
+                  ...(orgSellers ?? [])
+                    .filter(s => s.id !== data.user?.id)
+                    .map(s => ({ value: s.id, label: `Reasignar a ${s.name}` })),
+                ]}
+              />
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={handleDuplicate} loading={duplicating} leftIcon={<Copy size={13} />}>
             Duplicar
           </Button>
@@ -509,6 +545,7 @@ export default function CotizacionDetailPage() {
           { icon: <DollarSign size={14} />, label: totals?.discriminado ? 'Total (IVA incl.)' : 'Total', value: formatMoneyExact(totals?.total ?? data.finalTotal ?? data.total, data.currency) },
           { icon: <Calendar size={14} />,   label: 'Fecha',       value: date },
           { icon: <Mail size={14} />,       label: 'Destinatario',value: data.recipientEmail },
+          { icon: <User size={14} />,       label: 'Vendedor',    value: data.user?.name ?? '—' },
         ].map(item => (
           <div key={item.label} className="surface rounded-xl p-3">
             <p className="flex items-center gap-1 text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>
