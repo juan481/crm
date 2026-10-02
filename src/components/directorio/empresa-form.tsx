@@ -24,6 +24,7 @@ interface FormData {
   city:     string
   province: string
   website:  string
+  isCliente: boolean
   tipoCliente:       string
   cuit:              string
   condicionIva:      string
@@ -111,6 +112,12 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
       city:        empresa?.city     ?? '',
       province:    empresa?.province ?? '',
       website:     empresa?.website  ?? '',
+      // Sólo tiene efecto real en el alta (ver checkbox más abajo, oculto en
+      // edición) — pedido de Abba, 2026-10-02: cargar la empresa y marcarla
+      // cliente eran dos pasos separados ("flujo duplicado"), esto los junta
+      // en uno para el caso más común. Editar sigue usando el botón dedicado
+      // "Marcar como cliente" de la ficha, no este checkbox.
+      isCliente:   false,
       tipoCliente:       empresa?.tipoCliente ?? '',
       cuit:              empresa?.cuit ?? '',
       condicionIva:      empresa?.condicionIva && !CONDICIONES_IVA.includes(empresa.condicionIva) ? OTRA_CONDICION_IVA : (empresa?.condicionIva ?? ''),
@@ -172,6 +179,7 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         city:     data.city,
         province: data.province,
         website:  data.website,
+        ...(!empresa && { isCliente: data.isCliente }),
         tipoCliente:       data.tipoCliente || null,
         cuit:              data.cuit,
         condicionIva:      finalCondicionIva,
@@ -234,6 +242,18 @@ export function EmpresaForm({ empresa, onSuccess }: Props) {
         </label>
         <Input {...register('activity')} placeholder="Ej: Seguridad electrónica, Instalaciones CCTV..." />
       </div>
+
+      {/* Sólo en alta — pedido de Abba (Seba, 2026-10-02): que cargar una
+          empresa y marcarla cliente no sean dos pasos separados. */}
+      {!empresa && (
+        <label
+          className="flex items-center gap-2.5 text-sm font-medium cursor-pointer select-none rounded-xl p-3"
+          style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)', color: 'var(--color-text)' }}
+        >
+          <input type="checkbox" className="rounded" {...register('isCliente')} />
+          Ya es cliente (marcarla como tal al crearla)
+        </label>
+      )}
 
       <div className={isOtherCountry ? 'grid grid-cols-2 gap-3' : ''}>
         <div>

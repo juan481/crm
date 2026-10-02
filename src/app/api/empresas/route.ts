@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { name, activity, address, codigoPostal, city, province, country, website, ownerId, tipoCliente, cuit, condicionIva, formaPagoHabitual, esProveedor, cbu, alias } = body
+    const { name, activity, address, codigoPostal, city, province, country, website, ownerId, isCliente, tipoCliente, cuit, condicionIva, formaPagoHabitual, esProveedor, cbu, alias } = body
 
     if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
 
@@ -150,6 +150,10 @@ export async function POST(req: NextRequest) {
         province:     province?.trim()     || null,
         country:      country?.trim()      || null,
         website:      website?.trim()      || null,
+        // Un solo paso para cargar + marcar cliente (pedido de Abba,
+        // 2026-10-02 — ver comentario en empresa-form.tsx).
+        isCliente:    isCliente === true,
+        clienteDesde: isCliente === true ? new Date() : null,
         tipoCliente:        ['EMPRESA', 'CONSUMIDOR_FINAL'].includes(tipoCliente) ? tipoCliente : null,
         cuit:               cuit?.trim()               || null,
         condicionIva:       condicionIva?.trim()        || null,
