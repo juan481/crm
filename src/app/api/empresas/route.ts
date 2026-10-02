@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { relinkContactos } from '@/lib/directorio-link'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,7 +105,18 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Igual criterio que GET /api/empresas/[id] (ver comentario ahí): un
+    // Técnico con "Empresas" o "Clientes" habilitado en Permisos tiene que
+    // poder CARGAR una empresa nueva, no sólo verlas — pedido explícito de
+    // Abba (Seba, 2026-10-02), "le habilitamos el módulo pero el sistema no
+    // los deja cargar clientes".
+    if (
+      !canAccess(payload.role, 'SELLER') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'empresas')) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'clientes'))
+    ) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const body = await req.json()
     const { name, activity, address, codigoPostal, city, province, country, website, ownerId, tipoCliente, cuit, condicionIva, formaPagoHabitual, esProveedor, cbu, alias } = body

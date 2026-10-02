@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // Mismo chequeo que ya tiene el POST de acá abajo — sin esto, cualquier
     // rol autenticado (sin acceso al Directorio en el sidebar) podía leer
     // notas de auditoría privadas con sólo conocer el id del contacto.
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'contactos'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const db = prisma as any
 
@@ -49,7 +52,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     // Faltaba — /api/contactos (GET/POST) exige SELLER+ para tocar este
     // módulo, pero crear una nota se había salteado el mismo piso.
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'contactos'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const db = prisma as any
 

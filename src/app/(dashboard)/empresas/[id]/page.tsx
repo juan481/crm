@@ -24,6 +24,7 @@ import { AbonoDebitoBoton } from '@/components/servicios/abono-debito-boton'
 import { PortalAccesoCard } from '@/components/empresas/portal-acceso-card'
 import { ESTADO_LABEL } from '@/lib/servicios-recurrentes'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
 import type { DirectorioContacto, Empresa, ServicioRecurrente } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -54,7 +55,14 @@ export default function EmpresaDetailPage() {
   const [sendingEmail,       setSendingEmail]       = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
-  const canSell   = canManage || user?.role === 'SELLER'
+  // hasEmpresasModule: un Técnico al que un Super Admin le prendió el módulo
+  // "Empresas"/"Clientes" en Permisos tiene que poder vender de verdad acá
+  // (editar, marcar cliente, cotizar, agregar contacto) — no sólo mirar la
+  // ficha. Pedido de Abba, 2026-10-02 ("que los de IT vendan"). Eliminar
+  // sigue siendo sólo Admin+ (ver canManage más abajo).
+  const hasEmpresasModule = useModuleAccess('empresas')
+  const hasClientesModule = useModuleAccess('clientes')
+  const canSell   = canManage || user?.role === 'SELLER' || hasEmpresasModule === true || hasClientesModule === true
 
   const { data, isLoading } = useQuery({
     queryKey: ['empresa', id],
@@ -249,7 +257,7 @@ export default function EmpresaDetailPage() {
         >
           <ArrowLeft size={15} /> Empresas
         </button>
-        {canManage && (
+        {(canManage || canSell) && (
           <div className="flex gap-2 flex-wrap">
             <Button
               variant={empresa?.isCliente ? 'outline' : 'secondary'}
@@ -269,9 +277,11 @@ export default function EmpresaDetailPage() {
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Edit size={14} /> Editar
             </Button>
-            <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-              <Trash2 size={14} /> Eliminar
-            </Button>
+            {canManage && (
+              <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+                <Trash2 size={14} /> Eliminar
+              </Button>
+            )}
           </div>
         )}
       </div>

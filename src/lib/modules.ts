@@ -97,7 +97,13 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // TECHNICIAN/ADMINISTRATIVO/HR a propósito — prender este toggle NO le da
   // Proveedores a un Técnico, sólo Empresas (ver sidebar.tsx).
   { id: 'empresas',       label: 'Empresas',        defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'TECHNICIAN' },
-  { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'SELLER' },
+  // Piso bajado a TECHNICIAN — pedido de Abba (Seba, 2026-10-02): un Técnico
+  // derivado por Pipeline no podía abrir el contacto del cliente que le
+  // habían pasado ("de los chats que me derivaste, de ninguno tengo el
+  // contacto"), porque este piso seguía en SELLER aunque Empresas/Clientes/
+  // Pipeline ya se hubieran bajado antes. El default sigue siendo Vendedor+,
+  // ninguna org cambia hasta que un Super Admin prenda el toggle.
+  { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'TECHNICIAN' },
   { id: 'rrhh',           label: 'RRHH',            defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'HR'],                              minRole: 'HR' },
   { id: 'mi-asistencia',  label: 'Mi Asistencia',   defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
 ]
@@ -126,6 +132,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   cotizaciones: '/cotizaciones',
   pipeline: '/pipeline',
   empresas: '/empresas',
+  contactos: '/contactos',
   tareas: '/tareas',
   tickets: '/tickets',
   eventos: '/eventos',

@@ -77,7 +77,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Mismo criterio que el GET de acá arriba (y que el POST de
+    // api/empresas): sin esto, un Técnico con el módulo habilitado podía ver
+    // la ficha pero no editarla ni marcarla como cliente — se quedaba
+    // siempre con "Sin permisos" al guardar.
+    if (
+      !canAccess(payload.role, 'SELLER') &&
+      !(await roleHasModule(payload.orgId, payload.role, 'clientes')) &&
+      !(await roleHasModule(payload.orgId, payload.role, 'empresas'))
+    ) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const body = await req.json()
     const {

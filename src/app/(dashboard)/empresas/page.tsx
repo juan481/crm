@@ -14,6 +14,8 @@ import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
 import { usePlugin } from '@/hooks/use-plugin'
+import { useModuleAccess } from '@/hooks/use-module-access'
+import { roleAtLeast } from '@/lib/modules'
 import { exportToExcel } from '@/lib/xlsx-export'
 import type { Empresa } from '@/types'
 import toast from 'react-hot-toast'
@@ -95,6 +97,16 @@ export default function EmpresasPage() {
   const [bulkUpdating,  setBulkUpdating]  = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // Importar/exportar/unificar duplicados sigue siendo sólo Admin+ (bulk,
+  // más sensible) — pero cargar UNA empresa nueva tiene que estar disponible
+  // para cualquier rol que ya tenga el módulo habilitado (SELLER por
+  // default, o un TECHNICIAN al que un Super Admin se lo haya prendido en
+  // Permisos — pedido de Abba, 2026-10-02: "le habilitamos el módulo pero
+  // el sistema no los deja cargar clientes"). Ver mismo criterio en
+  // empresas/[id]/page.tsx (canSell).
+  const hasEmpresasModule = useModuleAccess('empresas')
+  const hasClientesModule = useModuleAccess('clientes')
+  const canCreate = canManage || (user ? roleAtLeast(user.role, 'SELLER') : false) || hasEmpresasModule === true || hasClientesModule === true
   const { enabled: exportEnabled } = usePlugin('export-data')
   const [exporting, setExporting] = useState(false)
 
@@ -465,10 +477,12 @@ export default function EmpresasPage() {
               <Button variant="outline" onClick={() => setShowMerge(true)}>
                 <Merge size={14} /> Unificar duplicados
               </Button>
-              <Button onClick={() => setShowForm(true)}>
-                <Plus size={15} /> Nueva empresa
-              </Button>
             </>
+          )}
+          {canCreate && (
+            <Button onClick={() => setShowForm(true)}>
+              <Plus size={15} /> Nueva empresa
+            </Button>
           )}
         </div>
       </div>

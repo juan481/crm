@@ -85,7 +85,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // comentario de arriba del archivo: nunca tiene Catálogo·gestión).
       { label: 'Gestionar catálogo', href: '/catalogo/gestion', icon: <Package size={17} />, roles: ['TECHNICIAN', 'SELLER', 'HR'], moduleId: 'catalogo-gestion' },
       { label: 'Empresas',     href: '/empresas',     icon: <Building2 size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'empresas' },
-      { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'], moduleId: 'contactos' },
+      { label: 'Contactos',    href: '/contactos',    icon: <UserCircle2 size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'contactos' },
     ],
   },
   {

@@ -10,6 +10,8 @@ import { Modal } from '@/components/ui/modal'
 import { ContactoForm } from '@/components/directorio/contacto-form'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
+import { roleAtLeast } from '@/lib/modules'
 import { exportToExcel } from '@/lib/xlsx-export'
 import type { DirectorioContacto } from '@/types'
 import toast from 'react-hot-toast'
@@ -58,6 +60,14 @@ export default function ContactosPage() {
   const [deleting,     setDeleting]     = useState(false)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // Importar Excel sigue siendo sólo Admin+ (bulk) — crear/editar un
+  // contacto puntual tiene que estar disponible para cualquier rol con el
+  // módulo habilitado (SELLER por default, o un TECHNICIAN al que un Super
+  // Admin se lo prendió en Permisos). Pedido de Abba, 2026-10-02: los
+  // técnicos a los que Seba les deriva un chat no encontraban el contacto
+  // del cliente derivado. Eliminar sigue siendo sólo Admin+ (ver canManage).
+  const hasContactosModule = useModuleAccess('contactos')
+  const canCreate = canManage || (user ? roleAtLeast(user.role, 'SELLER') : false) || hasContactosModule === true
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['contactos', search, page],
@@ -158,18 +168,22 @@ export default function ContactosPage() {
             {total} contactos · CEOs, dueños, técnicos, administrativos — todos vinculables a empresas
           </p>
         </div>
-        {canManage && (
-          <div className="flex gap-2">
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
-            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
-              <Upload size={15} />
-              {importing ? 'Importando...' : 'Importar Excel'}
-            </Button>
+        <div className="flex gap-2">
+          {canManage && (
+            <>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
+              <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing}>
+                <Upload size={15} />
+                {importing ? 'Importando...' : 'Importar Excel'}
+              </Button>
+            </>
+          )}
+          {canCreate && (
             <Button onClick={() => setShowForm(true)}>
               <Plus size={15} /> Nuevo contacto
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="max-w-sm">
@@ -275,24 +289,28 @@ export default function ContactosPage() {
                     ) : <span style={{ color: 'var(--color-text-muted)' }}>—</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {canManage && (
+                    {(canCreate || canManage) && (
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setEditContact(c)}
-                          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
-                          style={{ color: 'var(--color-text-muted)' }}
-                          title="Editar"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(c.id)}
-                          className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
-                          style={{ color: 'var(--color-text-muted)' }}
-                          title="Eliminar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {canCreate && (
+                          <button
+                            onClick={() => setEditContact(c)}
+                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
+                            style={{ color: 'var(--color-text-muted)' }}
+                            title="Editar"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => setDeleteId(c.id)}
+                            className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
+                            style={{ color: 'var(--color-text-muted)' }}
+                            title="Eliminar"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     )}
                   </td>
