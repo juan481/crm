@@ -20,6 +20,7 @@ import { ClienteActividadReciente } from '@/components/directorio/cliente-activi
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { formatCurrency, formatDate, timeAgo } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
 import type { Empresa, Deal, DealStage, Ticket, Task, TaskPriority } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -45,7 +46,13 @@ export default function ClienteDetailPage() {
   const qc            = useQueryClient()
   const { user }      = useAuthStore()
   const [tab, setTab] = useState<Tab>('resumen')
-  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'SELLER'
+  // ADMINISTRATIVO ya está en defaultRoles de "Clientes"/"Empresas" en
+  // modules.ts pero faltaba acá (bug real, Abba 2026-10-02) — y un
+  // TECHNICIAN con el módulo habilitado por Permisos tampoco podía Cotizar/
+  // Editar desde esta ficha pese a tenerlo prendido.
+  const hasEmpresasModule = useModuleAccess('empresas')
+  const hasClientesModule = useModuleAccess('clientes')
+  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'ADMINISTRATIVO' || user?.role === 'SELLER' || hasEmpresasModule === true || hasClientesModule === true
   const [editOpen, setEditOpen] = useState(false)
 
   // Task form state

@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
 import { mirrorAsistencia, MODALIDADES_FICHAJE, ETIQUETAS_TURNO, isValidHoraStr, isValidDateKey } from '@/lib/asistencia-turnos'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     const requestedUserId = searchParams.get('userId')
 
     const db = prisma as any
-    const canSeeAll = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
+    const canSeeAll = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role) || (await roleHasModule(payload.orgId, payload.role, 'rrhh'))
     const userId = canSeeAll ? (requestedUserId || undefined) : payload.userId
 
     const where: Record<string, unknown> = { organizationId: payload.orgId }
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
+    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role) || (await roleHasModule(payload.orgId, payload.role, 'rrhh'))
     if (!canManage) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // Bug real encontrado en auditoría: sin `.catch()`, un body vacío o

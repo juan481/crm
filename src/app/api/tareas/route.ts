@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { notifyTaskAssignment } from '@/lib/task-notifications'
 import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
 import { taskInvolvesUser } from '@/lib/assignment-scope'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,15 @@ export async function GET(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    // Faltaba — el toggle de Permisos para "Tareas" (módulo con piso
+    // TECHNICIAN) no tenía NINGÚN efecto del lado de la API: si un Super
+    // Admin le sacaba el módulo a un rol, la API lo seguía dejando pasar
+    // igual. defaultRoles ya incluye los 6 roles, así que esto sólo cambia
+    // algo cuando alguien lo restringe a propósito (hoy nadie lo tiene
+    // restringido en ninguna org, cero impacto en comportamiento actual).
+    if (!(await roleHasModule(payload.orgId, payload.role, 'tareas'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const { searchParams } = req.nextUrl
     const search       = searchParams.get('search')       ?? ''
@@ -82,6 +92,9 @@ export async function POST(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await roleHasModule(payload.orgId, payload.role, 'tareas'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const { title, description, priority, dueDate, assignedToId, clientId, empresaId, dealId, ticketId, collaboratorIds, ccEmails } = await req.json()
     if (!title?.trim()) return NextResponse.json({ error: 'El título es requerido' }, { status: 400 })

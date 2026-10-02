@@ -14,6 +14,8 @@ import { ContactoForm } from '@/components/directorio/contacto-form'
 import { ContactoNotas, type ContactoNotasHandle } from '@/components/directorio/contacto-notas'
 import { WhatsAppSendButton } from '@/components/integrations/whatsapp-send-button'
 import { useAuthStore } from '@/store/auth-store'
+import { useModuleAccess } from '@/hooks/use-module-access'
+import { roleAtLeast } from '@/lib/modules'
 import type { DirectorioContacto } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -28,6 +30,11 @@ export default function ContactoDetailPage() {
   const notasRef = useRef<ContactoNotasHandle>(null)
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+  // Mismo criterio que /contactos (lista): Editar disponible para SELLER+ o
+  // cualquier rol con el módulo "Contactos" habilitado en Permisos —
+  // Eliminar sigue siendo sólo Admin+ (pedido de Abba, 2026-10-02).
+  const hasContactosModule = useModuleAccess('contactos')
+  const canEdit = canManage || (user ? roleAtLeast(user.role, 'SELLER') : false) || hasContactosModule === true
 
   const { data, isLoading, isError } = useQuery<DirectorioContacto>({
     queryKey: ['contacto', id],
@@ -42,8 +49,10 @@ export default function ContactoDetailPage() {
     setDeleting(true)
     try {
       const res = await fetch(`/api/contactos/${id}`, { method: 'DELETE' })
-      if (!res.ok) { const j = await res.json(); toast.error(j.error ?? 'Error al eliminar'); return }
-      toast.success('Contacto eliminado')
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error ?? 'Error al eliminar'); return }
+      if (j.pending) { toast(j.message, { icon: '⏳' }); setConfirmDelete(false); return }
+      toast.success(j.message)
       router.push('/contactos')
     } catch {
       toast.error('Error de conexión')
@@ -92,24 +101,28 @@ export default function ContactoDetailPage() {
               {data.role && <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{data.role}</p>}
             </div>
           </div>
-          {canManage && (
+          {(canEdit || canManage) && (
             <div className="flex items-center gap-1 shrink-0">
-              <button
-                onClick={() => setEditing(true)}
-                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
-                style={{ color: 'var(--color-text-muted)' }}
-                title="Editar"
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="p-2 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
-                style={{ color: 'var(--color-text-muted)' }}
-                title="Eliminar"
-              >
-                <Trash2 size={15} />
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="p-2 rounded-lg transition-colors hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)]"
+                  style={{ color: 'var(--color-text-muted)' }}
+                  title="Editar"
+                >
+                  <Pencil size={15} />
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="p-2 rounded-lg transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  style={{ color: 'var(--color-text-muted)' }}
+                  title="Eliminar"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { roleHasModule } from '@/lib/module-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,14 @@ export async function POST(req: NextRequest) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
+    // El allowlist explícito es a propósito, no canAccess(role,'HR') — en la
+    // jerarquía de canAccess, HR rankea DEBAJO de SELLER (ver auth.ts), así
+    // que ese atajo le daría esto gratis a cualquier Vendedor. El fallback a
+    // roleHasModule es lo que faltaba: sin él, el toggle de "RRHH" en
+    // Permisos no tenía ningún efecto para un rol fuera de este allowlist
+    // (piso real en modules.ts: minRole HR, cualquier rol de nivel ≥ HR
+    // puede recibirlo si un Super Admin lo habilita a propósito).
+    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role) || (await roleHasModule(payload.orgId, payload.role, 'rrhh'))
     if (!canManage) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { userId, fecha, ausente = true, observaciones, horaEntrada, horaSalida, tardanza = false } = await req.json()
@@ -70,8 +78,9 @@ export async function GET(req: NextRequest) {
     if (userId)   where.userId = userId
     if (dateFrom) where.fecha  = { gte: dateFrom, lte: dateTo }
 
-    // HR and ADMIN can see all; others only see their own
-    const canSeeAll = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
+    // HR and ADMIN can see all; others only see their own — mismo criterio
+    // que el POST de acá arriba (allowlist + fallback a roleHasModule).
+    const canSeeAll = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role) || (await roleHasModule(payload.orgId, payload.role, 'rrhh'))
     if (!canSeeAll) where.userId = payload.userId
 
     const records = await db.asistencia.findMany({

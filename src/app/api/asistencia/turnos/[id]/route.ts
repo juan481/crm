@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { argentinaDateKeyToDayStart, argentinaTimeToInstant } from '@/lib/timezone'
 import { mirrorAsistencia, MODALIDADES_FICHAJE, ETIQUETAS_TURNO, isValidHoraStr, isValidDateKey } from '@/lib/asistencia-turnos'
+import { roleHasModule } from '@/lib/module-access'
 
 // PATCH — esto es "reasignar horas regulares a extra" (pedido explícito de
 // Sergio): un cambio de `etiqueta` sobre un bloque existente, sin endpoint
@@ -11,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
+    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role) || (await roleHasModule(payload.orgId, payload.role, 'rrhh'))
     if (!canManage) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any

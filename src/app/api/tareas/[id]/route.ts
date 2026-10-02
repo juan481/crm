@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { notifyTaskAssignment } from '@/lib/task-notifications'
 import { notifyCollaboratorAdded } from '@/lib/collaborator-notifications'
+import { roleHasModule } from '@/lib/module-access'
 
 interface Params { params: { id: string } }
 
@@ -20,6 +21,9 @@ export async function GET(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await roleHasModule(payload.orgId, payload.role, 'tareas'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const db = prisma as any
     // Same visibility as the list endpoint — a lower role could otherwise
@@ -49,6 +53,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (!(await roleHasModule(payload.orgId, payload.role, 'tareas'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
     // HR solo puede ver tareas, no editarlas
     if (payload.role === 'HR')
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })

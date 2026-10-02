@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { argentinaDayStart } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
 import { usePlugin } from '@/hooks/use-plugin'
+import { useModuleAccess } from '@/hooks/use-module-access'
 import { exportToExcel } from '@/lib/xlsx-export'
 import toast from 'react-hot-toast'
 
@@ -139,7 +140,12 @@ export default function FacturasPage() {
   // ver src/lib/finance-access.ts) desde que se armó ese rol — acá faltaba
   // sumarlo, así que veía la pantalla (el módulo estaba prendido) pero sin
   // "+ Nueva Factura" ni ninguna acción, aunque el backend igual la dejara.
-  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'ADMINISTRATIVO'
+  // + fallback a roleHasModule: el piso real de "Facturación" en modules.ts
+  // es SELLER, así que un Super Admin podría habilitársela a un Vendedor
+  // puntual desde Permisos — sin esto, ese toggle quedaba cosmético igual
+  // que el caso de ADMINISTRATIVO de arriba.
+  const hasFacturasModule = useModuleAccess('facturas')
+  const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'ADMINISTRATIVO' || hasFacturasModule === true
   const { enabled: exportEnabled } = usePlugin('export-data')
   const [exporting, setExporting] = useState(false)
 

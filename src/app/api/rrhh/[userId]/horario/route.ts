@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { isValidHoraStr, canManageAttendance } from '@/lib/asistencia-turnos'
+import { roleHasModule } from '@/lib/module-access'
 
 interface Params { params: { userId: string } }
 
@@ -14,7 +15,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canManageAttendance(payload.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canManageAttendance(payload.role) && !(await roleHasModule(payload.orgId, payload.role, 'rrhh'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const db = prisma as any
     const targetUser = await db.user.findFirst({ where: { id: params.userId, organizationId: payload.orgId }, select: { id: true } })
@@ -42,7 +45,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canManageAttendance(payload.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canManageAttendance(payload.role) && !(await roleHasModule(payload.orgId, payload.role, 'rrhh'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const db = prisma as any
     const targetUser = await db.user.findFirst({ where: { id: params.userId, organizationId: payload.orgId }, select: { id: true } })

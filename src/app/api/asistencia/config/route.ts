@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageAttendance } from '@/lib/asistencia-turnos'
+import { roleHasModule } from '@/lib/module-access'
 
 export async function GET() {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canManageAttendance(payload.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canManageAttendance(payload.role) && !(await roleHasModule(payload.orgId, payload.role, 'rrhh'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const org = await prisma.organization.findUnique({
       where: { id: payload.orgId },
@@ -26,7 +29,9 @@ export async function PATCH(req: NextRequest) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canManageAttendance(payload.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canManageAttendance(payload.role) && !(await roleHasModule(payload.orgId, payload.role, 'rrhh'))) {
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
 
     const { attendanceStartTime, attendanceToleranceMinutes } = await req.json()
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { roleHasModule } from '@/lib/module-access'
 
 interface Params { params: { id: string } }
 
@@ -9,7 +10,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role)
+    const canManage = ['SUPER_ADMIN', 'ADMIN', 'HR'].includes(payload.role) || (await roleHasModule(payload.orgId, payload.role, 'rrhh'))
     if (!canManage) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
