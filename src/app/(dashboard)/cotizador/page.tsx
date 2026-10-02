@@ -19,6 +19,7 @@ import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, type QuoteTotals }
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox, drawTcLegend } from '@/lib/pdf-branding'
 import { sanitizePdfText } from '@/lib/pdf-text'
 import { useThemeStore } from '@/store/theme-store'
+import { useAuthStore } from '@/store/auth-store'
 import { CatalogFilters } from '@/components/catalogo/catalog-filters'
 import { ProductCard } from '@/components/catalogo/product-card'
 import { ProductDetailModal } from '@/components/catalogo/product-detail-modal'
@@ -123,6 +124,28 @@ export default function CotizadorPage() {
   // la barra inferior, nunca haciendo scroll.
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
   const logoUrl = useThemeStore((s) => s.logoUrl)
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
+
+  // "¿Quién vendió esto?" — pedido de Abba (Seba, 2026-10-02): el gerente
+  // de ventas a veces carga él mismo una venta que cerró otro vendedor (se
+  // le pasó cargarla). Vacío = la cotización/oportunidad queda a nombre de
+  // quien está logueado (comportamiento de siempre); sólo Admin+ puede
+  // elegir otra persona — la API ya exigía ADMIN+ para reasignar ownerId
+  // en deals (ver /api/deals POST), esto reusa el mismo piso para la
+  // cotización en sí (/api/cotizador/send acepta `sellerId`).
+  const [sellerId, setSellerId] = useState('')
+  const { data: orgSellers } = useQuery<{ id: string; name: string; role: string }[]>({
+    queryKey: ['org-sellers-cotizador'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/users')
+      const json = await res.json()
+      return (json.data ?? []).filter((u: { role: string; status: string }) =>
+        ['SELLER', 'TECHNICIAN', 'ADMINISTRATIVO', 'ADMIN', 'SUPER_ADMIN'].includes(u.role) && u.status === 'ACTIVE')
+    },
+    enabled: isAdmin,
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Debounce sólo para la búsqueda contra el catálogo (server-side, miles
   // de SKUs) — los servicios y productos "simples" siguen filtrándose en
@@ -727,6 +750,7 @@ export default function CotizadorPage() {
           dealId,
           recipientEmail, recipientName: recipientName || 'Cliente',
           notes, total: subtotal, discount, currency, validityDays, priceMode, ivaDiscriminado,
+          ...(isAdmin && sellerId && { sellerId }),
         }),
       })
       const json = await res.json()
@@ -842,6 +866,7 @@ export default function CotizadorPage() {
           probability: 50, stage: 'PROPUESTA',
           notes:       `Generado automáticamente desde cotización ${quote.ref}`,
           empresaId:   clientMode === 'existing' ? selectedEmpresaId || null : null,
+          ...(isAdmin && sellerId && { ownerId: sellerId }),
         }),
       })
       const json = await res.json()
@@ -1546,6 +1571,27 @@ export default function CotizadorPage() {
               </button>
             ))}
           </div>
+
+          {isAdmin && (orgSellers?.length ?? 0) > 0 && (
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                <User size={11} className="inline mr-1" />¿Quién vendió esto?
+              </label>
+              <Select
+                value={sellerId}
+                onChange={e => setSellerId(e.target.value)}
+                options={[
+                  { value: '', label: 'Yo (por defecto)' },
+                  ...(orgSellers ?? [])
+                    .filter(s => s.id !== user?.id)
+                    .map(s => ({ value: s.id, label: s.name })),
+                ]}
+              />
+              <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+                Si estás cargando una venta que cerró otra persona, elegila acá — la cotización y la oportunidad en Pipeline quedan a su nombre, no al tuyo.
+              </p>
+            </div>
+          )}
 
           {clientMode === 'existing' ? (
             <div className="space-y-3">

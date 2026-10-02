@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { isOrgEmailConfigured } from '@/lib/email'
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode, ivaDiscriminado } = body as {
+    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode, ivaDiscriminado, sellerId } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       dealId?: string | null
@@ -32,6 +32,23 @@ export async function POST(req: NextRequest) {
       validityDays?: number
       priceMode?: string
       ivaDiscriminado?: boolean
+      // "¿Quién vendió esto?" — pedido de Abba (Seba, 2026-10-02): un
+      // gerente de ventas carga él mismo una venta que cerró otra persona
+      // (se le pasó registrarla) y la cotización/oportunidad tienen que
+      // quedar a nombre del vendedor real, no de quien la tipea. Sólo
+      // Admin+ puede usar esto — mismo piso que ya exige /api/deals para
+      // reasignar ownerId.
+      sellerId?: string | null
+    }
+
+    let cotizacionUserId = payload.userId
+    if (sellerId && sellerId !== payload.userId) {
+      if (!canAccess(payload.role, 'ADMIN')) {
+        return NextResponse.json({ error: 'Sólo un admin puede cargar una venta a nombre de otra persona' }, { status: 403 })
+      }
+      const seller = await prisma.user.findFirst({ where: { id: sellerId, organizationId: payload.orgId }, select: { id: true } })
+      if (!seller) return NextResponse.json({ error: 'Vendedor no encontrado en esta organización' }, { status: 400 })
+      cotizacionUserId = seller.id
     }
     // 'PUBLICO' | 'GREMIO' — qué lista de precios se aplicó (Módulo 2). Los
     // QuoteItem.price ya vienen resueltos desde el cliente; esto sólo queda
@@ -111,8 +128,11 @@ export async function POST(req: NextRequest) {
           smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
         },
       }),
+      // El nombre del vendedor real (cotizacionUserId), no el de quien la
+      // tipea — así el PDF/mail que recibe el cliente dice "Leonel" aunque
+      // Seba sea quien la cargó.
       prisma.user.findUnique({
-        where:  { id: payload.userId },
+        where:  { id: cotizacionUserId },
         select: { name: true },
       }),
     ])
@@ -130,7 +150,7 @@ export async function POST(req: NextRequest) {
       data: {
         ref:            quoteRef,
         organizationId: payload.orgId,
-        userId:         payload.userId,
+        userId:         cotizacionUserId,
         empresaId:      linkedEmpresaId,
         dealId:         linkedDealId,
         recipientEmail,

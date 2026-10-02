@@ -166,8 +166,11 @@ export async function POST(req: NextRequest) {
           smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
         },
       }),
+      // El vendedor dueño de la cotización, no quien aprieta "Enviar" — un
+      // Admin puede estar mandando una cotización que cargó a nombre de
+      // otro vendedor (ver sellerId en api/cotizador/send).
       prisma.user.findUnique({
-        where:  { id: payload.userId },
+        where:  { id: cotizacion.userId },
         select: { name: true },
       }),
     ])
