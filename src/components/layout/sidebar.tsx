@@ -77,8 +77,15 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // mismo día). ADMINISTRATIVO a propósito AFUERA de Cotizador/
       // Cotizaciones más abajo — pedido explícito de Abba (Norma no cotiza).
       { label: 'Pipeline',     href: '/pipeline',     icon: <TrendingUp size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'pipeline' },
-      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'cotizador' },
-      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'cotizaciones' },
+      // ADMINISTRATIVO en el techo (bug real, Abba 2026-10-02): por default
+      // "Norma no cotiza" así que el módulo no se lo da de entrada
+      // (defaultRoles en modules.ts no incluye ADMINISTRATIVO acá), pero el
+      // piso SÍ es TECHNICIAN — un Super Admin puede prenderle el toggle a
+      // un ADMINISTRATIVO puntual (Abba ya lo hizo) y sin esto en el techo
+      // ese toggle quedaba cosmético, mismo bug que Pipeline/Empresas el
+      // 2026-10-01.
+      { label: 'Cotizador',    href: '/cotizador',    icon: <Calculator size={17} />,      roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'cotizador' },
+      { label: 'Cotizaciones', href: '/cotizaciones', icon: <FileText size={17} />,        roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'cotizaciones' },
       { label: 'Catálogo',     href: '/catalogo',     icon: <Boxes size={17} />,           roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'catalogo' },
       // Sólo para roles que no tienen la Configuración (ADMIN/SUPER_ADMIN usan
       // Configuración → Catálogo). ADMINISTRATIVO a propósito AFUERA (ver
