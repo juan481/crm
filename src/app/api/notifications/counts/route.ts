@@ -11,6 +11,7 @@ export interface NotificationCounts {
   tickets: number
   invoices: number
   whatsapp: number
+  deletionRequests: number
 }
 
 export async function GET() {
@@ -26,7 +27,7 @@ export async function GET() {
     // y /api/conversaciones/*).
     const canSeeInbox = canAccess(role, 'SELLER') || (await roleHasModule(orgId, role, 'conversaciones'))
 
-    const [tasks, tickets, invoices, whatsapp] = await Promise.all([
+    const [tasks, tickets, invoices, whatsapp, deletionRequests] = await Promise.all([
       // Tareas asignadas a mí O donde soy colaborador, pendientes o en curso.
       prisma.task.count({
         where: {
@@ -69,6 +70,11 @@ export async function GET() {
             .then((r) => Number(r[0]?.count ?? 0))
             .catch(() => 0)
         : Promise.resolve(0),
+      // Pedidos de baja pendientes (maker-checker de Eliminar, ver
+      // src/lib/deletion-requests.ts) — sólo SUPER_ADMIN los resuelve.
+      role === 'SUPER_ADMIN'
+        ? prisma.deletionRequest.count({ where: { organizationId: orgId, status: 'PENDING' } })
+        : Promise.resolve(0),
     ])
 
     // 'private': esto es por-organización y por-rol (tasks/tickets/whatsapp
@@ -78,11 +84,11 @@ export async function GET() {
     // respuesta de OTRO usuario/organización. Mismo bug que se encontró en
     // /api/module-permissions.
     return NextResponse.json(
-      { data: { tasks, tickets, invoices, whatsapp } as NotificationCounts },
+      { data: { tasks, tickets, invoices, whatsapp, deletionRequests } as NotificationCounts },
       { headers: { 'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60' } },
     )
   } catch (error) {
     console.error('[NOTIFICATION COUNTS]', error)
-    return NextResponse.json({ data: { tasks: 0, tickets: 0, invoices: 0, whatsapp: 0 } })
+    return NextResponse.json({ data: { tasks: 0, tickets: 0, invoices: 0, whatsapp: 0, deletionRequests: 0 } })
   }
 }

@@ -149,8 +149,13 @@ export default function ContactosPage() {
     setDeleting(true)
     try {
       const res = await fetch(`/api/contactos/${deleteId}`, { method: 'DELETE' })
-      if (res.ok) { toast.success('Contacto eliminado'); qc.invalidateQueries({ queryKey: ['contactos'] }) }
-      else { const j = await res.json(); toast.error(j.error) }
+      const j = await res.json()
+      if (res.ok) {
+        if (j.pending) toast(j.message, { icon: '⏳' })
+        else { toast.success(j.message); qc.invalidateQueries({ queryKey: ['contactos'] }) }
+      } else {
+        toast.error(j.error)
+      }
     } catch { toast.error('Error de conexión') }
     finally { setDeleting(false); setDeleteId(null) }
   }

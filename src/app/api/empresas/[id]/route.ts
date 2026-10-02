@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { relinkContactos } from '@/lib/directorio-link'
 import { roleHasModule } from '@/lib/module-access'
+import { requestOrDelete } from '@/lib/deletion-requests'
 
 export const dynamic = 'force-dynamic'
 
@@ -176,11 +177,18 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Subido de SELLER a ADMIN — alineado con el botón del frontend
+    // (canManage, sólo Admin+), que es lo único que hoy llega hasta acá.
+    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const db = prisma as any
-    const exists = await db.empresa.findFirst({ where: { id: params.id, organizationId: payload.orgId }, select: { id: true } })
+    const exists = await db.empresa.findFirst({ where: { id: params.id, organizationId: payload.orgId }, select: { id: true, name: true } })
     if (!exists) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+
+    // Maker-checker (pedido de Abba, Seba 2026-10-02): un ADMIN que no es
+    // Super Admin deja un pedido de baja pendiente en vez de borrar directo.
+    const result = await requestOrDelete(payload, 'empresa', exists.id, exists.name)
+    if (!result.deleted) return NextResponse.json({ message: result.message, pending: true })
 
     await db.empresa.delete({ where: { id: params.id } })
     return NextResponse.json({ message: 'Empresa eliminada' })

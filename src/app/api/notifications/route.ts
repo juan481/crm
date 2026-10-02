@@ -31,7 +31,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const since72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
   const db = prisma as any
 
-  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs] = await Promise.all([
+  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions] = await Promise.all([
     db.invoice.findMany({
       where: {
         organizationId: orgId,
@@ -78,6 +78,15 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       where: { organizationId: orgId, importedAt: null, lastInboundAt: { gte: since72h } },
       select: { id: true, customerName: true, customerPhone: true, lastInboundAt: true },
       orderBy: { lastInboundAt: 'desc' },
+      take: 10,
+    }),
+    // Maker-checker de Eliminar (pedido de Abba, Seba 2026-10-02) — ver
+    // src/lib/deletion-requests.ts. Filtrado a SUPER_ADMIN más abajo, en el
+    // GET (mismo criterio que overdueInvoices con canSeeFinancials).
+    db.deletionRequest.findMany({
+      where: { organizationId: orgId, status: 'PENDING' },
+      select: { id: true, entityType: true, entityLabel: true, createdAt: true, requestedBy: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
       take: 10,
     }),
   ])
@@ -153,6 +162,19 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
     })
   }
 
+  for (const d of pendingDeletions) {
+    notifications.push({
+      id: `del-${d.id}`,
+      type: 'deletion_request',
+      title: d.entityType === 'empresa' ? 'Pedido de baja: empresa' : 'Pedido de baja: contacto',
+      body: `${d.entityLabel} — pedido por ${d.requestedBy?.name ?? '—'}`,
+      href: '/configuracion/bajas-pendientes',
+      severity: 'warning',
+      createdAt: d.createdAt.toISOString(),
+      countsTowardUnread: true,
+    })
+  }
+
   return notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
@@ -199,6 +221,7 @@ export async function GET() {
         if (n.type === 'new_lead') return canSeeLeads
         if (n.type === 'whatsapp_unread') return canSeeWhatsapp
         if (n.type === 'pending_task' || n.type === 'new_ticket') return involvesMe(n)
+        if (n.type === 'deletion_request') return payload.role === 'SUPER_ADMIN'
         return true
       })
       .map(({ assigneeId: _assigneeId, collaboratorIds: _collaboratorIds, ...n }) => ({

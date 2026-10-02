@@ -302,6 +302,7 @@ model Organization {
   alertasCosto            AlertaCosto[]
   entregasStock           EntregaStock[]
   payments                Payment[]
+  deletionRequests        DeletionRequest[]
 }
 
 // ─── Ruteo de avisos automáticos ───────────────────────────────────────────
@@ -500,6 +501,8 @@ model User {
   whatsAppConvsAssigned   WhatsAppConversation[]   @relation("WhatsAppAssignee")
   whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
   salesTargets            SalesTarget[]
+  deletionRequestsMade    DeletionRequest[]        @relation("DeletionRequestedBy")
+  deletionRequestsResolved DeletionRequest[]       @relation("DeletionRequestResolvedBy")
 
   @@index([organizationId])
   @@index([empresaId])
@@ -840,6 +843,42 @@ model ModulePermission {
 
   @@unique([organizationId, moduleId, role])
   @@index([organizationId])
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Maker-checker para Eliminar en Empresas/Contactos — pedido de Abba (Seba,
+// 2026-10-02): con el fix de permisos de ese mismo día, "Eliminar" sigue
+// siendo Admin+, pero Abba tiene varios ADMIN (Mauro, Oale) además de Seba
+// (SUPER_ADMIN) — no quiere que cualquiera de ellos pueda borrar sin que él
+// se entere y lo confirme. Un ADMIN que pide una baja crea esta fila en vez
+// de borrar directo; un SUPER_ADMIN la aprueba o la rechaza (ver
+// api/deletion-requests/[id]). Un SUPER_ADMIN que pide la baja la resuelve
+// en el momento (no tiene que autoconfirmarse) — ver lógica en el DELETE de
+// cada entidad. entityLabel es una copia del nombre al momento del pedido,
+// para que la notificación y el historial sigan siendo legibles aunque la
+// baja se rechace y después el registro cambie de nombre.
+model DeletionRequest {
+  id             String                 @id @default(cuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entityType     String                 // 'empresa' | 'contacto'
+  entityId       String
+  entityLabel    String
+  status         DeletionRequestStatus  @default(PENDING)
+  requestedById  String
+  requestedBy    User                   @relation("DeletionRequestedBy", fields: [requestedById], references: [id])
+  resolvedById   String?
+  resolvedBy     User?                  @relation("DeletionRequestResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt     DateTime?
+  createdAt      DateTime               @default(now())
+
+  @@index([organizationId, status])
+  @@index([entityType, entityId])
 }
 
 // ─── Bot de WhatsApp con IA ("NISSI" para Abba, genérico para cualquier org)

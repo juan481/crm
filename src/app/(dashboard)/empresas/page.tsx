@@ -376,8 +376,15 @@ export default function EmpresasPage() {
     setDeleting(true)
     try {
       const res = await fetch(`/api/empresas/${deleteId}`, { method: 'DELETE' })
-      if (res.ok) { toast.success('Empresa eliminada'); qc.invalidateQueries({ queryKey: ['empresas'] }) }
-      else { const j = await res.json(); toast.error(j.error) }
+      const j = await res.json()
+      if (res.ok) {
+        // pending: true = quedó como pedido de baja (maker-checker, un
+        // ADMIN que no es Super Admin) — la empresa sigue existiendo.
+        if (j.pending) toast(j.message, { icon: '⏳' })
+        else { toast.success(j.message); qc.invalidateQueries({ queryKey: ['empresas'] }) }
+      } else {
+        toast.error(j.error)
+      }
     } catch { toast.error('Error de conexión') }
     finally { setDeleting(false); setDeleteId(null) }
   }

@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { findEmpresaMatch } from '@/lib/directorio-link'
 import { roleHasModule } from '@/lib/module-access'
+import { requestOrDelete } from '@/lib/deletion-requests'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,14 +114,22 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Subido de SELLER a ADMIN — alineado con el botón del frontend (sólo
+    // Admin+ lo ve, tanto en /contactos como en la ficha de la empresa).
+    if (!canAccess(payload.role, 'ADMIN')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const exists = await (prisma as any).directorioContacto.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true },
+      select: { id: true, firstName: true, lastName: true },
     })
     if (!exists) return NextResponse.json({ error: 'Contacto no encontrado' }, { status: 404 })
+
+    // Maker-checker (pedido de Abba, Seba 2026-10-02) — ver mismo criterio
+    // en DELETE /api/empresas/[id].
+    const label = `${exists.firstName} ${exists.lastName}`.trim()
+    const result = await requestOrDelete(payload, 'contacto', exists.id, label)
+    if (!result.deleted) return NextResponse.json({ message: result.message, pending: true })
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (prisma as any).directorioContacto.delete({ where: { id: params.id } })

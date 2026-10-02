@@ -8,7 +8,7 @@ import {
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
   Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug, MessageCircle, RefreshCw,
-  Warehouse, Truck, ShoppingCart, PackageCheck,
+  Warehouse, Truck, ShoppingCart, PackageCheck, ShieldCheck,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -136,6 +136,10 @@ const settingsItems: NavItem[] = [
   { label: 'Configuración', href: '/configuracion',           icon: <Settings size={16} />,  exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Usuarios',      href: '/configuracion/usuarios',  icon: <UserCog size={16} />,   exact: true,  roles: ['SUPER_ADMIN', 'ADMIN'] },
   { label: 'Permisos',      href: '/configuracion/permisos',  icon: <KeyRound size={16} />,  exact: true,  roles: ['SUPER_ADMIN'] },
+  // Maker-checker de Eliminar (pedido de Abba, Seba 2026-10-02) — sólo
+  // Super Admin resuelve, ver api/deletion-requests. Badge con la cantidad
+  // de pedidos pendientes, mismo patrón que Tareas/Tickets/Facturación.
+  { label: 'Bajas pendientes', href: '/configuracion/bajas-pendientes', icon: <ShieldCheck size={16} />, exact: true, roles: ['SUPER_ADMIN'], badgeKey: 'deletionRequests' },
   // Un solo link para Productos + Servicios (antes eran 2 páginas
   // separadas sin conexión, y encima el catálogo real del proveedor
   // — /configuracion/catalogo — no tenía ningún link en el menú, sólo se

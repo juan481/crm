@@ -148,12 +148,13 @@ export default function EmpresaDetailPage() {
     setDeleting(true)
     try {
       const res = await fetch(`/api/empresas/${id}`, { method: 'DELETE' })
+      const j = await res.json()
       if (res.ok) {
-        toast.success('Empresa eliminada')
-        qc.invalidateQueries({ queryKey: ['empresas'] })
-        router.push('/empresas')
+        // pending: true = quedó como pedido de baja (maker-checker) — la
+        // empresa sigue existiendo, no se navega afuera de la ficha.
+        if (j.pending) { toast(j.message, { icon: '⏳' }) }
+        else { toast.success(j.message); qc.invalidateQueries({ queryKey: ['empresas'] }); router.push('/empresas') }
       } else {
-        const j = await res.json()
         toast.error(j.error)
       }
     } catch { toast.error('Error de conexión') }
@@ -165,11 +166,11 @@ export default function EmpresaDetailPage() {
     setDeleting(true)
     try {
       const res = await fetch(`/api/contactos/${deleteContactoId}`, { method: 'DELETE' })
+      const j = await res.json()
       if (res.ok) {
-        toast.success('Contacto eliminado')
-        qc.invalidateQueries({ queryKey: ['empresa', id] })
+        if (j.pending) { toast(j.message, { icon: '⏳' }) }
+        else { toast.success(j.message); qc.invalidateQueries({ queryKey: ['empresa', id] }) }
       } else {
-        const j = await res.json()
         toast.error(j.error)
       }
     } catch { toast.error('Error de conexión') }

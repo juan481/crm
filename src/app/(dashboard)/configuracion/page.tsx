@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound, Bot, BellRing } from 'lucide-react'
+import { Shield, UserCog, Puzzle, Settings, Trash2, AlertTriangle, Package, KeyRound, Bot, BellRing, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalFooter } from '@/components/ui/modal'
 import { useAuthStore } from '@/store/auth-store'
@@ -34,6 +34,14 @@ const settingsSections = [
     description: 'Elegí qué módulos ve cada rol (Técnico, Ventas, RRHH...) en el menú lateral.',
     roles: ['SUPER_ADMIN'],
     color: '#10b981',
+  },
+  {
+    href: '/configuracion/bajas-pendientes',
+    icon: <ShieldCheck size={24} />,
+    title: 'Bajas pendientes',
+    description: 'Pedidos de eliminación de Empresas y Contactos hechos por un Admin, a la espera de tu confirmación.',
+    roles: ['SUPER_ADMIN'],
+    color: '#ef4444',
   },
   {
     href: '/configuracion/plugins',
