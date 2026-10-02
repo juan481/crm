@@ -69,10 +69,14 @@ interface DealFormState {
   empresaId:     string
   contactoId:    string
   contactoLabel: string
+  // "¿Quién vendió esto?" — vacío = queda a nombre de quien está logueado
+  // (de siempre). Sólo Admin+ puede elegir otra persona (pedido de Abba,
+  // Seba 2026-10-02: cargar directo una venta que cerró otro vendedor).
+  ownerId: string
 }
 
 const EMPTY_FORM: DealFormState = {
-  title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '', contactoId: '', contactoLabel: '',
+  title: '', amount: '', currency: 'USD', probability: '10', stage: 'LEAD', notes: '', empresaId: '', contactoId: '', contactoLabel: '', ownerId: '',
 }
 
 function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => void }) {
@@ -162,7 +166,16 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
       const res = await fetch(`/api/deals/${dealId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage, probability: stage === 'GANADO' ? 100 : 0, closedAt: new Date().toISOString() }),
+        body: JSON.stringify({
+          stage, probability: stage === 'GANADO' ? 100 : 0, closedAt: new Date().toISOString(),
+          // Pedido de Abba (Seba, 2026-10-02): "si Leonel cerró una venta y
+          // se le pasó cargarla, que yo la pueda dar como vendida pero que
+          // quede a nombre de él". Antes reasignar el "Responsable" era un
+          // paso aparte (Guardar) de cerrar la venta (Marcar Ganado) — ahora
+          // si un admin tocó el selector de acá abajo, se manda junto con
+          // el mismo click que cierra.
+          ...(isAdmin && d?.ownerId && d.ownerId !== data?.owner?.id ? { ownerId: d.ownerId } : {}),
+        }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al cerrar'); return }
@@ -466,14 +479,30 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
                 <Button variant="outline" onClick={reopenDeal} loading={closing === 'GANADO'}>Reabrir</Button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <Button className="flex-1" onClick={() => closeDeal('GANADO')} loading={closing === 'GANADO'}
-                  style={{ background: '#10b981', borderColor: '#10b981', color: '#fff' }}>
-                  Marcar Ganado
-                </Button>
-                <Button variant="outline" onClick={() => closeDeal('PERDIDO')} loading={closing === 'PERDIDO'}>
-                  Perdido
-                </Button>
+              <div className="space-y-2">
+                {/* Reasignar a quien cerró la venta de verdad, justo acá —
+                    pedido de Abba (Seba): "si Leonel vendió y se le pasó
+                    cargarla, que la pueda dar como vendida yo pero que
+                    quede a nombre de él". Mismo selector/estado que
+                    "Responsable / Asignado a" más arriba — tocarlo acá
+                    también lo deja listo para el click de abajo. */}
+                {isAdmin && d && (
+                  <Select
+                    label="¿Quién cerró esta venta?"
+                    value={d.ownerId}
+                    onChange={e => setDraft({ ...d, ownerId: e.target.value })}
+                    options={ownerOptions.length ? ownerOptions : [{ value: d.ownerId, label: data.owner?.name ?? 'Cargando…' }]}
+                  />
+                )}
+                <div className="flex items-center gap-2">
+                  <Button className="flex-1" onClick={() => closeDeal('GANADO')} loading={closing === 'GANADO'}
+                    style={{ background: '#10b981', borderColor: '#10b981', color: '#fff' }}>
+                    Marcar Ganado
+                  </Button>
+                  <Button variant="outline" onClick={() => closeDeal('PERDIDO')} loading={closing === 'PERDIDO'}>
+                    Perdido
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -507,6 +536,22 @@ export default function PipelinePage() {
   const [form,     setForm]     = useState<DealFormState>(EMPTY_FORM)
   const [saving,   setSaving]   = useState(false)
   const [movingId, setMovingId] = useState<string | null>(null)
+
+  // Mismo criterio que el selector de "Responsable" del detalle del deal
+  // (DealDetailModal más arriba) — la lista sólo se pide si hace falta.
+  const { data: newDealOwners } = useQuery<{ id: string; name: string; role: string }[]>({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/users')
+      const json = await res.json()
+      return json.data ?? []
+    },
+    enabled: canDelete,
+    staleTime: 5 * 60 * 1000,
+  })
+  const newDealOwnerOptions = (newDealOwners ?? [])
+    .filter(u => ['SELLER', 'TECHNICIAN', 'ADMIN', 'SUPER_ADMIN'].includes(u.role))
+    .map(u => ({ value: u.id, label: u.name }))
   // Pre-selecciona el deal si se llega desde un link con ?dealId= (ej. la
   // notificación de "nuevo lead" de la campana) — mismo patrón que
   // cotizador/page.tsx usa para ?dealId=.
@@ -581,6 +626,7 @@ export default function PipelinePage() {
           notes:       form.notes.trim() || null,
           empresaId:   form.empresaId || null,
           contactoId:  form.contactoId || null,
+          ...(canDelete && form.ownerId && { ownerId: form.ownerId }),
         }),
       })
       const json = await res.json()
@@ -896,6 +942,14 @@ export default function PipelinePage() {
             valueLabel={form.contactoLabel}
             onChange={(id, label) => setForm(f => ({ ...f, contactoId: id, contactoLabel: label }))}
           />
+          {canDelete && (
+            <Select
+              label="¿Quién vendió esto? (opcional — vacío = vos)"
+              options={[{ value: '', label: 'Yo' }, ...newDealOwnerOptions]}
+              value={form.ownerId}
+              onChange={e => setForm(f => ({ ...f, ownerId: e.target.value }))}
+            />
+          )}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Notas</label>
             <textarea
