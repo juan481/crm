@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Search, Plus, Trash2, Send, Ban, Check, X, Building2 } from 'lucide-react'
@@ -36,7 +36,14 @@ export default function SolicitudCompraDetailPage() {
   const [productSearch, setProductSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [addingProductId, setAddingProductId] = useState<string | null>(null)
-  const [condicionCustom, setCondicionCustom] = useState('')
+  // "Otra" condición de pago — bug real encontrado en revisión: antes esto
+  // se calculaba comparando contra `data.condicionPago`, así que al elegir
+  // "Otra" (que guarda '' en el server) el valor dejaba de ser "libre" en
+  // el siguiente render y el Select/Input volvían a "sin especificar" solos.
+  // Ahora es un booleano propio: una vez que se entra a modo libre, se
+  // queda ahí hasta que el usuario elija otra opción del desplegable.
+  const [useOtraCondicion, setUseOtraCondicion] = useState(false)
+  const [condicionDraft, setCondicionDraft] = useState('')
   const [sendModalOpen, setSendModalOpen] = useState(false)
   const [sendEmail, setSendEmail] = useState('')
   const [sendNombre, setSendNombre] = useState('')
@@ -59,6 +66,25 @@ export default function SolicitudCompraDetailPage() {
 
   const isBorrador = data?.estado === 'BORRADOR'
   const isAnulada = data?.estado === 'ANULADA'
+
+  // Entra a modo libre si el valor guardado no está en la lista curada
+  // (ej. se abrió una solicitud que ya tenía una condición de pago rara) —
+  // sólo se inicializa UNA vez por solicitud, la primera vez que `data`
+  // llega (no en cada refetch): si corriera en cada refetch, cada
+  // keystroke del usuario (que dispara un PATCH → invalida la query →
+  // refetch) pisaría lo que está tipeando a mitad de escribir.
+  const condicionInitRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!data || condicionInitRef.current === data.id) return
+    condicionInitRef.current = data.id
+    if (data.condicionPago && !CONDICIONES_PAGO.includes(data.condicionPago)) {
+      setUseOtraCondicion(true)
+      setCondicionDraft(data.condicionPago)
+    } else {
+      setUseOtraCondicion(false)
+      setCondicionDraft('')
+    }
+  }, [data])
 
   const { data: proveedores } = useQuery<ProveedorOption[]>({
     queryKey: ['empresas-proveedores'],
@@ -199,8 +225,6 @@ export default function SolicitudCompraDetailPage() {
     return acc
   }, {} as Record<string, number>)
 
-  const condicionEsLibre = data.condicionPago && !CONDICIONES_PAGO.includes(data.condicionPago)
-
   return (
     <div className="space-y-5 max-w-3xl">
       <button onClick={() => router.push('/compras')} className="flex items-center gap-1.5 text-sm hover:underline" style={{ color: 'var(--color-text-muted)' }}>
@@ -248,10 +272,15 @@ export default function SolicitudCompraDetailPage() {
           {isBorrador ? (
             <>
               <Select
-                value={condicionEsLibre ? OTRA_CONDICION_PAGO : (data.condicionPago ?? '')}
+                value={useOtraCondicion ? OTRA_CONDICION_PAGO : (data.condicionPago ?? '')}
                 onChange={e => {
-                  if (e.target.value === OTRA_CONDICION_PAGO) { setCondicionCustom(''); updateCondicion('') }
-                  else updateCondicion(e.target.value)
+                  if (e.target.value === OTRA_CONDICION_PAGO) {
+                    setUseOtraCondicion(true)
+                    setCondicionDraft('')
+                  } else {
+                    setUseOtraCondicion(false)
+                    updateCondicion(e.target.value)
+                  }
                 }}
                 options={[
                   { value: '', label: '— sin especificar —' },
@@ -259,12 +288,13 @@ export default function SolicitudCompraDetailPage() {
                   { value: OTRA_CONDICION_PAGO, label: OTRA_CONDICION_PAGO },
                 ]}
               />
-              {(condicionEsLibre || condicionCustom) && (
+              {useOtraCondicion && (
                 <Input
                   className="mt-2"
                   placeholder="Especificar condición de pago"
-                  value={condicionEsLibre ? data.condicionPago ?? '' : condicionCustom}
-                  onChange={e => { setCondicionCustom(e.target.value); updateCondicion(e.target.value) }}
+                  value={condicionDraft}
+                  onChange={e => setCondicionDraft(e.target.value)}
+                  onBlur={() => updateCondicion(condicionDraft)}
                 />
               )}
             </>
@@ -326,58 +356,16 @@ export default function SolicitudCompraDetailPage() {
               <tr><td colSpan={6} className="px-4 py-10 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>Sin productos agregados</td></tr>
             ) : (
               data.items.map(it => (
-                <tr key={it.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <td className="px-3 py-2.5 font-mono text-xs" style={{ color: 'var(--color-text-muted)' }}>{it.sku ?? '—'}</td>
-                  <td className="px-3 py-2.5" style={{ color: 'var(--color-text)' }}>{it.nombre}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    {isBorrador ? (
-                      <input type="number" min="1" value={it.cantidad}
-                        onChange={e => updateItem(it.id, { cantidad: Number(e.target.value) || 1 })}
-                        className="w-16 text-center rounded-lg px-1 py-1 text-sm outline-none"
-                        style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                    ) : it.cantidad}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {isBorrador ? (
-                      <input type="number" min="0" step="0.01" value={it.costoUnitario}
-                        onChange={e => updateItem(it.id, { costoUnitario: Number(e.target.value) || 0 })}
-                        className="w-24 text-right rounded-lg px-1 py-1 text-sm outline-none"
-                        style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                    ) : formatMoneyExact(it.costoUnitario, it.moneda)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--color-text)' }}>
-                    {formatMoneyExact(it.costoUnitario * it.cantidad, it.moneda)}
-                  </td>
-                  {!isBorrador && (
-                    <td className="px-3 py-2.5 text-center">
-                      {isAnulada ? (
-                        <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => updateItem(it.id, { disponible: true })}
-                            className="p-1.5 rounded-lg transition-colors"
-                            style={it.disponible === true ? { background: 'rgba(16,185,129,0.15)', color: '#10b981' } : { color: 'var(--color-text-subtle)' }}
-                            title="Disponible">
-                            <Check size={14} />
-                          </button>
-                          <button onClick={() => updateItem(it.id, { disponible: false })}
-                            className="p-1.5 rounded-lg transition-colors"
-                            style={it.disponible === false ? { background: 'rgba(239,68,68,0.15)', color: '#ef4444' } : { color: 'var(--color-text-subtle)' }}
-                            title="Sin stock">
-                            <X size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  )}
-                  {isBorrador && (
-                    <td className="px-3 py-2.5 text-right">
-                      <button onClick={() => removeItem(it.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-colors" style={{ color: 'var(--color-text-muted)' }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  )}
-                </tr>
+                <ItemRow
+                  key={it.id}
+                  it={it}
+                  isBorrador={isBorrador}
+                  isAnulada={isAnulada}
+                  onCommitCantidad={(v) => updateItem(it.id, { cantidad: v })}
+                  onCommitCosto={(v) => updateItem(it.id, { costoUnitario: v })}
+                  onSetDisponible={(v) => updateItem(it.id, { disponible: v })}
+                  onRemove={() => removeItem(it.id)}
+                />
               ))
             )}
           </tbody>
@@ -420,5 +408,88 @@ export default function SolicitudCompraDetailPage() {
         </ModalFooter>
       </Modal>
     </div>
+  )
+}
+
+// Cantidad/costo en estado local, recién se manda al server al salir del
+// campo (onBlur) — bug real encontrado en revisión: antes el onChange
+// pegaba un PATCH por cada tecla, y como eso invalida la query y reemplaza
+// `it` con lo que venga del server, el input podía perder foco/cursor a
+// mitad de escribir un número de varios dígitos.
+function ItemRow({ it, isBorrador, isAnulada, onCommitCantidad, onCommitCosto, onSetDisponible, onRemove }: {
+  it: SolicitudItem
+  isBorrador: boolean
+  isAnulada: boolean
+  onCommitCantidad: (v: number) => void
+  onCommitCosto: (v: number) => void
+  onSetDisponible: (v: boolean) => void
+  onRemove: () => void
+}) {
+  const [cantidadDraft, setCantidadDraft] = useState(String(it.cantidad))
+  const [costoDraft, setCostoDraft] = useState(String(it.costoUnitario))
+
+  // Si el server trae un valor distinto (otra persona editó el mismo
+  // pedido, o se acaba de agregar el ítem) y el campo no está siendo
+  // tocado ahora mismo, refleja el nuevo valor — no pisa mientras se tipea
+  // porque sólo corre cuando `it.cantidad`/`it.costoUnitario` cambian de
+  // verdad (no en cada render).
+  useEffect(() => { setCantidadDraft(String(it.cantidad)) }, [it.cantidad])
+  useEffect(() => { setCostoDraft(String(it.costoUnitario)) }, [it.costoUnitario])
+
+  return (
+    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+      <td className="px-3 py-2.5 font-mono text-xs" style={{ color: 'var(--color-text-muted)' }}>{it.sku ?? '—'}</td>
+      <td className="px-3 py-2.5" style={{ color: 'var(--color-text)' }}>{it.nombre}</td>
+      <td className="px-3 py-2.5 text-center">
+        {isBorrador ? (
+          <input type="number" min="1" value={cantidadDraft}
+            onChange={e => setCantidadDraft(e.target.value)}
+            onBlur={() => onCommitCantidad(Math.max(1, Math.round(Number(cantidadDraft) || 1)))}
+            className="w-16 text-center rounded-lg px-1 py-1 text-sm outline-none"
+            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+        ) : it.cantidad}
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        {isBorrador ? (
+          <input type="number" min="0" step="0.01" value={costoDraft}
+            onChange={e => setCostoDraft(e.target.value)}
+            onBlur={() => onCommitCosto(Math.max(0, Number(costoDraft) || 0))}
+            className="w-24 text-right rounded-lg px-1 py-1 text-sm outline-none"
+            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+        ) : formatMoneyExact(it.costoUnitario, it.moneda)}
+      </td>
+      <td className="px-3 py-2.5 text-right font-semibold" style={{ color: 'var(--color-text)' }}>
+        {formatMoneyExact(it.costoUnitario * it.cantidad, it.moneda)}
+      </td>
+      {!isBorrador && (
+        <td className="px-3 py-2.5 text-center">
+          {isAnulada ? (
+            <span style={{ color: 'var(--color-text-subtle)' }}>—</span>
+          ) : (
+            <div className="flex items-center justify-center gap-1">
+              <button onClick={() => onSetDisponible(true)}
+                className="p-1.5 rounded-lg transition-colors"
+                style={it.disponible === true ? { background: 'rgba(16,185,129,0.15)', color: '#10b981' } : { color: 'var(--color-text-subtle)' }}
+                title="Disponible">
+                <Check size={14} />
+              </button>
+              <button onClick={() => onSetDisponible(false)}
+                className="p-1.5 rounded-lg transition-colors"
+                style={it.disponible === false ? { background: 'rgba(239,68,68,0.15)', color: '#ef4444' } : { color: 'var(--color-text-subtle)' }}
+                title="Sin stock">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </td>
+      )}
+      {isBorrador && (
+        <td className="px-3 py-2.5 text-right">
+          <button onClick={onRemove} className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-400 transition-colors" style={{ color: 'var(--color-text-muted)' }}>
+            <Trash2 size={14} />
+          </button>
+        </td>
+      )}
+    </tr>
   )
 }
