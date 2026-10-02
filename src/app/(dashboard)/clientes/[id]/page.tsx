@@ -19,12 +19,13 @@ import { EmpresaCotizaciones } from '@/components/directorio/empresa-cotizacione
 import { ClienteActividadReciente } from '@/components/directorio/cliente-actividad-reciente'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
 import { formatCurrency, formatDate, timeAgo } from '@/lib/utils'
+import { ESTADO_LABEL } from '@/lib/servicios-recurrentes'
 import { useAuthStore } from '@/store/auth-store'
 import { useModuleAccess } from '@/hooks/use-module-access'
 import type { Empresa, Deal, DealStage, Ticket, Task, TaskPriority } from '@/types'
 import toast from 'react-hot-toast'
 
-type Tab = 'resumen' | 'actividad' | 'deals' | 'cotizaciones' | 'tickets' | 'tareas' | 'contactos'
+type Tab = 'resumen' | 'actividad' | 'deals' | 'cotizaciones' | 'tickets' | 'tareas' | 'contactos' | 'servicios'
 
 const STAGE_LABELS: Record<DealStage, string> = {
   LEAD: 'Lead', CONTACTADO: 'Contactado', PROPUESTA: 'Propuesta',
@@ -185,6 +186,10 @@ export default function ClienteDetailPage() {
     { key: 'actividad',    label: 'Actividad',    icon: <ClipboardList size={14} /> },
     { key: 'deals',        label: 'Deals',        icon: <TrendingUp size={14} />,  count: activeDeals.length },
     { key: 'cotizaciones', label: 'Cotizaciones', icon: <FileText size={14} /> },
+    // Antes no estaba acá — el mismo cliente mostraba sus abonos/servicios
+    // recurrentes desde /empresas/[id] pero no desde /clientes/[id] (son la
+    // misma Empresa, dos fichas distintas). Reporte de Abba, 2026-10-02.
+    { key: 'servicios',    label: 'Servicios',    icon: <DollarSign size={14} />,  count: empresa.serviciosRecurrentes?.length },
     { key: 'tickets',      label: 'Tickets',      icon: <LifeBuoy size={14} />,    count: openTickets.length },
     { key: 'tareas',       label: 'Tareas',       icon: <CheckSquare size={14} />, count: pendingTareas.length },
     { key: 'contactos',    label: 'Contactos',    icon: <Users size={14} />,       count: empresa.contactos?.length },
@@ -499,6 +504,42 @@ export default function ClienteDetailPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === 'servicios' && (
+        <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Abonos y servicios recurrentes de este cliente.
+            </p>
+            <Link href={`/empresas/${id}`} className="text-xs font-medium hover:underline shrink-0" style={{ color: 'var(--color-primary)' }}>
+              Gestionar en Empresas →
+            </Link>
+          </div>
+          {!empresa.serviciosRecurrentes?.length ? (
+            <p className="text-xs py-6 text-center" style={{ color: 'var(--color-text-muted)' }}>
+              Sin servicios recurrentes cargados.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {empresa.serviciosRecurrentes.map(s => (
+                <div key={s.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ border: '1px solid var(--color-border)' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                      {s.nombre}
+                      {s.incluyeMonitoreo && <span className="ml-2 text-[10px] text-emerald-500">monitoreo</span>}
+                      {s.estado !== 'ACTIVO' && <span className="ml-2 text-[10px] text-[var(--color-text-subtle)]">({ESTADO_LABEL[s.estado] ?? s.estado})</span>}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {formatCurrency(s.monto, s.moneda)} · {s.cicloLabel ?? s.ciclo}
+                      {s.contratoFin ? ` · hasta ${new Date(s.contratoFin).toLocaleDateString('es-AR')}` : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

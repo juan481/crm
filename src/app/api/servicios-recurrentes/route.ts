@@ -153,7 +153,10 @@ export async function POST(req: NextRequest) {
     if (!nombre) return NextResponse.json({ error: 'Poné un nombre para el servicio' }, { status: 400 })
 
     const monto = Number(b.monto)
-    if (!Number.isFinite(monto) || monto < 0) return NextResponse.json({ error: 'El monto no es válido' }, { status: 400 })
+    // <= 0, no sólo < 0 — un servicio recurrente en $0 (reporte de Abba,
+    // 2026-10-02: Norma lo cargó así sin querer, el form no lo frenaba) es
+    // un registro sin datos reales de facturación, no un caso válido acá.
+    if (!Number.isFinite(monto) || monto <= 0) return NextResponse.json({ error: 'El monto tiene que ser mayor a 0' }, { status: 400 })
 
     const contratoInicio = parseFecha(b.contratoInicio)
     const contratoFin = parseFecha(b.contratoFin)

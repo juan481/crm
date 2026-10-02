@@ -44,7 +44,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if ('incluyeMonitoreo' in b) data.incluyeMonitoreo = b.incluyeMonitoreo === true
     if ('monto' in b) {
       const m = Number(b.monto)
-      if (!Number.isFinite(m) || m < 0) return NextResponse.json({ error: 'El monto no es válido' }, { status: 400 })
+      // Mismo criterio que el POST — ver comentario ahí.
+      if (!Number.isFinite(m) || m <= 0) return NextResponse.json({ error: 'El monto tiene que ser mayor a 0' }, { status: 400 })
       data.monto = m
     }
     if ('moneda' in b) data.moneda = sanitizeMoneda(b.moneda)

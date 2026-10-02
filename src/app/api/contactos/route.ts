@@ -27,14 +27,27 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = { organizationId: payload.orgId }
     if (empresaId) where.empresaId = empresaId
     if (search.length >= 2) {
-      where.OR = [
-        { firstName:  { contains: search, mode: 'insensitive' } },
-        { lastName:   { contains: search, mode: 'insensitive' } },
-        { email:      { contains: search, mode: 'insensitive' } },
-        { role:       { contains: search, mode: 'insensitive' } },
-        { companyRaw: { contains: search, mode: 'insensitive' } },
-        { empresa:    { name: { contains: search, mode: 'insensitive' } } },
-      ]
+      // Insensible a tildes además de mayúsculas — un contacto cargado
+      // "Mónica" no aparecía al buscar "Monica" (reporte de Abba,
+      // 2026-10-02). Prisma `contains`+`insensitive` sólo pliega
+      // mayúsculas/minúsculas, nunca acentos — se resuelve con la
+      // extensión unaccent de Postgres (ya habilitada en la base
+      // compartida) en una subconsulta que da la lista de ids que
+      // matchean, y esa lista entra como filtro normal de Prisma.
+      const like = `%${search}%`
+      const matches = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT dc.id FROM "DirectorioContacto" dc
+        LEFT JOIN "Empresa" e ON e.id = dc."empresaId"
+        WHERE dc."organizationId" = ${payload.orgId}
+        AND (
+          unaccent(dc."firstName" || ' ' || dc."lastName") ILIKE unaccent(${like})
+          OR unaccent(COALESCE(dc.email, '')) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(dc.role, '')) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(dc."companyRaw", '')) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(e.name, '')) ILIKE unaccent(${like})
+        )
+      `
+      where.id = { in: matches.map((m) => m.id) }
     }
 
     const [raw, total] = await Promise.all([

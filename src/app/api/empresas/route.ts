@@ -69,17 +69,26 @@ export async function GET(req: NextRequest) {
     // acá de forma incondicional las rompería.
     if (scope === 'cartera' && payload.role === 'SELLER') where.ownerId = payload.userId
 
-    // General search: name, activity, city + bidirectional (contact names)
+    // General search: name, activity, city + bidirectional (contact names) —
+    // insensible a tildes (reporte de Abba, 2026-10-02: "Mónica" no
+    // aparecía al buscar "Monica"). Mismo criterio que /api/contactos: la
+    // extensión unaccent de Postgres resuelve la lista de ids que matchean,
+    // y esa lista entra como filtro normal de Prisma.
     if (search.length >= 2) {
-      where.OR = [
-        { name:     { contains: search, mode: 'insensitive' } },
-        { activity: { contains: search, mode: 'insensitive' } },
-        { city:     { contains: search, mode: 'insensitive' } },
-        { contactos: { some: { OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName:  { contains: search, mode: 'insensitive' } },
-        ] } } },
-      ]
+      const like = `%${search}%`
+      const matches = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT DISTINCT emp.id FROM "Empresa" emp
+        LEFT JOIN "DirectorioContacto" dc ON dc."empresaId" = emp.id
+        WHERE emp."organizationId" = ${payload.orgId}
+        AND (
+          unaccent(emp.name) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(emp.activity, '')) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(emp.city, '')) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(dc."firstName", '')) ILIKE unaccent(${like})
+          OR unaccent(COALESCE(dc."lastName", '')) ILIKE unaccent(${like})
+        )
+      `
+      where.id = { in: matches.map((m) => m.id) }
     }
 
     const [raw, total] = await Promise.all([

@@ -146,7 +146,11 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
     if (!form.empresaId) { toast.error('Elegí la empresa'); return }
     if (!form.nombre.trim()) { toast.error('Poné un nombre para el servicio'); return }
     const monto = Number(form.monto)
-    if (!Number.isFinite(monto) || monto < 0) { toast.error('El monto no es válido'); return }
+    // monto <= 0 pasaba (Number('') da 0, que es "finito y no negativo") —
+    // reporte de Abba, 2026-10-02: Norma cargó servicios marcados como
+    // recurrentes con el campo Monto vacío, quedaron en $0 sin que nada
+    // avisara. Un servicio recurrente sin monto real no tiene sentido acá.
+    if (!Number.isFinite(monto) || monto <= 0) { toast.error('Ingresá el monto del servicio (tiene que ser mayor a 0)'); return }
     if (form.contratoInicio && form.contratoFin && form.contratoFin < form.contratoInicio) {
       toast.error('El fin de contrato no puede ser anterior al inicio'); return
     }
