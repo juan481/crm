@@ -16,6 +16,7 @@ import { formatMoneyExact } from '@/lib/utils'
 import { CompraForm, type OcrSeed } from '@/components/compras/compra-form'
 import { CompraDetail } from '@/components/compras/compra-detail'
 import { CuentasPorPagar } from '@/components/compras/cuentas-por-pagar'
+import { SolicitudesCompra } from '@/components/compras/solicitudes-compra'
 import toast from 'react-hot-toast'
 
 const ESTADO_OPTS = [
@@ -40,7 +41,7 @@ export default function ComprasPage() {
   const allowed = useModuleAccess('compras')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [tab, setTab] = useState<'LISTA' | 'PAGAR'>('LISTA')
+  const [tab, setTab] = useState<'LISTA' | 'PAGAR' | 'PEDIDOS'>('LISTA')
   const [estado, setEstado] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -151,6 +152,7 @@ export default function ComprasPage() {
         {([
           { t: 'LISTA' as const, label: 'Compras' },
           { t: 'PAGAR' as const, label: 'Por pagar' },
+          { t: 'PEDIDOS' as const, label: 'Pedidos a proveedores' },
         ]).map((x) => (
           <button key={x.t} onClick={() => setTab(x.t)}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap shrink-0 ${
@@ -163,6 +165,8 @@ export default function ComprasPage() {
 
       {tab === 'PAGAR' ? (
         <CuentasPorPagar onChanged={refetchList} />
+      ) : tab === 'PEDIDOS' ? (
+        <SolicitudesCompra />
       ) : (
       <>
       <div className="flex items-center gap-2 flex-wrap">

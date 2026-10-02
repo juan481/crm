@@ -299,6 +299,7 @@ model Organization {
   notificationSettings    NotificationSetting[]
   serviciosRecurrentes    ServicioRecurrente[]
   compras                 Compra[]
+  solicitudesCompra       SolicitudCompra[]
   alertasCosto            AlertaCosto[]
   entregasStock           EntregaStock[]
   payments                Payment[]
@@ -1573,6 +1574,7 @@ model Empresa {
   invoices              Invoice[]
   serviciosRecurrentes  ServicioRecurrente[]
   compras               Compra[]
+  solicitudesCompra     SolicitudCompra[]
   entregasStock         EntregaStock[]
   // Usuarios de portal de cliente atados a esta Empresa (role === 'CLIENTE').
   portalUsers           User[]                 @relation("PortalUser")
@@ -1710,6 +1712,7 @@ model Product {
   movimientos    StockMovimiento[]
   pedidoItems    PedidoItem[]
   compraItems    CompraItem[]
+  solicitudCompraItems SolicitudCompraItem[]
   alertasCosto   AlertaCosto[]
   entregaItems   EntregaStockItem[]
 
@@ -1918,6 +1921,73 @@ model CompraPago {
   createdAt   DateTime @default(now())
 
   @@index([compraId])
+}
+
+// ─── Solicitud de Compra (pedido saliente al proveedor/importador) ────────
+// Distinta de Compra (que registra una factura que YA llegó, con su propio
+// flujo de stock/alertas de costo) — esto es el pedido que se manda ANTES,
+// para que el importador confirme qué tiene disponible. Pedido de Abba
+// (Seba, 2026-10-02): hoy pierden horas consultando precios por WhatsApp
+// porque el costo real del importador no estaba en ningún lado armable;
+// ya vivía en Product.costo (sincronizado del catálogo del proveedor,
+// nunca mostrado en una pantalla de "armar pedido") — esto lo expone.
+//
+// Sin gestión de fechas/plazos de entrega a propósito (pedido explícito):
+// la prioridad es sólo código + costo + mercadería para que el importador
+// despache. Cuando la mercadería efectivamente llega, eso se sigue
+// registrando por el flujo de Compra de siempre — ninguno de los dos
+// toca stock ni costo del Product por sí mismo.
+model SolicitudCompra {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Correlativo — null mientras es BORRADOR, se asigna recién al enviar
+  // (mismo criterio que Compra.numero: un borrador abandonado no quema un
+  // número).
+  numero         Int?
+  // Proveedor (Empresa con esProveedor=true). null = todavía sin elegir.
+  proveedorId    String?
+  proveedor      Empresa?     @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  // A qué contacto del proveedor se mandó el mail — snapshot (no FK: si se
+  // borra el contacto después, el historial de a quién se le mandó queda
+  // igual).
+  contactoEmail  String?
+  contactoNombre String?
+  condicionPago  String? // ej. "E-Check 0/30" — lista curada + libre, ver src/lib/solicitudes-compra.ts
+  estado         String       @default("BORRADOR") // 'BORRADOR' | 'ENVIADA' | 'RESPONDIDA' | 'ANULADA'
+  notas          String?
+  creadoPorId    String?
+  enviadoAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  items SolicitudCompraItem[]
+
+  @@unique([organizationId, numero])
+  @@index([organizationId])
+  @@index([organizationId, estado])
+}
+
+model SolicitudCompraItem {
+  id            String          @id @default(cuid())
+  solicitudId   String
+  solicitud     SolicitudCompra @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sku           String?
+  nombre        String
+  cantidad      Int             @default(1)
+  costoUnitario Float           @default(0)
+  moneda        String          @default("USD")
+  // Respuesta del importador por ítem (no hay una sola para todo el pedido
+  // — puede tener parte sí y parte no) — null = todavía sin respuesta.
+  disponible    Boolean?
+  resueltoPorId String?
+  resueltoAt    DateTime?
+  createdAt     DateTime        @default(now())
+
+  @@index([solicitudId])
+  @@index([productId])
 }
 
 // ─── Alertas de cambio de costo (Fase 2) ───────────────────────────────────
