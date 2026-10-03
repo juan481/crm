@@ -14,6 +14,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // GET: lista los usuarios de portal (role CLIENTE) de esta empresa.
 // POST: da acceso al portal a un email (crea usuario Supabase sin contraseña +
 //       fila User CLIENTE atada a esta empresa, y le manda el link de ingreso).
+// PATCH { userId }: reenvía el enlace a un usuario de portal YA ACTIVO — el
+//       link vence en 1 hora y es de un solo uso (ver portal-magic-link.ts),
+//       así que hace falta poder pedir uno nuevo sin tener que revocar y
+//       recrear todo el acceso (reporte de Abba, 2026-10-02).
 // DELETE ?userId=: revoca el acceso (status DELETED + borra el usuario de Supabase Auth).
 // Sólo SUPER_ADMIN / ADMIN.
 
@@ -127,13 +131,49 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // Le mandamos el enlace de acceso directo (branded, desde el correo de la
   // org — NO el mail genérico de Supabase). Un clic y adentro.
+  //
+  // Bug real (reporte de Abba, 2026-10-02): sendPortalMagicLink devuelve
+  // { ok: false, error } en la mayoría de sus fallas (no tira excepción) —
+  // acá nunca se miraba ese resultado, así que si el envío fallaba (mail
+  // corporativo rechazado, SMTP/SES con problema puntual con ese dominio,
+  // etc.) el admin igual veía "Acceso creado — se le mandó el link" como si
+  // hubiera salido bien. El usuario SÍ quedó creado (eso no depende del
+  // mail) — lo que avisamos ahora es específicamente que el envío falló,
+  // para que el admin comparta el link a mano o reintente con "Reenviar".
+  let emailWarning: string | null = null
   try {
-    await sendPortalMagicLink(email, req)
+    const result = await sendPortalMagicLink(email, req)
+    if (!result.ok) emailWarning = result.error ?? 'No se pudo enviar el mail'
   } catch (err) {
     console.error('[PORTAL ACCESO] envío del enlace falló:', err)
+    emailWarning = 'No se pudo enviar el mail'
   }
 
-  return NextResponse.json({ data: user }, { status: 201 })
+  return NextResponse.json({ data: user, emailWarning }, { status: 201 })
+}
+
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const payload = await getCurrentUser()
+  if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role)) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+
+  const empresa = await guard(payload.orgId, params.id)
+  if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+
+  const body = await req.json().catch(() => null)
+  const userId = typeof body?.userId === 'string' ? body.userId : ''
+  if (!userId) return NextResponse.json({ error: 'Falta userId' }, { status: 400 })
+
+  const target = await prisma.user.findFirst({
+    where: { id: userId, organizationId: payload.orgId, empresaId: params.id, role: 'CLIENTE', status: 'ACTIVE' },
+    select: { email: true },
+  })
+  if (!target) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+
+  const result = await sendPortalMagicLink(target.email, req)
+  if (!result.ok) return NextResponse.json({ error: result.error ?? 'No se pudo enviar el mail' }, { status: 502 })
+
+  return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {

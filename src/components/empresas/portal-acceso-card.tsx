@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { KeyRound, Plus, Trash2, Loader2, Mail, Eye } from 'lucide-react'
+import { KeyRound, Plus, Trash2, Loader2, Mail, Eye, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface PortalUser { id: string; name: string; email: string; status: string; createdAt: string }
@@ -16,6 +16,7 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
 
   const load = () =>
     fetch(`/api/empresas/${empresaId}/portal-acceso`)
@@ -34,9 +35,30 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'No se pudo dar el acceso'); return }
-      toast.success('Acceso creado — se le mandó el link por email')
+      // Bug real (reporte de Abba, 2026-10-02): antes esto decía "se le
+      // mandó el link" aunque el envío hubiera fallado — el usuario de
+      // portal SÍ se crea siempre (eso no depende del mail), pero si
+      // `emailWarning` viene seteado el mail no salió y hay que avisarlo
+      // explícitamente, no festejar un envío que no pasó.
+      if (json.emailWarning) {
+        toast.error(`Acceso creado, pero el mail no se pudo enviar: ${json.emailWarning}. Usá "Reenviar" o compartile el link por WhatsApp.`, { duration: 7000 })
+      } else {
+        toast.success('Acceso creado — se le mandó el link por email')
+      }
       setEmail(''); setName(''); setAdding(false); load()
     } catch { toast.error('Error de conexión') } finally { setSaving(false) }
+  }
+
+  const resend = async (userId: string) => {
+    setResendingId(userId)
+    try {
+      const res = await fetch(`/api/empresas/${empresaId}/portal-acceso`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo reenviar'); return }
+      toast.success('Enlace reenviado')
+    } catch { toast.error('Error de conexión') } finally { setResendingId(null) }
   }
 
   const revoke = async (userId: string) => {
@@ -112,9 +134,15 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
                 {u.name && u.name !== u.email.split('@')[0] && <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>{u.name}</p>}
               </div>
               {canManage && (
-                <button onClick={() => revoke(u.id)} className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Revocar acceso">
-                  <Trash2 size={13} />
-                </button>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => resend(u.id)} disabled={resendingId === u.id}
+                    className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-[var(--color-primary)] disabled:opacity-50" title="Reenviar enlace — el anterior vence en 1 hora y es de un solo uso">
+                    {resendingId === u.id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  </button>
+                  <button onClick={() => revoke(u.id)} className="p-1.5 rounded-lg text-[var(--color-text-subtle)] hover:text-red-400" title="Revocar acceso">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               )}
             </div>
           ))}
