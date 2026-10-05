@@ -49,13 +49,27 @@ export function RevenueChart({ data }: RevenueChartProps) {
               axisLine={false}
               tickLine={false}
             />
-            <YAxis
-              tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
-              tick={{ fontSize: 11, fill: 'var(--color-text-subtle)', fontFamily: 'Poppins' }}
-              axisLine={false}
-              tickLine={false}
-              width={40}
-            />
+            {/* Un monto en ARS puede ser miles de veces más grande que el
+                mismo "tamaño" de ingreso en USD — con un solo eje Y
+                compartido (como estaba antes), la escala se ajustaba al pico
+                de la moneda más grande y la otra quedaba aplastada contra el
+                0 visualmente, aunque el tooltip mostrara el valor real (bug
+                real reportado por Juan: "octubre dice 906 usd y la barra
+                está en 0", 2026-10-05). Cada moneda ahora tiene su propio
+                eje — la primera a la izquierda, el resto a la derecha. */}
+            {currencies.map((cur, i) => (
+              <YAxis
+                key={cur}
+                yAxisId={cur}
+                orientation={i === 0 ? 'left' : 'right'}
+                tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                tick={{ fontSize: 11, fill: 'var(--color-text-subtle)', fontFamily: 'Poppins' }}
+                axisLine={false}
+                tickLine={false}
+                width={40}
+                hide={currencies.length > 1 && i > 1}
+              />
+            ))}
             <Tooltip
               formatter={(value: number, name: string) => [formatCurrency(value, name), name]}
               contentStyle={{
@@ -71,6 +85,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
             {currencies.map((cur, i) => (
               <Area
                 key={cur}
+                yAxisId={cur}
                 type="monotone"
                 dataKey={cur}
                 name={cur}
