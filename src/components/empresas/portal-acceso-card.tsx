@@ -80,7 +80,7 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
   }
 
   const submitReset = async (userId: string) => {
-    if (resetPassword.length < 4) { toast.error('La contraseña debe tener al menos 4 caracteres'); return }
+    if (resetPassword.length < 6) { toast.error('La contraseña debe tener al menos 6 caracteres'); return }
     setSavingReset(true)
     try {
       const res = await fetch(`/api/empresas/${empresaId}/portal-acceso`, {

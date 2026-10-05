@@ -187,7 +187,14 @@ async function createAbonadoAccess(_req: NextRequest, empresaId: string, payload
   let numeroAbonado = typeof body?.numeroAbonado === 'string' ? body.numeroAbonado.trim() : ''
 
   if (!name) return NextResponse.json({ error: 'Falta el nombre del cliente' }, { status: 400 })
-  if (password.length < 4) return NextResponse.json({ error: 'La contraseña debe tener al menos 4 caracteres' }, { status: 400 })
+  // 6, no 4 — es el mínimo REAL por defecto de Supabase Auth: con 4 dejábamos
+  // pasar acá algo que Supabase rechaza igual del otro lado, con un error
+  // genérico que no decía por qué (bug real, encontrado al reanalizar antes
+  // de pushear). No usamos 8 como el resto del sistema (mi-perfil,
+  // cambiar-contraseña, etc.) a propósito: acá la contraseña suele ser el
+  // DNI del cliente, y un DNI argentino puede tener 7 dígitos — pedir 8
+  // bloquearía justo el caso de uso que pidió Seba.
+  if (password.length < 6) return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 })
   if (numeroAbonado && !ABONADO_RE.test(numeroAbonado)) {
     return NextResponse.json({ error: 'El número de abonado debe ser numérico (3 a 10 dígitos)' }, { status: 400 })
   }
@@ -240,7 +247,7 @@ async function createAbonadoAccess(_req: NextRequest, empresaId: string, payload
   })
   if (authError || !authData.user) {
     console.error('[PORTAL ACCESO] createUser (abonado) falló:', authError?.message)
-    return NextResponse.json({ error: 'No se pudo crear el usuario' }, { status: 502 })
+    return NextResponse.json({ error: authError?.message || 'No se pudo crear el usuario' }, { status: 502 })
   }
 
   let user
@@ -307,12 +314,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // los de email si alguna vez hace falta destrabar a alguien sin esperar
   // el flujo de recuperación. Pedido de Abba/Seba, 2026-10-05.
   if (newPassword) {
-    if (newPassword.length < 4) return NextResponse.json({ error: 'La contraseña debe tener al menos 4 caracteres' }, { status: 400 })
+    if (newPassword.length < 6) return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 })
     if (!target.supabaseId) return NextResponse.json({ error: 'Este usuario no tiene cuenta de acceso asociada' }, { status: 409 })
     const { error } = await createAdminClient().auth.admin.updateUserById(target.supabaseId, { password: newPassword })
     if (error) {
       console.error('[PORTAL ACCESO] reset de contraseña falló:', error.message)
-      return NextResponse.json({ error: 'No se pudo cambiar la contraseña' }, { status: 502 })
+      // Mensaje real de Supabase (ej. su propia política de contraseña) en
+      // vez de uno genérico — si rechaza por un motivo que no anticipamos
+      // acá, el admin tiene que poder verlo, no quedarse sin pista.
+      return NextResponse.json({ error: error.message || 'No se pudo cambiar la contraseña' }, { status: 502 })
     }
     return NextResponse.json({ ok: true })
   }
