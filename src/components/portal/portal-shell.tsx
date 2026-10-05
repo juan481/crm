@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, LayoutDashboard, Receipt, LifeBuoy } from 'lucide-react'
+import { LogOut, LayoutDashboard, Receipt, LifeBuoy, KeyRound } from 'lucide-react'
 import { useThemeStore } from '@/store/theme-store'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,7 @@ const NAV = [
   { href: '/portal', label: 'Inicio', icon: LayoutDashboard },
   { href: '/portal/facturas', label: 'Facturas', icon: Receipt },
   { href: '/portal/soporte', label: 'Soporte', icon: LifeBuoy },
+  { href: '/portal/cuenta', label: 'Cuenta', icon: KeyRound },
 ] as const
 
 export function PortalShell({

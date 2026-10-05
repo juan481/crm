@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2, MessageCircle, Zap } from 'lucide-react'
+import { Plus, Mail, Send, FileText, Users, Calendar, CheckCircle, AlertCircle, Loader, XCircle, ChevronRight, Eye, ShieldAlert, MailX, Clock, Trash2, MessageCircle, Zap, MousePointerClick } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,6 +38,7 @@ interface CampaignRecipient {
   id: string; email: string; status: string; sentAt: string | null; error: string | null
   deliveredAt?: string | null; bouncedAt?: string | null; spamAt?: string | null
   openedAt?: string | null; openCount?: number
+  clickedAt?: string | null; clickCount?: number
 }
 interface CampaignDetail extends EmailCampaign {
   recipients: CampaignRecipient[]
@@ -167,7 +168,7 @@ export default function ComunicacionesPage() {
     sesSentCampaigns.length > 0 &&
     sesSentCampaigns.every((c) =>
       (c.totalDelivered ?? 0) === 0 && (c.totalOpened ?? 0) === 0 &&
-      (c.totalBounced ?? 0) === 0 && (c.totalSpam ?? 0) === 0
+      (c.totalBounced ?? 0) === 0 && (c.totalSpam ?? 0) === 0 && (c.totalClicked ?? 0) === 0
     )
 
   return (
@@ -319,6 +320,11 @@ export default function ComunicacionesPage() {
                         <Eye size={12} />{campaign.totalOpened}
                       </div>
                     )}
+                    {(campaign.totalClicked ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-violet-400" title="Clics">
+                        <MousePointerClick size={12} />{campaign.totalClicked}
+                      </div>
+                    )}
                     {(campaign.totalSpam ?? 0) > 0 && (
                       <div className="flex items-center gap-1 text-xs text-amber-400" title="Spam">
                         <ShieldAlert size={12} />{campaign.totalSpam}
@@ -382,9 +388,10 @@ export default function ComunicacionesPage() {
               const failedCount    = detailData.recipients.filter(r => r.status === 'failed').length
               const deliveredCount = detailData.recipients.filter(r => r.deliveredAt).length
               const openedCount    = detailData.recipients.filter(r => r.openedAt).length
+              const clickedCount   = detailData.recipients.filter(r => r.clickedAt).length
               const bouncedCount   = detailData.recipients.filter(r => r.bouncedAt || r.status === 'bounced').length
               const spamCount      = detailData.recipients.filter(r => r.spamAt    || r.status === 'spam').length
-              const hasSesTracking = deliveredCount > 0 || bouncedCount > 0 || openedCount > 0 || spamCount > 0
+              const hasSesTracking = deliveredCount > 0 || bouncedCount > 0 || openedCount > 0 || spamCount > 0 || clickedCount > 0
               const stats = [
                 { label: 'Enviados',    value: sentCount,      color: 'text-emerald-400' },
                 { label: 'Fallidos',    value: failedCount,    color: 'text-red-400' },
@@ -392,6 +399,7 @@ export default function ComunicacionesPage() {
                 ...(hasSesTracking ? [
                   { label: 'Entregados', value: deliveredCount, color: 'text-teal-400' },
                   { label: 'Abiertos',   value: openedCount,    color: 'text-blue-400' },
+                  { label: 'Clics',      value: clickedCount,   color: 'text-violet-400' },
                   { label: 'Rebotados',  value: bouncedCount,   color: 'text-orange-400' },
                   { label: 'Spam',       value: spamCount,      color: 'text-yellow-400' },
                 ] : []),
@@ -449,21 +457,24 @@ export default function ComunicacionesPage() {
             {/* Recipient list */}
             <div className="rounded-xl overflow-hidden max-h-72 overflow-y-auto" style={{ border: '1px solid var(--color-border)' }}>
               {detailData.recipients.map(r => {
-                const Icon = r.openedAt     ? Eye
+                const Icon = r.clickedAt    ? MousePointerClick
+                           : r.openedAt     ? Eye
                            : r.deliveredAt  ? CheckCircle
                            : r.status === 'bounced' || r.bouncedAt ? MailX
                            : r.status === 'spam'    || r.spamAt    ? ShieldAlert
                            : r.status === 'sent'    ? Mail
                            : r.status === 'failed'  ? XCircle
                            : Clock
-                const iconColor = r.openedAt     ? 'text-blue-400'
+                const iconColor = r.clickedAt    ? 'text-violet-400'
+                                : r.openedAt     ? 'text-blue-400'
                                 : r.deliveredAt  ? 'text-teal-400'
                                 : r.status === 'bounced' || r.bouncedAt ? 'text-orange-400'
                                 : r.status === 'spam'    || r.spamAt    ? 'text-yellow-400'
                                 : r.status === 'sent'    ? 'text-emerald-400'
                                 : r.status === 'failed'  ? 'text-red-400'
                                 : 'text-amber-400'
-                const iconTitle = r.openedAt     ? `Abierto${(r.openCount ?? 0) > 1 ? ` (${r.openCount}×)` : ''}`
+                const iconTitle = r.clickedAt    ? `Hizo clic${(r.clickCount ?? 0) > 1 ? ` (${r.clickCount}×)` : ''}`
+                                : r.openedAt     ? `Abierto${(r.openCount ?? 0) > 1 ? ` (${r.openCount}×)` : ''}`
                                 : r.deliveredAt  ? 'Entregado'
                                 : r.status === 'bounced' || r.bouncedAt ? 'Rebotado'
                                 : r.status === 'spam'    || r.spamAt    ? 'Marcado como spam'

@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
     const { SNSClient, CreateTopicCommand, SubscribeCommand } = await import('@aws-sdk/client-sns')
     const {
       SESClient, CreateConfigurationSetCommand, CreateConfigurationSetEventDestinationCommand,
+      UpdateConfigurationSetEventDestinationCommand, EventType,
     } = await import('@aws-sdk/client-ses')
 
     const sns = new SNSClient({ region, credentials })
@@ -85,20 +86,35 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const eventDestination = {
+      Name: 'crm-sns-tracking',
+      Enabled: true,
+      MatchingEventTypes: [EventType.BOUNCE, EventType.COMPLAINT, EventType.DELIVERY, EventType.OPEN, EventType.CLICK],
+      SNSDestination: { TopicARN: topicArn },
+    }
     try {
       await ses.send(new CreateConfigurationSetEventDestinationCommand({
         ConfigurationSetName: configSetName,
-        EventDestination: {
-          Name: 'crm-sns-tracking',
-          Enabled: true,
-          MatchingEventTypes: ['bounce', 'complaint', 'delivery', 'open'],
-          SNSDestination: { TopicARN: topicArn },
-        },
+        EventDestination: eventDestination,
       }))
     } catch (err: any) {
       // Acá el SDK tira EventDestinationAlreadyExistsException — mismo caso
-      // que arriba, nombre distinto al genérico.
-      if (!isAlreadyExists(err)) {
+      // que arriba, nombre distinto al genérico. Si ya existe (por ejemplo,
+      // una org que corrió este botón antes de que agregáramos "click" a
+      // MatchingEventTypes) lo actualizamos para sumar los tipos de evento
+      // nuevos sin pisar nada más — requiere el permiso IAM
+      // ses:UpdateConfigurationSetEventDestination, además de los que ya
+      // pedía este endpoint.
+      if (isAlreadyExists(err)) {
+        try {
+          await ses.send(new UpdateConfigurationSetEventDestinationCommand({
+            ConfigurationSetName: configSetName,
+            EventDestination: eventDestination,
+          }))
+        } catch (updateErr: any) {
+          return NextResponse.json({ error: awsErrorMessage(updateErr, 'actualizar los tipos de evento del Configuration Set (agregar clics)') }, { status: 502 })
+        }
+      } else {
         return NextResponse.json({ error: awsErrorMessage(err, 'conectar el Configuration Set con el topic de SNS') }, { status: 502 })
       }
     }
@@ -129,7 +145,7 @@ function awsErrorMessage(err: any, action: string): string {
   const name = err?.name ?? ''
   const msg = err?.message ?? String(err)
   if (name === 'AccessDenied' || name === 'AuthorizationErrorException' || /not authorized/i.test(msg)) {
-    return `Tu usuario de AWS no tiene permiso para ${action}. Pedile a quien administra la cuenta de AWS que agregue estos permisos al usuario IAM: ses:CreateConfigurationSet, ses:CreateConfigurationSetEventDestination, sns:CreateTopic, sns:Subscribe.`
+    return `Tu usuario de AWS no tiene permiso para ${action}. Pedile a quien administra la cuenta de AWS que agregue estos permisos al usuario IAM: ses:CreateConfigurationSet, ses:CreateConfigurationSetEventDestination, ses:UpdateConfigurationSetEventDestination, sns:CreateTopic, sns:Subscribe.`
   }
   return `No se pudo ${action}: ${msg}`
 }

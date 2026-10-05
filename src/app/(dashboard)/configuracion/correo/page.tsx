@@ -104,7 +104,7 @@ const AWS_STEPS = [
   {
     id: 'sns',
     title: '(Opcional) Configurar SNS Webhook para eventos',
-    desc: 'El botón "Activar métricas de entrega" más abajo hace este paso solo. Esto de acá es sólo si preferís armarlo vos mismo: SNS → Topics → Crear topic estándar → Suscripción tipo HTTPS. El sistema confirma la suscripción automáticamente. Después, en SES → el Configuration Set → Event Destinations → asociar este topic y activar eventos: Delivery, Bounce, Complaint, Open.',
+    desc: 'El botón "Activar métricas de entrega" más abajo hace este paso solo. Esto de acá es sólo si preferís armarlo vos mismo: SNS → Topics → Crear topic estándar → Suscripción tipo HTTPS. El sistema confirma la suscripción automáticamente. Después, en SES → el Configuration Set → Event Destinations → asociar este topic y activar eventos: Delivery, Bounce, Complaint, Open, Click.',
     tag: 'Tracking',
     optional: true,
   },

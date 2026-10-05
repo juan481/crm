@@ -486,6 +486,7 @@ export interface EmailCampaign {
   totalBounced?: number
   totalSpam?: number
   totalOpened?: number
+  totalClicked?: number
 }
 
 // ─── Email Template ───────────────────────────────────────────────────────

@@ -46,6 +46,13 @@ const PUBLIC_PATHS = [
   '/portal/login',
   '/portal/auth',
   '/api/portal/auth',
+  // Recuperación de contraseña del portal (Supabase resetPasswordForEmail +
+  // updateUser) — mismo criterio que /forgot-password y /reset-password del
+  // CRM interno: alcanzables sin sesión porque la sesión de recuperación la
+  // arma supabase-js del lado del cliente a partir del token en la URL,
+  // DESPUÉS de que esta página ya cargó.
+  '/portal/forgot-password',
+  '/portal/reset-password',
 ]
 
 export async function middleware(req: NextRequest) {

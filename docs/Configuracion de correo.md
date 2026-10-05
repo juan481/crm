@@ -10,8 +10,8 @@ El CRM soporta dos formas de enviar email, elegibles por organización desde
 - **SMTP / Brevo** — Gmail, Brevo, SendGrid, cualquier SMTP. Activo hoy para
   Just Create y Agencia Digital Pro.
 - **Amazon SES** — activo para Abba Seguridad (`sesRegion: us-east-2`),
-  incluyendo tracking de entregas/rebotes/spam/aperturas vía webhook SNS
-  (`src/app/api/webhooks/ses/route.ts`).
+  incluyendo tracking de entregas/rebotes/spam/aperturas/clics vía webhook
+  SNS (`src/app/api/webhooks/ses/route.ts`).
 
 El proveedor se guarda por organización (`Organization.smtpProvider`), así que
 convive con clientes que sigan usando SMTP mientras otro usa SES.
@@ -27,9 +27,20 @@ Configuration Set de SES conectado a todo eso
 manual de abajo queda documentado como alternativa por si se prefiere
 armarlo a mano, o si el usuario IAM del cliente no tiene los permisos que
 el botón necesita (`ses:CreateConfigurationSet`,
-`ses:CreateConfigurationSetEventDestination`, `sns:CreateTopic`,
+`ses:CreateConfigurationSetEventDestination`,
+`ses:UpdateConfigurationSetEventDestination`, `sns:CreateTopic`,
 `sns:Subscribe`) — en ese caso el botón devuelve el mensaje de error
 explicando qué permiso falta.
+
+**Clics (nuevo, 05/10/2026)**: el botón y el webhook ahora también activan
+y procesan el evento `Click` de SES (además de Delivery/Bounce/Complaint/
+Open) — requiere HTML con links (no texto plano) para que SES pueda
+reescribirlos y medir el clic. Si una organización ya había activado el
+tracking ANTES de este cambio, tiene que apretar el botón "Activar
+métricas de entrega" de nuevo una vez para sumar el evento Click al
+Configuration Set existente — y eso requiere que el usuario IAM tenga
+también `ses:UpdateConfigurationSetEventDestination` (no sólo el `Create`,
+porque el Configuration Set ya existe y hay que actualizarlo, no crearlo).
 
 **Caso real que motivó esto**: Abba Seguridad tenía SES activo y mandando
 mails bien hace semanas, pero nunca se había armado el Configuration Set
@@ -90,7 +101,7 @@ métricas, aparece un banner invitando a activar el tracking.
      apuntando a: `https://<dominio-del-crm>/api/webhooks/ses`
      (la confirmación de la suscripción la hace el sistema solo).
    - En el Configuration Set → Event Destinations → asociar el topic y
-     activar los eventos: Delivery, Bounce, Complaint, Open.
+     activar los eventos: Delivery, Bounce, Complaint, Open, Click.
 
 ### Lo que le pido al cliente
 

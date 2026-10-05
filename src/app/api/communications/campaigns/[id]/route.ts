@@ -16,7 +16,18 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where:  { id: params.id, organizationId: payload.orgId },
       include: {
         recipients: {
-          select: { id: true, email: true, status: true, sentAt: true, error: true },
+          // El select original sólo traía id/email/status/sentAt/error —
+          // sin las columnas de tracking de SES (deliveredAt, openedAt,
+          // bouncedAt, spamAt, clickedAt...) el detalle de campaña del
+          // front SIEMPRE mostraba sólo Enviados/Fallidos/Pendientes,
+          // aunque el webhook de SES las estuviera actualizando bien en la
+          // base (bug real: Juan, 2026-10-05 — "no me dice si se entregó,
+          // si lo leyeron, si hicieron click").
+          select: {
+            id: true, email: true, status: true, sentAt: true, error: true,
+            deliveredAt: true, bouncedAt: true, bounceType: true, bounceSubType: true,
+            spamAt: true, openedAt: true, openCount: true, clickedAt: true, clickCount: true,
+          },
           orderBy: { email: 'asc' },
         },
       },

@@ -1080,6 +1080,7 @@ model EmailCampaign {
   totalBounced   Int            @default(0)
   totalSpam      Int            @default(0)
   totalOpened    Int            @default(0)
+  totalClicked   Int            @default(0)
 
   recipients CampaignRecipient[]
 }
@@ -1102,6 +1103,8 @@ model CampaignRecipient {
   spamAt        DateTime?
   openedAt      DateTime?
   openCount     Int             @default(0)
+  clickedAt     DateTime?
+  clickCount    Int             @default(0)
   // Necesario para detectar filas "sending" abandonadas por un request que
   // murió a mitad de camino (ver auto-recuperación en
   // campaigns/[id]/send/route.ts) — se actualiza solo en cada UPDATE,

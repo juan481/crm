@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     const recipient = await db.campaignRecipient.findFirst({
       where: { messageId },
       select: {
-        id: true, campaignId: true, openedAt: true, email: true,
+        id: true, campaignId: true, openedAt: true, clickedAt: true, email: true,
         campaign: { select: { organizationId: true } },
       },
     })
@@ -172,6 +172,22 @@ export async function POST(req: NextRequest) {
           await db.emailCampaign.update({
             where: { id: recipient.campaignId },
             data:  { totalOpened: { increment: 1 } },
+          })
+        }
+      } catch { /* columns not yet migrated */ }
+    }
+
+    if (eventType === 'Click') {
+      try {
+        const first = !recipient.clickedAt
+        await db.campaignRecipient.update({
+          where: { id: recipient.id },
+          data:  { clickedAt: recipient.clickedAt ?? new Date(), clickCount: { increment: 1 } },
+        })
+        if (first) {
+          await db.emailCampaign.update({
+            where: { id: recipient.campaignId },
+            data:  { totalClicked: { increment: 1 } },
           })
         }
       } catch { /* columns not yet migrated */ }
