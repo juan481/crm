@@ -1,12 +1,17 @@
 'use client'
 
 // Ingreso al Portal de Clientes — dos caminos:
-//  1) Email + contraseña (una vez que el cliente configuró una en "Mi cuenta").
-//  2) Enlace de acceso por email (magic link) — sigue existiendo para la
-//     primera entrada (antes de tener contraseña) y como respaldo si la
-//     olvidó. El mail lo arma y lo manda NUESTRO backend (branded, desde el
-//     correo de la org), NO el template genérico de Supabase — ver
-//     src/lib/portal-magic-link.ts.
+//  1) Email o número de abonado + contraseña (una vez que el cliente
+//     configuró una en "Mi cuenta", o se la asignó el admin al dar acceso).
+//     El número de abonado es para clientes sin email real (pedido de
+//     Abba/Smart Panic, 2026-10-05) — por abajo sigue siendo Supabase Auth
+//     con un email sintético invisible para el cliente (ver
+//     /api/portal/auth/resolve-abonado y numeroAbonado en schema.prisma).
+//  2) Enlace de acceso por email (magic link) — sólo para quien tenga email
+//     real. Sigue existiendo para la primera entrada (antes de tener
+//     contraseña) y como respaldo si la olvidó. El mail lo arma y lo manda
+//     NUESTRO backend (branded, desde el correo de la org), NO el template
+//     genérico de Supabase — ver src/lib/portal-magic-link.ts.
 //
 // El guard de rol (sólo CLIENTE con Empresa puede quedarse en /portal) vive
 // en /portal/(app)/layout.tsx y se aplica sin importar por cuál de los dos
@@ -93,20 +98,42 @@ function PortalLoginForm() {
   const submitPassword = (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    const value = email.trim().toLowerCase()
-    if (!value || !password) { setError('Completá email y contraseña.'); return }
+    const value = email.trim()
+    if (!value || !password) { setError('Completá tu usuario y contraseña.'); return }
     if (TURNSTILE_SITE_KEY && !captchaToken) { setError('Completá la verificación de seguridad.'); return }
 
     startTransition(async () => {
+      // Un valor sólo numérico es número de abonado, no email — hay que
+      // resolverlo primero al email sintético interno antes de poder
+      // llamar a signInWithPassword (Supabase pide formato email siempre).
+      let loginEmail = value.toLowerCase()
+      if (/^\d+$/.test(value)) {
+        try {
+          const res = await fetch('/api/portal/auth/resolve-abonado', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ numeroAbonado: value }),
+          })
+          if (!res.ok) {
+            setError('Número de abonado o contraseña incorrectos.')
+            if (window.turnstile && widgetId.current) window.turnstile.reset(widgetId.current)
+            setCaptchaToken(null)
+            return
+          }
+          loginEmail = (await res.json()).email
+        } catch {
+          setError('Error de conexión — probá de nuevo.')
+          return
+        }
+      }
+
       const supabase = createClient()
       const { error: authError } = await supabase.auth.signInWithPassword({
-        email: value, password,
+        email: loginEmail, password,
         ...(captchaToken ? { options: { captchaToken } } : {}),
       })
       if (authError) {
         setError(
           authError.message === 'Invalid login credentials'
-            ? 'Email o contraseña incorrectos. Si todavía no configuraste una contraseña, usá "Entrar con un enlace por email".'
+            ? 'Usuario o contraseña incorrectos. Si todavía no configuraste una contraseña, usá "Entrar con un enlace por email".'
             : authError.message
         )
         if (window.turnstile && widgetId.current) window.turnstile.reset(widgetId.current)
@@ -154,16 +181,16 @@ function PortalLoginForm() {
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h1 style={{ color: 'var(--color-text)', fontSize: 20, fontWeight: 700 }}>Portal de clientes</h1>
           <p style={{ color: 'var(--color-text-muted)', fontSize: 14, marginTop: 4 }}>
-            {mode === 'password' ? 'Ingresá con tu email y contraseña.' : 'Ingresá con tu email — te mandamos un enlace de acceso.'}
+            {mode === 'password' ? 'Ingresá con tu email (o número de abonado) y contraseña.' : 'Ingresá con tu email — te mandamos un enlace de acceso.'}
           </p>
         </div>
 
         {mode === 'password' ? (
           <form onSubmit={submitPassword} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 16, padding: 24 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>Tu email</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>Email o número de abonado</label>
             <input
-              type="email" style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="vos@empresa.com" autoComplete="email" autoFocus
+              type="text" style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="vos@empresa.com o tu número de abonado" autoComplete="username" autoFocus
             />
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginBottom: 6 }}>

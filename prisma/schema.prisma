@@ -464,6 +464,15 @@ model User {
   // usuario de portal deja de tener sentido y se va con ella.
   empresaId           String?
   portalEmpresa       Empresa?     @relation("PortalUser", fields: [empresaId], references: [id], onDelete: Cascade)
+  // Login alternativo del portal para clientes sin email real (pedido de
+  // Abba/Smart Panic, 2026-10-05): el cliente entra con "número de abonado"
+  // + contraseña en vez de email. Por abajo seguimos usando Supabase Auth
+  // igual que siempre — el `email` de este User pasa a ser un email
+  // SINTÉTICO interno (nunca se le manda nada, nunca lo ve el cliente), y
+  // `numeroAbonado` es el dato que el cliente realmente escribe. Único a
+  // nivel de toda la base (no por organización) porque el login no sabe a
+  // qué organización pertenece hasta después de resolver este campo.
+  numeroAbonado       String?      @unique
   // "Marcar todo como leído" del centro de notificaciones (campanita del
   // header) — un ítem del feed (/api/notifications) cuenta como no-leído si
   // su fecha es POSTERIOR a esto. null = nunca lo tocó, todo se ve no-leído.
