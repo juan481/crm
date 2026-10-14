@@ -39,6 +39,7 @@ interface FullInvoice {
   iva: number | null
   sentAt: string | null
   recipientEmail: string | null
+  tcUsado: number | null
   items: Array<{ id: string; nombre: string; cantidad: number; precioUnitario: number; ivaPct: number | null; subtotal: number }>
 }
 
@@ -240,6 +241,7 @@ export function InvoicePreview({ invoice, onClose }: { invoice: InvoiceData; onC
                 <div className="flex justify-between gap-6"><span className="text-sm" style={{ color: '#64748b' }}>Emisión</span><span className="text-sm font-medium" style={{ color: '#1e293b' }}>{formatDate(invoice.createdAt)}</span></div>
                 <div className="flex justify-between gap-6"><span className="text-sm" style={{ color: '#64748b' }}>Vencimiento</span><span className="text-sm font-medium" style={{ color: '#1e293b' }}>{formatDate(invoice.dueDate)}</span></div>
                 {invoice.paidAt && <div className="flex justify-between gap-6"><span className="text-sm" style={{ color: '#64748b' }}>Pagada</span><span className="text-sm font-medium" style={{ color: '#22c55e' }}>{formatDate(invoice.paidAt)}</span></div>}
+                {full?.tcUsado && <div className="flex justify-between gap-6"><span className="text-sm" style={{ color: '#64748b' }}>TC BNA usado</span><span className="text-sm font-medium" style={{ color: '#1e293b' }}>${full.tcUsado}</span></div>}
               </div>
             </div>
 

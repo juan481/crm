@@ -346,17 +346,28 @@ async function recordPayment(
 }
 
 /**
- * Conciliación MANUAL de una transferencia (Abba y cualquier pago fuera de
- * pasarela). La invoca el botón "Registrar pago / marcar pagada" del CRM.
+ * Conciliación MANUAL de un pago (transferencia, efectivo, cheque, tarjeta —
+ * cualquier cobro fuera de pasarela). La invoca el flujo "Registrar pago" de
+ * Facturación (Norma). `metodo` + `detalle` quedan en el Payment para que el
+ * dato no se pierda detrás de un "Pagada" genérico — y son editables después
+ * (ver PATCH /api/payments/[id]) sin tener que anular la factura.
  */
 export async function recordManualPayment(opts: {
   invoiceId: string
   organizationId: string
   amount: number
   currency: string
+  metodo?: string | null
+  detalle?: Record<string, unknown> | null
   note?: string
-}): Promise<void> {
-  await prisma.payment.create({
+  // Cliente de transacción opcional — pedido explícito de Abba: el pago
+  // tiene que quedar registrado en la MISMA transacción que marca la
+  // factura como pagada, para que nunca pueda quedar "Pagada" sin ningún
+  // Payment asociado si esto llegara a fallar.
+  client?: { payment: { create: typeof prisma.payment.create } }
+}): Promise<{ id: string }> {
+  const db = opts.client ?? prisma
+  const payment = await db.payment.create({
     data: {
       organizationId: opts.organizationId,
       invoiceId: opts.invoiceId,
@@ -365,8 +376,11 @@ export async function recordManualPayment(opts: {
       status: 'APPROVED',
       amount: opts.amount,
       currency: opts.currency,
-      rawPayload: opts.note ? { note: opts.note } : undefined,
+      metodo: opts.metodo ?? null,
+      rawPayload: (opts.detalle as object | undefined) ?? (opts.note ? { note: opts.note } : undefined),
       paidAt: new Date(),
     },
+    select: { id: true },
   })
+  return payment
 }

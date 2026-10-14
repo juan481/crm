@@ -91,6 +91,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       header.retiradoPor = body.retiradoPor.trim()
     }
     if (body.motivo !== undefined) header.motivo = body.motivo?.trim() || null
+    if (body.notas !== undefined) header.notas = body.notas?.trim() || null
+    if (body.tipoEntrega !== undefined) header.tipoEntrega = body.tipoEntrega || null
     if (body.fecha !== undefined && body.fecha && !isNaN(Date.parse(body.fecha))) header.fecha = new Date(body.fecha)
     if (body.dealId !== undefined) {
       if (body.dealId) {

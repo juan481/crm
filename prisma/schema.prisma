@@ -667,6 +667,12 @@ model Invoice {
   subtotal             Float?
   iva                  Float?
   sentAt               DateTime? // cuándo se mandó el PDF por mail
+  // Tipo de cambio (BNA vendedor) usado para pesificar esta factura, cuando
+  // se emitió desde una cotización en USD — pedido de Abba: la factura
+  // siempre sale en ARS, aunque la cotización de origen esté en USD por
+  // costos de importación. Null = no hubo conversión (ya era ARS, o es una
+  // factura manual/recurrente anterior a este cambio).
+  tcUsado              Float?
 
   // ── Cobro online (Pagos & Portal, Fase 1) — 100% aditivo/nullable ──
   // payToken: link de pago público /pagar/<token>, sin login (misma clase que
@@ -691,6 +697,14 @@ model Invoice {
   updatedAt DateTime      @updatedAt
 
   @@unique([organizationId, numeroInterno])
+  // Red de seguridad real contra doble-facturación de la misma cotización
+  // (doble click, dos pestañas) — el chequeo `yaFacturada` en
+  // emitirFacturaDesdeCotizacion corre dentro de la misma transacción bajo
+  // READ COMMITTED, que NO bloquea que dos requests concurrentes lean
+  // "todavía no hay factura" antes de que cualquiera commitee. Postgres
+  // trata cada NULL como distinto en un índice único, así que esto no
+  // afecta a las facturas manuales/recurrentes (cotizacionId null).
+  @@unique([organizationId, cotizacionId])
   @@index([organizationId])
   @@index([organizationId, status])
   @@index([organizationId, dealId])
@@ -752,6 +766,13 @@ model Payment {
   provider       String
   // Id del pago EN EL PROVEEDOR. Para 'MANUAL' se usa 'manual-<cuid>'.
   externalId     String
+  // Medio de pago elegido por Facturación al registrar un pago MANUAL —
+  // EFECTIVO/CHEQUE/TRANSFERENCIA/TARJETA (lista curada en
+  // src/lib/medios-pago.ts). Null para pagos de pasarela (Whop/MP), donde el
+  // medio ya lo define `provider`. Los datos específicos de cada medio
+  // (banco, N° de cheque, cuotas, foto del comprobante en base64, etc.) van
+  // en `rawPayload`, que para MANUAL ya no es sólo un log de depuración.
+  metodo         String?
   // 'APPROVED' | 'PENDING' | 'REJECTED' | 'REFUNDED'
   status         String
   amount         Float
@@ -2057,7 +2078,18 @@ model EntregaStock {
   // User a propósito.
   retiradoPor    String
   motivo         String?
+  // Notas/observaciones libres del remito — distinto de `motivo` (que en la
+  // práctica se usa como referencia, ej. "pedido 345 del presupuesto 64.99").
+  // Pedido de Abba: poder dejar observaciones de la entrega en sí.
+  notas          String?
+  // Quién retira en términos de modalidad (no el nombre — eso es
+  // `retiradoPor`). Lista curada en src/lib/entrega-tipos.ts, no enum
+  // Prisma, mismo criterio que el resto del schema para listas que pueden
+  // crecer sin migración.
+  tipoEntrega    String?
   estado         String       @default("BORRADOR") // 'BORRADOR' | 'ENTREGADA' | 'ANULADA'
+  // Fecha Y hora de la entrega — pedido de Abba: registrar cuándo se
+  // entregó de verdad, no sólo el día.
   fecha          DateTime     @default(now())
   creadoPorId    String?
   createdAt      DateTime     @default(now())

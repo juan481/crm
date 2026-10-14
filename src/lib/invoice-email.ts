@@ -6,6 +6,7 @@ import { appBaseUrl } from '@/lib/app-url'
 import { providerForCurrency } from '@/lib/payments/types'
 import { checkoutProviderConfigured } from '@/lib/payments/checkout'
 import { paymentsEnabledForOrg } from '@/lib/payments/config'
+import { medioPagoLabel, type PagoDetalle } from '@/lib/medios-pago'
 
 // Envío de una factura por email — usado por el botón "Enviar por mail"
 // (con PDF adjunto generado en el browser) y por el cron invoice-automation
@@ -130,6 +131,105 @@ export async function sendInvoiceEmail(opts: {
       }).catch((err: unknown) => console.error('[INVOICE-EMAIL] nota falló:', err))
     }
   }
+
+  return { ok: true, to: email }
+}
+
+/**
+ * Comprobante de pago — se dispara al registrar un pago MANUAL desde
+ * Facturación (pedido de Abba: Norma tiene que poder mandarle al cliente una
+ * copia del pago registrado, con la foto del cheque/transferencia si la
+ * cargó). Best-effort: si falla (SMTP sin configurar, sin contacto con
+ * mail…) no revierte el pago — sólo se loguea, igual que el resto de los
+ * efectos secundarios de recordManualPayment.
+ */
+export async function sendPaymentReceiptEmail(opts: {
+  invoiceId: string
+  organizationId: string
+  metodo: string | null
+  detalle: PagoDetalle | null
+}): Promise<SendInvoiceEmailResult> {
+  const db = prisma as any
+
+  const inv = await db.invoice.findFirst({
+    where: { id: opts.invoiceId, organizationId: opts.organizationId },
+    select: { id: true, amount: true, currency: true, numeroInterno: true, description: true, empresaId: true },
+  })
+  if (!inv) return { ok: false, error: 'Factura no encontrada' }
+
+  const contactos = inv.empresaId
+    ? await db.directorioContacto.findMany({
+        where: { organizationId: opts.organizationId, empresaId: inv.empresaId, email: { not: null } },
+        orderBy: [{ recibeFacturas: 'desc' }, { createdAt: 'asc' }],
+        select: { email: true },
+      })
+    : []
+  const email = contactos[0]?.email ? String(contactos[0].email).trim().toLowerCase() : null
+  if (!email) return { ok: false, error: 'La empresa no tiene ningún contacto con email' }
+
+  const org = await prisma.organization.findUnique({
+    where: { id: opts.organizationId },
+    select: {
+      name: true, crmName: true, logoUrl: true, primaryColor: true,
+      smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
+      smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
+    },
+  })
+  if (!org || !isOrgEmailConfigured(org)) return { ok: false, error: 'Email de la organización no configurado' }
+
+  const orgName = org.name || org.crmName || 'CRM'
+  const numero = inv.numeroInterno ?? `#${inv.id.slice(-6).toUpperCase()}`
+  const metodoLabel = medioPagoLabel(opts.metodo) ?? 'Pago manual'
+  const accent = /^#[0-9a-f]{6}$/i.test(org.primaryColor || '') ? org.primaryColor! : '#6366f1'
+
+  const detailLines: string[] = []
+  const d = opts.detalle ?? {}
+  if (d.referencia) detailLines.push(`Referencia: ${esc(d.referencia)}`)
+  if (d.chequeNumero) detailLines.push(`N° de cheque: ${esc(d.chequeNumero)}`)
+  if (d.chequeBanco) detailLines.push(`Banco: ${esc(d.chequeBanco)}`)
+  if (d.chequeFecha) detailLines.push(`Fecha del cheque: ${esc(d.chequeFecha)}`)
+  if (d.tarjetaBancoEmisor) detailLines.push(`Banco emisor: ${esc(d.tarjetaBancoEmisor)}`)
+  if (d.tarjetaMarca) detailLines.push(`Tarjeta: ${esc(d.tarjetaMarca)}`)
+  if (d.tarjetaCuotas) detailLines.push(`Cuotas: ${d.tarjetaCuotas}`)
+  if (d.nota) detailLines.push(esc(d.nota))
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#eef3f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f0;padding:32px 10px">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 10px 40px rgba(15,23,42,.10)">
+        <tr><td style="background:${accent};padding:24px 28px;color:#fff;font-weight:700;font-size:16px">${esc(orgName)}</td></tr>
+        <tr><td style="padding:28px">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1.5px;color:${accent};text-transform:uppercase">Comprobante de pago</p>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a">${esc(money(inv.amount, inv.currency))}</p>
+          <p style="margin:6px 0 0;font-size:13px;color:#64748b">Factura ${esc(numero)}${inv.description ? ` — ${esc(inv.description)}` : ''}</p>
+          <div style="margin-top:18px;background:#f8fafc;border-radius:12px;padding:14px 18px;font-size:13px;color:#334155;line-height:1.8">
+            <strong style="color:#0f172a">Medio de pago:</strong> ${esc(metodoLabel)}
+            ${detailLines.length ? `<br/>${detailLines.join('<br/>')}` : ''}
+          </div>
+          <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;line-height:1.7">Registramos tu pago correctamente. Cualquier consulta, respondé este correo.<br/>— ${esc(orgName)}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`
+
+  const attachments = d.foto
+    ? [{
+        filename: `comprobante-${numero.replace(/[^\w-]/g, '')}.jpg`,
+        content: Buffer.from(d.foto.includes(',') ? d.foto.split(',')[1] : d.foto, 'base64'),
+        contentType: 'image/jpeg',
+      }]
+    : undefined
+
+  await sendEmail({
+    to: email,
+    subject: `Comprobante de pago — Factura ${numero} — ${orgName}`,
+    html,
+    smtpConfig: resolveOrgSmtpConfig(org),
+    attachments,
+  })
 
   return { ok: true, to: email }
 }

@@ -380,6 +380,12 @@ export interface QuoteItem {
   // Alícuota de IVA resuelta al cotizar (del producto, o el default 21).
   // Ausente en cotizaciones anteriores a la discriminación de IVA.
   ivaPct?:       number | null
+  // Respaldo de garantía (pedido de Abba) — se completan después de creada
+  // la cotización, cuando se conoce el equipo físico entregado (uno por
+  // unidad, la cantidad puede ser > 1). Editable desde el detalle de la
+  // cotización, no desde el cotizador.
+  serialNumbers?: string[]
+  itemNotes?:     string
 }
 
 // ─── RRHH ─────────────────────────────────────────────────────────────────

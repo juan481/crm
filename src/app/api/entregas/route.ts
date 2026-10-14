@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       db.entregaStock.findMany({
         where, orderBy: { createdAt: 'desc' }, skip, take: limit,
         select: {
-          id: true, numero: true, retiradoPor: true, motivo: true, estado: true,
+          id: true, numero: true, retiradoPor: true, motivo: true, notas: true, tipoEntrega: true, estado: true,
           fecha: true, dealId: true, cotizacionId: true, createdAt: true,
           empresa: { select: { id: true, name: true } },
           _count: { select: { items: true } },
@@ -57,6 +57,8 @@ export async function GET(req: NextRequest) {
       numero: e.numero,
       retiradoPor: e.retiradoPor,
       motivo: e.motivo,
+      notas: e.notas,
+      tipoEntrega: e.tipoEntrega,
       estado: e.estado,
       fecha: e.fecha.toISOString(),
       createdAt: e.createdAt.toISOString(),
@@ -132,6 +134,8 @@ export async function POST(req: NextRequest) {
           dealId: body.dealId || null,
           retiradoPor: body.retiradoPor.trim(),
           motivo: body.motivo?.trim() || null,
+          notas: body.notas?.trim() || null,
+          tipoEntrega: body.tipoEntrega || null,
           fecha: body.fecha && !isNaN(Date.parse(body.fecha)) ? new Date(body.fecha) : new Date(),
           estado: 'BORRADOR',
           creadoPorId: payload.userId,

@@ -16,15 +16,18 @@ const schema = z.object({
   empresaId: z.string().min(1, 'Seleccioná un cliente'),
   description: z.string().optional(),
   amount: z.coerce.number().positive('Debe ser mayor a 0'),
-  currency: z.string().default('USD'),
+  // Pedido de Abba: las facturas quedaban por defecto en USD aunque
+  // correspondieran a moneda local — ARS es el default real del negocio,
+  // USD queda disponible en el selector para el caso puntual que haga falta.
+  currency: z.string().default('ARS'),
   dueDate: z.string().min(1, 'Ingresá una fecha'),
   status: z.enum(['PENDING', 'PAID']).default('PENDING'),
 })
 type FormData = z.infer<typeof schema>
 
 const CURRENCY_OPTIONS = [
-  { value: 'USD', label: 'USD — Dólar' },
   { value: 'ARS', label: 'ARS — Peso Argentino' },
+  { value: 'USD', label: 'USD — Dólar' },
   { value: 'EUR', label: 'EUR — Euro' },
   { value: 'MXN', label: 'MXN — Peso Mexicano' },
   { value: 'CLP', label: 'CLP — Peso Chileno' },
@@ -75,7 +78,7 @@ export function InvoiceForm({ defaultEmpresaId, onSuccess, onCancel }: InvoiceFo
     resolver: zodResolver(schema),
     defaultValues: {
       empresaId: defaultEmpresaId ?? '',
-      currency: 'USD',
+      currency: 'ARS',
       dueDate: defaultDueStr,
       status: 'PENDING',
     },

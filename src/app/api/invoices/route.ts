@@ -170,7 +170,9 @@ export async function POST(req: NextRequest) {
         empresaId,
         organizationId: empresa.organizationId, // persist directly
         amount:  Number(amount),
-        currency: currency || 'USD',
+        // Pedido de Abba: las facturas manuales son ARS salvo que se elija
+        // otra cosa explícitamente — antes caía en USD por default.
+        currency: currency || 'ARS',
         description: description || null,
         dueDate: dateOnlyArgentina(dueY, dueM - 1, dueD),
         status: initialStatus,

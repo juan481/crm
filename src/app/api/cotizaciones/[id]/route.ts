@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'cotizaciones'))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { status, dealId, sellerId } = await req.json()
+    const { status, dealId, sellerId, notes, items } = await req.json()
     const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA']
     if (status !== undefined && !allowed.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
 
@@ -85,9 +85,35 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         organizationId: payload.orgId,
         ...(payload.role === 'SELLER' && { userId: payload.userId }),
       },
-      select: { id: true, dealId: true },
+      select: { id: true, dealId: true, items: true },
     })
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+
+    // Notas/N° de serie por ítem (pedido de Abba, respaldo de garantía) — se
+    // cargan después de creada, cuando se conoce el equipo entregado. Nunca
+    // se confía en lo que manda el cliente para precio/cantidad/producto:
+    // se parte SIEMPRE de los ítems que ya están en la base y sólo se
+    // pisan `itemNotes`/`serialNumbers` por índice, todo lo demás del
+    // ítem original queda intacto.
+    let resolvedItems: unknown[] | undefined
+    if (Array.isArray(items)) {
+      const base = Array.isArray(existing.items) ? existing.items : []
+      if (items.length !== base.length) {
+        return NextResponse.json({ error: 'La cantidad de ítems no coincide con la cotización' }, { status: 400 })
+      }
+      resolvedItems = base.map((orig: any, idx: number) => {
+        const incoming = items[idx] ?? {}
+        const serialNumbers = Array.isArray(incoming.serialNumbers)
+          ? incoming.serialNumbers.map((s: unknown) => String(s).trim()).filter(Boolean)
+          : undefined
+        const itemNotes = typeof incoming.itemNotes === 'string' ? incoming.itemNotes.trim() : undefined
+        return {
+          ...orig,
+          ...(serialNumbers !== undefined && { serialNumbers }),
+          ...(itemNotes !== undefined && { itemNotes: itemNotes || undefined }),
+        }
+      })
+    }
 
     // "¿Quién vendió esto?" — mismo criterio que Pipeline y el Cotizador
     // (pedido de Abba, Seba 2026-10-02): marcar una cotización ya cargada
@@ -132,6 +158,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(status !== undefined && { status }),
         ...(resolvedDealId !== undefined && { dealId: resolvedDealId }),
         ...(resolvedSellerId && { userId: resolvedSellerId }),
+        ...(typeof notes === 'string' && { notes: notes.trim() || null }),
+        ...(resolvedItems !== undefined && { items: resolvedItems }),
       },
     })
 

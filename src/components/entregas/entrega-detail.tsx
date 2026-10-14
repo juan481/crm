@@ -4,8 +4,19 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, Ban, CheckCircle2, Download, FileText, Save, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Select } from '@/components/ui/select'
 import { RetiraInput } from '@/components/entregas/retira-input'
+import { TIPO_ENTREGA_OPTIONS, tipoEntregaLabel } from '@/lib/entrega-tipos'
 import { formatMoneyExact } from '@/lib/utils'
+
+// YYYY-MM-DDTHH:mm en hora local, a partir de un ISO string — mismo
+// criterio que entrega-form.tsx (toISOString() da UTC y correría la hora
+// mostrada en el input según el huso del navegador).
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso)
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
 import { loadLogoForPdf, drawPdfHeader, drawBrandedFooter } from '@/lib/pdf-branding'
 import toast from 'react-hot-toast'
 
@@ -22,6 +33,7 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
   const [busy, setBusy] = useState(false)
   const [edit, setEdit] = useState<{ items: Record<string, string> } | null>(null)
   const [editRetira, setEditRetira] = useState<string | null>(null)
+  const [editMeta, setEditMeta] = useState<{ notas: string; tipoEntrega: string; fecha: string } | null>(null)
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['entrega', entregaId],
@@ -61,6 +73,31 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       toast.success('Guardado')
       setEdit(null)
+      invalidate()
+    } catch { toast.error('Error de conexión') } finally { setBusy(false) }
+  }
+
+  const startEditMeta = () => setEditMeta({
+    notas: e.notas ?? '',
+    tipoEntrega: e.tipoEntrega ?? '',
+    fecha: toLocalInput(e.fecha),
+  })
+
+  const saveMeta = async () => {
+    if (!editMeta) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/entregas/${entregaId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        // Mismo motivo que entrega-form.tsx: convertir a ISO absoluto acá
+        // (hora del browser → UTC con "Z") antes de mandarlo, para que el
+        // server no reinterprete el datetime-local en su propia zona.
+        body: JSON.stringify({ notas: editMeta.notas.trim() || null, tipoEntrega: editMeta.tipoEntrega || null, fecha: new Date(editMeta.fecha).toISOString() }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      toast.success('Guardado')
+      setEditMeta(null)
       invalidate()
     } catch { toast.error('Error de conexión') } finally { setBusy(false) }
   }
@@ -138,8 +175,10 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
         doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
         doc.text(e.numero ? `Remito N° ${e.numero}` : 'Remito (borrador)', mg, y); y += 8
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 116, 139)
-        doc.text(`Retira: ${e.retiradoPor}`, mg, y); y += 5
+        doc.text(`Retira: ${e.retiradoPor}${e.tipoEntrega ? ` (${tipoEntregaLabel(e.tipoEntrega)})` : ''}`, mg, y); y += 5
+        doc.text(`Entregado: ${new Date(e.fecha).toLocaleString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, mg, y); y += 5
         if (e.motivo) { doc.text(`Motivo: ${e.motivo}`, mg, y); y += 5 }
+        if (e.notas) { doc.text(`Notas: ${e.notas}`, mg, y); y += 5 }
         if (e.empresa?.name) { doc.text(`Empresa: ${e.empresa.name}`, mg, y); y += 5 }
         if (e.cotizacion?.ref) { doc.text(`Presupuesto: ${e.cotizacion.ref}`, mg, y); y += 5 }
         y += 4
@@ -216,8 +255,46 @@ export function EntregaDetail({ entregaId, onChanged, onDeleted }: {
             </div>
           )}
         </div>
-        <div><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Fecha</p><p style={{ color: 'var(--color-text)' }}>{new Date(e.fecha).toLocaleDateString('es-AR')}</p></div>
-        {e.motivo && <div className="col-span-2"><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Motivo</p><p style={{ color: 'var(--color-text)' }}>{e.motivo}</p></div>}
+        {editMeta ? (
+          <>
+            <div>
+              <p className="text-[11px] mb-1" style={{ color: 'var(--color-text-subtle)' }}>Fecha y hora</p>
+              <input type="datetime-local" value={editMeta.fecha} onChange={(ev) => setEditMeta({ ...editMeta, fecha: ev.target.value })}
+                className="w-full rounded-lg px-2 py-1 text-sm outline-none" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <div>
+              <p className="text-[11px] mb-1" style={{ color: 'var(--color-text-subtle)' }}>Modalidad</p>
+              <Select value={editMeta.tipoEntrega} onChange={(ev) => setEditMeta({ ...editMeta, tipoEntrega: ev.target.value })}
+                options={[{ value: '', label: '— Sin especificar —' }, ...TIPO_ENTREGA_OPTIONS]} />
+            </div>
+            <div className="col-span-2">
+              <p className="text-[11px] mb-1" style={{ color: 'var(--color-text-subtle)' }}>Notas / observaciones</p>
+              <textarea value={editMeta.notas} onChange={(ev) => setEditMeta({ ...editMeta, notas: ev.target.value })} rows={2}
+                className="w-full rounded-lg px-2 py-1 text-sm outline-none resize-none" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <div className="col-span-2 flex items-center gap-2">
+              <Button size="sm" onClick={saveMeta} loading={busy} leftIcon={<Save size={13} />}>Guardar</Button>
+              <button onClick={() => setEditMeta(null)} className="text-xs px-3 py-2" style={{ color: 'var(--color-text-muted)' }}>Cancelar</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <div>
+                <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Fecha y hora</p>
+                <p style={{ color: 'var(--color-text)' }}>{new Date(e.fecha).toLocaleString('es-AR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+              </div>
+              {e.estado !== 'ANULADA' && (
+                <button onClick={startEditMeta} className="p-1 rounded hover:opacity-70 shrink-0" style={{ color: 'var(--color-text-subtle)' }} title="Editar fecha/modalidad/notas">
+                  <Pencil size={11} />
+                </button>
+              )}
+            </div>
+            {e.tipoEntrega && <div><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Modalidad</p><p style={{ color: 'var(--color-text)' }}>{tipoEntregaLabel(e.tipoEntrega)}</p></div>}
+            {e.motivo && <div className="col-span-2"><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Motivo</p><p style={{ color: 'var(--color-text)' }}>{e.motivo}</p></div>}
+            {e.notas && <div className="col-span-2"><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Notas</p><p style={{ color: 'var(--color-text)' }}>{e.notas}</p></div>}
+          </>
+        )}
         {e.empresa?.name && <div><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Empresa</p><p style={{ color: 'var(--color-text)' }}>{e.empresa.name}</p></div>}
         {e.deal?.title && <div><p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Obra</p><p style={{ color: 'var(--color-text)' }}>{e.deal.title}</p></div>}
       </div>

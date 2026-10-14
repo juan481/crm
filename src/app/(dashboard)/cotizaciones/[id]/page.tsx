@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Download, Mail, MessageCircle, CheckCircle2,
   Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle, PackageCheck,
-  Copy, Repeat, User,
+  Copy, Repeat, User, Save, Pencil, Tag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -46,7 +46,7 @@ interface CotizacionDetail {
   validityDays:   number
   ivaDiscriminado: boolean | null
   priceMode:      string | null
-  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null; productId?: string }>
+  items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null; productId?: string; sku?: string | null; serialNumbers?: string[]; itemNotes?: string }>
   entregaGenerada?: boolean
   dealId?:        string | null
   facturaEmitida?: { id: string; numeroInterno: string | null } | null
@@ -73,6 +73,13 @@ export default function CotizacionDetailPage() {
   const [duplicating, setDuplicating] = useState(false)
   const [convertingCurrency, setConvertingCurrency] = useState(false)
   const [markingCliente, setMarkingCliente] = useState(false)
+  // Notas/N° de serie por ítem — pedido de Abba (respaldo de garantía). El
+  // N° de serie se ingresa como texto libre separado por coma/salto de
+  // línea (un equipo puede traer varios si la cantidad es > 1) y se
+  // normaliza a array recién al guardar.
+  const [editingItems, setEditingItems] = useState(false)
+  const [itemDrafts, setItemDrafts] = useState<Record<number, { notes: string; serials: string }>>({})
+  const [savingItems, setSavingItems] = useState(false)
 
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
@@ -401,6 +408,39 @@ export default function CotizacionDetailPage() {
     }
   }
 
+  const startEditItems = () => {
+    if (!data) return
+    setItemDrafts(Object.fromEntries(data.items.map((it, idx) => [
+      idx,
+      { notes: it.itemNotes ?? '', serials: (it.serialNumbers ?? []).join(', ') },
+    ])))
+    setEditingItems(true)
+  }
+
+  const saveItems = async () => {
+    if (!data) return
+    setSavingItems(true)
+    try {
+      const items = data.items.map((_, idx) => ({
+        itemNotes: itemDrafts[idx]?.notes ?? '',
+        serialNumbers: (itemDrafts[idx]?.serials ?? '').split(/[,\n]/).map(s => s.trim()).filter(Boolean),
+      }))
+      const res = await fetch(`/api/cotizaciones/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error al guardar'); return }
+      toast.success('Notas y números de serie guardados')
+      setEditingItems(false)
+      qc.invalidateQueries({ queryKey: ['cotizacion', id] })
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setSavingItems(false)
+    }
+  }
+
   const updateStatus = async (status: string) => {
     if (!data) return
     setUpdatingStatus(true)
@@ -556,6 +596,66 @@ export default function CotizacionDetailPage() {
         ))}
       </div>
 
+      {/* Ítems — notas y N° de serie (respaldo de garantía) */}
+      <div className="surface rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            <Tag size={14} /> Notas y N° de serie por ítem
+          </p>
+          {editingItems ? (
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={saveItems} loading={savingItems} leftIcon={<Save size={13} />}>Guardar</Button>
+              <button onClick={() => setEditingItems(false)} className="text-xs px-2" style={{ color: 'var(--color-text-muted)' }}>Cancelar</button>
+            </div>
+          ) : (
+            <button onClick={startEditItems} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:opacity-70" style={{ color: 'var(--color-text-subtle)' }}>
+              <Pencil size={11} /> Editar
+            </button>
+          )}
+        </div>
+        <div className="space-y-2">
+          {data.items.map((it, idx) => (
+            <div key={idx} className="rounded-xl p-3" style={{ border: '1px solid var(--color-border)' }}>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                {it.sku ? `[${it.sku}] ` : ''}{it.name} <span className="text-xs font-normal" style={{ color: 'var(--color-text-subtle)' }}>× {it.quantity}</span>
+              </p>
+              {editingItems ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <label className="block text-[11px] mb-1" style={{ color: 'var(--color-text-subtle)' }}>N° de serie (separados por coma)</label>
+                    <input
+                      value={itemDrafts[idx]?.serials ?? ''}
+                      onChange={(e) => setItemDrafts(d => ({ ...d, [idx]: { ...d[idx], notes: d[idx]?.notes ?? '', serials: e.target.value } }))}
+                      placeholder="Ej: SN12345, SN12346"
+                      className="w-full rounded-lg px-2 py-1.5 text-sm outline-none"
+                      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] mb-1" style={{ color: 'var(--color-text-subtle)' }}>Observaciones</label>
+                    <input
+                      value={itemDrafts[idx]?.notes ?? ''}
+                      onChange={(e) => setItemDrafts(d => ({ ...d, [idx]: { ...d[idx], serials: d[idx]?.serials ?? '', notes: e.target.value } }))}
+                      className="w-full rounded-lg px-2 py-1.5 text-sm outline-none"
+                      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                ((it.serialNumbers?.length ?? 0) > 0 || it.itemNotes) && (
+                  <div className="mt-1.5 space-y-0.5">
+                    {(it.serialNumbers?.length ?? 0) > 0 && (
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>N° de serie: {it.serialNumbers!.join(', ')}</p>
+                    )}
+                    {it.itemNotes && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{it.itemNotes}</p>}
+                  </div>
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* PDF preview */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--color-border)', height: '520px' }}>
         {pdfBlobUrl ? (
@@ -653,7 +753,9 @@ export default function CotizacionDetailPage() {
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                 {data.facturaEmitida
                   ? `Ya se emitió la factura ${data.facturaEmitida.numeroInterno ?? ''}.`
-                  : 'Genera la factura (registro + numeración interna, sin CAE de AFIP) con las líneas y el total.'}
+                  : data.currency === 'USD'
+                    ? 'Genera la factura en ARS al TC BNA vendedor del día (registro interno, sin CAE de AFIP).'
+                    : 'Genera la factura (registro + numeración interna, sin CAE de AFIP) con las líneas y el total.'}
               </p>
             </div>
           </div>

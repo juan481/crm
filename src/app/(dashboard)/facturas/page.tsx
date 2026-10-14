@@ -14,6 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
 import { InvoicePreview } from '@/components/invoices/invoice-preview'
+import { PaymentDetailsModal } from '@/components/invoices/payment-details-modal'
+import type { PagoDetalle } from '@/lib/medios-pago'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { argentinaDayStart } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
@@ -85,6 +87,27 @@ function RecurringModal({ open, onClose, onGenerated }: { open: boolean; onClose
   )
 }
 
+// Carga el detalle (factura + último Payment MANUAL) antes de mostrar el
+// modal de "Editar pago" — la lista de facturas no trae ese detalle, sólo
+// lo necesita este caso puntual.
+function EditPaymentLoader({ invoiceId, onClose, onSaved }: { invoiceId: string; onClose: () => void; onSaved: () => void }) {
+  const { data } = useQuery({
+    queryKey: ['invoice-for-payment-edit', invoiceId],
+    queryFn: async () => (await fetch(`/api/invoices/${invoiceId}`)).json().then((j) => j.data),
+  })
+  if (!data) return null
+  const payment = (data.payments ?? [])[0]
+  if (!payment) { toast.error('No se encontró el pago registrado'); onClose(); return null }
+  return (
+    <PaymentDetailsModal
+      open onClose={onClose} onSaved={onSaved}
+      invoiceId={invoiceId} amount={data.amount} currency={data.currency}
+      empresaName={data.empresa?.name ?? data.client?.name ?? null}
+      paymentId={payment.id} initialMetodo={payment.metodo} initialDetalle={payment.rawPayload as PagoDetalle | null}
+    />
+  )
+}
+
 interface InvoiceRow {
   id: string; amount: number; currency: string; status: string
   description: string | null; dueDate: string; paidAt: string | null; createdAt: string; sentAt?: string | null
@@ -136,6 +159,8 @@ export default function FacturasPage() {
   const [showRecurring, setShowRecurring] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRow | null>(null)
+  const [payInvoice, setPayInvoice] = useState<InvoiceRow | null>(null)
+  const [editPayInvoiceId, setEditPayInvoiceId] = useState<string | null>(null)
   // ADMINISTRATIVO ya tiene permiso real a nivel API (puedeVerFacturacion,
   // ver src/lib/finance-access.ts) desde que se armó ese rol — acá faltaba
   // sumarlo, así que veía la pantalla (el módulo estaba prendido) pero sin
@@ -169,15 +194,6 @@ export default function FacturasPage() {
 
   const invoices = data?.data ?? []
   const summary = data?.summary
-
-  const markAsPaid = async (id: string) => {
-    try {
-      const res = await fetch(`/api/invoices/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'PAID' }) })
-      if (!res.ok) throw new Error()
-      toast.success('Factura marcada como pagada')
-      qc.invalidateQueries({ queryKey: ['invoices'] })
-    } catch { toast.error('Error al actualizar') }
-  }
 
   const copyPayLink = async (token: string) => {
     const url = `${window.location.origin}/pagar/${token}`
@@ -344,7 +360,10 @@ export default function FacturasPage() {
                 </button>
               )}
               {canManage && row.status !== 'PAID' && row.status !== 'CANCELLED' && (
-                <button onClick={(e) => { e.stopPropagation(); markAsPaid(row.id) }} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all">Marcar pagada</button>
+                <button onClick={(e) => { e.stopPropagation(); setPayInvoice(row) }} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all">Registrar pago</button>
+              )}
+              {canManage && row.status === 'PAID' && (
+                <button onClick={(e) => { e.stopPropagation(); setEditPayInvoiceId(row.id) }} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-all">Editar pago</button>
               )}
               {canManage && (
                 <button onClick={(e) => { e.stopPropagation(); setDeletingId(row.id) }} className="text-xs text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400 px-2.5 py-1 rounded-lg transition-all">Eliminar</button>
@@ -368,6 +387,22 @@ export default function FacturasPage() {
 
       {previewInvoice && (
         <InvoicePreview invoice={previewInvoice} onClose={() => setPreviewInvoice(null)} />
+      )}
+
+      {payInvoice && (
+        <PaymentDetailsModal
+          open onClose={() => setPayInvoice(null)}
+          onSaved={() => { setPayInvoice(null); qc.invalidateQueries({ queryKey: ['invoices'] }) }}
+          invoiceId={payInvoice.id} amount={payInvoice.amount} currency={payInvoice.currency}
+          empresaName={payInvoice.empresa?.name ?? payInvoice.client?.name ?? null}
+        />
+      )}
+      {editPayInvoiceId && (
+        <EditPaymentLoader
+          invoiceId={editPayInvoiceId}
+          onClose={() => setEditPayInvoiceId(null)}
+          onSaved={() => { setEditPayInvoiceId(null); qc.invalidateQueries({ queryKey: ['invoices'] }) }}
+        />
       )}
     </div>
   )

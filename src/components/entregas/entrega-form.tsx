@@ -9,7 +9,16 @@ import { Select } from '@/components/ui/select'
 import { ModalFooter } from '@/components/ui/modal'
 import { ProductoPicker } from '@/components/shared/producto-picker'
 import { RetiraInput } from '@/components/entregas/retira-input'
+import { TIPO_ENTREGA_OPTIONS } from '@/lib/entrega-tipos'
 import toast from 'react-hot-toast'
+
+// YYYY-MM-DDTHH:mm en hora local — Date#toISOString() da UTC, lo que corre
+// el "ahora" del datetime-local a otro día/hora según el huso del navegador.
+const nowLocalInput = () => {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
 
 interface Row {
   key: string
@@ -28,7 +37,9 @@ const emptyRow = (): Row => ({ key: newKey(), productId: null, nombre: '', sku: 
 export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved: (id: string) => void }) {
   const [retiradoPor, setRetiradoPor] = useState('')
   const [motivo, setMotivo] = useState('')
-  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [notas, setNotas] = useState('')
+  const [tipoEntrega, setTipoEntrega] = useState('')
+  const [fecha, setFecha] = useState(nowLocalInput())
   const [empresaId, setEmpresaId] = useState('')
   const [dealId, setDealId] = useState('')
   const [rows, setRows] = useState<Row[]>([emptyRow()])
@@ -68,7 +79,12 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
     try {
       const res = await fetch('/api/entregas', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ retiradoPor: retiradoPor.trim(), motivo: motivo.trim() || null, fecha, empresaId: empresaId || null, dealId: dealId || null, items, entregar }),
+        // new Date(fecha) interpreta el datetime-local SIN offset en la hora
+        // del browser (correcto); .toISOString() lo manda con "Z" para que
+        // el server (Vercel corre en UTC) no lo reinterprete en su propia
+        // zona — mismo problema que ya resolvió src/lib/timezone.ts para
+        // fichaje/RRHH/facturas, acá se resuelve del lado del cliente.
+        body: JSON.stringify({ retiradoPor: retiradoPor.trim(), motivo: motivo.trim() || null, notas: notas.trim() || null, tipoEntrega: tipoEntrega || null, fecha: new Date(fecha).toISOString(), empresaId: empresaId || null, dealId: dealId || null, items, entregar }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
@@ -85,12 +101,24 @@ export function EntregaForm({ onClose, onSaved }: { onClose: () => void; onSaved
           <RetiraInput value={retiradoPor} onChange={setRetiradoPor} autoFocus />
         </div>
         <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Fecha</label>
-          <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Fecha y hora de entrega</label>
+          <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Modalidad</label>
+          <Select value={tipoEntrega} onChange={(e) => setTipoEntrega(e.target.value)}
+            options={[{ value: '', label: '— Sin especificar —' }, ...TIPO_ENTREGA_OPTIONS]} />
         </div>
         <div className="col-span-2">
           <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Motivo / referencia</label>
           <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej: pedido 345 del presupuesto 64.99" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Notas / observaciones</label>
+          <textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2}
+            placeholder="Observaciones de esta entrega..."
+            className="w-full rounded-xl px-3 py-2 text-sm outline-none resize-none"
+            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Empresa (opcional)</label>
