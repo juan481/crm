@@ -18,6 +18,10 @@
       "schedule": "30 12 * * *"
     },
     {
+      "path": "/api/cron/carnet-vencimiento",
+      "schedule": "35 12 * * *"
+    },
+    {
       "path": "/api/cron/stock-bajo",
       "schedule": "45 12 * * 1-5"
     },

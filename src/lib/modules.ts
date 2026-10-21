@@ -106,6 +106,15 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   { id: 'contactos',      label: 'Contactos',       defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],        minRole: 'TECHNICIAN' },
   { id: 'rrhh',           label: 'RRHH',            defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'HR'],                              minRole: 'HR' },
   { id: 'mi-asistencia',  label: 'Mi Asistencia',   defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'SELLER', 'TECHNICIAN', 'HR'],      minRole: 'TECHNICIAN' },
+  // Legajo de vigiladores (ABBA FISICA, reestructuración 2026-10) — dato
+  // sensible de personal. minRole 'HR' bloquea de verdad a TECHNICIAN (rango
+  // 0, por debajo de HR) pero NO a SELLER (rango 2, por ENCIMA de HR en
+  // ROLE_LEVEL) — mismo límite estructural que ya tiene 'rrhh' con el mismo
+  // piso: no hay un único minRole que incluya HR y excluya SELLER en una
+  // jerarquía lineal. Default ADMINISTRATIVO+HR (quienes lo gestionan en la
+  // práctica); que SELLER lo tenga requiere que un Super Admin lo prenda a
+  // mano en Permisos — un fat-finger posible, no un agujero por default.
+  { id: 'legajos',        label: 'Legajos',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'HR'],           minRole: 'HR' },
 ]
 
 export function getModule(id: string): ModuleDefinition | undefined {
@@ -141,6 +150,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   entregas: '/entregas',
   conversaciones: '/conversaciones',
   'mi-asistencia': '/mi-asistencia',
+  legajos: '/legajos',
 }
 
 // Jerarquía idéntica a canAccess() en src/lib/auth.ts — duplicada acá a

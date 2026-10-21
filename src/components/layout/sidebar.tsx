@@ -8,7 +8,7 @@ import {
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
   Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug, MessageCircle, RefreshCw,
-  Warehouse, Truck, ShoppingCart, PackageCheck, ShieldCheck,
+  Warehouse, Truck, ShoppingCart, PackageCheck, ShieldCheck, Fingerprint,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -135,6 +135,11 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
     items: [
       { label: 'RRHH',          href: '/rrhh',          icon: <ClipboardList size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'HR'], moduleId: 'rrhh' },
       { label: 'Mi Asistencia', href: '/mi-asistencia', icon: <ClipboardCheck size={17} />, roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'TECHNICIAN', 'HR'], moduleId: 'mi-asistencia' },
+      // ABBA FISICA (reestructuración 2026-10) — legajo de vigiladores, no
+      // confundir con RRHH interno de arriba (esa es la asistencia del
+      // STAFF del CRM; los vigiladores no son usuarios, ver Vigilador en
+      // schema.prisma). Mismos roles que el módulo 'legajos' en modules.ts.
+      { label: 'Legajos',       href: '/legajos',       icon: <Fingerprint size={17} />,    roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'HR'], moduleId: 'legajos' },
     ],
   },
 ]

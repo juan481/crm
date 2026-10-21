@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db'
 // comportamiento viejo (gate por plugin + destinatarios por rol) — así las
 // demás orgs del CRM no se ven afectadas por este cambio.
 
-export const NOTIFICATION_TYPES = ['attendance', 'it-activity', 'renewals', 'stock-bajo', 'alertas-costo'] as const
+export const NOTIFICATION_TYPES = ['attendance', 'it-activity', 'renewals', 'stock-bajo', 'alertas-costo', 'carnet-vencimiento'] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 
 export const NOTIFICATION_META: Record<NotificationType, { label: string; description: string; roleFallback: string }> = {
@@ -33,6 +33,11 @@ export const NOTIFICATION_META: Record<NotificationType, { label: string; descri
   'alertas-costo': {
     label: 'Alertas de costo',
     description: 'Cada mañana (lun–vie): cambios de costo pendientes de revisar (por una compra o por el catálogo del proveedor).',
+    roleFallback: 'Nadie hasta configurarlo',
+  },
+  'carnet-vencimiento': {
+    label: 'Carnet de vigilador por vencer',
+    description: 'Aviso cuando el carnet de un vigilador vence en 30, 15, 7 o 1 día (ABBA FISICA, legajos).',
     roleFallback: 'Nadie hasta configurarlo',
   },
 }

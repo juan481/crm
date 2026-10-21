@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
+import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
-import { createAdminClient } from '@/lib/supabase/admin'
-
-const BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'uploads'
-
-// Derives the storage object path from the full public URL — only needed as
-// a fallback for documents uploaded before `storagePath` existed.
-function pathFromPublicUrl(url: string): string | null {
-  const marker = `/object/public/${BUCKET}/`
-  const idx = url.indexOf(marker)
-  return idx === -1 ? null : url.slice(idx + marker.length)
-}
+import { deleteDocumentsFromStorage } from '@/lib/document-storage'
+import { canManageDocument } from '@/lib/document-access'
 
 interface Params { params: { id: string } }
 
@@ -19,7 +11,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    // Rechazo rápido SIN consultar la DB para quien no tiene ningún acceso
+    // de documentos — evita que alguien sin ningún permiso distinga 404 de
+    // 403 probando ids ajenos (encontrado en code-review: el findFirst de
+    // abajo corría ANTES de cualquier chequeo de rol).
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'legajos')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+
+    const existing = await prisma.document.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: { id: true, legajoId: true },
+    })
+    if (!existing) return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 })
+    if (!(await canManageDocument(payload.orgId, payload.role, existing))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const { name, tags } = await req.json()
 
@@ -44,22 +48,19 @@ export async function DELETE(_: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'legajos')))
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const doc = await prisma.document.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
     })
 
     if (!doc) return NextResponse.json({ error: 'Documento no encontrado' }, { status: 404 })
+    if (!(await canManageDocument(payload.orgId, payload.role, doc))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const storagePath = doc.storagePath ?? pathFromPublicUrl(doc.url)
-    if (storagePath) {
-      const supabase = createAdminClient()
-      const { error: removeError } = await supabase.storage.from(BUCKET).remove([storagePath])
-      // No bloquea el borrado del registro por un error de storage (ej. ya
-      // no existe), pero sí queda logueado para poder limpiarlo a mano.
-      if (removeError) console.error('[DOC DELETE] Storage remove failed:', removeError)
-    }
+    // No bloquea el borrado del registro por un error de storage (ej. ya
+    // no existe) — deleteDocumentsFromStorage ya loguea internamente.
+    await deleteDocumentsFromStorage([doc])
 
     await prisma.document.delete({ where: { id: params.id } })
 

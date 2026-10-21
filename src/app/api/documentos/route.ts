@@ -32,6 +32,14 @@ export async function GET(req: NextRequest) {
       organizationId: payload.orgId,
       ...(tag ? { tags: { contains: `"${tag}"` } } : { folderId }),
       ...(clientId && { clientId }),
+      // El repositorio general de Documentos (SELLER+ por default) nunca
+      // debe mostrar los documentos de legajo (DNI/carnet/contrato de un
+      // vigilador, ABBA FISICA) — esos sólo se ven desde la ficha del
+      // legajo, gateada por el módulo 'legajos'. Sin esto, un documento con
+      // folderId=null (el caso normal al subirlo desde /legajos) matcheaba
+      // igual este listado y quedaba expuesto a cualquiera con acceso al
+      // repositorio general (bug real encontrado en code-review).
+      legajoId: null,
       supersededBy: { none: {} }, // only the latest version of each document shows up
     }
 

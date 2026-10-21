@@ -317,6 +317,8 @@ model Organization {
   deals                   Deal[]
   salesTargets            SalesTarget[]
   commissionLedgers       CommissionLedger[]
+  vigiladores             Vigilador[]
+  vigiladorTurnos         VigiladorTurno[]
   tasks                   Task[]
   tickets                 Ticket[]
   empresas                Empresa[]
@@ -1263,6 +1265,11 @@ model Document {
   folder         Folder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   clientId       String?
   client         Client?      @relation(fields: [clientId], references: [id])
+  // Carnet/DNI/contrato escaneado de un vigilador (ABBA FISICA, legajo) —
+  // mismo patrón que clientId, un FK nullable más en el mismo modelo
+  // genérico de documentos, no uno nuevo.
+  legajoId       String?
+  legajo         Vigilador?   @relation(fields: [legajoId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tags           String       @default("[]")
@@ -1292,6 +1299,7 @@ model Document {
 
   @@index([organizationId])
   @@index([clientId])
+  @@index([legajoId])
   @@index([supersedesId])
 }
 
@@ -2488,6 +2496,83 @@ model HorarioTramo {
 
   @@unique([userId, orden])
   @@index([userId])
+  @@index([organizationId])
+}
+
+// ─── ABBA FISICA — legajo de vigiladores (reestructuración 2026-10) ────────
+// El vigilador NO es un usuario del CRM (usa VigiControl, un sistema
+// externo aparte) — confirmado que hoy no tiene NINGUNA representación en
+// la base salvo que fuera un User, y eso traía consigo todo lo que implica
+// ser un User (login, roles, aparecer en pickers de asignación) sin que
+// nada de eso aplicara. Vigilador es una entidad propia, independiente de
+// User, gestionada por RRHH/Administración — ver módulo 'legajos' en
+// src/lib/modules.ts.
+model Vigilador {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  nombre          String
+  apellido        String
+  dni             String
+  // Antigüedad se calcula en código a partir de esto — no se guarda aparte
+  // para no desincronizar.
+  fechaIngreso    DateTime?    @db.Date
+  // Vencimiento del carnet de vigilador — dispara el aviso de
+  // /api/cron/carnet-vencimiento (ver src/lib/notifications.ts). Null =
+  // todavía sin cargar, no genera ningún aviso.
+  carnetVencimiento DateTime?  @db.Date
+  art             String?
+  lugarTrabajo    String?
+  activo          Boolean      @default(true)
+  notas           String?
+  documentos      Document[]
+  cursos          VigiladorCurso[]
+  turnos          VigiladorTurno[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Modelo nuevo, cero filas en producción todavía — agregar este único
+  // ahora es gratis (no hay migración de datos existentes que pueda
+  // chocar). Evita el caso real: RRHH no encuentra a alguien por una
+  // búsqueda con errata y crea un segundo legajo para la misma persona.
+  @@unique([organizationId, dni])
+  @@index([organizationId])
+  @@index([organizationId, carnetVencimiento])
+}
+
+// Cursos/capacitaciones realizadas — lista simple, una fila por curso.
+model VigiladorCurso {
+  id          String    @id @default(cuid())
+  vigiladorId String
+  vigilador   Vigilador @relation(fields: [vigiladorId], references: [id], onDelete: Cascade)
+  nombre      String
+  fecha       DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+
+  @@index([vigiladorId])
+}
+
+// Turno/asistencia del vigilador — mirror liviano de TurnoAsistencia (mismo
+// espíritu: fecha + entrada/salida + lugar), pero cargado a MANO por RRHH
+// (sin GPS, sin fichaje propio — el vigilador no entra al CRM, ver
+// comentario del modelo Vigilador). Sin integración con VigiControl en esta
+// primera versión.
+model VigiladorTurno {
+  id             String       @id @default(cuid())
+  vigiladorId    String
+  vigilador      Vigilador    @relation(fields: [vigiladorId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fecha          DateTime     @db.Date
+  horaEntrada    DateTime?
+  horaSalida     DateTime?
+  lugarTrabajo   String?
+  observaciones  String?
+  creadoPorId    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([vigiladorId, fecha])
   @@index([organizationId])
 }
 

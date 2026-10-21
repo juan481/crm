@@ -55,6 +55,32 @@ export function dateOnlyArgentina(year: number, month: number, day: number): Dat
   return new Date(Date.UTC(year, month, day, 12, 0, 0))
 }
 
+/** Días calendario (puede ser negativo) entre HOY (día argentino real,
+ *  funciona igual en server o browser) y la fecha-clave de un campo
+ *  @db.Date ya serializado a ISO ("YYYY-MM-DDT00:00:00.000Z"). Comparar
+ *  ese ISO directo contra `Date.now()` corre el resultado ~3hs por el
+ *  huso horario (bug real encontrado en code-review, ver badges de
+ *  vencimiento de carnet en /legajos) — acá se comparan sólo los
+ *  componentes de fecha, nunca el instante completo. */
+export function daysUntilDateOnly(iso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const target = Date.UTC(y, m - 1, d, 12)
+  const [ty, tm, td] = argentinaDayKey().split('-').map(Number)
+  const today = Date.UTC(ty, tm - 1, td, 12)
+  return Math.round((target - today) / 86_400_000)
+}
+
+/** Formatea un campo @db.Date ya serializado a ISO como "DD/MM/YYYY" —
+ *  parsea el string directo, nunca construye un Date "timezone-aware" (ver
+ *  daysUntilDateOnly arriba: `new Date(iso).toLocaleDateString()` muestra
+ *  el día anterior en un navegador Argentina). Antes vivía duplicado en
+ *  cada página de /legajos. */
+export function fmtDateOnly(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
 /** Medianoche (UTC) del día argentino para una clave "YYYY-MM-DD" ya
  *  conocida (ej. un <input type="date">, o Asistencia.fecha ya serializada
  *  a string) — mismo shape que argentinaDayStart, para no pasar por el

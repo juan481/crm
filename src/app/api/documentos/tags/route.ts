@@ -11,8 +11,12 @@ export async function GET() {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
+    // legajoId: null — mismo motivo que el filtro agregado en
+    // /api/documentos (GET): sin esto, un tag puesto en el carnet/DNI de
+    // un vigilador aparecía como sugerencia para cualquier SELLER sin el
+    // módulo 'legajos' (bug real encontrado en code-review).
     const docs = await prisma.document.findMany({
-      where: { organizationId: payload.orgId, tags: { not: '[]' } },
+      where: { organizationId: payload.orgId, tags: { not: '[]' }, legajoId: null },
       select: { tags: true },
     })
 
