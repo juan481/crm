@@ -64,6 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       items.map((it: any) => ({ price: it.price, quantity: it.quantity, ivaPct: it.ivaPct, type: it.type })),
       cot.discount,
       cot.ivaDiscriminado,
+      cot.medioPagoPct ?? 0,
     )
 
     const updated = await db.cotizacion.update({

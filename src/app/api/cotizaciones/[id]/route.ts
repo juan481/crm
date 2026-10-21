@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       select: {
         id: true, ref: true, recipientName: true, recipientEmail: true,
         total: true, discount: true, finalTotal: true, currency: true, status: true, createdAt: true, notes: true,
-        validityDays: true, ivaDiscriminado: true, priceMode: true,
+        validityDays: true, ivaDiscriminado: true, priceMode: true, medioPago: true, medioPagoPct: true,
         entregaGenerada: true, dealId: true,
         items: true,
         empresa: { select: { id: true, name: true, isCliente: true } },

@@ -241,6 +241,20 @@ model Organization {
   // que el equipo compare entre sí cuando no hace falta. La prende/apaga un
   // ADMIN+ desde el propio panel de Objetivos (ver /api/organization/en-baja).
   enBaja                     Boolean      @default(false)
+  // Recargo por tarjeta / descuento por efectivo (reestructuración Abba
+  // 2026-10, Seba): "al seleccionar cobro con tarjeta, el sistema tiene que
+  // sumar automáticamente ese 25%" — se resuelve en el cotizador
+  // (computeQuoteTotals en quote-totals.ts) según el medio de pago elegido,
+  // nunca a mano. Quién recibe cuántas cuotas (3, 4 o 6) es una negociación
+  // comercial aparte que no cambia el % acá. Default 0 en AMBOS a propósito
+  // — esto es blanco (CRM multi-tenant, ver [[feedback-multi-client-isolation]]
+  // en memoria): ninguna organización nueva ni existente arranca con un
+  // recargo/descuento que nunca pidió. Abba se configura en 25/20 por script
+  // puntual (scripts/set-abba-medio-pago.ts) después de este deploy, no por
+  // default de schema. El selector de medio de pago del cotizador sólo se
+  // muestra si alguno de los dos es != 0 para esa organización.
+  recargoTarjetaPct          Float        @default(0)
+  descuentoEfectivoPct       Float        @default(0)
   // Horario laboral para el cálculo de tardanza en Asistencia — antes esto
   // estaba hardcodeado a las 09:15 en el código (09:00 + 15 min), fijo para
   // toda organización sin importar su horario real. "HH:MM" en texto simple
@@ -2193,6 +2207,16 @@ model Cotizacion {
   // resuelto al momento de cotizar. Default false = toda cotización anterior
   // a esto (se cotizaba neto, sin IVA) sigue significando lo mismo.
   ivaDiscriminado Boolean          @default(false)
+  // Medio de pago elegido al cotizar (reestructuración Abba 2026-10) — ya NO
+  // es sólo informativo: `medioPagoPct` es el % que ya quedó aplicado sobre
+  // el neto (ver computeQuoteTotals en quote-totals.ts), resuelto en el
+  // momento de cotizar a partir de Organization.recargoTarjetaPct/
+  // descuentoEfectivoPct (igual criterio que QuoteItem.ivaPct: snapshot al
+  // momento de cotizar, no se recalcula después aunque cambie la config de
+  // la organización). Default 'TARJETA'/0 preserva el total de toda
+  // cotización anterior a esto (nunca tuvo recargo ni descuento aplicado).
+  medioPago       String           @default("TARJETA")
+  medioPagoPct    Float            @default(0)
   // Ya se generó una EntregaStock a partir de esta cotización (botón "Preparar
   // materiales" en cotizaciones/[id]). Evita preparar dos veces el mismo
   // material. Default false = toda cotización anterior a Fase 3.

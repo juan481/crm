@@ -6,13 +6,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Download, Mail, MessageCircle, CheckCircle2,
   Clock, Send, Building2, Calendar, DollarSign, FileText, XCircle, AlertTriangle, PackageCheck,
-  Copy, Repeat, User, Save, Pencil, Tag,
+  Copy, Repeat, User, Save, Pencil, Tag, CreditCard,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { formatMoneyExact } from '@/lib/utils'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox, drawTcLegend } from '@/lib/pdf-branding'
-import { computeQuoteTotals } from '@/lib/quote-totals'
+import { computeQuoteTotals, medioPagoLabel } from '@/lib/quote-totals'
 import { sanitizePdfText } from '@/lib/pdf-text'
 import { useAuthStore } from '@/store/auth-store'
 import toast from 'react-hot-toast'
@@ -46,6 +46,8 @@ interface CotizacionDetail {
   validityDays:   number
   ivaDiscriminado: boolean | null
   priceMode:      string | null
+  medioPago?:     string | null
+  medioPagoPct?:  number | null
   items:          Array<{ type?: 'SERVICE' | 'PRODUCT'; name: string; price: number; currency: string; billingCycle: string; unit?: string; quantity: number; ivaPct?: number | null; productId?: string; sku?: string | null; serialNumbers?: string[]; itemNotes?: string }>
   entregaGenerada?: boolean
   dealId?:        string | null
@@ -129,7 +131,7 @@ export default function CotizacionDetailPage() {
   const rateReady = data?.currency !== 'USD' || rateFetched
 
   const totals = data
-    ? computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
+    ? computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true, data.medioPagoPct ?? 0)
     : null
 
   // Build PDF when data loads — espera a que el tipo de cambio haya
@@ -271,7 +273,7 @@ export default function CotizacionDetailPage() {
       // Totales — subtotal, descuento, IVA por alícuota, TOTAL.
       y += 2
       doc.setDrawColor(226, 232, 240); doc.line(mg, y, mg + cw, y); y += 6
-      const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
+      const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true, data.medioPagoPct ?? 0)
       const boxW = 78
       y = drawQuoteTotalsBox(doc, { x: mg + cw - boxW, y, w: boxW, totals: tt, currency: data.currency, pr, pg, pb, simple: data.priceMode === 'PUBLICO' })
 
@@ -472,8 +474,9 @@ export default function CotizacionDetailPage() {
       const per = i.type === 'PRODUCT' ? (i.unit || 'unidad') : (BILLING_LABELS[i.billingCycle] ?? 'mes')
       t += `• ${i.name}${i.quantity > 1 ? ` ×${i.quantity}` : ''} — ${formatMoneyExact(lt, i.currency)}/${per}\n`
     })
-    const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true)
+    const tt = computeQuoteTotals(data.items, data.discount ?? 0, data.ivaDiscriminado === true, data.medioPagoPct ?? 0)
     t += `\nSubtotal (neto): ${formatMoneyExact(tt.neto, data.currency)}`
+    if (tt.medioPagoPct !== 0) t += `\n${medioPagoLabel(tt.medioPagoPct)}: ${tt.medioPagoPct > 0 ? '+' : '-'}${formatMoneyExact(Math.abs(tt.medioPagoMonto), data.currency)}`
     if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatMoneyExact(tt.descuentoMonto, data.currency)}`
     if (tt.discriminado) for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatMoneyExact(b.monto, data.currency)}`
     t += `\n*Total${tt.discriminado ? ' (IVA incl.)' : ''}: ${formatMoneyExact(tt.total, data.currency)}*`
@@ -586,6 +589,14 @@ export default function CotizacionDetailPage() {
           { icon: <Calendar size={14} />,   label: 'Fecha',       value: date },
           { icon: <Mail size={14} />,       label: 'Destinatario',value: data.recipientEmail },
           { icon: <User size={14} />,       label: 'Vendedor',    value: data.user?.name ?? '—' },
+          // Sólo si de verdad se aplicó algo — una cotización vieja o de una
+          // organización que no usa esto (medioPagoPct=0) no suma una
+          // tarjeta vacía/confusa.
+          ...(data.medioPagoPct ? [{
+            icon: <CreditCard size={14} />,
+            label: 'Medio de pago',
+            value: medioPagoLabel(data.medioPagoPct),
+          }] : []),
         ].map(item => (
           <div key={item.label} className="surface rounded-xl p-3">
             <p className="flex items-center gap-1 text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>

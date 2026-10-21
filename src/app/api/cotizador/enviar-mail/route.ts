@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { sendEmail, resolveOrgSmtpConfig } from '@/lib/email'
-import { computeQuoteTotals, type QuoteTotals } from '@/lib/quote-totals'
+import { computeQuoteTotals, medioPagoLabel, type QuoteTotals } from '@/lib/quote-totals'
 import { getOfficialUsdRate } from '@/lib/exchange-rate'
 import type { QuoteItem } from '@/types'
 
@@ -44,10 +44,20 @@ function buildQuoteHtml(opts: {
   const footRow = (label: string, value: string, color: string, bold = false) =>
     `<tr><td colspan="2" style="padding:4px 0;font-size:13px;color:${color}${bold ? ';font-weight:700' : ''}">${label}</td>
      <td style="padding:4px 0;font-size:13px;color:${color};text-align:right${bold ? ';font-weight:700' : ''}">${value}</td></tr>`
+  // Recargo tarjeta / descuento efectivo — línea propia, mismo criterio que
+  // el descuento comercial de abajo (ver mismo fix en pdf-branding.ts).
+  const medioPagoRow = tt.medioPagoPct !== 0
+    ? footRow(
+        medioPagoLabel(tt.medioPagoPct),
+        `${tt.medioPagoPct > 0 ? '+' : '−'} ${money(Math.abs(tt.medioPagoMonto))}`,
+        tt.medioPagoPct > 0 ? '#64748b' : '#10b981',
+      )
+    : ''
   const foot = simple ? '' :
     footRow('Subtotal (neto)', money(tt.neto), '#64748b')
+    + medioPagoRow
     + (tt.descuentoMonto > 0 ? footRow(`Descuento (${tt.descuentoPct}%)`, `− ${money(tt.descuentoMonto)}`, '#10b981') : '')
-    + (tt.discriminado && tt.iva.length && tt.descuentoMonto > 0 ? footRow('Neto gravado', money(tt.netoGravado), '#94a3b8') : '')
+    + (tt.discriminado && tt.iva.length && (tt.descuentoMonto > 0 || tt.medioPagoPct !== 0) ? footRow('Neto gravado', money(tt.netoGravado), '#94a3b8') : '')
     + (tt.discriminado ? tt.iva.map(b => footRow(`IVA ${String(b.pct).replace('.', ',')}%`, money(b.monto), '#94a3b8')).join('') : '')
 
   // Mismo criterio que el PDF adjunto (cotizaciones/[id]/page.tsx) — sin
@@ -196,7 +206,7 @@ export async function POST(req: NextRequest) {
       orgName, primaryColor,
       recipientName: cotizacion.recipientName,
       items:         cotizacion.items as QuoteItem[],
-      totals:        computeQuoteTotals(cotizacion.items as QuoteItem[], cotizacion.discount ?? 0, cotizacion.ivaDiscriminado === true),
+      totals:        computeQuoteTotals(cotizacion.items as QuoteItem[], cotizacion.discount ?? 0, cotizacion.ivaDiscriminado === true, cotizacion.medioPagoPct ?? 0),
       currency:      cotizacion.currency,
       notes:         cotizacion.notes ?? undefined,
       quoteRef:      cotizacion.ref,

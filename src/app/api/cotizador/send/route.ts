@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode, ivaDiscriminado, sellerId } = body as {
+    const { items, recipientEmail, recipientName, notes, discount = 0, currency, empresaId, validityDays, dealId, priceMode, ivaDiscriminado, medioPago, sellerId } = body as {
       items: QuoteItem[]
       empresaId?: string | null
       dealId?: string | null
@@ -32,6 +32,12 @@ export async function POST(req: NextRequest) {
       validityDays?: number
       priceMode?: string
       ivaDiscriminado?: boolean
+      // 'TARJETA' | 'EFECTIVO' — el % real (recargoTarjetaPct/
+      // descuentoEfectivoPct) se resuelve server-side desde Organization,
+      // nunca se confía un número que venga del cliente (mismo criterio que
+      // el total). Cualquier otro valor cae a 'TARJETA' (sin ajuste si la
+      // organización no configuró nada, ver abajo).
+      medioPago?: string
       // "¿Quién vendió esto?" — pedido de Abba (Seba, 2026-10-02): un
       // gerente de ventas carga él mismo una venta que cerró otra persona
       // (se le pasó registrarla) y la cotización/oportunidad tienen que
@@ -84,12 +90,9 @@ export async function POST(req: NextRequest) {
         : sanitizeIvaPct(i.ivaPct),
     }))
 
-    // El total nunca se confía del cliente — se recalcula server-side a
-    // partir de los ítems (que quedan guardados tal cual) + el descuento.
+    // El descuento se sanea acá (el % de medio de pago se resuelve más abajo,
+    // una vez que tenemos los datos de la organización).
     const discountPct  = Math.max(0, Math.min(100, Number(discount) || 0))
-    const totals       = computeQuoteTotals(itemsResolved, discountPct, discriminarIva)
-    const total        = totals.neto        // neto sin descuento sin IVA (mismo significado histórico)
-    const finalTotal   = totals.total       // con IVA si se discrimina; si no, neto − descuento
 
     // Si viene de una oportunidad de Pipeline, validar que exista en esta org
     // (y, para SELLER, que sea suya) antes de vincularla estructuralmente.
@@ -124,6 +127,7 @@ export async function POST(req: NextRequest) {
         where:  { id: payload.orgId },
         select: {
           name: true, crmName: true, primaryColor: true, logoUrl: true, quoteValidityDays: true,
+          recargoTarjetaPct: true, descuentoEfectivoPct: true,
           smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true,
           smtpProvider: true, sesRegion: true, sesAccessKeyId: true, sesSecretKey: true, sesFrom: true, sesConfigSet: true,
         },
@@ -140,6 +144,23 @@ export async function POST(req: NextRequest) {
     const orgName      = org?.name || org?.crmName || 'CRM Pro'
     const primaryColor = org?.primaryColor || '#6366f1'
     const agentName    = agent?.name || 'El equipo'
+
+    // Medio de pago — el % real SIEMPRE se resuelve server-side desde
+    // Organization (nunca un número que venga del cliente), igual criterio
+    // que la alícuota de IVA de arriba. 'EFECTIVO' → descuento (negativo);
+    // cualquier otro valor ('TARJETA' o ausente) → recargo. Si la
+    // organización no configuró nada (0/0, el default para cualquier
+    // tenant que no pidió esto), el resultado es idéntico a no tener la
+    // función — ver comentario en Organization.recargoTarjetaPct.
+    const medioPagoFinal = medioPago === 'EFECTIVO' ? 'EFECTIVO' : 'TARJETA'
+    const medioPagoPct   = medioPagoFinal === 'EFECTIVO' ? -(org?.descuentoEfectivoPct ?? 0) : (org?.recargoTarjetaPct ?? 0)
+
+    // El total nunca se confía del cliente — se recalcula server-side a
+    // partir de los ítems (que quedan guardados tal cual) + el descuento +
+    // el medio de pago.
+    const totals     = computeQuoteTotals(itemsResolved, discountPct, discriminarIva, medioPagoPct)
+    const total       = totals.neto        // neto sin descuento sin IVA (mismo significado histórico)
+    const finalTotal  = totals.total       // con IVA si se discrimina; si no, neto − descuento
     // Sufijo random además del timestamp — dos requests en el mismo
     // milisegundo (dos sellers a la vez, o un retry) no deben colisionar.
     const quoteRef     = `PRESUP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
@@ -165,6 +186,8 @@ export async function POST(req: NextRequest) {
         status:         'GUARDADA',
         priceMode:      priceModeFinal,
         ivaDiscriminado: discriminarIva,
+        medioPago:      medioPagoFinal,
+        medioPagoPct,
       },
       select: { id: true },
     })
@@ -196,6 +219,8 @@ export async function POST(req: NextRequest) {
       discount:     discountPct,
       finalTotal,
       ivaDiscriminado: discriminarIva,
+      medioPago:    medioPagoFinal,
+      medioPagoPct,
       totals,
       items: itemsResolved,
       validityDays: validityDaysFinal,

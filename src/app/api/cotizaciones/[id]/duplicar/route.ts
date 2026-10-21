@@ -47,6 +47,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         status: 'GUARDADA',
         priceMode: original.priceMode,
         ivaDiscriminado: original.ivaDiscriminado,
+        medioPago: original.medioPago,
+        medioPagoPct: original.medioPagoPct,
       },
       select: { id: true, ref: true },
     })

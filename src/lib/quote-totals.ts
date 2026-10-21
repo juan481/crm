@@ -23,6 +23,13 @@ export function sanitizeIvaPct(raw: unknown): number {
   return n
 }
 
+// Label de la línea de recargo/descuento por medio de pago — centralizado
+// para que PDF/mail/WhatsApp/preview no repitan (y eventualmente diverjan
+// en) la misma condición de signo en 5 lugares distintos.
+export function medioPagoLabel(pct: number): string {
+  return pct > 0 ? `Recargo tarjeta (+${pct}%)` : `Descuento efectivo (${pct}%)`
+}
+
 export interface QuoteLine {
   price: number       // precio NETO unitario
   quantity: number
@@ -37,10 +44,12 @@ export interface IvaBucket {
 }
 
 export interface QuoteTotals {
-  neto: number            // Σ price·qty, sin descuento, sin IVA
+  neto: number            // Σ price·qty, sin descuento, sin IVA, sin ajuste de medio de pago
+  medioPagoPct: number    // recargo (+) o descuento (−) por medio de pago, ej. +25 / −20
+  medioPagoMonto: number  // neto * medioPagoPct/100 — línea de desglose propia, igual criterio que descuentoMonto
   descuentoPct: number
-  descuentoMonto: number
-  netoGravado: number     // neto − descuento
+  descuentoMonto: number  // calculado sobre (neto + medioPagoMonto), no sobre neto puro — ver nota abajo
+  netoGravado: number     // (neto + medioPagoMonto) − descuentoMonto
   discriminado: boolean
   iva: IvaBucket[]        // buckets con monto > 0, ordenados por alícuota desc
   ivaTotal: number
@@ -51,17 +60,42 @@ export interface QuoteTotals {
  * @param lines  ítems de la cotización (precio neto)
  * @param discountPct  0–100
  * @param discriminado  si false, el IVA no se calcula ni se suma (total = neto − descuento)
+ * @param medioPagoPct  recargo (+) o descuento (−) por medio de pago elegido (ej. +25 tarjeta,
+ *   −20 efectivo — ver Organization.recargoTarjetaPct/descuentoEfectivoPct). Default 0 = sin
+ *   ajuste, el mismo comportamiento de siempre para cualquier llamado que no lo pase. A
+ *   propósito NO se mezcla dentro de `neto` (ver bug encontrado en code-review: un `neto`
+ *   "ajustado" no cuadraba con la suma de los ítems impresos en PDF/mail/WhatsApp) — se expone
+ *   como `medioPagoMonto`, una línea de desglose más, mismo trato que `descuentoMonto`. Quien
+ *   renderiza el desglose (PDF, mail, WhatsApp, preview) tiene que sumar esa línea igual que ya
+ *   suma el descuento — ninguno de los dos se "esconde" dentro de `neto`.
+ *
+ *   El descuento comercial se aplica DESPUÉS del ajuste de medio de pago (sobre
+ *   `neto + medioPagoMonto`, no sobre `neto` puro) — a propósito, no por elección arbitraria:
+ *   es la única forma de que `netoGravado`/`total` coincidan con la suma real de las bases por
+ *   alícuota de IVA (cada bucket ya se escala por `cardFactor * factor`, multiplicativo). Sumar
+ *   los dos ajustes como montos independientes sobre el mismo `neto` (lo que hacía la primera
+ *   versión de este fix) deja un cross-term suelto apenas los dos % son distintos de cero —
+ *   bug real encontrado en code-review, no una sutileza cosmética: habría cobrado de más/menos.
  */
 export function computeQuoteTotals(
   lines: QuoteLine[],
   discountPct: number,
   discriminado: boolean,
+  medioPagoPct: number = 0,
 ): QuoteTotals {
   const disc = Math.max(0, Math.min(100, Number(discountPct) || 0))
   const factor = 1 - disc / 100
+  // Piso en -100 (no en +100 — un recargo de tarjeta no tiene por qué tener
+  // techo): por debajo de -100, cardFactor se vuelve negativo y arrastra
+  // netoGravado/IVA/total a números sin sentido en silencio (encontrado en
+  // code-review) — ej. un descuentoEfectivoPct mal cargado a 150 en vez de
+  // 15. No debería pasar nunca con los valores reales de Abba (20/25), pero
+  // es la única validación real ya que no hay UI de settings todavía.
+  const medioPago = Math.max(-100, Number(medioPagoPct) || 0)
+  const cardFactor = 1 + medioPago / 100
 
   let neto = 0
-  const byRate = new Map<number, number>() // alícuota -> neto (sin descuento) a esa alícuota
+  const byRate = new Map<number, number>() // alícuota -> neto (sin descuento, sin ajuste de medio de pago) a esa alícuota
 
   for (const l of lines) {
     const lineNet = (Number(l.price) || 0) * (Number(l.quantity) || 0)
@@ -72,14 +106,23 @@ export function computeQuoteTotals(
 
   const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
   neto = round2(neto)
-  const descuentoMonto = round2(neto * (disc / 100))
-  const netoGravado = round2(neto - descuentoMonto)
+  const medioPagoMonto = round2(neto * (medioPago / 100))
+  // El descuento se calcula sobre el neto YA ajustado por medio de pago (no
+  // sobre `neto` puro) — ver nota en el doc-comment de arriba, es lo que
+  // mantiene este número consistente con la suma real de las bases de IVA.
+  const netoConMedioPago = round2(neto + medioPagoMonto)
+  const descuentoMonto = round2(netoConMedioPago * (disc / 100))
+  const netoGravado = round2(netoConMedioPago - descuentoMonto)
 
   const iva: IvaBucket[] = []
   if (discriminado) {
-    for (const [pct, baseSinDesc] of Array.from(byRate.entries())) {
+    for (const [pct, baseSinAjuste] of Array.from(byRate.entries())) {
       if (pct <= 0) continue
-      const base = round2(baseSinDesc * factor)
+      // El ajuste de medio de pago entra a la base gravada igual que el
+      // descuento (ambos son % sobre el mismo neto) — netoGravado arriba es
+      // justamente la suma de estas bases por alícuota, dentro del margen de
+      // redondeo de centavos.
+      const base = round2(baseSinAjuste * cardFactor * factor)
       const monto = round2(base * (pct / 100))
       if (monto > 0) iva.push({ pct, base, monto })
     }
@@ -89,5 +132,5 @@ export function computeQuoteTotals(
   const ivaTotal = round2(iva.reduce((s, b) => s + b.monto, 0))
   const total = round2(netoGravado + ivaTotal)
 
-  return { neto, descuentoPct: disc, descuentoMonto, netoGravado, discriminado, iva, ivaTotal, total }
+  return { neto, medioPagoPct: medioPago, medioPagoMonto, descuentoPct: disc, descuentoMonto, netoGravado, discriminado, iva, ivaTotal, total }
 }

@@ -82,7 +82,7 @@ export function ClienteActividadReciente({ empresaId, onVerActividad, onVerCotiz
 
   const items = useMemo<Item[]>(() => {
     const notas = (notasData?.data ?? []) as Array<{ id: string; tipo: NotaTipo; content: string; createdAt: string; user: { name: string } }>
-    const cotizaciones = (cotizData?.data ?? []) as Array<{ id: string; ref: string; total: number; currency: string; status: string; createdAt: string }>
+    const cotizaciones = (cotizData?.data ?? []) as Array<{ id: string; ref: string; total: number; finalTotal?: number | null; currency: string; status: string; createdAt: string }>
     const chats = (chatsData?.data ?? []) as Array<{ id: string; displayName: string | null; preview: string; lastMessageAt: string | null }>
 
     const fromNotas: Item[] = notas.map((n) => {
@@ -98,7 +98,7 @@ export function ClienteActividadReciente({ empresaId, onVerActividad, onVerCotiz
     const fromCotizaciones: Item[] = cotizaciones.map((c) => ({
       id: `cot-${c.id}`, date: c.createdAt, icon: <FileText size={13} />, color: '#f59e0b',
       title: `Cotización ${c.ref}`,
-      subtitle: `${formatMoneyExact(c.total, c.currency)} · ${c.status}`,
+      subtitle: `${formatMoneyExact(c.finalTotal ?? c.total, c.currency)} · ${c.status}`,
       onClick: onVerCotizaciones,
     }))
 
