@@ -233,6 +233,14 @@ model Organization {
   // sin token" y lo resuelven on-demand si hiciera falta.
   publicSupportToken         String?      @default(cuid())
   quoteValidityDays          Int          @default(30)
+  // "La empresa viene en baja" — pedido de Abba (Seba/Mauro, reestructuración
+  // 2026-10): el objetivo de venta GENERAL (suma de lo repartido, ver
+  // SalesTarget) sólo se le muestra a todo el equipo cuando esta bandera está
+  // prendida. Si está apagada, cada vendedor sigue viendo su objetivo
+  // individual (siempre visible), pero no el agregado de la empresa — evita
+  // que el equipo compare entre sí cuando no hace falta. La prende/apaga un
+  // ADMIN+ desde el propio panel de Objetivos (ver /api/organization/en-baja).
+  enBaja                     Boolean      @default(false)
   // Horario laboral para el cálculo de tardanza en Asistencia — antes esto
   // estaba hardcodeado a las 09:15 en el código (09:00 + 15 min), fijo para
   // toda organización sin importar su horario real. "HH:MM" en texto simple
