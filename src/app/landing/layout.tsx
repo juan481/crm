@@ -1,47 +1,34 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'JustCRM | Sistema Operativo para Empresas de Seguridad y Servicios Técnicos',
+  title: { absolute: 'JustCRM | Ventas, IA y operación en un solo sistema' },
   description:
-    'El CRM y software de gestión operativo para empresas de seguridad electrónica, telecomunicaciones e instaladores técnicos. Cotizá en 30s, controlá stock, pañol, cuadrillas y WhatsApp con IA.',
+    'Conectá WhatsApp con IA, pipeline, cotizaciones, campañas masivas, equipos técnicos, stock, facturación y cobranzas en una sola plataforma adaptable a tu empresa.',
   keywords: [
     'JustCRM',
-    'CRM seguridad electrónica',
-    'software para instaladores técnicos',
-    'CRM telecomunicaciones',
-    'cotizador en 30 segundos',
-    'sistema de stock para pañol',
-    'ordenes de trabajo cuadrillas',
-    'remitos de entrega instalaciones',
-    'bot de whatsapp para ventas e instaladores',
-    'CRM Argentina',
-    'gestión de abonados monitoreo',
-    'software de seguridad y CCTV',
+    'CRM con IA',
+    'CRM WhatsApp Argentina',
+    'pipeline comercial',
+    'campañas masivas',
+    'cotizaciones y stock',
+    'gestión de equipos técnicos',
+    'facturación y cobranzas',
+    'software de gestión empresarial',
   ],
-  alternates: {
-    canonical: 'https://crm.justcreate.com.ar/landing',
-  },
+  alternates: { canonical: 'https://crm.justcreate.com.ar/landing' },
   openGraph: {
-    title: 'JustCRM | Sistema Operativo para Empresas de Seguridad y Servicios Técnicos',
-    description:
-      'Cotizador Flash en 30 segundos con listas gremio/público, app móvil Mi Día para cuadrillas, pañol con remitos y atención WhatsApp oficial con IA.',
+    title: 'JustCRM | De una conversación a una venta',
+    description: 'Ventas, IA, operación y administración conectadas en un solo sistema.',
     url: 'https://crm.justcreate.com.ar/landing',
     siteName: 'JustCRM',
     locale: 'es_AR',
     type: 'website',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'JustCRM',
-      },
-    ],
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'JustCRM' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'JustCRM | Sistema Operativo para Empresas de Seguridad y Servicios Técnicos',
-    description: 'Cotizá en 30s, controlá pañol, cuadrillas y WhatsApp oficial con IA.',
+    title: 'JustCRM | Ventas, IA y operación en un solo sistema',
+    description: 'Conectá WhatsApp, pipeline, cotizaciones y operación con una implementación adaptada a tu empresa.',
     images: ['/og-image.png'],
   },
 }
@@ -53,16 +40,13 @@ export default function LandingLayout({ children }: { children: React.ReactNode 
       {
         '@type': 'Organization',
         '@id': 'https://crm.justcreate.com.ar/#organization',
-        name: 'JustCRM by JustCreate',
+        name: 'JustCRM by Just Create',
         url: 'https://crm.justcreate.com.ar',
-        logo: {
-          '@type': 'ImageObject',
-          url: 'https://crm.justcreate.com.ar/logo.png',
-        },
+        logo: 'https://crm.justcreate.com.ar/logo.png',
         contactPoint: {
           '@type': 'ContactPoint',
           telephone: '+5491124527669',
-          contactType: 'sales and technical support',
+          contactType: 'sales',
           email: 'contacto@justcreate.com.ar',
           areaServed: 'AR',
           availableLanguage: ['Spanish'],
@@ -74,30 +58,14 @@ export default function LandingLayout({ children }: { children: React.ReactNode 
         name: 'JustCRM',
         operatingSystem: 'Web, Android, iOS (PWA)',
         applicationCategory: 'BusinessApplication',
-        description:
-          'Sistema operativo de productividad y CRM diseñado para empresas de seguridad electrónica, telecomunicaciones e instaladores técnicos.',
-        offers: {
-          '@type': 'Offer',
-          price: '0',
-          priceCurrency: 'USD',
-          description: 'Prueba gratuita de 14 días sin tarjeta de crédito',
-        },
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: '4.9',
-          reviewCount: '128',
-          bestRating: '5',
-        },
+        description: 'CRM operativo que conecta ventas, atención con IA, cotizaciones, operación, inventario y administración.',
       },
     ],
   }
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       {children}
     </>
   )
