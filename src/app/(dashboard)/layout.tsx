@@ -40,6 +40,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // Portal de clientes (Pagos & Portal) — CLIENTE nunca monta el AppShell
     // interno, mismo criterio que GREMIO.
     if (payload.role === 'CLIENTE') redirect('/portal')
+    // Portal de soporte técnico externo — mismo criterio que GREMIO/CLIENTE.
+    if (payload.role === 'SUPPORT_EXTERNAL') redirect('/soporte-externo')
 
     if (!dbUser.onboardingCompleted) redirect('/onboarding')
     // Selector de rubro: es por-organización, no por-usuario — un usuario

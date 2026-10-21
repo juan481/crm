@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, getCurrentUserAny } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { SLA_HOURS } from '@/lib/tickets'
 import { fireWebhook } from '@/lib/webhooks'
@@ -21,8 +21,15 @@ const INCLUDE = {
 
 export async function GET(req: NextRequest) {
   try {
-    const payload = await getCurrentUser()
+    // getCurrentUserAny() en vez de getCurrentUser(): el portal de soporte
+    // externo (SUPPORT_EXTERNAL) necesita listar tickets y getCurrentUser()
+    // lo excluye (carril lateral, ver src/lib/auth.ts). GREMIO/CLIENTE se
+    // bloquean acá explícitamente para no reabrir el hueco que
+    // getCurrentUser() existe justamente para tapar.
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'GREMIO' || payload.role === 'CLIENTE')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     // HR no entra por default (no hace soporte a clientes), pero si un Super
     // Admin le prende el módulo "Tickets" en Permisos tiene que entrar de
     // verdad — antes este bloqueo era incondicional e ignoraba el toggle.

@@ -34,6 +34,13 @@ enum Role {
   // ~109 rutas internas que sólo chequean "logueado". Sólo lo sirve
   // /api/portal/* con chequeo explícito role === 'CLIENTE'.
   CLIENTE
+  // Portal de soporte técnico externo (reestructuración Abba 2026-10) — MISMO
+  // criterio que GREMIO/CLIENTE: carril lateral, fuera de canAccess()/
+  // MODULE_DEFINITIONS. Un externo que gestiona tickets (asignar, cambiar
+  // estado, responder) sin ver nada más del CRM interno. Excluido de
+  // getCurrentUser() igual que GREMIO/CLIENTE; las rutas de tickets que debe
+  // poder usar llaman getCurrentUserAny() + chequeo explícito de rol.
+  SUPPORT_EXTERNAL
 }
 
 enum UserStatus {

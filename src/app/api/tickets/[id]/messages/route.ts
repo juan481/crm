@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUserAny } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { roleHasModule } from '@/lib/module-access'
@@ -8,8 +8,12 @@ interface Params { params: { id: string } }
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    const payload = await getCurrentUser()
+    // getCurrentUserAny(): el portal de soporte externo necesita responder
+    // tickets. GREMIO/CLIENTE siguen bloqueados explícitamente.
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'GREMIO' || payload.role === 'CLIENTE')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
