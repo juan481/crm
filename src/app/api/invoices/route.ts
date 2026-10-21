@@ -3,6 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { puedeVerFacturacion } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
+import { recordCommissionForPaidInvoice } from '@/lib/commissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -180,6 +181,16 @@ export async function POST(req: NextRequest) {
       },
       include: { empresa: { select: { id: true, name: true } } },
     })
+
+    // No-op hoy (esta factura manual no tiene items ni dealId/cotizacionId,
+    // así que recordCommissionForPaidInvoice se sale enseguida) — está acá
+    // para que, si este flujo alguna vez suma ítems/vínculo a deal, no quede
+    // un tercer lugar que marca PAID sin pasar por el motor de comisiones
+    // (encontrado en code-review revisando reconcile.ts).
+    if (initialStatus === 'PAID') {
+      await recordCommissionForPaidInvoice(prisma, empresa.organizationId, invoice.id)
+        .catch((err) => console.error('[INVOICES POST] recordCommissionForPaidInvoice falló:', err))
+    }
 
     return NextResponse.json({ data: invoice }, { status: 201 })
   } catch (error) {

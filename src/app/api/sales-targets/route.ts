@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
+import { argentinaMonthRange } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,9 +36,10 @@ export async function GET(req: NextRequest) {
         if (!org?.enBaja) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
       }
 
-      const [y, m] = month.split('-').map(Number)
-      const start = new Date(y, m - 1, 1)
-      const end = new Date(y, m, 1)
+      // Argentina-aware, no el constructor local de Date — en Vercel (UTC)
+      // eso corría los límites del mes 3hs (bug real encontrado en
+      // code-review, ver src/lib/timezone.ts).
+      const { start, end } = argentinaMonthRange(month)
 
       const [targetSum, dealSum] = await Promise.all([
         db.salesTarget.aggregate({ where: { organizationId: payload.orgId, month }, _sum: { amount: true } }),

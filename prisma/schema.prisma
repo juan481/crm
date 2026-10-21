@@ -255,6 +255,13 @@ model Organization {
   // muestra si alguno de los dos es != 0 para esa organización.
   recargoTarjetaPct          Float        @default(0)
   descuentoEfectivoPct       Float        @default(0)
+  // % que Mauro aplica sobre la ganancia (precio × margen de familia) para
+  // llegar a la "utilidad real" que cuenta para comisión — ej. ganancia
+  // $1000 × utilidadRealPct 22% = $220 de utilidad. Default 0 a propósito
+  // (mismo criterio que recargoTarjetaPct/descuentoEfectivoPct): hasta que
+  // Mauro lo configure, el motor de comisiones (src/lib/commissions.ts)
+  // registra utilidad=0 para cualquier venta — no inventa un número.
+  utilidadRealPct            Float        @default(0)
   // Horario laboral para el cálculo de tardanza en Asistencia — antes esto
   // estaba hardcodeado a las 09:15 en el código (09:00 + 15 min), fijo para
   // toda organización sin importar su horario real. "HH:MM" en texto simple
@@ -309,6 +316,7 @@ model Organization {
   documents               Document[]
   deals                   Deal[]
   salesTargets            SalesTarget[]
+  commissionLedgers       CommissionLedger[]
   tasks                   Task[]
   tickets                 Ticket[]
   empresas                Empresa[]
@@ -540,6 +548,7 @@ model User {
   whatsAppConvsAssigned   WhatsAppConversation[]   @relation("WhatsAppAssignee")
   whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
   salesTargets            SalesTarget[]
+  commissionLedgers       CommissionLedger[]
   deletionRequestsMade    DeletionRequest[]        @relation("DeletionRequestedBy")
   deletionRequestsResolved DeletionRequest[]       @relation("DeletionRequestResolvedBy")
 
@@ -720,6 +729,7 @@ model Invoice {
   checkoutUrl     String?
   checkoutRef     String?
   payments        Payment[]
+  commissionLedger CommissionLedger?
 
   items     InvoiceItem[]
   createdAt DateTime      @default(now())
@@ -1394,6 +1404,39 @@ model SalesTarget {
   @@index([organizationId, month])
 }
 
+// Registro inmutable de ganancia/utilidad por factura PAGADA (reestructuración
+// Abba 2026-10) — una fila por Invoice (@@unique) que SÍ cuenta para
+// comisión: no es un abono/renovación (Invoice.servicioRecurrenteId null) y
+// se pudo resolver un vendedor (vía Cotizacion.userId o Deal.ownerId, ver
+// src/lib/commissions.ts). NO guarda el % de comisión ni el monto a pagar —
+// el tramo (10/15/20%, según cuánto del objetivo de venta lleva cumplido el
+// vendedor ese mes) se aplica siempre sobre el TOTAL del mes (confirmado por
+// Seba, no marginal), así que se recalcula en vivo cada vez que se consulta
+// el panel (ver /api/commissions) en vez de guardarse ya "congelado" acá —
+// si se guardara, quedaría desactualizado apenas entra una venta nueva que
+// cambia el tramo de TODO el mes, no sólo de la venta que lo disparó.
+model CommissionLedger {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceId      String       @unique
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  month          String // "YYYY-MM", mismo formato que SalesTarget.month
+  // Moneda de la Invoice al momento de pagarse (snapshot, no se re-convierte
+  // después) — una factura de cotización sale siempre en ARS (pedido de
+  // Abba, ver facturacion.ts), pero un cobro online vía Whop puede ser USD.
+  // Sin este campo, sumar ganancia/utilidad de distintas monedas en
+  // /api/commissions mezclaba montos incompatibles en un solo número.
+  currency       String       @default("USD")
+  ganancia       Float // Σ (precio de línea ya ajustado por descuento/medio de pago) × margenPct de la familia
+  utilidad       Float // ganancia × Organization.utilidadRealPct/100
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, userId, month])
+}
+
 // ─── Tasks ─────────────────────────────────────────────────────────────────
 model Task {
   id             String             @id @default(cuid())
@@ -1855,6 +1898,16 @@ model ProductCategory {
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   products       Product[]
   createdAt      DateTime          @default(now())
+  // % de margen de esta familia para el motor de comisiones (reestructuración
+  // Abba 2026-10) — ya NO hay un % fijo sobre costo para todo el catálogo
+  // (confirmado por Seba: cada familia tiene el suyo, 5/15/35% son los
+  // valores reales que mencionó, no un placeholder). Null = sin configurar
+  // todavía → esa familia no aporta ganancia/comisión hasta que Mauro la
+  // cargue (ver computeInvoiceGanancia en src/lib/commissions.ts). Hoy se
+  // edita a mano desde configuración/catálogo; no viene del sync de Google
+  // Sheets (CRM_PROGRAMADOR), que tiene headers fijos y es de solo lectura
+  // del proveedor — ver catalogo-sync.ts.
+  margenPct      Float?
 
   @@index([organizationId, parentId])
 }

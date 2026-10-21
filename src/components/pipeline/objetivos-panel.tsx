@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Target, TrendingDown } from 'lucide-react'
 import { formatMoneyExact } from '@/lib/utils'
+import { argentinaDayKey } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
 import type { Deal } from '@/types'
 import toast from 'react-hot-toast'
@@ -25,10 +26,11 @@ function shiftMonth(month: string, delta: number) {
   const d = new Date(y, m - 1 + delta, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
-const currentMonth = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+// Argentina-aware, no el reloj local del navegador — este panel y
+// ComisionesPanel (abajo en la misma página) tienen que arrancar mirando el
+// mismo mes (bug encontrado en code-review al sumar ComisionesPanel, que sí
+// usa argentinaDayKey porque CommissionLedger escribe el mes así).
+const currentMonth = () => argentinaDayKey().slice(0, 7)
 
 interface Usuario { id: string; name: string; role: string }
 interface TargetRow { id: string; userId: string; amount: number; currency: string; user: { id: string; name: string } }
@@ -155,6 +157,10 @@ export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boo
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       qc.invalidateQueries({ queryKey: ['sales-targets', month] })
+      // El panel de Comisiones (justo debajo en Pipeline) calcula su tramo
+      // 10/15/20% a partir de este mismo objetivo — sin esto, quedaba hasta
+      // 30s mostrando el % viejo después de guardar un objetivo nuevo.
+      qc.invalidateQueries({ queryKey: ['commissions', month] })
     } catch { toast.error('Error de conexión') } finally {
       setSaving(null)
       setEditing((e) => { const n = { ...e }; delete n[userId]; return n })

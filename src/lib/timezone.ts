@@ -66,3 +66,28 @@ export function argentinaDateKeyToDayStart(dateKey: string): Date {
   const [y, m, d] = dateKey.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d))
 }
+
+/** Rango [inicio, fin) del mes argentino "YYYY-MM" (ej. de SalesTarget/
+ *  CommissionLedger.month) como INSTANTES reales — para filtrar
+ *  `closedAt`/`paidAt` (DateTime completo, no una fecha "sin hora") con
+ *  `gte`/`lt` sin el corrimiento de 3hs que da armar el rango con el
+ *  constructor local de Date en un server que corre en UTC.
+ *
+ *  OJO, bug real que esto corrigió en code-review: `argentinaDateKeyToDayStart`
+ *  da la medianoche UTC de esa fecha-clave (para comparar contra columnas
+ *  @db.Date, donde sólo importa que el año/mes/día coincidan) — NO es el
+ *  instante real de la medianoche ARGENTINA (que cae a las 03:00 UTC, por
+ *  el offset -3). Usar ese resultado directo como límite de un rango contra
+ *  un DateTime real arrancaba (y cortaba) el mes 3hs antes de lo real.
+ *  argentinaTimeToInstant() es la función que sí hace esa conversión. */
+export function argentinaMonthRange(month: string): { start: Date; end: Date } {
+  const [y, m] = month.split('-').map(Number)
+  const startDayKey = argentinaDateKeyToDayStart(`${y}-${String(m).padStart(2, '0')}-01`)
+  const nextY = m === 12 ? y + 1 : y
+  const nextM = m === 12 ? 1 : m + 1
+  const endDayKey = argentinaDateKeyToDayStart(`${nextY}-${String(nextM).padStart(2, '0')}-01`)
+  return {
+    start: argentinaTimeToInstant(startDayKey, 0, 0),
+    end: argentinaTimeToInstant(endDayKey, 0, 0),
+  }
+}

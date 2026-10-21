@@ -7,6 +7,7 @@ import { formatMoneyExact } from '@/lib/utils'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 import { clampDiaVencimiento } from '@/lib/servicios-recurrentes'
 import { paymentsEnabledForOrg } from './config'
+import { recordCommissionForPaidInvoice, removeCommissionForInvoice } from '@/lib/commissions'
 import type { NormalizedPaymentEvent } from './types'
 
 // Conciliación de pagos — el ÚNICO lugar que pasa una Invoice a PAID desde un
@@ -90,6 +91,11 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
     if (!changed) return { ok: true, invoiceId: invoice.id, alreadyProcessed: true }
     if (invoice.status === 'PAID') {
       await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'PENDING', paidAt: null } })
+      // "No aparece comisión si no pagó" — simétrico al `despagando` del PATCH
+      // manual (src/app/api/invoices/[id]/route.ts): un reembolso también
+      // tiene que borrar la ganancia/utilidad que había quedado registrada.
+      await removeCommissionForInvoice(prisma, invoice.id)
+        .catch((err) => console.error('[RECONCILE] removeCommissionForInvoice falló:', err))
     }
     await notifyStaff(
       invoice.organizationId,
@@ -123,6 +129,17 @@ async function applyPaymentToInvoice(event: NormalizedPaymentEvent, invoice: Inv
 
   if (invoice.status !== 'PAID') {
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status: 'PAID', paidAt: new Date() } })
+    // Motor de comisiones (reestructuración Abba 2026-10) — sin este
+    // llamado, cualquier venta cobrada online vía Whop/MP nunca generaba
+    // comisión. (El alta manual de factura en api/invoices/route.ts también
+    // puede crear una ya PAID, pero hoy nunca con ítems/dealId, así que
+    // recordCommissionForPaidInvoice se sale enseguida ahí — se llama igual,
+    // por si ese flujo alguna vez suma ítems.) No bloquea la respuesta al
+    // webhook del proveedor si falla — best-effort, mismo criterio que el
+    // resto de los efectos de esta función (empresaNota, webhook, aviso a
+    // staff).
+    await recordCommissionForPaidInvoice(prisma, invoice.organizationId, invoice.id)
+      .catch((err) => console.error('[RECONCILE] recordCommissionForPaidInvoice falló:', err))
 
     if (invoice.empresaId) {
       const adminId = await oldestAdminId(invoice.organizationId)
