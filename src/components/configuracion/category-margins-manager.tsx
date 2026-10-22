@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Percent, Info } from 'lucide-react'
+import { Percent, Info, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Categoria {
@@ -107,6 +107,21 @@ export function CategoryMarginsManager() {
   })
   const utilidadRealPct: number = utilidadData?.data?.utilidadRealPct ?? 0
 
+  // Recargo tarjeta / descuento efectivo (cuotas automáticas, Fase 4) — el
+  // motor ya los usaba desde que se armó esa fase, pero nunca se construyó
+  // la pantalla para cargarlos (sólo /api/cotizador/config GET, de sólo
+  // lectura). Mismo endpoint, PATCH agregado ahora.
+  const { data: cuotasData } = useQuery({
+    queryKey: ['cotizador-config-cuotas'],
+    queryFn: async () => (await fetch('/api/cotizador/config')).json(),
+    staleTime: 30_000,
+  })
+  const recargoTarjetaPct: number = cuotasData?.data?.recargoTarjetaPct ?? 0
+  const descuentoEfectivoPct: number = cuotasData?.data?.descuentoEfectivoPct ?? 0
+  const [editingRecargo, setEditingRecargo] = useState<string | null>(null)
+  const [editingDescuento, setEditingDescuento] = useState<string | null>(null)
+  const [savingCuotas, setSavingCuotas] = useState<'recargo' | 'descuento' | null>(null)
+
   const saveMargen = async (id: string, raw: string) => {
     const value = raw.trim() === '' ? null : Number(raw)
     if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) {
@@ -149,6 +164,28 @@ export function CategoryMarginsManager() {
     }
   }
 
+  const saveCuota = async (field: 'recargoTarjetaPct' | 'descuentoEfectivoPct', raw: string) => {
+    const value = Number(raw)
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      toast.error('Tiene que ser un número entre 0 y 100')
+      return
+    }
+    setSavingCuotas(field === 'recargoTarjetaPct' ? 'recargo' : 'descuento')
+    try {
+      const res = await fetch('/api/cotizador/config', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      qc.invalidateQueries({ queryKey: ['cotizador-config-cuotas'] })
+    } catch { toast.error('Error de conexión') } finally {
+      setSavingCuotas(null)
+      if (field === 'recargoTarjetaPct') setEditingRecargo(null)
+      else setEditingDescuento(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl p-4 space-y-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -177,6 +214,55 @@ export function CategoryMarginsManager() {
             </span>
           )}
         </div>
+      </div>
+
+      <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        <div className="flex items-center gap-2">
+          <CreditCard size={16} style={{ color: 'var(--color-primary)' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Cuotas automáticas</h3>
+        </div>
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Se aplican solos en el cotizador según el medio de pago elegido — nadie tiene que calcularlos a mano.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Recargo tarjeta</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number" min="0" max="100"
+                value={editingRecargo ?? String(recargoTarjetaPct)}
+                onChange={(e) => setEditingRecargo(e.target.value)}
+                onBlur={(e) => { if (e.target.value !== String(recargoTarjetaPct)) saveCuota('recargoTarjetaPct', e.target.value) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                disabled={savingCuotas === 'recargo'}
+                className="w-20 text-sm rounded-lg px-3 py-1.5 outline-none"
+                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>%</span>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-text-subtle)' }}>Descuento efectivo</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="number" min="0" max="100"
+                value={editingDescuento ?? String(descuentoEfectivoPct)}
+                onChange={(e) => setEditingDescuento(e.target.value)}
+                onBlur={(e) => { if (e.target.value !== String(descuentoEfectivoPct)) saveCuota('descuentoEfectivoPct', e.target.value) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                disabled={savingCuotas === 'descuento'}
+                className="w-20 text-sm rounded-lg px-3 py-1.5 outline-none"
+                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>%</span>
+            </div>
+          </div>
+        </div>
+        {recargoTarjetaPct === 0 && descuentoEfectivoPct === 0 && (
+          <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+            <Info size={11} /> En 0%, el cotizador no ajusta nada todavía
+          </span>
+        )}
       </div>
 
       <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
