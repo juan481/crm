@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUserAny } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -9,17 +9,24 @@ export const dynamic = 'force-dynamic'
 // Accessible to any authenticated user (unlike /api/settings/users which is admin-only).
 export async function GET() {
   try {
-    const payload = await getCurrentUser()
+    // getCurrentUserAny(): el portal de soporte externo (SUPPORT_EXTERNAL)
+    // consume este endpoint para poblar el picker de "Asignado a" de
+    // tickets — getCurrentUser() lo excluye (carril lateral). GREMIO sigue
+    // bloqueado explícitamente, mismo criterio que el resto de las rutas
+    // tocadas en este cambio.
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'GREMIO' || payload.role === 'CLIENTE')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const users = await prisma.user.findMany({
       where: {
         organizationId: payload.orgId,
         status: { not: 'DELETED' },
-        // GREMIO es un carril lateral (portal B2B, sin acceso al CRM
-        // interno) — nunca debe aparecer en pickers de asignación de
-        // Tareas/Tickets/RRHH que consumen este endpoint.
-        role: { not: 'GREMIO' },
+        // GREMIO/SUPPORT_EXTERNAL son carriles laterales (portales sin
+        // acceso al CRM interno) — nunca deben aparecer en pickers de
+        // asignación de Tareas/Tickets/RRHH que consumen este endpoint.
+        role: { notIn: ['GREMIO', 'SUPPORT_EXTERNAL'] },
       },
       select: {
         id:        true,

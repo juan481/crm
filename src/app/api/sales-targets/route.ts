@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
+import { argentinaMonthRange } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,36 @@ export async function GET(req: NextRequest) {
     if (!month || !MONTH_RE.test(month)) return NextResponse.json({ error: 'Mes inválido (YYYY-MM)' }, { status: 400 })
 
     const db = prisma as any
+
+    // ?company=1 — agregado de TODA la empresa (no el reparto por persona).
+    // Sólo se entrega si quien pide es ADMIN+ o si Organization.enBaja está
+    // prendida (ver comentario en el schema) — un vendedor sin ese permiso
+    // nunca debe poder enterarse del número agregado de la empresa salvo que
+    // esté explícitamente habilitado para todos.
+    if (req.nextUrl.searchParams.get('company') === '1') {
+      const isAdmin = canAccess(payload.role, 'ADMIN')
+      if (!isAdmin) {
+        const org = await db.organization.findUnique({ where: { id: payload.orgId }, select: { enBaja: true } })
+        if (!org?.enBaja) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+      }
+
+      // Argentina-aware, no el constructor local de Date — en Vercel (UTC)
+      // eso corría los límites del mes 3hs (bug real encontrado en
+      // code-review, ver src/lib/timezone.ts).
+      const { start, end } = argentinaMonthRange(month)
+
+      const [targetSum, dealSum] = await Promise.all([
+        db.salesTarget.aggregate({ where: { organizationId: payload.orgId, month }, _sum: { amount: true } }),
+        db.deal.aggregate({
+          where: { organizationId: payload.orgId, stage: 'GANADO', closedAt: { gte: start, lt: end } },
+          _sum: { amount: true },
+        }),
+      ])
+
+      return NextResponse.json({
+        data: { totalObjetivo: targetSum._sum.amount ?? 0, totalReal: dealSum._sum.amount ?? 0 },
+      })
+    }
 
     // Un vendedor/técnico sólo ve SU propio objetivo, nunca el del resto del
     // equipo — sólo ADMIN+ (quien reparte) ve la tabla completa, salvo que

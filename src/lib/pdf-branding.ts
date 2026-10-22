@@ -1,5 +1,5 @@
 import type { jsPDF } from 'jspdf'
-import type { QuoteTotals } from '@/lib/quote-totals'
+import { medioPagoLabel, type QuoteTotals } from '@/lib/quote-totals'
 
 /**
  * Caja de totales de una cotización, alineada a la derecha: Subtotal (neto),
@@ -29,9 +29,20 @@ export function drawQuoteTotalsBox(
 
   type Row = { label: string; value: string; kind: 'normal' | 'discount' | 'muted' }
   const rows: Row[] = simple ? [] : [{ label: 'Subtotal (neto)', value: money(tt.neto), kind: 'normal' }]
+  // Recargo tarjeta / descuento efectivo — línea propia, igual criterio que
+  // el descuento comercial de abajo. Sin esto el Subtotal de arriba (suma
+  // real de los ítems) no cuadraba con el TOTAL final, sin ninguna línea
+  // que explique la diferencia (bug encontrado en code-review).
+  if (!simple && tt.medioPagoPct !== 0) {
+    rows.push({
+      label: medioPagoLabel(tt.medioPagoPct),
+      value: `${tt.medioPagoPct > 0 ? '+' : '-'}${money(Math.abs(tt.medioPagoMonto))}`,
+      kind: tt.medioPagoPct > 0 ? 'normal' : 'discount',
+    })
+  }
   if (!simple && tt.descuentoMonto > 0) rows.push({ label: `Descuento (${tt.descuentoPct}%)`, value: `-${money(tt.descuentoMonto)}`, kind: 'discount' })
   if (!simple && tt.discriminado && tt.iva.length > 0) {
-    if (tt.descuentoMonto > 0) rows.push({ label: 'Neto gravado', value: money(tt.netoGravado), kind: 'muted' })
+    if (tt.descuentoMonto > 0 || tt.medioPagoPct !== 0) rows.push({ label: 'Neto gravado', value: money(tt.netoGravado), kind: 'muted' })
     for (const b of tt.iva) rows.push({ label: `IVA ${String(b.pct).replace('.', ',')}%`, value: money(b.monto), kind: 'muted' })
   }
 

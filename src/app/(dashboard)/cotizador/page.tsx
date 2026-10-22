@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Pagination } from '@/components/ui/table'
 import { formatMoneyExact } from '@/lib/utils'
-import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, type QuoteTotals } from '@/lib/quote-totals'
+import { computeQuoteTotals, sanitizeIvaPct, DEFAULT_IVA_PCT, medioPagoLabel, type QuoteTotals } from '@/lib/quote-totals'
 import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBrandedFooter, drawQuoteTotalsBox, drawTcLegend } from '@/lib/pdf-branding'
 import { sanitizePdfText } from '@/lib/pdf-text'
 import { useThemeStore } from '@/store/theme-store'
@@ -55,6 +55,14 @@ interface CartItem {
 // item.price sin importar el modo — backward-compatible por construcción.
 type PriceMode = 'PUBLICO' | 'GREMIO'
 
+// 'TARJETA' | 'EFECTIVO' — recargo/descuento por medio de pago (pedido de
+// Abba, reestructuración 2026-10). El % real nunca se calcula ni se confía
+// acá — lo resuelve el servidor desde Organization.recargoTarjetaPct/
+// descuentoEfectivoPct (ver /api/cotizador/config y /api/cotizador/send);
+// este componente sólo usa esos dos números para la VISTA PREVIA, igual
+// criterio que ya hace con quoteValidityDays.
+type MedioPago = 'TARJETA' | 'EFECTIVO'
+
 const itemKey  = (type: ItemType, id: string) => `${type}_${id}`
 function getUnitPrice(type: ItemType, item: Service | Product, mode: PriceMode): number {
   if (type === 'PRODUCT' && mode === 'GREMIO') {
@@ -90,6 +98,7 @@ interface SavedQuote {
   notes:          string
   validityDays:   number
   priceMode:      PriceMode
+  medioPago:      MedioPago
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -106,6 +115,7 @@ export default function CotizadorPage() {
   const [validityTouched, setValidityTouched] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const [priceMode, setPriceMode] = useState<PriceMode>('PUBLICO')
+  const [medioPago, setMedioPago] = useState<MedioPago>('TARJETA')
   // Paso 1 rediseñado como grilla completa con foto, no un buscador
   // chiquito con dropdown — categoría y página sólo aplican al catálogo
   // del proveedor (paginado, potencialmente miles de SKUs); servicios y
@@ -256,6 +266,7 @@ export default function CotizadorPage() {
         setDiscount(cot.discount ?? 0)
         setPriceMode(cot.priceMode === 'GREMIO' ? 'GREMIO' : 'PUBLICO')
         setIvaDiscriminado(cot.ivaDiscriminado === true)
+        setMedioPago(cot.medioPago === 'EFECTIVO' ? 'EFECTIVO' : 'TARJETA')
         toast.success(`Cargado desde ${cot.ref} — revisá y corregí antes de generar el nuevo presupuesto.`)
       } catch {
         toast.error('No se pudo cargar la cotización para duplicar')
@@ -358,15 +369,22 @@ export default function CotizadorPage() {
     enabled:   clientMode === 'existing' && contactSearch.trim().length >= 2,
     staleTime: 30_000,
   })
-  const { data: cotizadorConfig } = useQuery({
+  const { data: cotizadorConfig, isLoading: configLoading } = useQuery({
     queryKey: ['cotizador-config'],
     queryFn:  async () => {
       const r = await fetch('/api/cotizador/config')
       if (!r.ok) return null
-      return (await r.json()).data as { quoteValidityDays: number } | null
+      return (await r.json()).data as { quoteValidityDays: number; recargoTarjetaPct: number; descuentoEfectivoPct: number } | null
     },
     staleTime: 5 * 60_000,
   })
+  // El selector de medio de pago sólo tiene sentido si esta organización
+  // configuró algún recargo/descuento — para cualquier otra (default 0/0,
+  // ver Organization.recargoTarjetaPct) queda oculto y no cambia nada.
+  const medioPagoHabilitado = !!(cotizadorConfig && (cotizadorConfig.recargoTarjetaPct !== 0 || cotizadorConfig.descuentoEfectivoPct !== 0))
+  const medioPagoPctPreview = medioPagoHabilitado
+    ? (medioPago === 'EFECTIVO' ? -(cotizadorConfig!.descuentoEfectivoPct) : cotizadorConfig!.recargoTarjetaPct)
+    : 0
 
   useEffect(() => {
     if (cotizadorConfig?.quoteValidityDays && !validityTouched) {
@@ -466,7 +484,7 @@ export default function CotizadorPage() {
   const cartItems  = Object.values(cart)
   const ivaRateFor = (ci: CartItem) => ci.type === 'PRODUCT' ? sanitizeIvaPct((ci.item as Product).ivaPct) : DEFAULT_IVA_PCT
   const quoteLines = cartItems.map(ci => ({ price: getPrice(ci, priceMode), quantity: ci.quantity, ivaPct: ivaRateFor(ci), type: ci.type }))
-  const totals     = computeQuoteTotals(quoteLines, discount, ivaDiscriminado)
+  const totals     = computeQuoteTotals(quoteLines, discount, ivaDiscriminado, medioPagoPctPreview)
   const subtotal   = totals.neto
   const discountAmt = totals.descuentoMonto
   const finalTotal = totals.total
@@ -715,6 +733,13 @@ export default function CotizadorPage() {
     // venta). Sin mail, la cotización se puede mandar igual por WhatsApp;
     // "Enviar por mail" queda deshabilitado en el paso siguiente.
     if (!recipientName.trim())  { toast.error('Ingresá el nombre del destinatario'); return }
+    // Sin esto: si se guarda ANTES de que resuelva /api/cotizador/config,
+    // medioPagoHabilitado todavía da false → el body no manda `medioPago` →
+    // el servidor (que no depende de este fetch) igual aplica el recargo/
+    // descuento real de la organización — el total guardado/PDF termina
+    // distinto al que se vio en la preview, sin ningún aviso (bug de
+    // carrera encontrado en code-review).
+    if (configLoading) { toast.error('Esperá un momento, cargando configuración...'); return }
 
     setSaving(true)
     try {
@@ -750,6 +775,7 @@ export default function CotizadorPage() {
           dealId,
           recipientEmail, recipientName: recipientName || 'Cliente',
           notes, total: subtotal, discount, currency, validityDays, priceMode, ivaDiscriminado,
+          ...(medioPagoHabilitado && { medioPago }),
           ...(isAdmin && sellerId && { sellerId }),
         }),
       })
@@ -780,6 +806,7 @@ export default function CotizadorPage() {
         notes,
         validityDays: json.validityDays ?? validityDays,
         priceMode,
+        medioPago:    json.medioPago === 'EFECTIVO' ? 'EFECTIVO' : 'TARJETA',
       }
 
       const doc     = await buildPdf(quote)
@@ -840,6 +867,7 @@ export default function CotizadorPage() {
       t += l + '\n'
     })
     t += `\nSubtotal (neto): ${formatMoneyExact(tt.neto, src.currency)}`
+    if (tt.medioPagoPct !== 0) t += `\n${medioPagoLabel(tt.medioPagoPct)}: ${tt.medioPagoPct > 0 ? '+' : '-'}${formatMoneyExact(Math.abs(tt.medioPagoMonto), src.currency)}`
     if (tt.descuentoMonto > 0) t += `\nDescuento (${tt.descuentoPct}%): -${formatMoneyExact(tt.descuentoMonto, src.currency)}`
     if (tt.discriminado && tt.iva.length > 0) {
       for (const b of tt.iva) t += `\nIVA ${String(b.pct).replace('.', ',')}%: ${formatMoneyExact(b.monto, src.currency)}`
@@ -1055,6 +1083,28 @@ export default function CotizadorPage() {
                 </button>
               ))}
             </div>
+
+            {/* Toggle Tarjeta/Efectivo — pedido de Abba (reestructuración
+                2026-10): el recargo/descuento real lo resuelve el servidor,
+                acá sólo se elige cuál de los dos. Oculto para cualquier
+                organización que no configuró ninguno de los dos (ver
+                medioPagoHabilitado). */}
+            {medioPagoHabilitado && (
+              <div className="flex rounded-xl overflow-hidden p-0.5"
+                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+                {([
+                  { mode: 'TARJETA' as MedioPago, label: `Tarjeta (+${cotizadorConfig!.recargoTarjetaPct}%)` },
+                  { mode: 'EFECTIVO' as MedioPago, label: `Efectivo (-${cotizadorConfig!.descuentoEfectivoPct}%)` },
+                ]).map(opt => (
+                  <button key={opt.mode} onClick={() => setMedioPago(opt.mode)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+                      medioPago === opt.mode ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
           {/* Dólar widget */}
           <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl shrink-0"
@@ -1534,12 +1584,17 @@ export default function CotizadorPage() {
                 </div>
               )}
               <div className="pt-2 border-t space-y-0.5" style={{ borderColor: 'var(--color-border)' }}>
+                {medioPagoHabilitado && totals.medioPagoPct !== 0 && (
+                  <p className="text-xs" style={{ color: totals.medioPagoPct > 0 ? 'var(--color-text-muted)' : '#10b981' }}>
+                    {medioPagoLabel(totals.medioPagoPct)}: {totals.medioPagoPct > 0 ? '+' : '-'}{formatMoneyExact(Math.abs(totals.medioPagoMonto), currency)}
+                  </p>
+                )}
                 {discount > 0 && (
                   <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Descuento {discount}%: -{formatMoneyExact(totals.descuentoMonto, currency)}</p>
                 )}
                 {ivaDiscriminado && totals.iva.length > 0 && (
                   <>
-                    {discount > 0 && <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Neto gravado: {formatMoneyExact(totals.netoGravado, currency)}</p>}
+                    {(discount > 0 || totals.medioPagoPct !== 0) && <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Neto gravado: {formatMoneyExact(totals.netoGravado, currency)}</p>}
                     {totals.iva.map(b => (
                       <p key={b.pct} className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
                         IVA {String(b.pct).replace('.', ',')}%: {formatMoneyExact(b.monto, currency)}

@@ -22,14 +22,17 @@ export function canAccess(userRole: Role, requiredRole: Role): boolean {
     SELLER: 2,
     HR: 1,         // canAccess(role, 'HR')  → blocks only TECHNICIAN
     TECHNICIAN: 0, // canAccess(role, 'SELLER') → blocks HR and TECHNICIAN
-    // GREMIO y CLIENTE no participan de esta jerarquía (carriles laterales,
-    // ver comentario en el enum Role del schema) — el -1 es sólo una red de
-    // seguridad fail-closed para que TS compile y para que un llamado
-    // legacy a canAccess('GREMIO' | 'CLIENTE', cualquierCosa) dé false. El
-    // control de acceso real de esos portales es el guard explícito de rol
-    // en (gremio)/layout.tsx, portal/layout.tsx y en las APIs que consumen.
+    // GREMIO, CLIENTE y SUPPORT_EXTERNAL no participan de esta jerarquía
+    // (carriles laterales, ver comentario en el enum Role del schema) — el
+    // -1 es sólo una red de seguridad fail-closed para que TS compile y para
+    // que un llamado legacy a canAccess('GREMIO' | 'CLIENTE' |
+    // 'SUPPORT_EXTERNAL', cualquierCosa) dé false. El control de acceso real
+    // de esos portales es el guard explícito de rol en (gremio)/layout.tsx,
+    // portal/layout.tsx, soporte-externo/layout.tsx y en las APIs que
+    // consumen.
     GREMIO: -1,
     CLIENTE: -1,
+    SUPPORT_EXTERNAL: -1,
   }
   return hierarchy[userRole] >= hierarchy[requiredRole]
 }
@@ -154,7 +157,7 @@ export async function getCurrentUser(): Promise<AuthPayload | null> {
   try {
     const resolved = await resolveSession()
     if (!resolved || resolved.homeSuspended) return null
-    if (resolved.role === 'GREMIO' || resolved.role === 'CLIENTE') return null
+    if (resolved.role === 'GREMIO' || resolved.role === 'CLIENTE' || resolved.role === 'SUPPORT_EXTERNAL') return null
     return { userId: resolved.user.id, orgId: resolved.orgId, role: resolved.role, email: resolved.user.email }
   } catch {
     return null

@@ -8,6 +8,7 @@ import { dateOnlyArgentina } from '@/lib/timezone'
 import { recordManualPayment } from '@/lib/payments/reconcile'
 import { sendPaymentReceiptEmail } from '@/lib/invoice-email'
 import { MEDIO_PAGO_VALUES } from '@/lib/medios-pago'
+import { recordCommissionForPaidInvoice, removeCommissionForInvoice } from '@/lib/commissions'
 
 interface Params { params: { id: string } }
 
@@ -96,6 +97,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (marcandoPagada && (!metodo || !MEDIO_PAGO_VALUES.includes(metodo))) {
       return NextResponse.json({ error: 'Elegí el medio de pago para registrar el cobro' }, { status: 400 })
     }
+    // "No aparece comisión si no pagó" es literal — si se despaga, la
+    // ganancia/utilidad que había quedado registrada deja de contar (ver
+    // removeCommissionForInvoice en src/lib/commissions.ts).
+    const despagando = status !== undefined && status !== 'PAID' && existing.status === 'PAID'
 
     // Si cambia el monto o la moneda, la URL de checkout cacheada (Whop/MP)
     // apunta a un cobro con el valor viejo — se invalida para que se recree
@@ -103,6 +108,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const amountChanged = amount !== undefined && Number(amount) !== existing.amount
     const currencyChanged = !!currency && currency !== existing.currency
     const invalidateCheckout = amountChanged || currencyChanged
+    // Deliberadamente NO se recalcula la comisión sólo porque se corrija
+    // amount/currency de una factura que YA estaba Pagada — ninguno de los
+    // dos casos se puede resolver bien acá: `amount` no toca
+    // Invoice.subtotal/items (de donde sale la ganancia, ver
+    // src/lib/commissions.ts), así que "recalcular" repetiría el mismo
+    // número de siempre; y `currency` sola re-etiquetaría ganancia/utilidad
+    // ya calculadas en la escala de la moneda VIEJA bajo la moneda nueva,
+    // sin convertir el monto — un ARS 150.000 pasaría a figurar como
+    // "USD 150.000" (bug real encontrado en code-review, revertido). Ver
+    // limitación conocida ya documentada para InvoiceItem (commit de cuotas
+    // automáticas): corregir una factura ya pagada queda afuera de este
+    // motor — la ganancia/utilidad quedan fijadas al momento de marcarla
+    // Pagada, nunca se tocan después por una edición posterior.
 
     // Pedido de Abba: el pago tiene que quedar registrado en la MISMA
     // transacción que marca la factura como pagada — antes, si
@@ -148,6 +166,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           detalle: detalle && typeof detalle === 'object' ? detalle : null,
           client: tx,
         })
+      }
+      if (marcandoPagada) {
+        // Motor de comisiones (reestructuración Abba 2026-10) — "se gana"
+        // la comisión recién acá, nunca antes (ni se vuelve a tocar después
+        // por una edición posterior — ver comentario arriba).
+        await recordCommissionForPaidInvoice(tx, payload.orgId, inv.id)
+      } else if (despagando) {
+        await removeCommissionForInvoice(tx, inv.id)
       }
 
       return inv

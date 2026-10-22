@@ -34,6 +34,13 @@ enum Role {
   // ~109 rutas internas que sólo chequean "logueado". Sólo lo sirve
   // /api/portal/* con chequeo explícito role === 'CLIENTE'.
   CLIENTE
+  // Portal de soporte técnico externo (reestructuración Abba 2026-10) — MISMO
+  // criterio que GREMIO/CLIENTE: carril lateral, fuera de canAccess()/
+  // MODULE_DEFINITIONS. Un externo que gestiona tickets (asignar, cambiar
+  // estado, responder) sin ver nada más del CRM interno. Excluido de
+  // getCurrentUser() igual que GREMIO/CLIENTE; las rutas de tickets que debe
+  // poder usar llaman getCurrentUserAny() + chequeo explícito de rol.
+  SUPPORT_EXTERNAL
 }
 
 enum UserStatus {
@@ -226,6 +233,35 @@ model Organization {
   // sin token" y lo resuelven on-demand si hiciera falta.
   publicSupportToken         String?      @default(cuid())
   quoteValidityDays          Int          @default(30)
+  // "La empresa viene en baja" — pedido de Abba (Seba/Mauro, reestructuración
+  // 2026-10): el objetivo de venta GENERAL (suma de lo repartido, ver
+  // SalesTarget) sólo se le muestra a todo el equipo cuando esta bandera está
+  // prendida. Si está apagada, cada vendedor sigue viendo su objetivo
+  // individual (siempre visible), pero no el agregado de la empresa — evita
+  // que el equipo compare entre sí cuando no hace falta. La prende/apaga un
+  // ADMIN+ desde el propio panel de Objetivos (ver /api/organization/en-baja).
+  enBaja                     Boolean      @default(false)
+  // Recargo por tarjeta / descuento por efectivo (reestructuración Abba
+  // 2026-10, Seba): "al seleccionar cobro con tarjeta, el sistema tiene que
+  // sumar automáticamente ese 25%" — se resuelve en el cotizador
+  // (computeQuoteTotals en quote-totals.ts) según el medio de pago elegido,
+  // nunca a mano. Quién recibe cuántas cuotas (3, 4 o 6) es una negociación
+  // comercial aparte que no cambia el % acá. Default 0 en AMBOS a propósito
+  // — esto es blanco (CRM multi-tenant, ver [[feedback-multi-client-isolation]]
+  // en memoria): ninguna organización nueva ni existente arranca con un
+  // recargo/descuento que nunca pidió. Abba se configura en 25/20 por script
+  // puntual (scripts/set-abba-medio-pago.ts) después de este deploy, no por
+  // default de schema. El selector de medio de pago del cotizador sólo se
+  // muestra si alguno de los dos es != 0 para esa organización.
+  recargoTarjetaPct          Float        @default(0)
+  descuentoEfectivoPct       Float        @default(0)
+  // % que Mauro aplica sobre la ganancia (precio × margen de familia) para
+  // llegar a la "utilidad real" que cuenta para comisión — ej. ganancia
+  // $1000 × utilidadRealPct 22% = $220 de utilidad. Default 0 a propósito
+  // (mismo criterio que recargoTarjetaPct/descuentoEfectivoPct): hasta que
+  // Mauro lo configure, el motor de comisiones (src/lib/commissions.ts)
+  // registra utilidad=0 para cualquier venta — no inventa un número.
+  utilidadRealPct            Float        @default(0)
   // Horario laboral para el cálculo de tardanza en Asistencia — antes esto
   // estaba hardcodeado a las 09:15 en el código (09:00 + 15 min), fijo para
   // toda organización sin importar su horario real. "HH:MM" en texto simple
@@ -280,6 +316,9 @@ model Organization {
   documents               Document[]
   deals                   Deal[]
   salesTargets            SalesTarget[]
+  commissionLedgers       CommissionLedger[]
+  vigiladores             Vigilador[]
+  vigiladorTurnos         VigiladorTurno[]
   tasks                   Task[]
   tickets                 Ticket[]
   empresas                Empresa[]
@@ -511,6 +550,7 @@ model User {
   whatsAppConvsAssigned   WhatsAppConversation[]   @relation("WhatsAppAssignee")
   whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
   salesTargets            SalesTarget[]
+  commissionLedgers       CommissionLedger[]
   deletionRequestsMade    DeletionRequest[]        @relation("DeletionRequestedBy")
   deletionRequestsResolved DeletionRequest[]       @relation("DeletionRequestResolvedBy")
 
@@ -691,6 +731,7 @@ model Invoice {
   checkoutUrl     String?
   checkoutRef     String?
   payments        Payment[]
+  commissionLedger CommissionLedger?
 
   items     InvoiceItem[]
   createdAt DateTime      @default(now())
@@ -1224,6 +1265,11 @@ model Document {
   folder         Folder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
   clientId       String?
   client         Client?      @relation(fields: [clientId], references: [id])
+  // Carnet/DNI/contrato escaneado de un vigilador (ABBA FISICA, legajo) —
+  // mismo patrón que clientId, un FK nullable más en el mismo modelo
+  // genérico de documentos, no uno nuevo.
+  legajoId       String?
+  legajo         Vigilador?   @relation(fields: [legajoId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   tags           String       @default("[]")
@@ -1253,6 +1299,7 @@ model Document {
 
   @@index([organizationId])
   @@index([clientId])
+  @@index([legajoId])
   @@index([supersedesId])
 }
 
@@ -1363,6 +1410,39 @@ model SalesTarget {
 
   @@unique([organizationId, userId, month, currency])
   @@index([organizationId, month])
+}
+
+// Registro inmutable de ganancia/utilidad por factura PAGADA (reestructuración
+// Abba 2026-10) — una fila por Invoice (@@unique) que SÍ cuenta para
+// comisión: no es un abono/renovación (Invoice.servicioRecurrenteId null) y
+// se pudo resolver un vendedor (vía Cotizacion.userId o Deal.ownerId, ver
+// src/lib/commissions.ts). NO guarda el % de comisión ni el monto a pagar —
+// el tramo (10/15/20%, según cuánto del objetivo de venta lleva cumplido el
+// vendedor ese mes) se aplica siempre sobre el TOTAL del mes (confirmado por
+// Seba, no marginal), así que se recalcula en vivo cada vez que se consulta
+// el panel (ver /api/commissions) en vez de guardarse ya "congelado" acá —
+// si se guardara, quedaría desactualizado apenas entra una venta nueva que
+// cambia el tramo de TODO el mes, no sólo de la venta que lo disparó.
+model CommissionLedger {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoiceId      String       @unique
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  month          String // "YYYY-MM", mismo formato que SalesTarget.month
+  // Moneda de la Invoice al momento de pagarse (snapshot, no se re-convierte
+  // después) — una factura de cotización sale siempre en ARS (pedido de
+  // Abba, ver facturacion.ts), pero un cobro online vía Whop puede ser USD.
+  // Sin este campo, sumar ganancia/utilidad de distintas monedas en
+  // /api/commissions mezclaba montos incompatibles en un solo número.
+  currency       String       @default("USD")
+  ganancia       Float // Σ (precio de línea ya ajustado por descuento/medio de pago) × margenPct de la familia
+  utilidad       Float // ganancia × Organization.utilidadRealPct/100
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, userId, month])
 }
 
 // ─── Tasks ─────────────────────────────────────────────────────────────────
@@ -1826,6 +1906,16 @@ model ProductCategory {
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   products       Product[]
   createdAt      DateTime          @default(now())
+  // % de margen de esta familia para el motor de comisiones (reestructuración
+  // Abba 2026-10) — ya NO hay un % fijo sobre costo para todo el catálogo
+  // (confirmado por Seba: cada familia tiene el suyo, 5/15/35% son los
+  // valores reales que mencionó, no un placeholder). Null = sin configurar
+  // todavía → esa familia no aporta ganancia/comisión hasta que Mauro la
+  // cargue (ver computeInvoiceGanancia en src/lib/commissions.ts). Hoy se
+  // edita a mano desde configuración/catálogo; no viene del sync de Google
+  // Sheets (CRM_PROGRAMADOR), que tiene headers fijos y es de solo lectura
+  // del proveedor — ver catalogo-sync.ts.
+  margenPct      Float?
 
   @@index([organizationId, parentId])
 }
@@ -2178,6 +2268,16 @@ model Cotizacion {
   // resuelto al momento de cotizar. Default false = toda cotización anterior
   // a esto (se cotizaba neto, sin IVA) sigue significando lo mismo.
   ivaDiscriminado Boolean          @default(false)
+  // Medio de pago elegido al cotizar (reestructuración Abba 2026-10) — ya NO
+  // es sólo informativo: `medioPagoPct` es el % que ya quedó aplicado sobre
+  // el neto (ver computeQuoteTotals en quote-totals.ts), resuelto en el
+  // momento de cotizar a partir de Organization.recargoTarjetaPct/
+  // descuentoEfectivoPct (igual criterio que QuoteItem.ivaPct: snapshot al
+  // momento de cotizar, no se recalcula después aunque cambie la config de
+  // la organización). Default 'TARJETA'/0 preserva el total de toda
+  // cotización anterior a esto (nunca tuvo recargo ni descuento aplicado).
+  medioPago       String           @default("TARJETA")
+  medioPagoPct    Float            @default(0)
   // Ya se generó una EntregaStock a partir de esta cotización (botón "Preparar
   // materiales" en cotizaciones/[id]). Evita preparar dos veces el mismo
   // material. Default false = toda cotización anterior a Fase 3.
@@ -2396,6 +2496,83 @@ model HorarioTramo {
 
   @@unique([userId, orden])
   @@index([userId])
+  @@index([organizationId])
+}
+
+// ─── ABBA FISICA — legajo de vigiladores (reestructuración 2026-10) ────────
+// El vigilador NO es un usuario del CRM (usa VigiControl, un sistema
+// externo aparte) — confirmado que hoy no tiene NINGUNA representación en
+// la base salvo que fuera un User, y eso traía consigo todo lo que implica
+// ser un User (login, roles, aparecer en pickers de asignación) sin que
+// nada de eso aplicara. Vigilador es una entidad propia, independiente de
+// User, gestionada por RRHH/Administración — ver módulo 'legajos' en
+// src/lib/modules.ts.
+model Vigilador {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  nombre          String
+  apellido        String
+  dni             String
+  // Antigüedad se calcula en código a partir de esto — no se guarda aparte
+  // para no desincronizar.
+  fechaIngreso    DateTime?    @db.Date
+  // Vencimiento del carnet de vigilador — dispara el aviso de
+  // /api/cron/carnet-vencimiento (ver src/lib/notifications.ts). Null =
+  // todavía sin cargar, no genera ningún aviso.
+  carnetVencimiento DateTime?  @db.Date
+  art             String?
+  lugarTrabajo    String?
+  activo          Boolean      @default(true)
+  notas           String?
+  documentos      Document[]
+  cursos          VigiladorCurso[]
+  turnos          VigiladorTurno[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Modelo nuevo, cero filas en producción todavía — agregar este único
+  // ahora es gratis (no hay migración de datos existentes que pueda
+  // chocar). Evita el caso real: RRHH no encuentra a alguien por una
+  // búsqueda con errata y crea un segundo legajo para la misma persona.
+  @@unique([organizationId, dni])
+  @@index([organizationId])
+  @@index([organizationId, carnetVencimiento])
+}
+
+// Cursos/capacitaciones realizadas — lista simple, una fila por curso.
+model VigiladorCurso {
+  id          String    @id @default(cuid())
+  vigiladorId String
+  vigilador   Vigilador @relation(fields: [vigiladorId], references: [id], onDelete: Cascade)
+  nombre      String
+  fecha       DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+
+  @@index([vigiladorId])
+}
+
+// Turno/asistencia del vigilador — mirror liviano de TurnoAsistencia (mismo
+// espíritu: fecha + entrada/salida + lugar), pero cargado a MANO por RRHH
+// (sin GPS, sin fichaje propio — el vigilador no entra al CRM, ver
+// comentario del modelo Vigilador). Sin integración con VigiControl en esta
+// primera versión.
+model VigiladorTurno {
+  id             String       @id @default(cuid())
+  vigiladorId    String
+  vigilador      Vigilador    @relation(fields: [vigiladorId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fecha          DateTime     @db.Date
+  horaEntrada    DateTime?
+  horaSalida     DateTime?
+  lugarTrabajo   String?
+  observaciones  String?
+  creadoPorId    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([vigiladorId, fecha])
   @@index([organizationId])
 }
 

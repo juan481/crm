@@ -11,10 +11,16 @@ export async function GET() {
 
     const org = await prisma.organization.findUnique({
       where:  { id: payload.orgId },
-      select: { quoteValidityDays: true },
+      select: { quoteValidityDays: true, recargoTarjetaPct: true, descuentoEfectivoPct: true },
     })
 
-    return NextResponse.json({ data: { quoteValidityDays: org?.quoteValidityDays ?? 30 } })
+    return NextResponse.json({
+      data: {
+        quoteValidityDays: org?.quoteValidityDays ?? 30,
+        recargoTarjetaPct: org?.recargoTarjetaPct ?? 0,
+        descuentoEfectivoPct: org?.descuentoEfectivoPct ?? 0,
+      },
+    })
   } catch (error) {
     console.error('[COTIZADOR CONFIG]', error)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })

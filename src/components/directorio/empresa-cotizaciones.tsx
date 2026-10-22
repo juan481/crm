@@ -5,7 +5,7 @@ import { FileText, Calendar, DollarSign, Send, Clock, CheckCircle2 } from 'lucid
 import { formatMoneyExact } from '@/lib/utils'
 
 interface CotizacionRow {
-  id: string; ref: string; recipientName: string; total: number
+  id: string; ref: string; recipientName: string; total: number; finalTotal?: number | null
   currency: string; status: string; createdAt: string
   items: Array<{ name: string; quantity: number }>
   user: { name: string } | null
@@ -84,7 +84,7 @@ export function EmpresaCotizaciones({ empresaId }: { empresaId: string }) {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
-                        {formatMoneyExact(c.total, c.currency)}
+                        {formatMoneyExact(c.finalTotal ?? c.total, c.currency)}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-center hidden sm:table-cell">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser, canAccess } from '@/lib/auth'
+import { getCurrentUser, getCurrentUserAny, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { sendEmail, buildEmailHtml, resolveOrgSmtpConfig, isOrgEmailConfigured } from '@/lib/email'
 import { SLA_HOURS } from '@/lib/tickets'
@@ -32,8 +32,13 @@ const INCLUDE_LIST = {
 
 export async function GET(_: NextRequest, { params }: Params) {
   try {
-    const payload = await getCurrentUser()
+    // getCurrentUserAny(): mismo motivo que en /api/tickets GET — el portal
+    // de soporte externo necesita leer el detalle. GREMIO/CLIENTE siguen
+    // bloqueados explícitamente.
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'GREMIO' || payload.role === 'CLIENTE')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
@@ -58,8 +63,13 @@ export async function GET(_: NextRequest, { params }: Params) {
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    const payload = await getCurrentUser()
+    // getCurrentUserAny(): el portal de soporte externo necesita asignar y
+    // cambiar estado. GREMIO/CLIENTE siguen bloqueados explícitamente, igual
+    // que en GET.
+    const payload = await getCurrentUserAny()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    if (payload.role === 'GREMIO' || payload.role === 'CLIENTE')
+      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     // HR no edita tickets por default, salvo que un Super Admin le prenda el
     // módulo "Tickets" en Permisos.
     if (payload.role === 'HR' && !(await roleHasModule(payload.orgId, payload.role, 'tickets')))
@@ -86,12 +96,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const body = await req.json()
     const { status } = body
-    const isTech  = payload.role === 'TECHNICIAN'
-    const isAdmin = canAccess(payload.role, 'ADMIN')
+    const isSupportExternal = payload.role === 'SUPPORT_EXTERNAL'
+    // SUPPORT_EXTERNAL se trata como TECHNICIAN para los campos "de
+    // contenido" del ticket (título/prioridad/categoría/empresa/cliente/
+    // destinatario) — sólo puede tocar estado y asignación, que es
+    // exactamente lo que pidió Abba para el externo que gestiona soporte.
+    const isTech  = payload.role === 'TECHNICIAN' || isSupportExternal
+    // SUPPORT_EXTERNAL gana el nivel de isAdmin SOLO para asignar/reasignar
+    // (abajo) — nunca hereda canAccess(role,'ADMIN') en general, por eso es
+    // un OR explícito acá y no un cambio en la jerarquía de canAccess().
+    const isAdmin = canAccess(payload.role, 'ADMIN') || isSupportExternal
 
     // TECHNICIAN solo puede cambiar el estado de tickets asignados a ellos
-    // (o donde sea colaborador).
-    if (isTech && existing.assignedToId !== payload.userId && !existingCollabIds.includes(payload.userId))
+    // (o donde sea colaborador). SUPPORT_EXTERNAL queda afuera de esta
+    // restricción a propósito: gestiona TODOS los tickets, no sólo los suyos.
+    if (payload.role === 'TECHNICIAN' && existing.assignedToId !== payload.userId && !existingCollabIds.includes(payload.userId))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
     const wasClosed  = existing.status === 'RESUELTO' || existing.status === 'CERRADO'

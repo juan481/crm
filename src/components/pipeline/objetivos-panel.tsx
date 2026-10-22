@@ -10,8 +10,9 @@
 
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Target } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Target, TrendingDown } from 'lucide-react'
 import { formatMoneyExact } from '@/lib/utils'
+import { argentinaDayKey } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
 import type { Deal } from '@/types'
 import toast from 'react-hot-toast'
@@ -25,10 +26,11 @@ function shiftMonth(month: string, delta: number) {
   const d = new Date(y, m - 1 + delta, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
-const currentMonth = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+// Argentina-aware, no el reloj local del navegador — este panel y
+// ComisionesPanel (abajo en la misma página) tienen que arrancar mirando el
+// mismo mes (bug encontrado en code-review al sumar ComisionesPanel, que sí
+// usa argentinaDayKey porque CommissionLedger escribe el mes así).
+const currentMonth = () => argentinaDayKey().slice(0, 7)
 
 interface Usuario { id: string; name: string; role: string }
 interface TargetRow { id: string; userId: string; amount: number; currency: string; user: { id: string; name: string } }
@@ -102,6 +104,47 @@ export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boo
   const totalObjetivo = targets.reduce((s, t) => s + t.amount, 0)
   const totalReal = rows.reduce((s, r) => s + (realByUser.get(r.id) ?? 0), 0)
 
+  // "Empresa en baja" (ver Organization.enBaja) — un ADMIN+ la prende/apaga
+  // acá mismo; un vendedor sólo la consulta para decidir si pide (y muestra)
+  // el agregado de la empresa, nunca la cambia.
+  const { data: enBajaData } = useQuery({
+    queryKey: ['organization-en-baja'],
+    queryFn: async () => (await fetch('/api/organization/en-baja')).json(),
+    staleTime: 60_000,
+  })
+  const enBaja: boolean = enBajaData?.data?.enBaja ?? false
+  const [savingEnBaja, setSavingEnBaja] = useState(false)
+
+  const toggleEnBaja = async () => {
+    setSavingEnBaja(true)
+    try {
+      const res = await fetch('/api/organization/en-baja', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enBaja: !enBaja }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'Error'); return }
+      qc.invalidateQueries({ queryKey: ['organization-en-baja'] })
+    } catch { toast.error('Error de conexión') } finally { setSavingEnBaja(false) }
+  }
+
+  // Agregado de TODA la empresa — sólo tiene sentido pedirlo para un
+  // vendedor no-admin cuando enBaja está prendida (si no, el backend
+  // devuelve 403 y no hace falta ni intentarlo); un admin ya ve el agregado
+  // real de arriba (totalObjetivo/totalReal calculados de la data completa
+  // que ya trae por ser admin).
+  const { data: companyData } = useQuery({
+    queryKey: ['sales-targets-company', month],
+    queryFn: async () => {
+      const res = await fetch(`/api/sales-targets?month=${month}&company=1`)
+      if (!res.ok) return null
+      return res.json()
+    },
+    enabled: !isAdmin && enBaja,
+    staleTime: 30_000,
+  })
+  const companyTotals = companyData?.data as { totalObjetivo: number; totalReal: number } | undefined
+
   const saveTarget = async (userId: string, raw: string) => {
     const amount = raw.trim() === '' ? 0 : Number(raw)
     if (!Number.isFinite(amount) || amount < 0) { toast.error('Monto inválido'); return }
@@ -114,6 +157,10 @@ export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boo
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
       qc.invalidateQueries({ queryKey: ['sales-targets', month] })
+      // El panel de Comisiones (justo debajo en Pipeline) calcula su tramo
+      // 10/15/20% a partir de este mismo objetivo — sin esto, quedaba hasta
+      // 30s mostrando el % viejo después de guardar un objetivo nuevo.
+      qc.invalidateQueries({ queryKey: ['commissions', month] })
     } catch { toast.error('Error de conexión') } finally {
       setSaving(null)
       setEditing((e) => { const n = { ...e }; delete n[userId]; return n })
@@ -140,6 +187,21 @@ export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boo
         </div>
       </div>
 
+      {isAdmin && (
+        <button
+          onClick={toggleEnBaja}
+          disabled={savingEnBaja}
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors disabled:opacity-50"
+          style={enBaja
+            ? { borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)', color: '#ef4444' }
+            : { borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+          title="Si está prendido, todo el equipo ve el objetivo general de la empresa (no sólo el suyo)"
+        >
+          <TrendingDown size={12} />
+          {enBaja ? 'Empresa en baja — objetivo general visible a todos' : 'Marcar empresa en baja'}
+        </button>
+      )}
+
       <div className="flex items-center justify-between text-sm px-1">
         <span style={{ color: 'var(--color-text-muted)' }}>
           {isAdmin ? 'Objetivo general del mes (suma de lo repartido)' : 'Tu objetivo de este mes'}
@@ -148,6 +210,20 @@ export function ObjetivosPanel({ deals, isAdmin }: { deals: Deal[]; isAdmin: boo
           {formatMoneyExact(totalReal, 'USD')} / {formatMoneyExact(totalObjetivo, 'USD')}
         </span>
       </div>
+
+      {/* Objetivo general de la empresa — sólo para no-admin, y sólo cuando
+          Organization.enBaja está prendida (ver comentario arriba). */}
+      {!isAdmin && enBaja && companyTotals && (
+        <div className="flex items-center justify-between text-sm px-1 py-1.5 rounded-lg" style={{ background: 'rgba(239,68,68,0.06)' }}>
+          <span className="flex items-center gap-1.5" style={{ color: '#ef4444' }}>
+            <TrendingDown size={13} />
+            Objetivo general de la empresa este mes
+          </span>
+          <span className="font-bold" style={{ color: 'var(--color-text)' }}>
+            {formatMoneyExact(companyTotals.totalReal, 'USD')} / {formatMoneyExact(companyTotals.totalObjetivo, 'USD')}
+          </span>
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-xs text-center py-4" style={{ color: 'var(--color-text-muted)' }}>Cargando...</p>

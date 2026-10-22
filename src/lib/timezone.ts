@@ -55,6 +55,32 @@ export function dateOnlyArgentina(year: number, month: number, day: number): Dat
   return new Date(Date.UTC(year, month, day, 12, 0, 0))
 }
 
+/** Días calendario (puede ser negativo) entre HOY (día argentino real,
+ *  funciona igual en server o browser) y la fecha-clave de un campo
+ *  @db.Date ya serializado a ISO ("YYYY-MM-DDT00:00:00.000Z"). Comparar
+ *  ese ISO directo contra `Date.now()` corre el resultado ~3hs por el
+ *  huso horario (bug real encontrado en code-review, ver badges de
+ *  vencimiento de carnet en /legajos) — acá se comparan sólo los
+ *  componentes de fecha, nunca el instante completo. */
+export function daysUntilDateOnly(iso: string): number {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const target = Date.UTC(y, m - 1, d, 12)
+  const [ty, tm, td] = argentinaDayKey().split('-').map(Number)
+  const today = Date.UTC(ty, tm - 1, td, 12)
+  return Math.round((target - today) / 86_400_000)
+}
+
+/** Formatea un campo @db.Date ya serializado a ISO como "DD/MM/YYYY" —
+ *  parsea el string directo, nunca construye un Date "timezone-aware" (ver
+ *  daysUntilDateOnly arriba: `new Date(iso).toLocaleDateString()` muestra
+ *  el día anterior en un navegador Argentina). Antes vivía duplicado en
+ *  cada página de /legajos. */
+export function fmtDateOnly(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
+}
+
 /** Medianoche (UTC) del día argentino para una clave "YYYY-MM-DD" ya
  *  conocida (ej. un <input type="date">, o Asistencia.fecha ya serializada
  *  a string) — mismo shape que argentinaDayStart, para no pasar por el
@@ -65,4 +91,29 @@ export function dateOnlyArgentina(year: number, month: number, day: number): Dat
 export function argentinaDateKeyToDayStart(dateKey: string): Date {
   const [y, m, d] = dateKey.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d))
+}
+
+/** Rango [inicio, fin) del mes argentino "YYYY-MM" (ej. de SalesTarget/
+ *  CommissionLedger.month) como INSTANTES reales — para filtrar
+ *  `closedAt`/`paidAt` (DateTime completo, no una fecha "sin hora") con
+ *  `gte`/`lt` sin el corrimiento de 3hs que da armar el rango con el
+ *  constructor local de Date en un server que corre en UTC.
+ *
+ *  OJO, bug real que esto corrigió en code-review: `argentinaDateKeyToDayStart`
+ *  da la medianoche UTC de esa fecha-clave (para comparar contra columnas
+ *  @db.Date, donde sólo importa que el año/mes/día coincidan) — NO es el
+ *  instante real de la medianoche ARGENTINA (que cae a las 03:00 UTC, por
+ *  el offset -3). Usar ese resultado directo como límite de un rango contra
+ *  un DateTime real arrancaba (y cortaba) el mes 3hs antes de lo real.
+ *  argentinaTimeToInstant() es la función que sí hace esa conversión. */
+export function argentinaMonthRange(month: string): { start: Date; end: Date } {
+  const [y, m] = month.split('-').map(Number)
+  const startDayKey = argentinaDateKeyToDayStart(`${y}-${String(m).padStart(2, '0')}-01`)
+  const nextY = m === 12 ? y + 1 : y
+  const nextM = m === 12 ? 1 : m + 1
+  const endDayKey = argentinaDateKeyToDayStart(`${nextY}-${String(nextM).padStart(2, '0')}-01`)
+  return {
+    start: argentinaTimeToInstant(startDayKey, 0, 0),
+    end: argentinaTimeToInstant(endDayKey, 0, 0),
+  }
 }

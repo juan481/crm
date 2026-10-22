@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Boxes, Wrench } from 'lucide-react'
+import { Boxes, Wrench, Percent } from 'lucide-react'
 import { SimpleProductsManager } from '@/components/configuracion/simple-products-manager'
 import { KitsManager } from '@/components/configuracion/kits-manager'
 import { SupplierCatalogManager } from '@/components/configuracion/supplier-catalog-manager'
 import { ServicesManager } from '@/components/configuracion/services-manager'
+import { CategoryMarginsManager } from '@/components/configuracion/category-margins-manager'
+import { useAuthStore } from '@/store/auth-store'
 
-type Tab = 'PRODUCTOS' | 'SERVICIOS'
+type Tab = 'PRODUCTOS' | 'SERVICIOS' | 'COMISIONES'
 
 // Punto único de administración de todo lo que se puede vender — antes
 // repartido en 3 pantallas sin conexión entre sí (/configuracion/productos,
@@ -17,6 +19,8 @@ type Tab = 'PRODUCTOS' | 'SERVICIOS'
 // mapa mental en todos lados.
 export default function ConfiguracionCatalogoPage() {
   const [tab, setTab] = useState<Tab>('PRODUCTOS')
+  const { user } = useAuthStore()
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
 
   return (
     <div className="space-y-6">
@@ -32,6 +36,9 @@ export default function ConfiguracionCatalogoPage() {
         {([
           { type: 'PRODUCTOS' as Tab, label: 'Productos', icon: <Boxes size={14} /> },
           { type: 'SERVICIOS' as Tab, label: 'Servicios', icon: <Wrench size={14} /> },
+          // Márgenes por familia + utilidad real — sólo tiene sentido para
+          // quien puede tocar el motor de comisiones (ADMIN+).
+          ...(isAdmin ? [{ type: 'COMISIONES' as Tab, label: 'Comisiones', icon: <Percent size={14} /> }] : []),
         ]).map((t) => (
           <button key={t.type} onClick={() => setTab(t.type)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
@@ -50,8 +57,10 @@ export default function ConfiguracionCatalogoPage() {
           <div className="h-px" style={{ background: 'var(--color-border)' }} />
           <SupplierCatalogManager />
         </div>
-      ) : (
+      ) : tab === 'SERVICIOS' ? (
         <ServicesManager />
+      ) : (
+        <CategoryMarginsManager />
       )}
     </div>
   )

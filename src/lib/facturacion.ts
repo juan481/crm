@@ -23,7 +23,7 @@ export async function emitirFacturaDesdeCotizacion(
 ): Promise<EmitirFacturaResult | EmitirFacturaError> {
   const cot = await tx.cotizacion.findFirst({
     where: { id: cotizacionId, organizationId: orgId },
-    select: { id: true, ref: true, items: true, discount: true, ivaDiscriminado: true, currency: true, empresaId: true, dealId: true, status: true },
+    select: { id: true, ref: true, items: true, discount: true, ivaDiscriminado: true, medioPagoPct: true, currency: true, empresaId: true, dealId: true, status: true },
   })
   if (!cot) return { ok: false, error: 'Cotización no encontrada', status: 404 }
   if (!cot.empresaId) return { ok: false, error: 'La cotización no tiene un cliente asignado', status: 400 }
@@ -43,7 +43,7 @@ export async function emitirFacturaDesdeCotizacion(
     ivaPct: it.ivaPct ?? null,
     type: it.type,
   }))
-  const totals = computeQuoteTotals(lines, cot.discount ?? 0, cot.ivaDiscriminado === true)
+  const totals = computeQuoteTotals(lines, cot.discount ?? 0, cot.ivaDiscriminado === true, cot.medioPagoPct ?? 0)
 
   // Pedido de Abba: el documento final de facturación SIEMPRE sale en ARS,
   // aunque la cotización de origen esté en USD (frecuente por costos de
