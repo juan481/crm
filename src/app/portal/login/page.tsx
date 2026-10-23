@@ -103,11 +103,13 @@ function PortalLoginForm() {
     if (TURNSTILE_SITE_KEY && !captchaToken) { setError('Completá la verificación de seguridad.'); return }
 
     startTransition(async () => {
-      // Un valor sólo numérico es número de abonado, no email — hay que
+      // Un valor sin "@" es número de abonado, no email — hay que
       // resolverlo primero al email sintético interno antes de poder
       // llamar a signInWithPassword (Supabase pide formato email siempre).
+      // Sin "@" y no "sólo dígitos": el N° del Ultra puede traer letras
+      // (cuentas hexadecimales tipo "1A2F").
       let loginEmail = value.toLowerCase()
-      if (/^\d+$/.test(value)) {
+      if (!value.includes('@')) {
         try {
           const res = await fetch('/api/portal/auth/resolve-abonado', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ numeroAbonado: value }),

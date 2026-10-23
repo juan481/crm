@@ -70,6 +70,77 @@ const SAFETY_SETTINGS: SafetySetting[] = [
   HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
 ].map((category) => ({ category, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }))
 
+// Segundo intento con los filtros apagados, SÓLO si el primero volvió
+// bloqueado. Caso real (Abba, 20/10): "mi hijo quiere practicar tiro con
+// pistola, papeles en regla" — consulta legítima (Abba tiene polígono y
+// gestiona CLU) que el filtro de DANGEROUS_CONTENT cortó dos turnos
+// seguidos y el cliente recibió dos veces "tuve un problema técnico". Los
+// cerrojos que importan (precio, credenciales, links) no dependen de este
+// filtro: viven en el prompt y en OUTBOUND_LEAK_PATTERN. Si la API llegara
+// a rechazar OFF, ese intento cae al catch y sigue el fallback de siempre.
+const RELAXED_SAFETY_SETTINGS: SafetySetting[] = SAFETY_SETTINGS.map((s) => ({ ...s, threshold: HarmBlockThreshold.OFF }))
+
+// Lo que recibe el cliente cuando NISSI no pudo armar una respuesta. Antes
+// era "Perdón, tuve un problema técnico" — el cliente (y Abba) lo leían
+// como que el bot estaba roto. Se manda UNA vez por ventana (ver
+// FALLBACK_REPEAT_WINDOW_MS); después NISSI se calla y la conversación
+// queda sin leer en el inbox para que la conteste una persona.
+const FALLBACK_TEXT = 'Gracias por escribirnos. Le paso tu mensaje a una persona del equipo para que te responda por acá.'
+const FALLBACK_REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000
+
+// Ya derivado (Deal/Ticket abierto): un mensaje con info nueva se suma al
+// registro y se confirma UNA vez cada tanto — antes se repetía "Ya derivamos
+// tu consulta…" ante cada mensaje, incluso ante un "ok" (Abba, 20/10).
+const HANDOFF_FOLLOWUP_TEXT = 'Anotado, se lo sumo a tu consulta. La persona que la tiene te responde por acá.'
+const HANDOFF_FOLLOWUP_REPEAT_MS = 2 * 60 * 60 * 1000
+
+// "ok", "gracias", "dale", un 👍 — cierre de cortesía, no hay nada que
+// contestar ni que sumar al registro.
+const ACK_WORDS = new Set([
+  'ok', 'oka', 'okey', 'okay', 'oki', 'okis', 'dale', 'gracias', 'muchas', 'mil', 'genial', 'perfecto', 'perfecta',
+  'listo', 'lista', 'bueno', 'buenisimo', 'joya', 'barbaro', 'excelente', 'bien', 'si', 'espero', 'aguardo', 'quedo',
+  'atento', 'atenta', 'a', 'la', 'su', 'tu', 'espera', 'de', 'nada', 'buen', 'buena', 'dia', 'tarde', 'tardes', 'noches',
+  'saludos', 'chau', 'abrazo', 'slds', 'gcias', 'grs', 'graciass',
+])
+function isJustAck(text: string): boolean {
+  const words = text
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9ñ\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+  // Sólo emojis / puntuación → también es un acuse.
+  return words.length <= 6 && words.every((w) => ACK_WORDS.has(w))
+}
+
+// Error de la API que vale la pena reintentar una vez (saturación de
+// Google, rate limit, corte de red) — no un 400 por pedido mal armado.
+function isTransientGeminiError(err: unknown): boolean {
+  const status = (err as { status?: number })?.status
+  return status === undefined || status === 429 || status >= 500
+}
+
+type GenerateParams = Parameters<GoogleGenAI['models']['generateContent']>[0]
+type GenerateResult = Awaited<ReturnType<GoogleGenAI['models']['generateContent']>>
+
+// Una llamada a Gemini con UN reintento ante error transitorio — antes un
+// 503 suelto de Google ya terminaba en el mensaje de error al cliente.
+async function generateWithRetry(ai: GoogleGenAI, params: GenerateParams): Promise<GenerateResult> {
+  try {
+    return await ai.models.generateContent(params)
+  } catch (err) {
+    if (!isTransientGeminiError(err)) throw err
+    console.warn('[NISSI ENGINE] Gemini falló (transitorio) — reintento', err)
+    await new Promise((r) => setTimeout(r, 1500))
+    return ai.models.generateContent(params)
+  }
+}
+
+function isBlockedResponse(res: GenerateResult): boolean {
+  const finish = res.candidates?.[0]?.finishReason as string | undefined
+  return !!res.promptFeedback?.blockReason || (!!finish && BLOCKING_FINISH_REASONS.has(finish))
+}
+
 // Finish reasons que son un bloqueo real de contenido (avisar a un humano,
 // no reintentar). MALFORMED_FUNCTION_CALL NO va acá — el modelo se
 // autocorrige solo la vuelta siguiente (más probable con thinking apagado),
@@ -155,10 +226,48 @@ function mediaFields(media: IncomingMessage['media']): Record<string, string> {
   }
 }
 
+// Sin "en minutos" — no hay un SLA real detrás de esa promesa (pedido de
+// Abba: lo tenían prohibido en sus instrucciones, pero este texto es fijo y
+// las instrucciones no lo pisaban).
 function handoffConfirmationText(to: string): string {
-  if (to === 'SOPORTE') return 'Listo, ya derivé tu consulta al equipo técnico. En minutos se comunican con vos.'
-  if (to === 'ADMINISTRACION') return 'Listo, ya derivé tu consulta a Administración. En minutos se comunican con vos.'
-  return 'Listo, ya le pasé tus datos a un asesor. En minutos se comunican con vos.'
+  if (to === 'SOPORTE') return 'Listo, le pasé tu consulta al equipo técnico. Te responden por acá.'
+  if (to === 'ADMINISTRACION') return 'Listo, le pasé tu consulta a Administración. Te responden por acá.'
+  if (to === 'RRHH') return 'Listo, le pasé tu mensaje a Recursos Humanos. Te responden por acá.'
+  if (to === 'CONSULTAS') return 'Listo, le pasé tu consulta a la persona que se encarga de este tema. Te responde por acá.'
+  return 'Listo, le pasé tus datos a un asesor comercial. Te escribe por acá.'
+}
+
+// Nota interna en el inbox (rol 'system', se ve como divisor y nunca llega
+// al modelo — ver el filtro role in [user, assistant] del historial).
+async function addInboxNote(db: any, orgId: string, conversationId: string, content: string): Promise<void> {
+  try {
+    await db.whatsAppMessage.create({ data: { conversationId, organizationId: orgId, role: 'system', content } })
+  } catch (err) {
+    console.error('[NISSI ENGINE] no se pudo dejar la nota interna en el inbox', err)
+  }
+}
+
+// El cliente siguió escribiendo con info nueva después de que NISSI derivó:
+// se suma al Deal (nota de actividad) o al Ticket (mensaje interno) para
+// que quien lo tiene lo vea sin ir al inbox. Falla suave.
+async function appendToHandoffRecord(
+  db: any,
+  orgId: string,
+  conversation: { ticketId: string | null; dealId: string | null },
+  text: string,
+): Promise<void> {
+  const content = `Mensaje nuevo del cliente por WhatsApp (después de la derivación):\n${text}`
+  try {
+    if (conversation.dealId) {
+      const deal = await db.deal.findUnique({ where: { id: conversation.dealId }, select: { ownerId: true } })
+      if (deal) await db.dealNota.create({ data: { dealId: conversation.dealId, organizationId: orgId, userId: deal.ownerId, tipo: 'CHAT', content } })
+    } else if (conversation.ticketId) {
+      const ticket = await db.ticket.findUnique({ where: { id: conversation.ticketId }, select: { createdById: true } })
+      if (ticket) await db.ticketMessage.create({ data: { ticketId: conversation.ticketId, userId: ticket.createdById, isInternal: true, content } })
+    }
+  } catch (err) {
+    console.error('[NISSI ENGINE] no se pudo sumar el mensaje al registro derivado', err)
+  }
 }
 
 // Reconstruye el historial para Gemini: assistant -> 'model', y fusiona
@@ -495,13 +604,34 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   if (conversation.status === 'HANDED_OFF') {
     const stillOpen = await isHandoffStillOpen(db, conversation)
     if (stillOpen) {
+      const turnMsgs = await db.whatsAppMessage.findMany({
+        where: { conversationId: conversation.id, role: 'user', processedAt: null },
+        orderBy: { createdAt: 'asc' }, select: { content: true },
+      })
       await markUserMessagesProcessed(db, conversation.id)
-      // Ya hay un ticket/deal abierto + se avisó por mail al derivar — el
-      // badge del inbox no tiene que volver a saltar por este mensaje.
-      await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone,
-        'Ya derivamos tu consulta a un responsable — en minutos se comunican con vos. Si es algo nuevo y distinto, contámelo y lo derivo también.',
-        conversation.lastInboundAt,
-        { markConversationRead: true })
+      const turnText = turnMsgs.map((m: any) => m.content).join('\n').trim()
+
+      // "ok" / "gracias" / 👍 → nada que contestar ni que sumar. Se marca
+      // leída para que no salte el badge del inbox por un cierre de cortesía.
+      if (!turnText || isJustAck(turnText)) {
+        await db.whatsAppConversation.update({ where: { id: conversation.id }, data: { lastReadAt: new Date() } })
+        return
+      }
+
+      // Info nueva: va al Deal/Ticket y la conversación queda SIN leer — la
+      // tiene que ver quien tomó la consulta. Confirmación al cliente una
+      // vez cada HANDOFF_FOLLOWUP_REPEAT_MS, nunca ante cada mensaje.
+      await appendToHandoffRecord(db, msg.orgId, conversation, turnText)
+      const cd = (conversation.collectedData as Record<string, unknown> | null) ?? {}
+      const lastAck = typeof cd._handoffAckAt === 'string' ? new Date(cd._handoffAckAt).getTime() : 0
+      if (Date.now() - lastAck > HANDOFF_FOLLOWUP_REPEAT_MS) {
+        await db.whatsAppConversation.update({
+          where: { id: conversation.id },
+          data: { collectedData: { ...cd, _handoffAckAt: new Date().toISOString() } },
+        })
+        await persistAndSendOutbound(db, msg.orgId, conversation.id, botConfig, msg.customerPhone,
+          HANDOFF_FOLLOWUP_TEXT, conversation.lastInboundAt, { markConversationRead: false })
+      }
       return
     }
     // El contexto se reinicia desde el primer mensaje de ESTE turno (los que
@@ -581,45 +711,55 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // UN aviso a un humano (evita mails duplicados por cada vuelta).
   let couldNotAnswer: string | null = null
 
+  // Se pasa a RELAXED_SAFETY_SETTINGS si una vuelta volvió bloqueada, y
+  // queda así el resto del turno (el historial que disparó el filtro sigue
+  // siendo el mismo).
+  let safetySettings = SAFETY_SETTINGS
+  const configFor = (withTools: boolean) => ({
+    systemInstruction,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    temperature: 0.4,
+    safetySettings,
+    ...thinkingConfigFor(model),
+    ...(withTools
+      ? {
+          tools: [{ functionDeclarations: WHATSAPP_BOT_TOOLS }],
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
+        }
+      : {}),
+  })
+
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    let res: Awaited<ReturnType<typeof ai.models.generateContent>>
+    let res: GenerateResult
     try {
-      res = await ai.models.generateContent({
-        model,
-        contents,
-        config: {
-          systemInstruction,
-          maxOutputTokens: MAX_OUTPUT_TOKENS,
-          temperature: 0.4,
-          safetySettings: SAFETY_SETTINGS,
-          ...thinkingConfigFor(model),
-          // Una vez derivado, no se le vuelve a ofrecer ninguna herramienta —
-          // evita que el modelo invoque OTRA herramienta de handoff en la
-          // vuelta de confirmación y deje el primer Ticket/Deal huérfano.
-          ...(handedOff
-            ? {}
-            : {
-                tools: [{ functionDeclarations: WHATSAPP_BOT_TOOLS }],
-                toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO } },
-              }),
-        },
-      })
+      // Una vez derivado, no se le vuelve a ofrecer ninguna herramienta —
+      // evita que el modelo invoque OTRA herramienta de handoff en la
+      // vuelta de confirmación y deje el primer Ticket/Deal huérfano.
+      res = await generateWithRetry(ai, { model, contents, config: configFor(!handedOff) })
+      if (isBlockedResponse(res) && safetySettings !== RELAXED_SAFETY_SETTINGS) {
+        console.warn('[NISSI ENGINE] Gemini bloqueó la respuesta — reintento con filtros relajados', {
+          blockReason: res.promptFeedback?.blockReason, finishReason: res.candidates?.[0]?.finishReason,
+          orgId: msg.orgId, conversationId: conversation.id,
+        })
+        safetySettings = RELAXED_SAFETY_SETTINGS
+        res = await generateWithRetry(ai, { model, contents, config: configFor(!handedOff) })
+      }
     } catch (err) {
       console.error('[NISSI ENGINE] Gemini error', err, { orgId: msg.orgId, conversationId: conversation.id })
-      finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
+      finalText = FALLBACK_TEXT
       couldNotAnswer = 'error de la API de Gemini'
       break
     }
 
     const cand = res.candidates?.[0]
     const finish = cand?.finishReason as string | undefined
-    if (res.promptFeedback?.blockReason || (finish && BLOCKING_FINISH_REASONS.has(finish))) {
+    if (isBlockedResponse(res)) {
       console.error('[NISSI ENGINE] Gemini bloqueó la respuesta', {
         blockReason: res.promptFeedback?.blockReason, finishReason: finish,
         orgId: msg.orgId, conversationId: conversation.id,
       })
-      finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
-      couldNotAnswer = 'el modelo bloqueó la respuesta (filtro de contenido)'
+      finalText = FALLBACK_TEXT
+      couldNotAnswer = 'el filtro de contenido de Google bloqueó la respuesta'
       break
     }
 
@@ -685,14 +825,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
   // genérico o un preámbulo.
   if (!handedOff && !finalText.trim()) {
     try {
-      const res = await ai.models.generateContent({
-        model, contents,
-        config: {
-          systemInstruction, maxOutputTokens: MAX_OUTPUT_TOKENS, temperature: 0.4,
-          safetySettings: SAFETY_SETTINGS,
-          ...thinkingConfigFor(model),
-        },
-      })
+      const res = await generateWithRetry(ai, { model, contents, config: configFor(false) })
       const cand = res.candidates?.[0]
       const t = extractText(cand)
       // Misma protección que en el loop de arriba: un segundo corte por
@@ -711,7 +844,7 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     if (handedOff) {
       finalText = handoffConfirmationText(handedOff.to)
     } else {
-      finalText = 'Perdón, tuve un problema técnico. En un rato te contesta un asesor.'
+      finalText = FALLBACK_TEXT
       couldNotAnswer = couldNotAnswer ?? 'no generó una respuesta después de todas las vueltas'
     }
   }
@@ -729,30 +862,43 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     if (!handedOff) couldNotAnswer = couldNotAnswer ?? 'el filtro de salida detectó un precio / dato sensible'
   }
 
-  // No pudo responder de verdad y no derivó → avisar a un humano (una sola
-  // vez) para que entre al inbox. Si no hay mail configurado, el único aviso
-  // es el badge de no-leídos del inbox.
+  // Marcar procesado siempre (los dos caminos lo hacen) + chequear si un
+  // humano tomó el hilo mientras el modelo generaba — en paralelo.
+  // collectedData se relee acá (no se usa el de `conversation`): las
+  // herramientas de este mismo turno (save_customer_info) pudieron escribirlo.
+  const [fresh] = await Promise.all([
+    db.whatsAppConversation.findUnique({ where: { id: conversation.id }, select: { humanTakeoverAt: true, collectedData: true } }),
+    markUserMessagesProcessed(db, conversation.id),
+  ])
+  if (fresh?.humanTakeoverAt) {
+    console.warn('[NISSI ENGINE] un humano tomó el hilo mientras se generaba — no se manda la respuesta de NISSI', { conversationId: conversation.id })
+    return
+  }
+
+  // No pudo responder de verdad y no derivó: nota visible en el inbox
+  // (siempre — así se sabe POR QUÉ no contestó), y el aviso al cliente +
+  // el mail al humano UNA sola vez por ventana. Caso real (Abba, 20/10):
+  // dos "tuve un problema técnico" seguidos al mismo cliente. Después del
+  // primero NISSI se calla y la conversación queda sin leer.
   if (couldNotAnswer && !handedOff) {
+    await addInboxNote(db, msg.orgId, conversation.id, `NISSI no pudo responder (${couldNotAnswer}) — respondé vos desde acá`)
+    const cd = (fresh?.collectedData as Record<string, unknown> | null) ?? {}
+    const lastFallback = typeof cd._fallbackAt === 'string' ? new Date(cd._fallbackAt).getTime() : 0
+    if (Date.now() - lastFallback <= FALLBACK_REPEAT_WINDOW_MS) return
+
+    await db.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: { collectedData: { ...cd, _fallbackAt: new Date().toISOString() } },
+    })
     const to = botConfig.salesContactEmail || botConfig.billingContactEmail
     if (to) {
       notifyHuman({
         orgId: msg.orgId, toEmail: to, toName: null,
         subject: 'NISSI no pudo responder un WhatsApp',
         heading: 'Revisá esta conversación de WhatsApp',
-        bodyText: `NISSI no pudo generar una respuesta para el número ${msg.customerPhone} (${couldNotAnswer}). El cliente recibió un mensaje de "en un rato te contesta un asesor". Entrá a Conversaciones en el CRM y respondé vos.`,
+        bodyText: `NISSI no pudo generar una respuesta para el número ${msg.customerPhone} (${couldNotAnswer}). Al cliente le avisó que una persona del equipo le responde por ahí (si vuelve a fallar en las próximas 24 hs, no le repite ese aviso). Entrá a Conversaciones en el CRM y respondé vos.`,
       })
     }
-  }
-
-  // Marcar procesado siempre (los dos caminos lo hacen) + chequear si un
-  // humano tomó el hilo mientras el modelo generaba — en paralelo.
-  const [fresh] = await Promise.all([
-    db.whatsAppConversation.findUnique({ where: { id: conversation.id }, select: { humanTakeoverAt: true } }),
-    markUserMessagesProcessed(db, conversation.id),
-  ])
-  if (fresh?.humanTakeoverAt) {
-    console.warn('[NISSI ENGINE] un humano tomó el hilo mientras se generaba — no se manda la respuesta de NISSI', { conversationId: conversation.id })
-    return
   }
 
   // Si NISSI contestó de verdad, la conversación queda "atendida" (no aparece

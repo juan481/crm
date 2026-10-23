@@ -12,10 +12,13 @@ interface PortalUser { id: string; name: string; email: string; numeroAbonado: s
 //  - Email: el cliente entra por enlace de un solo uso, y después puede
 //    configurarse una contraseña en "Mi cuenta" del portal.
 //  - Número de abonado: para clientes sin email real (pedido de Abba/Smart
-//    Panic, 2026-10-05) — el admin elige acá mismo el número (o lo deja
-//    vacío para que se genere solo) y una contraseña inicial (ej. el DNI del
-//    cliente). Sin mail de por medio, el acceso queda listo al toque.
-export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; canManage: boolean }) {
+//    Panic, 2026-10-05) — el admin pone el número y una contraseña inicial
+//    (ej. el DNI del cliente). Sin mail de por medio, el acceso queda listo
+//    al toque. Desde 22/10 es el MISMO número que el cliente tiene en el
+//    Ultra (abonadosUltra = los N° cargados en los abonos de esta empresa) —
+//    antes se podía dejar vacío y se inventaba uno, que no coincidía con
+//    nada (pedido de Seba, migración de CRA).
+export function PortalAccesoCard({ empresaId, canManage, abonadosUltra = [] }: { empresaId: string; canManage: boolean; abonadosUltra?: string[] }) {
   const [users, setUsers] = useState<PortalUser[] | null>(null)
   const [adding, setAdding] = useState(false)
   const [mode, setMode] = useState<'email' | 'abonado'>('email')
@@ -39,13 +42,22 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
 
   const resetAddForm = () => { setEmail(''); setName(''); setNumeroAbonado(''); setPassword(''); setAdding(false); setMode('email') }
 
+  // N° del Ultra de esta empresa que todavía no tienen acceso al portal.
+  const conAcceso = new Set((users ?? []).map((u) => u.numeroAbonado).filter(Boolean))
+  const ultraLibres = Array.from(new Set(abonadosUltra)).filter((n) => !conAcceso.has(n))
+  const abonadoNoEnUltra = !!numeroAbonado && abonadosUltra.length > 0 && !abonadosUltra.includes(numeroAbonado)
+  const pickMode = (m: 'email' | 'abonado') => {
+    setMode(m)
+    if (m === 'abonado' && !numeroAbonado && ultraLibres.length > 0) setNumeroAbonado(ultraLibres[0])
+  }
+
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     try {
       const payload = mode === 'email'
         ? { mode: 'email', email, name }
-        : { mode: 'abonado', name, numeroAbonado: numeroAbonado || undefined, password }
+        : { mode: 'abonado', name, numeroAbonado, password }
       const res = await fetch(`/api/empresas/${empresaId}/portal-acceso`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
@@ -137,7 +149,7 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
               { id: 'abonado', label: 'N° de abonado' },
             ] as const).map((opt) => (
               <button
-                key={opt.id} type="button" onClick={() => setMode(opt.id)}
+                key={opt.id} type="button" onClick={() => pickMode(opt.id)}
                 className="flex-1 text-xs font-medium py-1.5 rounded-md transition-colors"
                 style={mode === opt.id
                   ? { background: 'var(--color-surface)', color: 'var(--color-text)' }
@@ -170,11 +182,28 @@ export function PortalAccesoCard({ empresaId, canManage }: { empresaId: string; 
                 style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               />
               <input
-                type="text" inputMode="numeric" placeholder="número de abonado (vacío = automático)" value={numeroAbonado}
-                onChange={(e) => setNumeroAbonado(e.target.value.replace(/\D/g, ''))}
-                className="w-full text-sm rounded-lg px-3 py-2 outline-none"
+                type="text" required placeholder="N° de abonado del Ultra" value={numeroAbonado}
+                onChange={(e) => setNumeroAbonado(e.target.value.toUpperCase().replace(/[^0-9A-Z-]/g, ''))}
+                className="w-full text-sm font-mono rounded-lg px-3 py-2 outline-none"
                 style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               />
+              {ultraLibres.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1 text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>
+                  Del Ultra:
+                  {ultraLibres.map((n) => (
+                    <button key={n} type="button" onClick={() => setNumeroAbonado(n)}
+                      className="font-mono px-1.5 py-0.5 rounded"
+                      style={{ background: n === numeroAbonado ? 'var(--color-primary)' : 'var(--color-surface-raised)', color: n === numeroAbonado ? '#fff' : 'var(--color-text-muted)' }}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {abonadosUltra.length === 0 ? (
+                <p className="text-[11px] text-amber-500">Esta empresa no tiene el N° de abonado cargado en ningún abono. Cargalo en su servicio de monitoreo y usá el mismo acá.</p>
+              ) : abonadoNoEnUltra && (
+                <p className="text-[11px] text-amber-500">Ojo: {numeroAbonado} no está en ningún abono de esta empresa — revisá que sea el del Ultra.</p>
+              )}
               <input
                 type="text" required placeholder="contraseña inicial (ej: DNI del cliente)" value={password}
                 onChange={(e) => setPassword(e.target.value)}

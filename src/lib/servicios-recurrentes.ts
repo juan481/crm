@@ -122,3 +122,35 @@ export function diasHastaFin(contratoFin: Date | string | null | undefined, from
   const day = 24 * 60 * 60 * 1000
   return Math.ceil((fin.getTime() - from.getTime()) / day)
 }
+
+// N° de abonado del software de monitoreo (Ultra) — mayúsculas, sin
+// espacios. Las cuentas Contact ID suelen ser 4 dígitos hexadecimales
+// ("1A2F"), por eso se aceptan letras. null = vacío; '' (string vacío) =
+// formato inválido (el llamador devuelve el 400).
+export const ABONADO_FORMATO = /^[0-9A-Z-]{2,20}$/
+export function normalizarAbonado(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim().toUpperCase().replace(/\s+/g, '')
+  if (!s) return null
+  return ABONADO_FORMATO.test(s) ? s : ''
+}
+
+// Ajuste periódico de abonos (AjusteAbono) — cada cuántos meses.
+export const AJUSTE_CADA_MESES_OPTIONS = [
+  { value: '3', label: 'Cada 3 meses (trimestral)' },
+  { value: '6', label: 'Cada 6 meses' },
+  { value: '12', label: 'Cada 12 meses' },
+]
+
+// Suma `meses` a una fecha-clave "YYYY-MM-DD" (sin pasar por timezone) y
+// devuelve otra fecha-clave. Día 31 + 3 meses → se recorta al último día
+// del mes destino (ej. 30/11 → 28/02).
+export function sumarMesesDateKey(dateKey: string, meses: number): string {
+  const [y, m, d] = dateKey.slice(0, 10).split('-').map(Number)
+  const total = (m - 1) + meses
+  const ny = y + Math.floor(total / 12)
+  const nm = ((total % 12) + 12) % 12
+  const ultimoDia = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate()
+  const nd = Math.min(d, ultimoDia)
+  return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(nd).padStart(2, '0')}`
+}

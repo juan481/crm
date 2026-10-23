@@ -588,7 +588,7 @@ export interface Deal {
   clientId: string | null
   client?: { id: string; name: string; company: string | null } | null
   contactoId: string | null
-  contacto?: { id: string; firstName: string; lastName: string; phone: string | null } | null
+  contacto?: { id: string; firstName: string; lastName: string; phone: string | null; empresa?: { id: string; name: string; isCliente?: boolean } | null } | null
   ownerId: string
   owner?: { id: string; name: string }
   organizationId: string
@@ -752,6 +752,8 @@ export interface ServicioRecurrente {
   version: string | null
   puestos: number | null
   notas: string | null
+  // N° de abonado en el software de monitoreo (Ultra)
+  numeroAbonado: string | null
   // Débito automático (Pagos & Portal, Fase 4)
   subProvider: PaymentProvider | null
   subExternalId: string | null

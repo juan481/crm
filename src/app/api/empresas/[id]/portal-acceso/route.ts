@@ -3,13 +3,13 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPortalMagicLink } from '@/lib/portal-magic-link'
+import { normalizarAbonado } from '@/lib/servicios-recurrentes'
 
 export const dynamic = 'force-dynamic'
 
 interface Params { params: { id: string } }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const ABONADO_RE = /^[0-9]{3,10}$/
 // Dominio inexistente a propósito — estos emails NUNCA se mandan a nadie,
 // son sólo el identificador interno que Supabase Auth necesita por diseño.
 // El cliente real sólo conoce su número de abonado.
@@ -184,7 +184,11 @@ async function createEmailAccess(req: NextRequest, empresaId: string, payload: {
 async function createAbonadoAccess(_req: NextRequest, empresaId: string, payload: { orgId: string }, body: any) {
   const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : ''
   const password = typeof body?.password === 'string' ? body.password : ''
-  let numeroAbonado = typeof body?.numeroAbonado === 'string' ? body.numeroAbonado.trim() : ''
+  // Mismo formato que el N° de abonado del Ultra en los abonos (pedido de
+  // Abba, 22/10: el portal tiene que entrar con ESE número, no con uno
+  // inventado) — por eso acepta letras (cuentas hexadecimales tipo "1A2F").
+  const normalizado = normalizarAbonado(body?.numeroAbonado)
+  let numeroAbonado = normalizado ?? ''
 
   if (!name) return NextResponse.json({ error: 'Falta el nombre del cliente' }, { status: 400 })
   // 6, no 4 — es el mínimo REAL por defecto de Supabase Auth: con 4 dejábamos
@@ -195,8 +199,8 @@ async function createAbonadoAccess(_req: NextRequest, empresaId: string, payload
   // DNI del cliente, y un DNI argentino puede tener 7 dígitos — pedir 8
   // bloquearía justo el caso de uso que pidió Seba.
   if (password.length < 6) return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 })
-  if (numeroAbonado && !ABONADO_RE.test(numeroAbonado)) {
-    return NextResponse.json({ error: 'El número de abonado debe ser numérico (3 a 10 dígitos)' }, { status: 400 })
+  if (normalizado === '') {
+    return NextResponse.json({ error: 'El número de abonado sólo puede tener letras, números o guiones (2 a 20 caracteres)' }, { status: 400 })
   }
 
   // DELETE no borra la fila ni libera numeroAbonado (deja status=DELETED
@@ -226,8 +230,9 @@ async function createAbonadoAccess(_req: NextRequest, empresaId: string, payload
   }
 
   // Email sintético determinístico — nunca se manda nada acá, es sólo el
-  // identificador interno que pide Supabase Auth.
-  const email = `abonado.${numeroAbonado}@${ABONADO_EMAIL_DOMAIN}`
+  // identificador interno que pide Supabase Auth. En minúsculas: Supabase
+  // normaliza los emails, y el número ahora puede traer letras.
+  const email = `abonado.${numeroAbonado.toLowerCase()}@${ABONADO_EMAIL_DOMAIN}`
 
   const supabaseAdmin = createAdminClient()
 

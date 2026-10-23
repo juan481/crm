@@ -319,6 +319,7 @@ model Organization {
   commissionLedgers       CommissionLedger[]
   vigiladores             Vigilador[]
   vigiladorTurnos         VigiladorTurno[]
+  ajustesAbono            AjusteAbono[]
   tasks                   Task[]
   tickets                 Ticket[]
   empresas                Empresa[]
@@ -408,6 +409,13 @@ model ServicioRecurrente {
   puestos Int?
   notas   String?
 
+  // N° de abonado / cuenta del cliente en el software de monitoreo (Ultra,
+  // lo asigna la empresa, no el cliente) — pedido de Abba (Seba, 22/10) por
+  // la migración a otra CRA. NO es único: el mismo abonado puede tener
+  // monitoreo + app como dos servicios distintos. Normalizado a mayúsculas
+  // sin espacios (ver normalizarAbonado en src/lib/servicios-recurrentes.ts).
+  numeroAbonado String?
+
   // ── Débito automático (Pagos & Portal, Fase 4) — 100% aditivo/nullable ──
   // Cuando subStatus === 'ACTIVO', este abono lo cobra el proveedor externo
   // (Whop / Mercado Pago) por su cuenta cada ciclo: el cron invoice-automation
@@ -435,6 +443,32 @@ model ServicioRecurrente {
   @@index([empresaId])
   @@index([organizationId, estado])
   @@index([subProvider, subExternalId])
+  @@index([organizationId, numeroAbonado])
+}
+
+// Ajuste periódico del precio de un abono (ej. trimestral por IPC) —
+// pedido de Abba (Seba, 22/10): "que nos avise, che subí el abono, o que me
+// deje poner el % del IPC y suba; a los tres meses de nuevo". NO es
+// automático: cuando llega la fecha aparece en la campanita y en
+// /servicios (se calcula en vivo, sin cron), el % lo pone una persona y al
+// aplicarlo se corre la fecha. Va por nombre+moneda del abono (mismo
+// criterio de agrupado que el MRR y el "Ajustar precio en masa" —
+// ServicioRecurrente no tiene FK al catálogo, el abono queda independiente).
+model AjusteAbono {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  nombre          String
+  moneda          String
+  cadaMeses       Int          @default(3)
+  proximoAjuste   DateTime     @db.Date
+  ultimoAjusteAt  DateTime?
+  ultimoAjustePct Float?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([organizationId, nombre, moneda])
+  @@index([organizationId, proximoAjuste])
 }
 
 // Emails that opted out of marketing/campaign sends for an org. Checked before
@@ -519,40 +553,40 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  notes                   Note[]
-  activityLogs            ActivityLog[]
-  assignedClients         Client[]                 @relation("SellerClients")
-  sales                   Sale[]
-  uploadedDocs            Document[]
-  emailTemplates          EmailTemplate[]
-  ownedDeals              Deal[]                   @relation("DealOwner")
-  ownedEmpresas           Empresa[]                @relation("EmpresaOwner")
-  assignedTasks           Task[]                   @relation("TaskAssignee")
-  createdTasks            Task[]                   @relation("TaskCreator")
-  taskCollaborations      TaskCollaborator[]
-  assignedTickets         Ticket[]                 @relation("TicketAssignee")
-  createdTickets          Ticket[]                 @relation("TicketCreator")
-  ticketCollaborations    TicketCollaborator[]
-  ticketMessages          TicketMessage[]          @relation("TicketMessageAuthor")
-  taskComments            TaskComment[]
-  empresaNotas            EmpresaNota[]
-  dealNotas               DealNota[]
-  directorioContactoNotas DirectorioContactoNota[]
-  cotizaciones            Cotizacion[]
-  asistencias             Asistencia[]
-  loginEvents             LoginEvent[]
-  turnosAsistencia        TurnoAsistencia[]
-  horarioTramos           HorarioTramo[]
-  quickActionUsage        QuickActionUsage[]
-  memberships             OrganizationMembership[]
-  pedidosComoAutor        Pedido[]                 @relation("PedidoAutor")
-  pedidosAsignados        Pedido[]                 @relation("PedidoAsignado")
-  whatsAppConvsAssigned   WhatsAppConversation[]   @relation("WhatsAppAssignee")
-  whatsAppMessagesSent    WhatsAppMessage[]        @relation("WhatsAppMessageSender")
-  salesTargets            SalesTarget[]
-  commissionLedgers       CommissionLedger[]
-  deletionRequestsMade    DeletionRequest[]        @relation("DeletionRequestedBy")
-  deletionRequestsResolved DeletionRequest[]       @relation("DeletionRequestResolvedBy")
+  notes                    Note[]
+  activityLogs             ActivityLog[]
+  assignedClients          Client[]                 @relation("SellerClients")
+  sales                    Sale[]
+  uploadedDocs             Document[]
+  emailTemplates           EmailTemplate[]
+  ownedDeals               Deal[]                   @relation("DealOwner")
+  ownedEmpresas            Empresa[]                @relation("EmpresaOwner")
+  assignedTasks            Task[]                   @relation("TaskAssignee")
+  createdTasks             Task[]                   @relation("TaskCreator")
+  taskCollaborations       TaskCollaborator[]
+  assignedTickets          Ticket[]                 @relation("TicketAssignee")
+  createdTickets           Ticket[]                 @relation("TicketCreator")
+  ticketCollaborations     TicketCollaborator[]
+  ticketMessages           TicketMessage[]          @relation("TicketMessageAuthor")
+  taskComments             TaskComment[]
+  empresaNotas             EmpresaNota[]
+  dealNotas                DealNota[]
+  directorioContactoNotas  DirectorioContactoNota[]
+  cotizaciones             Cotizacion[]
+  asistencias              Asistencia[]
+  loginEvents              LoginEvent[]
+  turnosAsistencia         TurnoAsistencia[]
+  horarioTramos            HorarioTramo[]
+  quickActionUsage         QuickActionUsage[]
+  memberships              OrganizationMembership[]
+  pedidosComoAutor         Pedido[]                 @relation("PedidoAutor")
+  pedidosAsignados         Pedido[]                 @relation("PedidoAsignado")
+  whatsAppConvsAssigned    WhatsAppConversation[]   @relation("WhatsAppAssignee")
+  whatsAppMessagesSent     WhatsAppMessage[]        @relation("WhatsAppMessageSender")
+  salesTargets             SalesTarget[]
+  commissionLedgers        CommissionLedger[]
+  deletionRequestsMade     DeletionRequest[]        @relation("DeletionRequestedBy")
+  deletionRequestsResolved DeletionRequest[]        @relation("DeletionRequestResolvedBy")
 
   @@index([organizationId])
   @@index([empresaId])
@@ -726,11 +760,11 @@ model Invoice {
   // checkoutUrl / checkoutRef: URL hosteada del proveedor ya creada + su id
   //   de sesión/preference (para no recrearla en cada visita y para debug).
   //   Se limpian si se edita monto/moneda de la factura (PATCH /api/invoices/[id]).
-  payToken        String?   @unique @default(uuid())
-  paymentProvider String?
-  checkoutUrl     String?
-  checkoutRef     String?
-  payments        Payment[]
+  payToken         String?           @unique @default(uuid())
+  paymentProvider  String?
+  checkoutUrl      String?
+  checkoutRef      String?
+  payments         Payment[]
   commissionLedger CommissionLedger?
 
   items     InvoiceItem[]
@@ -935,19 +969,19 @@ enum DeletionRequestStatus {
 // para que la notificación y el historial sigan siendo legibles aunque la
 // baja se rechace y después el registro cambie de nombre.
 model DeletionRequest {
-  id             String                 @id @default(cuid())
+  id             String                @id @default(cuid())
   organizationId String
-  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  entityType     String                 // 'empresa' | 'contacto'
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entityType     String // 'empresa' | 'contacto'
   entityId       String
   entityLabel    String
-  status         DeletionRequestStatus  @default(PENDING)
+  status         DeletionRequestStatus @default(PENDING)
   requestedById  String
-  requestedBy    User                   @relation("DeletionRequestedBy", fields: [requestedById], references: [id])
+  requestedBy    User                  @relation("DeletionRequestedBy", fields: [requestedById], references: [id])
   resolvedById   String?
-  resolvedBy     User?                  @relation("DeletionRequestResolvedBy", fields: [resolvedById], references: [id])
+  resolvedBy     User?                 @relation("DeletionRequestResolvedBy", fields: [resolvedById], references: [id])
   resolvedAt     DateTime?
-  createdAt      DateTime               @default(now())
+  createdAt      DateTime              @default(now())
 
   @@index([organizationId, status])
   @@index([entityType, entityId])
@@ -1804,30 +1838,30 @@ model Product {
   catalogSource        String? // 'EXCEL_IMPORT' | 'GOOGLE_SHEETS' | null (alta manual)
   lastSyncedAt         DateTime?
 
-  organizationId String
-  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId       String
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   // Stock — opt-in por producto (default false) para que ningún producto ya
   // cargado hoy pase a mostrar "0 en stock" de la nada; sólo tiene sentido
   // activarlo en equipamiento físico (cámaras, sensores, paneles), nunca en
   // Service (abonos de facturación recurrente — modelo totalmente separado).
-  trackStock     Boolean            @default(false)
-  stock          Int                @default(0)
+  trackStock           Boolean               @default(false)
+  stock                Int                   @default(0)
   // Reservado a una cotización aceptada cuyo material todavía no se entregó —
   // no toca `stock` real, pero `stock - stockReservado` = lo que se puede
   // comprometer en una venta nueva. Ver EntregaStock (Fase 3).
-  stockReservado Int                @default(0)
+  stockReservado       Int                   @default(0)
   // Punto de re-compra — dispara el aviso "stock bajo mínimo". null = sin aviso.
-  stockMinimo    Int?
+  stockMinimo          Int?
   // Número parseado de supplierAvailability cuando el Sheet trae una cantidad
   // (no "Disponible"/"Consultar"). El texto original se conserva en
   // supplierAvailability. Alimenta la "disponibilidad total unificada".
-  supplierStock  Int?
-  movimientos    StockMovimiento[]
-  pedidoItems    PedidoItem[]
-  compraItems    CompraItem[]
+  supplierStock        Int?
+  movimientos          StockMovimiento[]
+  pedidoItems          PedidoItem[]
+  compraItems          CompraItem[]
   solicitudCompraItems SolicitudCompraItem[]
-  alertasCosto   AlertaCosto[]
-  entregaItems   EntregaStockItem[]
+  alertasCosto         AlertaCosto[]
+  entregaItems         EntregaStockItem[]
 
   // ── Producto KIT / compuesto ──────────────────────────────────────────
   // isKit=true → este Product es un combo armado con otros productos del
@@ -2508,28 +2542,28 @@ model HorarioTramo {
 // User, gestionada por RRHH/Administración — ver módulo 'legajos' en
 // src/lib/modules.ts.
 model Vigilador {
-  id              String       @id @default(cuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  nombre          String
-  apellido        String
-  dni             String
+  id                String           @id @default(cuid())
+  organizationId    String
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  nombre            String
+  apellido          String
+  dni               String
   // Antigüedad se calcula en código a partir de esto — no se guarda aparte
   // para no desincronizar.
-  fechaIngreso    DateTime?    @db.Date
+  fechaIngreso      DateTime?        @db.Date
   // Vencimiento del carnet de vigilador — dispara el aviso de
   // /api/cron/carnet-vencimiento (ver src/lib/notifications.ts). Null =
   // todavía sin cargar, no genera ningún aviso.
-  carnetVencimiento DateTime?  @db.Date
-  art             String?
-  lugarTrabajo    String?
-  activo          Boolean      @default(true)
-  notas           String?
-  documentos      Document[]
-  cursos          VigiladorCurso[]
-  turnos          VigiladorTurno[]
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  carnetVencimiento DateTime?        @db.Date
+  art               String?
+  lugarTrabajo      String?
+  activo            Boolean          @default(true)
+  notas             String?
+  documentos        Document[]
+  cursos            VigiladorCurso[]
+  turnos            VigiladorTurno[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   // Modelo nuevo, cero filas en producción todavía — agregar este único
   // ahora es gratis (no hay migración de datos existentes que pueda

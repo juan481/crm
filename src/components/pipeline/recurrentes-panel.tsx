@@ -11,7 +11,7 @@ import { RefreshCw, Users } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 
-interface Grupo { nombre: string; moneda: string; clientes: number; mrr: number; min: number; max: number; ciclo: string }
+interface Grupo { nombre: string; moneda: string; clientes: number; mrr: number; min: number; max: number; ciclo: string; ajuste: { vencido: boolean } | null }
 interface Resp { agrupado: Grupo[]; kpis: { mrrPorMoneda: Record<string, number> } }
 
 function money(byCur: Record<string, number>): string {
@@ -71,6 +71,14 @@ export function RecurrentesPanel() {
               </span>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatCurrency(g.mrr, g.moneda)}/mes</span>
             </div>
+            {g.ajuste?.vencido && (
+              <Link
+                href={`/servicios?ajustar=${encodeURIComponent(`${g.nombre}::${g.moneda}`)}`}
+                className="inline-block mt-1.5 text-[11px] font-semibold text-amber-500 hover:underline"
+              >
+                Toca ajustar el precio →
+              </Link>
+            )}
           </div>
         ))}
       </div>

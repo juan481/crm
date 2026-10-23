@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, Contact, Phone, AlertTriangle, Calculator, CalendarClock, Clock } from 'lucide-react'
+import { Plus, DollarSign, Building2, ChevronRight, ChevronLeft, Trash2, TrendingUp, Target, User, Contact, Phone, AlertTriangle, Calculator, CalendarClock, Clock, CheckCircle2, Search, Maximize2, Minimize2, UserCog, CheckSquare, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -54,6 +54,11 @@ function isDealStale(deal: Deal) {
   return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO' && daysSinceUpdate(deal) >= STALE_DAYS
 }
 
+// Para el buscador del tablero: "Martín" encuentra "martin".
+function fold(s: string) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 const CURRENCY_OPTIONS = [
   { value: 'USD', label: 'USD' },
   { value: 'ARS', label: 'ARS' },
@@ -85,7 +90,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const [saving, setSaving] = useState(false)
-  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string; tipo: string; ownerId: string } | null>(null)
+  const [draft, setDraft] = useState<{ amount: string; probability: string; expectedCloseDate: string; notes: string; tipo: string; ownerId: string; empresaId: string; contactoId: string; contactoLabel: string } | null>(null)
   const [closing, setClosing] = useState<null | 'GANADO' | 'PERDIDO'>(null)
   const [markingCliente, setMarkingCliente] = useState(false)
   // Al ganar: paso "¿qué sigue?" — el usuario elige qué crear para la instalación.
@@ -110,7 +115,35 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
     notes: data.notes ?? '',
     tipo: data.tipo ?? '',
     ownerId: data.owner?.id ?? '',
+    empresaId: data.empresa?.id ?? '',
+    contactoId: data.contacto?.id ?? '',
+    contactoLabel: data.contacto ? `${data.contacto.firstName} ${data.contacto.lastName}`.trim() : '',
   } : null)
+
+  // Empresa / contacto editables desde el detalle — caso real de Abba
+  // (22/10): una oportunidad quedó atada a la empresa equivocada (un club en
+  // vez del electricista) y no había forma de cambiarla sin borrarla. Misma
+  // queryKey que el formulario de "Nuevo Deal" (comparten caché).
+  const { data: empresasData } = useQuery({
+    queryKey: ['empresas-pipeline'],
+    queryFn: async () => {
+      const r = await fetch('/api/empresas/options')
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as Array<{ id: string; name: string; city?: string | null }>
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const empresaOptions = [
+    { value: '', label: 'Sin empresa (consumidor final)' },
+    ...(empresasData ?? []).map(e => ({ value: e.id, label: e.city ? `${e.name} (${e.city})` : e.name })),
+  ]
+  // Cambios de empresa/contacto todavía sin guardar — se mandan también con
+  // "Marcar Ganado" (si no, ganar usaría la empresa vieja).
+  const vinculoChanges = d && data ? {
+    ...(d.empresaId !== (data.empresa?.id ?? '') ? { empresaId: d.empresaId || null } : {}),
+    ...(d.contactoId !== (data.contacto?.id ?? '') ? { contactoId: d.contactoId || null } : {}),
+  } : {}
+  const vinculoDirty = Object.keys(vinculoChanges).length > 0
 
   // Sólo para reasignar — la API ya exige ADMIN+ para tocar ownerId (mismo
   // criterio que reasignar un Ticket), así que ni se pide la lista para un
@@ -143,6 +176,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
           notes: d.notes.trim() || null,
           tipo: d.tipo || null,
           ...(isAdmin && d.ownerId && d.ownerId !== data?.owner?.id ? { ownerId: d.ownerId } : {}),
+          ...vinculoChanges,
         }),
       })
       const json = await res.json()
@@ -150,6 +184,7 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
       toast.success('Deal actualizado')
       qc.invalidateQueries({ queryKey: ['deal', dealId] })
       qc.invalidateQueries({ queryKey: ['deals'] })
+      if (vinculoDirty) qc.invalidateQueries({ queryKey: ['empresa-deals'] })
       setDraft(null)
     } catch { toast.error('Error de conexión') } finally { setSaving(false) }
   }
@@ -176,10 +211,12 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
           // si un admin tocó el selector de acá abajo, se manda junto con
           // el mismo click que cierra.
           ...(isAdmin && d?.ownerId && d.ownerId !== data?.owner?.id ? { ownerId: d.ownerId } : {}),
+          ...vinculoChanges,
         }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error al cerrar'); return }
+      setDraft(null)
       invalidateAll()
       if (stage === 'PERDIDO') { toast.success('Marcada como perdida'); onClose(); return }
       toast.success(json.cliente?.nuevoCliente
@@ -196,10 +233,15 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
   // ya saben que alguien es cliente aunque esa oportunidad puntual siga
   // abierta. Reusa el mismo criterio de empresa/contacto/consumidor final
   // que dispara al ganar (marcarClienteAlGanar).
-  const marcarCliente = async () => {
+  // comoPersona: el contacto figura en una Empresa pero esta venta es para
+  // él como particular (ver marcarClienteAlGanar).
+  const marcarCliente = async (comoPersona = false) => {
     setMarkingCliente(true)
     try {
-      const res = await fetch(`/api/deals/${dealId}/marcar-cliente`, { method: 'POST' })
+      const res = await fetch(`/api/deals/${dealId}/marcar-cliente`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comoPersona }),
+      })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'No se pudo marcar como cliente'); return }
       toast.success(`${json.cliente.nombre} quedó marcado como cliente.`)
@@ -357,6 +399,21 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             )}
           </div>
 
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Select
+              label="Empresa"
+              value={d.empresaId}
+              onChange={e => setDraft({ ...d, empresaId: e.target.value })}
+              options={empresaOptions}
+            />
+            <ContactoPicker
+              label="Contacto (persona)"
+              value={d.contactoId}
+              valueLabel={d.contactoLabel}
+              onChange={(id, label) => setDraft({ ...d, contactoId: id, contactoLabel: label })}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Monto"
@@ -460,14 +517,47 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             </div>
           )}
 
-          {/* Marcar cliente sin esperar a ganar la venta — pedido de Abba */}
-          {!data.empresa?.isCliente && (
-            <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
-              <Button variant="outline" className="w-full" onClick={marcarCliente} loading={markingCliente}>
-                Marcar como cliente
+          {/* Marcar cliente sin esperar a ganar la venta — pedido de Abba.
+              Siempre dice A QUIÉN va a marcar: antes era un botón ciego que,
+              con el contacto dentro de una empresa, marcaba a la empresa. */}
+          <div className="pt-2 border-t space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+            {vinculoDirty ? (
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Cambiaste la empresa o el contacto — tocá <strong>Guardar cambios</strong> antes de marcarlo como cliente.
+              </p>
+            ) : data.empresa?.isCliente ? (
+              <p className="text-xs flex items-center gap-1.5" style={{ color: '#10b981' }}>
+                <CheckCircle2 size={13} /> {data.empresa.name} ya es cliente.
+                <span style={{ color: 'var(--color-text-subtle)' }}>Si la venta es para otra persona o empresa, cambiala arriba.</span>
+              </p>
+            ) : data.empresa ? (
+              <Button variant="outline" className="w-full" onClick={() => marcarCliente()} loading={markingCliente}>
+                Marcar a {data.empresa.name} como cliente
               </Button>
-            </div>
-          )}
+            ) : data.contacto?.empresa ? (
+              <>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {data.contacto.firstName} {data.contacto.lastName} figura en <strong>{data.contacto.empresa.name}</strong>. ¿A quién le vendés?
+                </p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <Button variant="outline" onClick={() => marcarCliente()} loading={markingCliente}>
+                    A {data.contacto.empresa.name}
+                  </Button>
+                  <Button variant="outline" onClick={() => marcarCliente(true)} loading={markingCliente}>
+                    A {data.contacto.firstName} {data.contacto.lastName} (particular)
+                  </Button>
+                </div>
+              </>
+            ) : data.contacto ? (
+              <Button variant="outline" className="w-full" onClick={() => marcarCliente()} loading={markingCliente}>
+                Marcar a {data.contacto.firstName} {data.contacto.lastName} como cliente
+              </Button>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+                Elegí una empresa o un contacto arriba para poder marcarlo como cliente.
+              </p>
+            )}
+          </div>
 
           {/* Cerrar la venta desde acá mismo (antes había que ir al tablero) */}
           <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
@@ -593,10 +683,84 @@ export default function PipelinePage() {
   })
 
   const deals        = data ?? []
+
+  // ── Tablero: filtro por vendedor, buscador, pantalla completa y
+  // reasignación en lote (pedido de Abba, Seba 22/10: "me tengo que ir abajo
+  // de todo para mover al costado" y "tengo que buscar con Ctrl+F lo que
+  // está gestionando Emilio, uno por uno"). Los paneles de arriba (forecast,
+  // objetivos, derivaciones) siguen mirando TODO — el filtro es del tablero.
+  const [ownerFilter, setOwnerFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [fullscreen, setFullscreen] = useState(false)
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [reassignTo, setReassignTo] = useState('')
+  const [reassigning, setReassigning] = useState(false)
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  // Esc sale de pantalla completa (salvo que haya un modal abierto, que se
+  // cierra solo con su propio Esc) + sin scroll de la página de fondo.
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !selectedDealId && !showForm) setFullscreen(false) }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
+  }, [fullscreen, selectedDealId, showForm])
+
+  const boardOwners = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const d of data ?? []) m.set(d.ownerId, d.owner?.name ?? 'Sin asignar')
+    return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [data])
+
+  const term = fold(search.trim())
+  const boardDeals = deals.filter(d => {
+    if (ownerFilter && d.ownerId !== ownerFilter) return false
+    if (!term) return true
+    const contacto = d.contacto ? `${d.contacto.firstName} ${d.contacto.lastName}` : ''
+    return fold([d.title, d.empresa?.name ?? '', contacto, d.owner?.name ?? ''].join(' ')).includes(term)
+  })
+  const boardFiltered = !!ownerFilter || !!term
+
   const dealsByStage = STAGES.reduce((acc, s) => {
-    acc[s.key] = deals.filter(d => d.stage === s.key)
+    acc[s.key] = boardDeals.filter(d => d.stage === s.key)
     return acc
   }, {} as Record<DealStage, Deal[]>)
+
+  const pickOwner = (ownerId: string) => {
+    setOwnerFilter(prev => (prev === ownerId ? '' : ownerId))
+    boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // Ganadas/perdidas no se reasignan en lote: el responsable de una venta
+  // ganada es a quien se le liquida la comisión.
+  const isClosed = (d: Deal) => d.stage === 'GANADO' || d.stage === 'PERDIDO'
+  const openBoardIds = boardDeals.filter(d => !isClosed(d)).map(d => d.id)
+  const toggleSelected = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const exitSelecting = () => { setSelecting(false); setSelectedIds(new Set()); setReassignTo('') }
+
+  const bulkReassign = async () => {
+    if (!reassignTo || selectedIds.size === 0) return
+    setReassigning(true)
+    try {
+      const res = await fetch('/api/deals/bulk-reassign', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selectedIds), ownerId: reassignTo }),
+      })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error ?? 'No se pudo reasignar'); return }
+      toast.success(`${j.updated} oportunidad${j.updated !== 1 ? 'es' : ''} pasada${j.updated !== 1 ? 's' : ''} a ${j.owner.name}`)
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      exitSelecting()
+    } catch { toast.error('Error de conexión') } finally { setReassigning(false) }
+  }
 
   // Agrupado por moneda, nunca sumado entre monedas — un deal en USD y
   // otro en ARS no son la misma unidad (mismo criterio que ya usa el
@@ -757,16 +921,103 @@ export default function PipelinePage() {
       {!isLoading && !isError && deals.length > 0 && <ForecastPanel deals={deals} />}
       {!isLoading && !isError && <ObjetivosPanel deals={deals} isAdmin={canDelete} />}
       {!isLoading && !isError && <ComisionesPanel isAdmin={canDelete} />}
-      {!isLoading && !isError && deals.length > 0 && <DerivacionesPanel deals={deals} />}
+      {!isLoading && !isError && deals.length > 0 && (
+        <DerivacionesPanel deals={deals} selectedOwnerId={ownerFilter} onSelectOwner={pickOwner} />
+      )}
       <RecurrentesPanel />
 
-      {/* Kanban board */}
+      {/* Kanban board — alto fijo con scroll por columna, así la barra
+          horizontal queda siempre a la vista (antes había que bajar hasta el
+          final de la columna más larga para poder moverse al costado). */}
+      <div
+        ref={boardRef}
+        className={fullscreen ? 'fixed inset-0 z-[60] flex flex-col gap-3 p-3 sm:p-4' : 'space-y-3 scroll-mt-4'}
+        style={fullscreen ? { background: 'var(--color-bg)' } : undefined}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)] pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar en el tablero: título, empresa, contacto…"
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+            />
+          </div>
+          {boardOwners.length > 1 && (
+            <div className="w-52">
+              <Select
+                className="py-2"
+                value={ownerFilter}
+                onChange={e => setOwnerFilter(e.target.value)}
+                options={[{ value: '', label: 'Todos los vendedores' }, ...boardOwners.map(o => ({ value: o.id, label: o.name }))]}
+              />
+            </div>
+          )}
+          {boardFiltered && (
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Mostrando {boardDeals.length} de {deals.length} ·{' '}
+              <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => { setOwnerFilter(''); setSearch('') }}>
+                ver todas
+              </button>
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {canDelete && !selecting && (
+              <Button variant="outline" size="sm" leftIcon={<UserCog size={14} />} onClick={() => setSelecting(true)}>
+                Reasignar varias
+              </Button>
+            )}
+            <Button
+              variant="outline" size="sm"
+              leftIcon={fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              onClick={() => setFullscreen(f => !f)}
+            >
+              {fullscreen ? 'Salir (Esc)' : 'Pantalla completa'}
+            </Button>
+          </div>
+        </div>
+
+        {selecting && (
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-3 py-2"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-primary)' }}
+          >
+            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              {selectedIds.size} seleccionada{selectedIds.size !== 1 ? 's' : ''}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Tocá las tarjetas para elegirlas ·{' '}
+              <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => setSelectedIds(new Set(openBoardIds))}>
+                elegir las {openBoardIds.length} abiertas que se ven
+              </button>
+              {selectedIds.size > 0 && (
+                <> · <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => setSelectedIds(new Set())}>ninguna</button></>
+              )}
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="w-48">
+                <Select
+                  className="py-2"
+                  value={reassignTo}
+                  onChange={e => setReassignTo(e.target.value)}
+                  options={[{ value: '', label: 'Pasarlas a…' }, ...newDealOwnerOptions]}
+                />
+              </div>
+              <Button size="sm" onClick={bulkReassign} loading={reassigning} disabled={!reassignTo || selectedIds.size === 0}>
+                Reasignar
+              </Button>
+              <Button variant="ghost" size="sm" onClick={exitSelecting}>Cancelar</Button>
+            </div>
+          </div>
+        )}
+
       {isLoading ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {STAGES.map(s => <Skeleton key={s.key} className="h-64 w-60 shrink-0 rounded-2xl" />)}
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className={`flex gap-4 overflow-x-auto pb-2 ${fullscreen ? 'flex-1 min-h-0' : 'h-[calc(100vh-10rem)] min-h-[420px]'}`}>
           {STAGES.map(stage => {
             const columnDeals = dealsByStage[stage.key] ?? []
             // Mismo criterio que el total del header — agrupado por
@@ -779,13 +1030,13 @@ export default function PipelinePage() {
             return (
               <div
                 key={stage.key}
-                className="shrink-0 w-64 flex flex-col gap-2"
+                className="shrink-0 w-64 flex flex-col gap-2 min-h-0"
                 onDragOver={e => onDragOver(e, stage.key)}
                 onDragLeave={onDragLeave}
                 onDrop={e => onDrop(e, stage.key)}
               >
                 {/* Column header */}
-                <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${stage.color}`}>
+                <div className={`shrink-0 flex items-center justify-between px-3 py-2 rounded-xl border ${stage.color}`}>
                   <span className="text-xs font-semibold">{stage.label}</span>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs">{columnDeals.length}</span>
@@ -797,7 +1048,7 @@ export default function PipelinePage() {
 
                 {/* Drop zone */}
                 <div
-                  className={`flex flex-col gap-2 min-h-[120px] rounded-xl transition-all duration-150 ${
+                  className={`flex-1 min-h-[120px] overflow-y-auto overscroll-contain flex flex-col gap-2 rounded-xl transition-all duration-150 ${
                     isDragOver ? 'bg-[var(--color-primary)]/8 ring-2 ring-[var(--color-primary)]/30' : ''
                   }`}
                   style={{ padding: isDragOver ? '6px' : '0' }}
@@ -806,6 +1057,8 @@ export default function PipelinePage() {
                     {columnDeals.map(deal => {
                       const stageIdx = STAGES.findIndex(s => s.key === deal.stage)
                       const stale = isDealStale(deal)
+                      const selectable = selecting && !isClosed(deal)
+                      const isSelected = selectedIds.has(deal.id)
                       return (
                         <motion.div
                           key={deal.id}
@@ -813,16 +1066,29 @@ export default function PipelinePage() {
                           initial={{ opacity: 0, y: -6 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, scale: 0.95 }}
+                          className="shrink-0"
                         >
                           {/* Inner div owns HTML5 drag — avoids type conflict with Framer Motion */}
                           <div
-                            draggable
+                            draggable={!selecting}
                             onDragStart={(e: React.DragEvent<HTMLDivElement>) => onDragStart(e, deal.id)}
-                            onClick={() => setSelectedDealId(deal.id)}
-                            className={`surface rounded-xl p-3 group relative select-none cursor-grab active:cursor-grabbing hover:border-[var(--color-border-strong)] transition-colors ${stale ? 'border-l-2 border-amber-400/60' : ''}`}
-                            style={{ opacity: movingId === deal.id ? 0.5 : 1 }}
+                            onClick={() => {
+                              if (!selecting) setSelectedDealId(deal.id)
+                              else if (selectable) toggleSelected(deal.id)
+                            }}
+                            className={`surface rounded-xl p-3 group relative select-none transition-colors ${
+                              selecting ? (selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50') : 'cursor-grab active:cursor-grabbing'
+                            } hover:border-[var(--color-border-strong)] ${stale ? 'border-l-2 border-amber-400/60' : ''} ${
+                              isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''
+                            }`}
+                            style={{ opacity: movingId === deal.id ? 0.5 : undefined }}
                           >
-                            <p className="text-sm font-medium text-[var(--color-text)] mb-1.5 pr-5 leading-snug">
+                            <p className={`text-sm font-medium text-[var(--color-text)] mb-1.5 pr-5 leading-snug ${selectable ? 'pl-6' : ''}`}>
+                              {selectable && (
+                                <span className="absolute left-3 top-3" style={{ color: isSelected ? 'var(--color-primary)' : 'var(--color-text-subtle)' }}>
+                                  {isSelected ? <CheckSquare size={15} /> : <Square size={15} />}
+                                </span>
+                              )}
                               {deal.title}
                             </p>
 
@@ -866,7 +1132,7 @@ export default function PipelinePage() {
                               </p>
                             )}
 
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-0.5 transition-opacity">
+                            <div className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-0.5 transition-opacity ${selecting ? 'hidden' : ''}`}>
                               {stageIdx > 0 && (
                                 <button onClick={e => { e.stopPropagation(); moveStage(deal, 'prev') }} disabled={!!movingId}
                                   className="p-1 rounded bg-[var(--color-border)] text-[var(--color-text-subtle)] hover:text-[var(--color-text)] transition-colors"
@@ -909,6 +1175,7 @@ export default function PipelinePage() {
           })}
         </div>
       )}
+      </div>
 
       {/* Create deal modal */}
       <Modal open={showForm} onClose={() => setShowForm(false)} title="Nuevo Deal" size="sm">

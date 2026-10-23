@@ -50,6 +50,11 @@ export interface WhatsAppBotConfig {
   rrhhContactEmail: string | null
   rrhhContactName: string | null
   rrhhContactPhone: string | null
+  // "Otras consultas" (create_consulta_ticket: cursos, trámites, polígono…).
+  // Vacío = va a Administración.
+  consultasContactEmail: string | null
+  consultasContactName: string | null
+  consultasContactPhone: string | null
 
   // ── Instrucciones (bloque editable del prompt) ──────────────────────────
   // null = usar NISSI_DEFAULT_INSTRUCTIONS. El núcleo de seguridad NUNCA sale
@@ -146,6 +151,9 @@ export function parseWhatsAppBotConfig(raw: Record<string, unknown> | null): Wha
     rrhhContactEmail: strOrNull(raw.rrhhContactEmail),
     rrhhContactName: strOrNull(raw.rrhhContactName),
     rrhhContactPhone: strOrNull(raw.rrhhContactPhone),
+    consultasContactEmail: strOrNull(raw.consultasContactEmail),
+    consultasContactName: strOrNull(raw.consultasContactName),
+    consultasContactPhone: strOrNull(raw.consultasContactPhone),
 
     instructions: strOrNull(raw.instructions),
 

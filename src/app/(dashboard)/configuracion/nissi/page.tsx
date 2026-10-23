@@ -37,6 +37,7 @@ const STRING_KEYS = [
   'supportContactName', 'supportContactEmail', 'supportContactPhone',
   'billingContactName', 'billingContactEmail', 'billingContactPhone',
   'rrhhContactName', 'rrhhContactEmail', 'rrhhContactPhone',
+  'consultasContactName', 'consultasContactEmail', 'consultasContactPhone',
   'followUpMessage',
 ]
 
@@ -221,9 +222,14 @@ export default function NissiConfigPage() {
           <Select label="RRHH — email (usuario del CRM)" value={String(form.rrhhContactEmail ?? '')} onChange={(e) => set('rrhhContactEmail', e.target.value)} options={userOptions} />
           <Input label="RRHH — WhatsApp (opcional)" value={String(form.rrhhContactPhone ?? '')} onChange={(e) => set('rrhhContactPhone', e.target.value)} placeholder="+54 9 2302 63-7803" />
         </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Input label="Otras consultas — nombre" value={String(form.consultasContactName ?? '')} onChange={(e) => set('consultasContactName', e.target.value)} placeholder="Polígono, cursos, CLU…" />
+          <Select label="Otras consultas — email (usuario del CRM)" value={String(form.consultasContactEmail ?? '')} onChange={(e) => set('consultasContactEmail', e.target.value)} options={userOptions} />
+          <Input label="Otras consultas — WhatsApp (opcional)" value={String(form.consultasContactPhone ?? '')} onChange={(e) => set('consultasContactPhone', e.target.value)} placeholder="+54 9 2302 00-0000" />
+        </div>
         <p className="text-xs text-[var(--color-text-subtle)] flex items-start gap-1.5">
           <Info size={13} className="mt-0.5 shrink-0" />
-          Los tickets de soporte se asignan solos al técnico fichado con menos carga. El email/WhatsApp de Soporte de acá es sólo para el aviso. El WhatsApp interno se manda apenas se guarda esta pantalla — no hace falta ningún otro paso.
+          Los tickets de soporte se asignan solos al técnico fichado con menos carga. El email/WhatsApp de Soporte de acá es sólo para el aviso. &quot;Otras consultas&quot; es todo lo que no es venta, falla, pagos ni RRHH (cursos, polígono, trámites…): queda como ticket, nunca en el Pipeline. Si lo dejás vacío, va a Administración. El WhatsApp interno se manda apenas se guarda esta pantalla — no hace falta ningún otro paso.
         </p>
       </Section>
 

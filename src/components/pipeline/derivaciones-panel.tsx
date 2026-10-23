@@ -19,19 +19,27 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
 const OPEN_STAGES = Object.keys(STAGE_META)
 
 interface OwnerRow {
+  ownerId: string
   name: string
   porStage: Record<string, number>
   total: number
   ganados: number
 }
 
-export function DerivacionesPanel({ deals }: { deals: Deal[] }) {
+// selectedOwnerId / onSelectOwner: tocar una persona filtra el tablero de
+// abajo a lo suyo (pedido de Abba, 22/10: "tengo que cambiar los de Emilio
+// y los busco uno por uno con Ctrl+F"). Tocarla de nuevo saca el filtro.
+export function DerivacionesPanel({ deals, selectedOwnerId, onSelectOwner }: {
+  deals: Deal[]
+  selectedOwnerId?: string
+  onSelectOwner?: (ownerId: string) => void
+}) {
   const rows = useMemo<OwnerRow[]>(() => {
     const byOwner = new Map<string, OwnerRow>()
     for (const d of deals) {
-      const name = d.owner?.name ?? 'Sin asignar'
-      if (!byOwner.has(name)) byOwner.set(name, { name, porStage: {}, total: 0, ganados: 0 })
-      const row = byOwner.get(name)!
+      const key = d.ownerId
+      if (!byOwner.has(key)) byOwner.set(key, { ownerId: key, name: d.owner?.name ?? 'Sin asignar', porStage: {}, total: 0, ganados: 0 })
+      const row = byOwner.get(key)!
       if (d.stage === 'GANADO') { row.ganados++; continue }
       if (d.stage === 'PERDIDO') continue
       row.porStage[d.stage] = (row.porStage[d.stage] ?? 0) + 1
@@ -59,11 +67,23 @@ export function DerivacionesPanel({ deals }: { deals: Deal[] }) {
       </div>
       <p className="text-xs -mt-2" style={{ color: 'var(--color-text-muted)' }}>
         Oportunidades abiertas asignadas a cada uno, por etapa — no cuenta ganadas ni perdidas.
+        {onSelectOwner && ' Tocá una persona para ver sólo lo suyo en el tablero.'}
       </p>
 
-      <div className="space-y-2.5">
+      <div className="space-y-1">
         {rows.map((r) => (
-          <div key={r.name} className="flex items-center gap-3">
+          <button
+            key={r.ownerId}
+            type="button"
+            disabled={!onSelectOwner}
+            onClick={() => onSelectOwner?.(r.ownerId)}
+            className="w-full flex items-center gap-3 rounded-lg px-1.5 py-1 text-left transition-colors enabled:hover:bg-[var(--color-surface-raised)] disabled:cursor-default"
+            style={{
+              opacity: selectedOwnerId && selectedOwnerId !== r.ownerId ? 0.45 : 1,
+              outline: selectedOwnerId === r.ownerId ? '1px solid var(--color-primary)' : undefined,
+            }}
+            title={onSelectOwner ? (selectedOwnerId === r.ownerId ? 'Ver todos' : `Ver sólo lo de ${r.name}`) : undefined}
+          >
             <span className="w-28 shrink-0 text-sm font-medium truncate" style={{ color: 'var(--color-text)' }} title={r.name}>
               {r.name}
             </span>
@@ -89,7 +109,7 @@ export function DerivacionesPanel({ deals }: { deals: Deal[] }) {
                 {r.ganados} ganada{r.ganados > 1 ? 's' : ''}
               </span>
             )}
-          </div>
+          </button>
         ))}
       </div>
 

@@ -115,6 +115,25 @@ export const WHATSAPP_BOT_TOOLS: FunctionDeclaration[] = [
       required: ['title', 'description'],
     },
   },
+  {
+    // Pedido de Abba (21/10): una consulta por práctica de tiro terminó como
+    // oportunidad en el Pipeline porque no había a dónde más mandarla — el
+    // modelo eligió create_sales_lead reason="asesor". Esto la manda a un
+    // ticket de categoría CONSULTA para quien se configure en el panel.
+    name: 'create_consulta_ticket',
+    description:
+      'Deriva una consulta que NO es una venta (comprar/contratar), ni una falla técnica, ni facturación/pagos, ni RRHH: cursos y capacitaciones, trámites, polígono o práctica de tiro, turnos para usar instalaciones, proveedores que ofrecen algo, prensa/publicidad, consultas institucionales. Crea un ticket para la persona a cargo. Antes de derivar juntá lo útil (quién es, qué necesita, para cuándo) sin interrogar.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING, description: 'Resumen corto, ej: "Consulta práctica de tiro — Iris Campagno"' },
+        description: { type: Type.STRING, description: 'Todo el detalle: qué consulta, para quién, fechas, documentación que mencionó, cualquier dato que haya dado.' },
+        customerName: { type: Type.STRING },
+        customerEmail: { type: Type.STRING },
+      },
+      required: ['title', 'description'],
+    },
+  },
 ]
 
 export interface ToolContext {
@@ -132,7 +151,7 @@ interface ToolResult {
   handedOff?: { to: string; ticketId?: string; dealId?: string }
 }
 
-const HUMAN_WAIT_MESSAGE = 'En minutos un asesor o responsable de área se comunicará con usted.'
+const HUMAN_WAIT_MESSAGE = 'Una persona del equipo te responde por este mismo chat.'
 
 // Aviso interno por WhatsApp al responsable de área cuando NISSI deriva —
 // además del email de siempre (notifyHuman). REGLA DE PRIVACIDAD: esto le
@@ -364,15 +383,16 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     }
   }
 
-  if (name === 'create_sales_lead' || name === 'create_billing_ticket' || name === 'create_rrhh_ticket') {
-    // Los tres tipos de derivación a TICKET (no Deal) comparten toda la
-    // lógica de creación — sólo cambia a quién avisan, la categoría y el
-    // área que queda registrada en la conversación.
+  if (name === 'create_sales_lead' || name === 'create_billing_ticket' || name === 'create_rrhh_ticket' || name === 'create_consulta_ticket') {
+    // Los tipos de derivación a TICKET (no Deal) comparten toda la lógica de
+    // creación — sólo cambia a quién avisan, la categoría y el área que
+    // queda registrada en la conversación.
     const TICKET_KIND = {
       create_billing_ticket: { category: 'FACTURACION', handedOffTo: 'ADMINISTRACION', label: 'Administración', defaultTitle: 'Consulta de facturación por WhatsApp', emailField: 'billingContactEmail' as const, phoneField: 'billingContactPhone' as const, nameField: 'billingContactName' as const },
       create_rrhh_ticket: { category: 'RRHH', handedOffTo: 'RRHH', label: 'RRHH', defaultTitle: 'Consulta de RRHH por WhatsApp', emailField: 'rrhhContactEmail' as const, phoneField: 'rrhhContactPhone' as const, nameField: 'rrhhContactName' as const },
+      create_consulta_ticket: { category: 'CONSULTA', handedOffTo: 'CONSULTAS', label: 'Otras consultas', defaultTitle: 'Consulta por WhatsApp', emailField: 'consultasContactEmail' as const, phoneField: 'consultasContactPhone' as const, nameField: 'consultasContactName' as const },
     } as const
-    const ticketKind = (name === 'create_billing_ticket' || name === 'create_rrhh_ticket') ? TICKET_KIND[name] : null
+    const ticketKind = name === 'create_sales_lead' ? null : TICKET_KIND[name]
 
     const rawCustomerName = typeof input.customerName === 'string' ? input.customerName.trim() : ''
     // Nunca dejar entrar "Sin nombre" / placeholders al nombre ni al título.
@@ -388,7 +408,11 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
     const customerEmail = typeof input.customerEmail === 'string' ? input.customerEmail.trim() : null
     const fullDetail = await prependOrigin(db, ctx.conversationId, `${detail}\n\n— Recibido por NISSI (bot de WhatsApp) desde el número ${ctx.customerPhone}.`)
 
-    const contactEmail = ticketKind ? ctx.botConfig[ticketKind.emailField] : ctx.botConfig.salesContactEmail
+    // "Otras consultas" sin nadie cargado en el panel → cae en Administración
+    // (que es a donde Abba manda hoy polígono/CLU), nunca en Ventas.
+    const useBillingFallback = name === 'create_consulta_ticket' && !ctx.botConfig.consultasContactEmail
+    const area = ticketKind && useBillingFallback ? TICKET_KIND.create_billing_ticket : ticketKind
+    const contactEmail = area ? ctx.botConfig[area.emailField] : ctx.botConfig.salesContactEmail
     const contactUser = await findUserByEmail(ctx.orgId, contactEmail)
 
     // Alta / match del contacto (persona) con lo que NISSI fue juntando —
@@ -434,7 +458,7 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
         })
       }
       notifyAreaByWhatsApp(ctx, {
-        phone: ctx.botConfig[ticketKind.phoneField], responsableName: ctx.botConfig[ticketKind.nameField],
+        phone: ctx.botConfig[(area ?? ticketKind).phoneField], responsableName: ctx.botConfig[(area ?? ticketKind).nameField],
         areaLabel: ticketKind.label, customerName, motivo: detail,
       })
 

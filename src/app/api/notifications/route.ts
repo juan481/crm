@@ -3,6 +3,8 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { roleHasModule } from '@/lib/module-access'
 import { unstable_cache } from 'next/cache'
+import { puedeVerServicios } from '@/lib/finance-access'
+import { argentinaDayStart, fmtDateOnly } from '@/lib/timezone'
 
 export interface AppNotification {
   id: string
@@ -31,7 +33,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const since72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
   const db = prisma as any
 
-  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions] = await Promise.all([
+  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions, ajustesVencidos] = await Promise.all([
     db.invoice.findMany({
       where: {
         organizationId: orgId,
@@ -87,6 +89,15 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       where: { organizationId: orgId, status: 'PENDING' },
       select: { id: true, entityType: true, entityLabel: true, createdAt: true, requestedBy: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
+    // Ajuste periódico de abonos (ej. trimestral por IPC) que ya tocaba —
+    // pedido de Abba (Seba, 22/10): "que nos avise, che subí el abono".
+    // Sigue apareciendo hasta que alguien lo aplica (eso corre la fecha).
+    db.ajusteAbono.findMany({
+      where: { organizationId: orgId, proximoAjuste: { lte: argentinaDayStart(now) } },
+      select: { id: true, nombre: true, moneda: true, cadaMeses: true, proximoAjuste: true },
+      orderBy: { proximoAjuste: 'asc' },
       take: 10,
     }),
   ])
@@ -175,6 +186,21 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
     })
   }
 
+  for (const a of ajustesVencidos) {
+    const fecha = a.proximoAjuste.toISOString().slice(0, 10)
+    notifications.push({
+      id: `ajuste-${a.id}-${fecha}`,
+      type: 'ajuste_abono',
+      title: 'Toca ajustar un abono',
+      body: `${a.nombre} (${a.moneda}) — ajuste ${a.cadaMeses === 3 ? 'trimestral' : `cada ${a.cadaMeses} meses`} desde el ${fmtDateOnly(fecha)}`,
+      href: `/servicios?ajustar=${encodeURIComponent(`${a.nombre}::${a.moneda}`)}`,
+      severity: 'warning',
+      // Mediodía UTC del día que tocaba — "no leída" una vez por fecha.
+      createdAt: `${fecha}T12:00:00.000Z`,
+      countsTowardUnread: true,
+    })
+  }
+
   return notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
@@ -211,6 +237,7 @@ export async function GET() {
     const canSeeLeads = canAccess(payload.role, 'SELLER')
     const canSeeWhatsapp = canAccess(payload.role, 'SELLER') || (await roleHasModule(payload.orgId, payload.role, 'conversaciones'))
     const isAdmin = canAccess(payload.role, 'ADMIN')
+    const canSeeServicios = all.some((n) => n.type === 'ajuste_abono') && (await puedeVerServicios(payload.orgId, payload.role))
     const involvesMe = (n: AppNotification) =>
       isAdmin || n.assigneeId === payload.userId || !!n.collaboratorIds?.includes(payload.userId)
 
@@ -222,6 +249,7 @@ export async function GET() {
         if (n.type === 'whatsapp_unread') return canSeeWhatsapp
         if (n.type === 'pending_task' || n.type === 'new_ticket') return involvesMe(n)
         if (n.type === 'deletion_request') return payload.role === 'SUPER_ADMIN'
+        if (n.type === 'ajuste_abono') return canSeeServicios
         return true
       })
       .map(({ assigneeId: _assigneeId, collaboratorIds: _collaboratorIds, ...n }) => ({

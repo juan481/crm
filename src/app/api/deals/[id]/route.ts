@@ -11,7 +11,9 @@ interface Params { params: { id: string } }
 const INCLUDE = {
   empresa:  { select: { id: true, name: true, city: true, isCliente: true } },
   client:   { select: { id: true, name: true, company: true } },
-  contacto: { select: { id: true, firstName: true, lastName: true, phone: true } },
+  // empresa del contacto: el detalle avisa a quién se va a marcar como
+  // cliente cuando la oportunidad no tiene empresa propia.
+  contacto: { select: { id: true, firstName: true, lastName: true, phone: true, empresa: { select: { id: true, name: true, isCliente: true } } } },
   owner:    { select: { id: true, name: true } },
   cotizaciones: {
     orderBy: { createdAt: 'desc' as const },

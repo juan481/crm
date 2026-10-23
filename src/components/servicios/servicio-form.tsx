@@ -50,6 +50,7 @@ type FormState = {
   version: string
   puestos: string
   notas: string
+  numeroAbonado: string
 }
 
 const EMPTY: FormState = {
@@ -57,7 +58,7 @@ const EMPTY: FormState = {
   medioCobro: '',
   modoLicencia: 'NINGUNA', incluyeMonitoreo: false, canalIngreso: 'CRM',
   contratoInicio: '', contratoFin: '', estado: 'ACTIVO',
-  serial: '', version: '', puestos: '', notas: '',
+  serial: '', version: '', puestos: '', notas: '', numeroAbonado: '',
 }
 
 const MEDIO_COBRO_OPTIONS = [
@@ -132,6 +133,7 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
         version: servicio.version ?? '',
         puestos: servicio.puestos != null ? String(servicio.puestos) : '',
         notas: servicio.notas ?? '',
+        numeroAbonado: servicio.numeroAbonado ?? '',
       })
       setShowLicencia(!!(servicio.serial || servicio.version || servicio.puestos != null))
     } else {
@@ -175,6 +177,7 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
         version: form.version.trim() || null,
         puestos: form.puestos === '' ? null : Number(form.puestos),
         notas: form.notas.trim() || null,
+        numeroAbonado: form.numeroAbonado.trim() || null,
       }
       const res = await fetch(
         editing ? `/api/servicios-recurrentes/${servicio!.id}` : '/api/servicios-recurrentes',
@@ -231,6 +234,17 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
           placeholder="Ej: Monitoreo 24hs, Licencia SoftGuard SaaS, Mantenimiento…"
           value={form.nombre}
           onChange={e => set('nombre', e.target.value)}
+        />
+
+        {/* Pedido de Abba (22/10, migración de CRA): el número de cuenta
+            del cliente en el Ultra, para tener todo prolijo y para que el
+            portal de clientes entre con ese mismo número. */}
+        <Input
+          label="N° de abonado (Ultra) — opcional"
+          placeholder="Ej: 1A2F"
+          value={form.numeroAbonado}
+          onChange={e => set('numeroAbonado', e.target.value.toUpperCase().replace(/\s+/g, ''))}
+          hint="El número de cuenta del cliente en el software de monitoreo, el que le asignan ustedes."
         />
 
         {/* ── Facturación ── */}

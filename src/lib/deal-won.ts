@@ -33,6 +33,11 @@ export async function marcarClienteAlGanar(
   db: any,
   deal: { id: string; empresaId: string | null; contactoId: string | null; ownerId: string },
   orgId: string,
+  // comoPersona: el contacto figura en una Empresa pero ESTA venta es para
+  // él como particular (caso real de Abba, 22/10: un electricista cargado
+  // dentro de un club — "Marcar como cliente" marcaba al club). Se elige a
+  // mano desde el detalle de la oportunidad; al ganar sigue el default.
+  opts?: { comoPersona?: boolean },
 ): Promise<DealWonClienteResult | null> {
   let empresaId = deal.empresaId
   let contacto: { id: string; firstName: string; lastName: string; empresaId: string | null } | null = null
@@ -43,7 +48,7 @@ export async function marcarClienteAlGanar(
       where: { id: deal.contactoId, organizationId: orgId },
       select: { id: true, firstName: true, lastName: true, empresaId: true },
     })
-    if (contacto?.empresaId) empresaId = contacto.empresaId
+    if (contacto?.empresaId && !opts?.comoPersona) empresaId = contacto.empresaId
   }
 
   // Consumidor final: no hay ninguna Empresa en juego, pero sí un contacto
@@ -77,7 +82,11 @@ export async function marcarClienteAlGanar(
     if (existente && !existente.isCliente) {
       await db.empresa.update({ where: { id: existente.id }, data: { isCliente: true, clienteDesde: new Date(), tipoCliente: 'CONSUMIDOR_FINAL' } })
     }
-    await db.directorioContacto.update({ where: { id: contacto.id }, data: { empresaId: target.id } })
+    // Si el contacto ya estaba en otra Empresa (comoPersona), no se lo saca
+    // de ahí — sólo se engancha cuando estaba suelto.
+    if (!contacto.empresaId) {
+      await db.directorioContacto.update({ where: { id: contacto.id }, data: { empresaId: target.id } })
+    }
     await db.deal.update({ where: { id: deal.id }, data: { empresaId: target.id } })
     return { empresaId: target.id, nombre: target.name, nuevoCliente: !existente?.isCliente, empresaCreada: !existente }
   }

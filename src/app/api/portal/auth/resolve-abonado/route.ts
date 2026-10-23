@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 import { prisma } from '@/lib/db'
+import { normalizarAbonado } from '@/lib/servicios-recurrentes'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,8 +19,10 @@ export async function POST(req: NextRequest) {
   if (limited) return NextResponse.json({ error: 'Demasiados intentos — probá de nuevo en un rato.' }, { status: 429 })
 
   const body = await req.json().catch(() => null)
-  const numeroAbonado = typeof body?.numeroAbonado === 'string' ? body.numeroAbonado.trim() : ''
-  if (!numeroAbonado) return NextResponse.json({ error: 'Falta el número de abonado' }, { status: 400 })
+  // Mismo normalizado que al crear el acceso (mayúsculas, sin espacios) —
+  // así "1a2f" y "1A2F " entran igual.
+  const numeroAbonado = normalizarAbonado(body?.numeroAbonado)
+  if (!numeroAbonado) return NextResponse.json({ error: 'Número de abonado o contraseña incorrectos.' }, { status: 404 })
 
   const user = await prisma.user.findUnique({
     where: { numeroAbonado },

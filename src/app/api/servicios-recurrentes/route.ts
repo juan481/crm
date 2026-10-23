@@ -3,10 +3,10 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { puedeVerServicios } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import {
-  montoMensualizado, sanitizeMoneda, clampDiaVencimiento, diasHastaFin,
+  montoMensualizado, sanitizeMoneda, clampDiaVencimiento, diasHastaFin, normalizarAbonado,
   CICLO_LABEL, type Ciclo,
 } from '@/lib/servicios-recurrentes'
-import { argentinaDayStart } from '@/lib/timezone'
+import { argentinaDayStart, argentinaDayKey } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
         monto: true, moneda: true, ciclo: true, diaVencimiento: true, medioCobro: true,
         contratoInicio: true, contratoFin: true, estado: true, canalIngreso: true,
         subProvider: true, subStatus: true, subAuthUrl: true,
-        serial: true, version: true, puestos: true, notas: true,
+        serial: true, version: true, puestos: true, notas: true, numeroAbonado: true,
         createdAt: true, updatedAt: true,
         empresa: { select: { id: true, name: true, isCliente: true } },
       },
@@ -60,7 +60,8 @@ export async function GET(req: NextRequest) {
 
     const hoy = argentinaDayStart()
     const data = rows
-      .filter((r) => !q || r.nombre.toLowerCase().includes(q) || r.empresa.name.toLowerCase().includes(q))
+      .filter((r) => !q || r.nombre.toLowerCase().includes(q) || r.empresa.name.toLowerCase().includes(q)
+        || (r.numeroAbonado ?? '').toLowerCase().includes(q))
       .map((r) => ({
         ...r,
         cicloLabel: CICLO_LABEL[r.ciclo as Ciclo] ?? r.ciclo,
@@ -112,7 +113,27 @@ export async function GET(req: NextRequest) {
         agrupadoMap.set(key, { nombre: a.nombre, moneda: a.moneda, clientes: 1, mrr: m, min: a.monto, max: a.monto, ciclo: a.ciclo })
       }
     }
-    const agrupado = Array.from(agrupadoMap.values()).sort((a, b) => b.mrr - a.mrr)
+    // Ajuste periódico (ej. trimestral por IPC) de cada grupo, si se
+    // programó — ver AjusteAbono. "vencido" = ya llegó la fecha y nadie lo
+    // aplicó todavía (lo mismo dispara la campanita, ver /api/notifications).
+    const ajustes = await prisma.ajusteAbono.findMany({
+      where: { organizationId: payload.orgId },
+      select: { nombre: true, moneda: true, cadaMeses: true, proximoAjuste: true, ultimoAjusteAt: true, ultimoAjustePct: true },
+    })
+    const hoyKey = argentinaDayKey()
+    const ajustePorGrupo = new Map(ajustes.map((a) => {
+      const proximo = a.proximoAjuste.toISOString().slice(0, 10)
+      return [`${a.nombre}::${a.moneda}`, {
+        cadaMeses: a.cadaMeses,
+        proximoAjuste: proximo,
+        vencido: proximo <= hoyKey,
+        ultimoAjusteAt: a.ultimoAjusteAt?.toISOString() ?? null,
+        ultimoAjustePct: a.ultimoAjustePct,
+      }]
+    }))
+    const agrupado = Array.from(agrupadoMap.values())
+      .sort((a, b) => b.mrr - a.mrr)
+      .map((g) => ({ ...g, ajuste: ajustePorGrupo.get(`${g.nombre}::${g.moneda}`) ?? null }))
 
     return NextResponse.json({
       data,
@@ -165,6 +186,10 @@ export async function POST(req: NextRequest) {
     }
 
     const puestos = b.puestos === '' || b.puestos == null ? null : Math.max(0, Math.round(Number(b.puestos) || 0))
+    const numeroAbonado = normalizarAbonado(b.numeroAbonado)
+    if (numeroAbonado === '') {
+      return NextResponse.json({ error: 'El N° de abonado sólo puede tener letras, números o guiones (2 a 20 caracteres)' }, { status: 400 })
+    }
 
     const row = await prisma.servicioRecurrente.create({
       data: {
@@ -186,6 +211,7 @@ export async function POST(req: NextRequest) {
         version: str(b.version) || null,
         puestos,
         notas: str(b.notas) || null,
+        numeroAbonado,
       },
     })
 

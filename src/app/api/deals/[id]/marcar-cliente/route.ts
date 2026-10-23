@@ -12,7 +12,7 @@ interface Params { params: { id: string } }
 // la venta puntual que están viendo en el Pipeline. Reusa el mismo helper
 // que dispara solo al ganar (marcarClienteAlGanar) — misma lógica de
 // empresa/contacto/consumidor final, mismo resultado.
-export async function POST(_req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest, { params }: Params) {
   try {
     const payload = await getCurrentUser()
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -30,8 +30,11 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Esta oportunidad no tiene empresa ni contacto vinculado — no hay a quién marcar como cliente.' }, { status: 400 })
     }
 
+    // comoPersona: ver marcarClienteAlGanar — el contacto está en una
+    // Empresa pero esta venta es para él como particular.
+    const body = await req.json().catch(() => ({}))
     const db = prisma as any
-    const cliente = await marcarClienteAlGanar(db, deal, payload.orgId)
+    const cliente = await marcarClienteAlGanar(db, deal, payload.orgId, { comoPersona: body?.comoPersona === true })
     if (!cliente) {
       return NextResponse.json({ error: 'No se pudo determinar el cliente (falta un nombre real en el contacto).' }, { status: 400 })
     }

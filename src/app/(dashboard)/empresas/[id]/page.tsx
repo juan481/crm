@@ -379,6 +379,7 @@ export default function EmpresaDetailPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                         {s.nombre}
+                        {s.numeroAbonado && <span className="ml-2 text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }} title="N° de abonado (Ultra)">#{s.numeroAbonado}</span>}
                         {s.incluyeMonitoreo && <span className="ml-2 text-[10px] text-emerald-500">monitoreo</span>}
                         {s.estado !== 'ACTIVO' && <span className="ml-2 text-[10px] text-[var(--color-text-subtle)]">({ESTADO_LABEL[s.estado] ?? s.estado})</span>}
                       </p>
@@ -451,7 +452,15 @@ export default function EmpresaDetailPage() {
         )
       })()}
 
-      {empresa.isCliente && <PortalAccesoCard empresaId={empresa.id} canManage={canManage} />}
+      {empresa.isCliente && (
+        <PortalAccesoCard
+          empresaId={empresa.id}
+          canManage={canManage}
+          abonadosUltra={(empresa.serviciosRecurrentes ?? [])
+            .filter((s) => s.estado !== 'BAJA' && s.numeroAbonado)
+            .map((s) => s.numeroAbonado as string)}
+        />
+      )}
 
       {/* Activity / Notas section */}
       <div className="flex justify-end -mb-2">

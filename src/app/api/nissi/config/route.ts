@@ -23,6 +23,7 @@ const STRING_FIELDS = [
   'supportContactEmail', 'supportContactName', 'supportContactPhone',
   'billingContactEmail', 'billingContactName', 'billingContactPhone',
   'rrhhContactEmail', 'rrhhContactName', 'rrhhContactPhone',
+  'consultasContactEmail', 'consultasContactName', 'consultasContactPhone',
   'followUpMessage',
 ] as const
 
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Email simple check (no bloqueante duro, sólo avisa)
-    for (const k of ['salesContactEmail', 'supportContactEmail', 'billingContactEmail', 'rrhhContactEmail']) {
+    for (const k of ['salesContactEmail', 'supportContactEmail', 'billingContactEmail', 'rrhhContactEmail', 'consultasContactEmail']) {
       const v = str(next[k])
       if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
         return NextResponse.json({ error: `El email de ${k.replace('ContactEmail', '')} no parece válido.` }, { status: 400 })
@@ -171,7 +172,7 @@ export async function POST(req: NextRequest) {
     // Teléfono: se guarda tal cual lo tipeen pero validamos que tenga
     // suficientes dígitos como para ser un número real (se le manda el
     // aviso interno de derivación por WhatsApp — ver tools.ts).
-    for (const k of ['salesContactPhone', 'supportContactPhone', 'billingContactPhone', 'rrhhContactPhone']) {
+    for (const k of ['salesContactPhone', 'supportContactPhone', 'billingContactPhone', 'rrhhContactPhone', 'consultasContactPhone']) {
       const v = str(next[k])
       if (v && v.replace(/\D/g, '').length < 8) {
         return NextResponse.json({ error: `El teléfono de ${k.replace('ContactPhone', '')} no parece válido — usá el formato +549 2302 XXXXXX.` }, { status: 400 })

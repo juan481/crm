@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { puedeVerServicios } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
-import { sanitizeMoneda, clampDiaVencimiento } from '@/lib/servicios-recurrentes'
+import { sanitizeMoneda, clampDiaVencimiento, normalizarAbonado } from '@/lib/servicios-recurrentes'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +58,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if ('version' in b) data.version = str(b.version) || null
     if ('puestos' in b) data.puestos = b.puestos === '' || b.puestos == null ? null : Math.max(0, Math.round(Number(b.puestos) || 0))
     if ('notas' in b) data.notas = str(b.notas) || null
+    if ('numeroAbonado' in b) {
+      const n = normalizarAbonado(b.numeroAbonado)
+      if (n === '') return NextResponse.json({ error: 'El N° de abonado sólo puede tener letras, números o guiones (2 a 20 caracteres)' }, { status: 400 })
+      data.numeroAbonado = n
+    }
     if ('contratoInicio' in b) data.contratoInicio = parseFecha(b.contratoInicio)
     if ('contratoFin' in b) data.contratoFin = parseFecha(b.contratoFin)
 

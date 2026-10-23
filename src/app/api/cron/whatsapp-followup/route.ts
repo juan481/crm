@@ -14,7 +14,10 @@ const WINDOW_MS = 24 * 60 * 60 * 1000
 // está "esperando"), no hay que insistir. Heurística simple a propósito
 // (regex, cero costo/latencia de IA) — no es perfecta, pero cubre los casos
 // típicos de Abba (agradecimiento, despedida, "cualquier cosa escribime").
-const CLOSING_PATTERN = /gracias por (tu |el )?(mensaje|consulta|contact)|que tengas (un )?(lindo|buen) día|fue un placer|espero haberte ayudado|no dudes en (escrib|contact)|cualquier (cosa|duda|consulta).{0,20}(escrib|contact|avis)|hasta (luego|pronto)|saludos!?$|nos vemos|¡?gracias a vos!?$/i
+// La segunda mitad (desde "te respond…") son los textos fijos de engine.ts
+// donde la pelota quedó de nuestro lado (aviso de que contesta una persona)
+// — preguntarle "¿seguís ahí?" después de eso no tiene sentido.
+const CLOSING_PATTERN = /gracias por (tu |el )?(mensaje|consulta|contact)|que tengas (un )?(lindo|buen) día|fue un placer|espero haberte ayudado|no dudes en (escrib|contact)|cualquier (cosa|duda|consulta).{0,20}(escrib|contact|avis)|hasta (luego|pronto)|saludos!?$|nos vemos|¡?gracias a vos!?$|te respond[ea]n? por acá|te escribe por acá|le paso tu mensaje|se lo sumo a tu consulta/i
 
 // Corre cada pocos minutos (ver vercel.json). Para cada organización con
 // NISSI activo y el seguimiento habilitado, busca charlas donde el ÚLTIMO

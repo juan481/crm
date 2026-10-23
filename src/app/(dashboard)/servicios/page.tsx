@@ -1,11 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   RefreshCw, Plus, Search, Shield, Radio, Pencil, Trash2, AlertTriangle,
-  TrendingUp, CalendarClock, Building2, FileText, DollarSign, Users,
+  TrendingUp, CalendarClock, Building2, FileText, DollarSign, Users, Hash,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -14,7 +15,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { ServicioForm } from '@/components/servicios/servicio-form'
 import { formatCurrency } from '@/lib/utils'
-import { ESTADO_OPTIONS, ESTADO_LABEL, CANAL_OPTIONS, MONEDAS_VALIDAS, MODO_LICENCIA_LABEL } from '@/lib/servicios-recurrentes'
+import { ESTADO_OPTIONS, ESTADO_LABEL, CANAL_OPTIONS, MONEDAS_VALIDAS, MODO_LICENCIA_LABEL, AJUSTE_CADA_MESES_OPTIONS } from '@/lib/servicios-recurrentes'
+import { fmtDateOnly, daysUntilDateOnly } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
 import type { ServicioRecurrente } from '@/types'
 import toast from 'react-hot-toast'
@@ -28,7 +30,8 @@ interface Kpis {
   porCanal: Record<string, number>
   renovaciones: { d30: number; d60: number; d90: number }
 }
-interface Grupo { nombre: string; moneda: string; clientes: number; mrr: number; min: number; max: number; ciclo: string }
+interface AjusteGrupo { cadaMeses: number; proximoAjuste: string; vencido: boolean; ultimoAjusteAt: string | null; ultimoAjustePct: number | null }
+interface Grupo { nombre: string; moneda: string; clientes: number; mrr: number; min: number; max: number; ciclo: string; ajuste: AjusteGrupo | null }
 interface ListResponse { data: ServicioRecurrente[]; kpis: Kpis; agrupado: Grupo[] }
 
 function money(byCur: Record<string, number>): string {
@@ -60,7 +63,15 @@ export default function ServiciosPage() {
   const [deleting, setDeleting] = useState<ServicioRecurrente | null>(null)
   const [delLoading, setDelLoading] = useState(false)
   const [genOpen, setGenOpen] = useState(false)
-  const [bulkOpen, setBulkOpen] = useState(false)
+  // ?ajustar=nombre::moneda — llegada desde la campanita ("Toca ajustar…").
+  const searchParams = useSearchParams()
+  const [bulkKey, setBulkKey] = useState<string | null>(() => searchParams.get('ajustar'))
+  const [bulkOpen, setBulkOpen] = useState(() => !!searchParams.get('ajustar'))
+  useEffect(() => {
+    const k = searchParams.get('ajustar')
+    if (k) { setBulkKey(k); setBulkOpen(true) }
+  }, [searchParams])
+  const openBulk = (key: string | null = null) => { setBulkKey(key); setBulkOpen(true) }
 
   const params = new URLSearchParams()
   if (estado) params.set('estado', estado)
@@ -83,7 +94,8 @@ export default function ServiciosPage() {
     const term = q.trim().toLowerCase()
     if (!term) return list
     return list.filter(s =>
-      s.nombre.toLowerCase().includes(term) || (s.empresa?.name ?? '').toLowerCase().includes(term))
+      s.nombre.toLowerCase().includes(term) || (s.empresa?.name ?? '').toLowerCase().includes(term)
+      || (s.numeroAbonado ?? '').toLowerCase().includes(term))
   }, [data, q])
 
   const kpis = data?.kpis
@@ -118,8 +130,8 @@ export default function ServiciosPage() {
           <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Abonos, monitoreo y contratos de todos los clientes.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" leftIcon={<DollarSign size={14} />} onClick={() => setBulkOpen(true)}>
-            Ajustar precio en masa
+          <Button variant="outline" size="sm" leftIcon={<DollarSign size={14} />} onClick={() => openBulk()}>
+            Ajustar precio / IPC
           </Button>
           <Button variant="outline" size="sm" leftIcon={<FileText size={14} />} onClick={() => setGenOpen(true)}>
             Generar facturas del mes
@@ -167,13 +179,49 @@ export default function ServiciosPage() {
         </div>
       )}
 
+      {/* Ajustes por inflación programados (AjusteAbono) — el "che, subí
+          el abono" que pidió Seba. Tocar uno abre el ajuste ya elegido. */}
+      {(data?.agrupado ?? []).some((g) => g.ajuste) && (
+        <div className="surface rounded-2xl p-4">
+          <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)] mb-2">
+            <CalendarClock size={13} /> Ajustes de precio programados
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(data?.agrupado ?? []).filter((g) => g.ajuste).map((g) => {
+              const a = g.ajuste!
+              const key = `${g.nombre}::${g.moneda}`
+              const dias = daysUntilDateOnly(a.proximoAjuste)
+              return (
+                <button
+                  key={key}
+                  onClick={() => openBulk(key)}
+                  className="rounded-xl px-3 py-2 text-left border transition-colors hover:border-[var(--color-primary)]"
+                  style={a.vencido
+                    ? { borderColor: 'rgba(245,158,11,0.5)', background: 'rgba(245,158,11,0.08)' }
+                    : { borderColor: 'var(--color-border)' }}
+                >
+                  <p className="text-sm font-medium text-[var(--color-text)]">
+                    {g.nombre} <span className="text-[11px] text-[var(--color-text-subtle)]">{g.moneda} · {g.clientes} cliente{g.clientes !== 1 ? 's' : ''}</span>
+                  </p>
+                  <p className={`text-[11px] ${a.vencido ? 'text-amber-500 font-semibold' : 'text-[var(--color-text-subtle)]'}`}>
+                    {a.vencido
+                      ? `Toca ajustar (desde el ${fmtDateOnly(a.proximoAjuste)}) — tocá para aplicarlo`
+                      : `Próximo ajuste: ${fmtDateOnly(a.proximoAjuste)} · en ${dias} día${dias !== 1 ? 's' : ''}`}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)] pointer-events-none" />
           <input
             value={q} onChange={e => setQ(e.target.value)}
-            placeholder="Buscar por servicio o empresa…"
+            placeholder="Buscar por servicio, empresa o N° de abonado…"
             className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
           />
         </div>
@@ -235,6 +283,11 @@ export default function ServiciosPage() {
                     <td className="px-4 py-3">
                       <span className="text-[var(--color-text)]">{s.nombre}</span>
                       <span className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {s.numeroAbonado && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[var(--color-text-muted)]" title="N° de abonado (Ultra)">
+                            <Hash size={10} />{s.numeroAbonado}
+                          </span>
+                        )}
                         {s.incluyeMonitoreo && (
                           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500"><Radio size={10} /> monitoreo</span>
                         )}
@@ -303,17 +356,44 @@ export default function ServiciosPage() {
       </Modal>
 
       <GenerarFacturasModal open={genOpen} onClose={() => setGenOpen(false)} onDone={refresh} />
-      <BulkPriceModal open={bulkOpen} onClose={() => setBulkOpen(false)} onDone={refresh} agrupado={data?.agrupado ?? []} />
+      <BulkPriceModal
+        key={bulkKey ?? 'manual'}
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onDone={refresh}
+        agrupado={data?.agrupado ?? []}
+        initialKey={bulkKey}
+      />
     </div>
   )
 }
 
 // ── Modal: ajustar el precio de un servicio para TODOS los clientes que lo
 // tienen activo (pedido de Abba: el abono se re-precia trimestralmente y no
-// quieren editar cliente por cliente) ────────────────────────────────────
-function BulkPriceModal({ open, onClose, onDone, agrupado }: { open: boolean; onClose: () => void; onDone: () => void; agrupado: Grupo[] }) {
+// quieren editar cliente por cliente). Desde 22/10 también por % (IPC) y con
+// aviso programado para el próximo ajuste (Seba: "que me deje poner el % del
+// IPC y suba, a los tres meses de nuevo") ──────────────────────────────────
+type ModoAjuste = 'porcentaje' | 'monto' | 'solo_aviso'
+
+const MODO_AJUSTE_OPTIONS: { value: ModoAjuste; label: string }[] = [
+  { value: 'porcentaje', label: 'Subir un % (IPC)' },
+  { value: 'monto', label: 'Precio nuevo' },
+  { value: 'solo_aviso', label: 'Sólo programar aviso' },
+]
+
+function redondearPreview(monto: number, moneda: string) {
+  return moneda === 'ARS' ? Math.round(monto) : Math.round(monto * 100) / 100
+}
+
+function BulkPriceModal({ open, onClose, onDone, agrupado, initialKey }: {
+  open: boolean; onClose: () => void; onDone: () => void; agrupado: Grupo[]; initialKey?: string | null
+}) {
   const [selected, setSelected] = useState<string>('') // "nombre::moneda"
+  const [modo, setModo] = useState<ModoAjuste>('porcentaje')
   const [monto, setMonto] = useState('')
+  const [porcentaje, setPorcentaje] = useState('')
+  const [aviso, setAviso] = useState('3') // '0' = no avisar
+  const [actualizarCatalogo, setActualizarCatalogo] = useState(true)
   const [loading, setLoading] = useState(false)
 
   const grupo = agrupado.find((g) => `${g.nombre}::${g.moneda}` === selected) ?? null
@@ -322,32 +402,54 @@ function BulkPriceModal({ open, onClose, onDone, agrupado }: { open: boolean; on
     setSelected(key)
     const g = agrupado.find((x) => `${x.nombre}::${x.moneda}` === key)
     setMonto(g && g.min === g.max ? String(g.min) : '')
+    setAviso(String(g?.ajuste?.cadaMeses ?? 3))
   }
 
+  // Llegada desde la campanita ("Toca ajustar…" → /servicios?ajustar=…).
+  useEffect(() => {
+    if (open && initialKey && !selected && agrupado.some((g) => `${g.nombre}::${g.moneda}` === initialKey)) pick(initialKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialKey, agrupado])
+
+  const pct = Number(porcentaje.replace(',', '.'))
+  const pctOk = Number.isFinite(pct) && pct !== 0 && pct > -90 && pct <= 300
+  const montoOk = Number.isFinite(Number(monto)) && Number(monto) > 0
+  const puede = !!grupo && (modo === 'porcentaje' ? pctOk : modo === 'monto' ? montoOk : aviso !== '0')
+
   const confirmar = async () => {
-    if (!grupo) return
-    const montoNum = Number(monto)
-    if (!Number.isFinite(montoNum) || montoNum < 0) { toast.error('Monto inválido'); return }
+    if (!grupo || !puede) return
     setLoading(true)
     try {
       const r = await fetch('/api/servicios-recurrentes/bulk-update', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: grupo.nombre, moneda: grupo.moneda, monto: montoNum }),
+        body: JSON.stringify({
+          nombre: grupo.nombre, moneda: grupo.moneda, modo,
+          ...(modo === 'monto' ? { monto: Number(monto) } : {}),
+          ...(modo === 'porcentaje' ? { porcentaje: pct } : {}),
+          avisoCadaMeses: Number(aviso),
+          actualizarCatalogo,
+        }),
       })
       const j = await r.json()
       if (!r.ok) { toast.error(j.error || 'No se pudo actualizar'); return }
-      toast.success(`Precio actualizado en ${j.updated} cliente${j.updated !== 1 ? 's' : ''}`)
+      const proximo = j.proximoAjuste ? ` Próximo aviso: ${fmtDateOnly(j.proximoAjuste)}.` : ''
+      toast.success(modo === 'solo_aviso'
+        ? `Aviso programado.${proximo}`
+        : `Precio actualizado en ${j.updated} cliente${j.updated !== 1 ? 's' : ''}.${proximo}`, { duration: 6000 })
       onDone()
       onClose()
-      setSelected(''); setMonto('')
+      setSelected(''); setMonto(''); setPorcentaje(''); setModo('porcentaje')
     } catch { toast.error('Error de conexión') } finally { setLoading(false) }
   }
 
+  const rango = (min: number, max: number, moneda: string) =>
+    min === max ? formatCurrency(min, moneda) : `entre ${formatCurrency(min, moneda)} y ${formatCurrency(max, moneda)}`
+
   return (
-    <Modal open={open} onClose={onClose} title="Ajustar precio en masa" size="sm">
+    <Modal open={open} onClose={onClose} title="Ajustar precio / IPC" size="sm">
       <div className="space-y-4">
         <p className="text-xs text-[var(--color-text-muted)]">
-          Elegí un servicio y el precio nuevo se aplica de una sola vez a <strong>todos los clientes que lo tienen activo</strong> hoy — no toca a los pausados/de baja.
+          Se aplica de una sola vez a <strong>todos los clientes que tienen el servicio activo</strong> hoy — no toca a los pausados/de baja.
         </p>
         {agrupado.length === 0 ? (
           <p className="text-sm text-[var(--color-text-subtle)]">No hay servicios activos para ajustar.</p>
@@ -369,21 +471,79 @@ function BulkPriceModal({ open, onClose, onDone, agrupado }: { open: boolean; on
               <>
                 <div className="text-xs text-[var(--color-text-muted)] flex items-center gap-1.5">
                   <Users size={12} />
-                  Precio actual: {grupo.min === grupo.max ? formatCurrency(grupo.min, grupo.moneda) : `entre ${formatCurrency(grupo.min, grupo.moneda)} y ${formatCurrency(grupo.max, grupo.moneda)}`}
+                  Precio actual: {rango(grupo.min, grupo.max, grupo.moneda)}
+                  {grupo.ajuste?.ultimoAjusteAt && (
+                    <span className="text-[var(--color-text-subtle)]">
+                      · último ajuste {new Date(grupo.ajuste.ultimoAjusteAt).toLocaleDateString('es-AR')}
+                      {grupo.ajuste.ultimoAjustePct != null ? ` (${grupo.ajuste.ultimoAjustePct}%)` : ''}
+                    </span>
+                  )}
                 </div>
+
+                <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--color-surface-raised)' }}>
+                  {MODO_AJUSTE_OPTIONS.map((o) => (
+                    <button
+                      key={o.value} type="button" onClick={() => setModo(o.value)}
+                      className="flex-1 text-xs font-medium py-1.5 rounded-md transition-colors"
+                      style={modo === o.value ? { background: 'var(--color-surface)', color: 'var(--color-text)' } : { color: 'var(--color-text-muted)' }}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+
+                {modo === 'porcentaje' && (
+                  <div>
+                    <label className="text-sm font-semibold text-[var(--color-text-muted)] block mb-1.5">% de aumento (ej. IPC del trimestre)</label>
+                    <input
+                      type="text" inputMode="decimal" placeholder="Ej: 8,5" value={porcentaje} onChange={(e) => setPorcentaje(e.target.value)}
+                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                    />
+                    {pctOk && (
+                      <p className="text-xs mt-1.5 text-[var(--color-text)]">
+                        {rango(grupo.min, grupo.max, grupo.moneda)} → <strong>{rango(redondearPreview(grupo.min * (1 + pct / 100), grupo.moneda), redondearPreview(grupo.max * (1 + pct / 100), grupo.moneda), grupo.moneda)}</strong>
+                        <span className="block text-[11px] text-[var(--color-text-subtle)]">Cada cliente sube sobre lo que paga hoy (si alguno paga distinto, se respeta).</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {modo === 'monto' && (
+                  <div>
+                    <label className="text-sm font-semibold text-[var(--color-text-muted)] block mb-1.5">Precio nuevo ({grupo.moneda}) — igual para todos</label>
+                    <input
+                      type="number" min={0} step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)}
+                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                    />
+                  </div>
+                )}
+
+                {modo !== 'solo_aviso' && (
+                  <label className="flex items-start gap-2 cursor-pointer text-xs text-[var(--color-text-muted)]">
+                    <input type="checkbox" checked={actualizarCatalogo} onChange={(e) => setActualizarCatalogo(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[var(--color-primary)]" />
+                    <span>Actualizar también el precio en el catálogo de Servicios (así los abonos nuevos salen con el precio nuevo)</span>
+                  </label>
+                )}
+
                 <div>
-                  <label className="text-sm font-semibold text-[var(--color-text-muted)] block mb-1.5">Precio nuevo ({grupo.moneda})</label>
-                  <input
-                    type="number" min={0} step="0.01" value={monto} onChange={(e) => setMonto(e.target.value)}
-                    className="w-full px-4 py-2.5 text-sm rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+                  <Select
+                    label="Avisarme del próximo ajuste"
+                    value={aviso}
+                    onChange={(e) => setAviso(e.target.value)}
+                    options={[...AJUSTE_CADA_MESES_OPTIONS, { value: '0', label: 'No avisar' }]}
                   />
+                  <p className="text-[11px] mt-1 text-[var(--color-text-subtle)]">
+                    {aviso === '0'
+                      ? 'No va a aparecer ningún recordatorio para este servicio.'
+                      : `Ese día aparece en la campanita del CRM y acá arriba. No sube nada solo: el % lo ponés vos.`}
+                  </p>
                 </div>
               </>
             )}
             <ModalFooter>
               <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-              <Button loading={loading} disabled={!grupo || !monto} onClick={confirmar} leftIcon={<DollarSign size={14} />}>
-                Aplicar a {grupo?.clientes ?? 0} cliente{(grupo?.clientes ?? 0) !== 1 ? 's' : ''}
+              <Button loading={loading} disabled={!puede} onClick={confirmar} leftIcon={<DollarSign size={14} />}>
+                {modo === 'solo_aviso' ? 'Programar aviso' : `Aplicar a ${grupo?.clientes ?? 0} cliente${(grupo?.clientes ?? 0) !== 1 ? 's' : ''}`}
               </Button>
             </ModalFooter>
           </>
