@@ -23,7 +23,7 @@ const STRING_FIELDS = [
   'supportContactEmail', 'supportContactName', 'supportContactPhone',
   'billingContactEmail', 'billingContactName', 'billingContactPhone',
   'rrhhContactEmail', 'rrhhContactName', 'rrhhContactPhone',
-  'consultasContactEmail', 'consultasContactName', 'consultasContactPhone',
+  'consultasContactEmail', 'consultasContactName', 'consultasContactPhone', 'consultasCcEmail',
   'followUpMessage',
 ] as const
 
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Email simple check (no bloqueante duro, sólo avisa)
-    for (const k of ['salesContactEmail', 'supportContactEmail', 'billingContactEmail', 'rrhhContactEmail', 'consultasContactEmail']) {
+    for (const k of ['salesContactEmail', 'supportContactEmail', 'billingContactEmail', 'rrhhContactEmail', 'consultasContactEmail', 'consultasCcEmail']) {
       const v = str(next[k])
       if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
         return NextResponse.json({ error: `El email de ${k.replace('ContactEmail', '')} no parece válido.` }, { status: 400 })

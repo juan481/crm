@@ -182,8 +182,8 @@ export function PortalAccesoCard({ empresaId, canManage, abonadosUltra = [] }: {
                 style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               />
               <input
-                type="text" required placeholder="N° de abonado del Ultra" value={numeroAbonado}
-                onChange={(e) => setNumeroAbonado(e.target.value.toUpperCase().replace(/[^0-9A-Z-]/g, ''))}
+                type="text" required placeholder="Abonado del Ultra (ej. ABB3434)" value={numeroAbonado}
+                onChange={(e) => setNumeroAbonado(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''))}
                 className="w-full text-sm font-mono rounded-lg px-3 py-2 outline-none"
                 style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               />
@@ -210,7 +210,7 @@ export function PortalAccesoCard({ empresaId, canManage, abonadosUltra = [] }: {
                 className="w-full text-sm rounded-lg px-3 py-2 outline-none"
                 style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
               />
-              <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Sin mail — el acceso queda usable al toque con el número de abonado y esta contraseña. El cliente la puede cambiar después en &quot;Mi cuenta&quot;.</p>
+              <p className="text-[11px]" style={{ color: 'var(--color-text-subtle)' }}>Sin mail — queda usable al toque. Entran con el código (ABB3434) o el número solo (3434), y esta contraseña. Es UN acceso por abonado: todos los de ese abonado (contactos de emergencia, usuarios de la app) usan el mismo. Se puede cambiar después en &quot;Mi cuenta&quot;.</p>
             </>
           )}
 

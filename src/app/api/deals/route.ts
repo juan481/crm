@@ -4,7 +4,7 @@ import { roleHasModule } from '@/lib/module-access'
 import { prisma } from '@/lib/db'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
 import { sellerOwnerScope, isScopedPipelineRole } from '@/lib/deal-access'
-import { ultimaActividadManual, ultimoContacto } from '@/lib/deal-contacto'
+import { ultimaActividadManual, ultimoContacto, proximasAgendas } from '@/lib/deal-contacto'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,8 +53,14 @@ export async function GET(req: NextRequest) {
 
     // lastContactAt: alimenta "X días sin contacto" del tablero (ver
     // src/lib/deal-contacto.ts) — una query agrupada para todos, no por deal.
-    const manual = await ultimaActividadManual(db, deals.map((d: any) => d.id))
-    const data = deals.map((d: any) => ({ ...d, lastContactAt: ultimoContacto(d.updatedAt, manual.get(d.id)).toISOString() }))
+    // proximaAgenda: el contacto agendado más próximo (Task con dealId).
+    const ids = deals.map((d: any) => d.id)
+    const [manual, agendas] = await Promise.all([ultimaActividadManual(db, ids), proximasAgendas(db, ids)])
+    const data = deals.map((d: any) => ({
+      ...d,
+      lastContactAt: ultimoContacto(d.updatedAt, manual.get(d.id)).toISOString(),
+      proximaAgenda: agendas.get(d.id) ?? null,
+    }))
 
     return NextResponse.json({ data, total, page, limit, totalPages: Math.ceil(total / limit) })
   } catch (error) {

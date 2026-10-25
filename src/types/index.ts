@@ -595,6 +595,7 @@ export interface Deal {
   cotizaciones?: Array<{ id: string; ref: string; finalTotal: number; currency: string; status: string; createdAt: string }>
   // Sólo en el listado (GET /api/deals) — ver src/lib/deal-contacto.ts.
   lastContactAt?: string
+  proximaAgenda?: { id: string; title: string; description: string | null; dia: string } | null
   createdAt: string
   updatedAt: string
 }

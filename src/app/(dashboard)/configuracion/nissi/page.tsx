@@ -37,7 +37,7 @@ const STRING_KEYS = [
   'supportContactName', 'supportContactEmail', 'supportContactPhone',
   'billingContactName', 'billingContactEmail', 'billingContactPhone',
   'rrhhContactName', 'rrhhContactEmail', 'rrhhContactPhone',
-  'consultasContactName', 'consultasContactEmail', 'consultasContactPhone',
+  'consultasContactName', 'consultasContactEmail', 'consultasContactPhone', 'consultasCcEmail',
   'followUpMessage',
 ]
 
@@ -226,6 +226,11 @@ export default function NissiConfigPage() {
           <Input label="Otras consultas — nombre" value={String(form.consultasContactName ?? '')} onChange={(e) => set('consultasContactName', e.target.value)} placeholder="Polígono, cursos, CLU…" />
           <Select label="Otras consultas — email (usuario del CRM)" value={String(form.consultasContactEmail ?? '')} onChange={(e) => set('consultasContactEmail', e.target.value)} options={userOptions} />
           <Input label="Otras consultas — WhatsApp (opcional)" value={String(form.consultasContactPhone ?? '')} onChange={(e) => set('consultasContactPhone', e.target.value)} placeholder="+54 9 2302 00-0000" />
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="sm:col-start-2">
+            <Select label="Otras consultas — también a (opcional)" value={String(form.consultasCcEmail ?? '')} onChange={(e) => set('consultasCcEmail', e.target.value)} options={userOptions} />
+          </div>
         </div>
         <p className="text-xs text-[var(--color-text-subtle)] flex items-start gap-1.5">
           <Info size={13} className="mt-0.5 shrink-0" />

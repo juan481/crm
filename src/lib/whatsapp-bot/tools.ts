@@ -476,6 +476,23 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
       if (name === 'create_rrhh_ticket') {
         await guardarCvsYAvisar(db, { orgId: ctx.orgId, conversationId: ctx.conversationId, ticketId: ticket.id, personName: customerName, userId: createdById })
       }
+      // "Otras consultas" con una segunda persona (Abba: Norma y Sergio) →
+      // colaboradora del ticket (lo ve en sus tickets, le llega el
+      // recordatorio de tickets sin atender) + el mismo aviso por mail.
+      const ccUser = name === 'create_consulta_ticket' ? await findUserByEmail(ctx.orgId, ctx.botConfig.consultasCcEmail) : null
+      if (ccUser && ccUser.id !== ticket.assignedToId) {
+        try {
+          await db.ticketCollaborator.create({ data: { ticketId: ticket.id, userId: ccUser.id } })
+          notifyHuman({
+            orgId: ctx.orgId, toEmail: ccUser.email, toName: ccUser.name,
+            subject: `Consulta por WhatsApp: ${title}`,
+            heading: 'Nueva consulta (te sumaron como colaborador)',
+            bodyText: `NISSI derivó esta consulta — quedó como ticket #${ticket.number} en el CRM y te sumó como colaborador.\n\n${detail}`,
+          })
+        } catch (err) {
+          console.error('[NISSI] no se pudo sumar al colaborador de Otras consultas', err)
+        }
+      }
       fireWebhook(ctx.orgId, 'ticket.created', { id: ticket.id, number: ticket.number, title, category: ticketKind.category, source: 'whatsapp-ai-bot' })
 
       const notifyTarget = contactUser ?? (contactEmail ? { name: null, email: contactEmail } : null)

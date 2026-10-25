@@ -55,6 +55,9 @@ export interface WhatsAppBotConfig {
   consultasContactEmail: string | null
   consultasContactName: string | null
   consultasContactPhone: string | null
+  // Segunda persona para "Otras consultas" (Abba: Norma Y Sergio) — queda
+  // como colaboradora del ticket y también recibe el aviso.
+  consultasCcEmail: string | null
 
   // ── Instrucciones (bloque editable del prompt) ──────────────────────────
   // null = usar NISSI_DEFAULT_INSTRUCTIONS. El núcleo de seguridad NUNCA sale
@@ -154,6 +157,7 @@ export function parseWhatsAppBotConfig(raw: Record<string, unknown> | null): Wha
     consultasContactEmail: strOrNull(raw.consultasContactEmail),
     consultasContactName: strOrNull(raw.consultasContactName),
     consultasContactPhone: strOrNull(raw.consultasContactPhone),
+    consultasCcEmail: strOrNull(raw.consultasCcEmail),
 
     instructions: strOrNull(raw.instructions),
 

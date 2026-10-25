@@ -14,6 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatMultiCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
 import { DealNotas } from '@/components/pipeline/deal-notas'
+import { DealAgenda } from '@/components/pipeline/deal-agenda'
+import { etiquetaDiaAgenda } from '@/lib/deal-agenda-fechas'
 import { DealMateriales } from '@/components/pipeline/deal-materiales'
 import { DealRentabilidad } from '@/components/pipeline/deal-rentabilidad'
 import { ForecastPanel } from '@/components/pipeline/forecast-panel'
@@ -22,7 +24,8 @@ import { ObjetivosPanel } from '@/components/pipeline/objetivos-panel'
 import { ComisionesPanel } from '@/components/pipeline/comisiones-panel'
 import { RecurrentesPanel } from '@/components/pipeline/recurrentes-panel'
 import { ContactoPicker } from '@/components/pipeline/contacto-picker'
-import { DIAS_SIN_CONTACTO, diasDesde } from '@/lib/deal-contacto'
+import { DIAS_SIN_CONTACTO, diasDesde, tieneAgendaVigente } from '@/lib/deal-contacto'
+import { argentinaDayKey } from '@/lib/timezone'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -51,8 +54,17 @@ function daysSinceContact(deal: Deal) {
   return diasDesde(deal.lastContactAt ?? deal.updatedAt)
 }
 
+// Con un contacto agendado para hoy o más adelante NO está "sin contacto"
+// (el vendedor ya sabe cuándo la vuelve a tocar) — ver tieneAgendaVigente.
 function isDealStale(deal: Deal) {
-  return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO' && daysSinceContact(deal) >= DIAS_SIN_CONTACTO
+  return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO'
+    && !tieneAgendaVigente(deal.proximaAgenda, argentinaDayKey())
+    && daysSinceContact(deal) >= DIAS_SIN_CONTACTO
+}
+
+// Agenda para hoy o ya vencida → "tenés que contactarlo".
+function agendaParaHoy(deal: Deal) {
+  return !!deal.proximaAgenda && deal.proximaAgenda.dia <= argentinaDayKey()
 }
 
 // Para el buscador del tablero: "Martín" encuentra "martin".
@@ -480,6 +492,10 @@ function DealDetailModal({ dealId, onClose }: { dealId: string; onClose: () => v
             {data.closedAt && ` · Cerrado ${formatDate(data.closedAt)}`}
           </p>
 
+          <div className="pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <DealAgenda dealId={dealId} />
+          </div>
+
           {data.cotizaciones && data.cotizaciones.length > 0 && (
             <div className="space-y-1.5 pt-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-subtle)' }}>
@@ -694,8 +710,11 @@ export default function PipelinePage() {
   // sin contacto").
   const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('owner') ?? '')
   const [soloSinContacto, setSoloSinContacto] = useState(() => searchParams.get('sinContacto') === '1')
+  // ?agenda=1 — "Tenés que contactar hoy" de la campanita.
+  const [soloAgendaHoy, setSoloAgendaHoy] = useState(() => searchParams.get('agenda') === '1')
   useEffect(() => {
     if (searchParams.get('sinContacto') === '1') setSoloSinContacto(true)
+    if (searchParams.get('agenda') === '1') setSoloAgendaHoy(true)
     const o = searchParams.get('owner')
     if (o) setOwnerFilter(o)
   }, [searchParams])
@@ -728,12 +747,14 @@ export default function PipelinePage() {
   const boardDeals = deals.filter(d => {
     if (ownerFilter && d.ownerId !== ownerFilter) return false
     if (soloSinContacto && !isDealStale(d)) return false
+    if (soloAgendaHoy && !agendaParaHoy(d)) return false
     if (!term) return true
     const contacto = d.contacto ? `${d.contacto.firstName} ${d.contacto.lastName}` : ''
     return fold([d.title, d.empresa?.name ?? '', contacto, d.owner?.name ?? ''].join(' ')).includes(term)
   })
-  const boardFiltered = !!ownerFilter || !!term || soloSinContacto
+  const boardFiltered = !!ownerFilter || !!term || soloSinContacto || soloAgendaHoy
   const sinContactoCount = deals.filter(isDealStale).length
+  const agendaHoyCount = deals.filter(agendaParaHoy).length
 
   const dealsByStage = STAGES.reduce((acc, s) => {
     acc[s.key] = boardDeals.filter(d => d.stage === s.key)
@@ -981,10 +1002,21 @@ export default function PipelinePage() {
           >
             <Clock size={13} /> Sin contacto +{DIAS_SIN_CONTACTO} días{sinContactoCount > 0 ? ` (${sinContactoCount})` : ''}
           </button>
+          <button
+            type="button"
+            onClick={() => setSoloAgendaHoy(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl border transition-colors"
+            style={soloAgendaHoy
+              ? { background: 'rgba(99,102,241,0.12)', borderColor: 'rgba(99,102,241,0.5)', color: '#818cf8' }
+              : { borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+            title="Oportunidades con un contacto agendado para hoy (o que ya se pasó)"
+          >
+            <CalendarClock size={13} /> Para contactar hoy{agendaHoyCount > 0 ? ` (${agendaHoyCount})` : ''}
+          </button>
           {boardFiltered && (
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               Mostrando {boardDeals.length} de {deals.length} ·{' '}
-              <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => { setOwnerFilter(''); setSearch(''); setSoloSinContacto(false) }}>
+              <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => { setOwnerFilter(''); setSearch(''); setSoloSinContacto(false); setSoloAgendaHoy(false) }}>
                 ver todas
               </button>
             </span>
@@ -1158,6 +1190,20 @@ export default function PipelinePage() {
                                 <Clock size={9} />{daysSinceContact(deal)} días sin contacto
                               </p>
                             )}
+
+                            {deal.proximaAgenda && (() => {
+                              const hoyKey = argentinaDayKey()
+                              const vencida = deal.proximaAgenda.dia < hoyKey
+                              const esHoy = deal.proximaAgenda.dia === hoyKey
+                              return (
+                                <p className="text-[10px] flex items-center gap-1 mt-1 font-medium"
+                                  style={{ color: vencida ? '#ef4444' : esHoy ? '#f59e0b' : '#818cf8' }}
+                                  title={deal.proximaAgenda.description ?? deal.proximaAgenda.title}>
+                                  <CalendarClock size={9} />
+                                  {vencida ? 'Contacto agendado vencido' : `Contactar ${etiquetaDiaAgenda(deal.proximaAgenda.dia, hoyKey).toLowerCase()}`}
+                                </p>
+                              )
+                            })()}
 
                             <div className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-0.5 transition-opacity ${selecting ? 'hidden' : ''}`}>
                               {stageIdx > 0 && (

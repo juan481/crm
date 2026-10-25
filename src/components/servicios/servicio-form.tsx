@@ -241,10 +241,10 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
             portal de clientes entre con ese mismo número. */}
         <Input
           label="N° de abonado (Ultra) — opcional"
-          placeholder="Ej: 1A2F"
+          placeholder="Ej: ABB3434"
           value={form.numeroAbonado}
-          onChange={e => set('numeroAbonado', e.target.value.toUpperCase().replace(/\s+/g, ''))}
-          hint="El número de cuenta del cliente en el software de monitoreo, el que le asignan ustedes."
+          onChange={e => set('numeroAbonado', e.target.value.toUpperCase().replace(/[\s-]+/g, ''))}
+          hint="El código del abonado en el Ultra: letras del dealer + número (ej. ABB3434)."
         />
 
         {/* ── Facturación ── */}

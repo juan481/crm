@@ -106,8 +106,8 @@ function PortalLoginForm() {
       // Un valor sin "@" es número de abonado, no email — hay que
       // resolverlo primero al email sintético interno antes de poder
       // llamar a signInWithPassword (Supabase pide formato email siempre).
-      // Sin "@" y no "sólo dígitos": el N° del Ultra puede traer letras
-      // (cuentas hexadecimales tipo "1A2F").
+      // Sin "@" y no "sólo dígitos": el código del Ultra trae las letras del
+      // dealer adelante ("ABB3434"), y también se acepta el número solo.
       let loginEmail = value.toLowerCase()
       if (!value.includes('@')) {
         try {
@@ -115,7 +115,8 @@ function PortalLoginForm() {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ numeroAbonado: value }),
           })
           if (!res.ok) {
-            setError('Número de abonado o contraseña incorrectos.')
+            // 409 = el número solo es ambiguo (existe en más de un dealer).
+            setError(res.status === 409 ? (await res.json()).error : 'Número de abonado o contraseña incorrectos.')
             if (window.turnstile && widgetId.current) window.turnstile.reset(widgetId.current)
             setCaptchaToken(null)
             return
@@ -192,7 +193,7 @@ function PortalLoginForm() {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--color-text-muted)', marginBottom: 6 }}>Email o número de abonado</label>
             <input
               type="text" style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="vos@empresa.com o tu número de abonado" autoComplete="username" autoFocus
+              placeholder="vos@empresa.com o tu abonado (ej. ABB3434)" autoComplete="username" autoFocus
             />
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginBottom: 6 }}>

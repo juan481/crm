@@ -4,8 +4,9 @@ import { prisma } from '@/lib/db'
 import { roleHasModule } from '@/lib/module-access'
 import { unstable_cache } from 'next/cache'
 import { puedeVerServicios } from '@/lib/finance-access'
-import { argentinaDayStart, argentinaTimeToInstant, fmtDateOnly } from '@/lib/timezone'
-import { DIAS_SIN_CONTACTO, ultimaActividadManual, ultimoContacto } from '@/lib/deal-contacto'
+import { argentinaDayStart, argentinaDayKey, argentinaDateKeyToDayStart, argentinaTimeToInstant, fmtDateOnly } from '@/lib/timezone'
+import { DIAS_SIN_CONTACTO, ultimaActividadManual, ultimoContacto, proximasAgendas, tieneAgendaVigente, diaDeAgenda } from '@/lib/deal-contacto'
+import { TICKET_SIN_ATENDER_HORAS } from '@/lib/tickets'
 
 export interface AppNotification {
   id: string
@@ -34,7 +35,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const since72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
   const db = prisma as any
 
-  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions, ajustesVencidos, dealsAbiertos] = await Promise.all([
+  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions, ajustesVencidos, dealsAbiertos, ticketsSinAtender] = await Promise.all([
     db.invoice.findMany({
       where: {
         organizationId: orgId,
@@ -55,8 +56,10 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
     }),
     // Tareas pendientes/en curso — de TODA la org (se filtra "es mía o soy
     // colaborador" en el GET, después de la caché compartida).
+    // Las agendas de contacto de una oportunidad (Task con dealId + fecha)
+    // NO van acá: aparecen recién el día que tocan, ver agendasDelDia.
     db.task.findMany({
-      where: { organizationId: orgId, status: { in: ['PENDIENTE', 'EN_CURSO'] } },
+      where: { organizationId: orgId, status: { in: ['PENDIENTE', 'EN_CURSO'] }, OR: [{ dealId: null }, { dueDate: null }] },
       select: { id: true, title: true, dueDate: true, createdAt: true, assignedToId: true, collaborators: { select: { userId: true } } },
       orderBy: { createdAt: 'desc' },
       take: 20,
@@ -114,14 +117,42 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       select: { id: true, ownerId: true, updatedAt: true, owner: { select: { name: true } } },
       take: 2000,
     }),
+    // Tickets que siguen ABIERTOS hace más de TICKET_SIN_ATENDER_HORAS —
+    // pedido de Abba (Seba, 25/10): lo que NISSI deriva a Norma/Sergio
+    // (polígono, CLU, CVs) "no lo están revisando; si puede generar molestia
+    // al área, genial". Deja de aparecer cuando lo pasan a En proceso.
+    db.ticket.findMany({
+      where: { organizationId: orgId, status: 'ABIERTO', createdAt: { lt: new Date(now.getTime() - TICKET_SIN_ATENDER_HORAS * 60 * 60 * 1000) } },
+      select: { id: true, assignedToId: true, assignedTo: { select: { name: true } }, collaborators: { select: { userId: true, user: { select: { name: true } } } } },
+      take: 500,
+    }),
   ])
 
   // Un aviso por vendedor, no uno por oportunidad (Abba tiene decenas
-  // abiertas a la vez — uno por deal tapaba la campanita).
-  const manual = await ultimaActividadManual(db, dealsAbiertos.map((d: any) => d.id))
+  // abiertas a la vez — uno por deal tapaba la campanita). Las que tienen un
+  // contacto agendado para hoy o más adelante no cuentan.
+  const abiertosIds = dealsAbiertos.map((d: any) => d.id)
+  const hoyKey = argentinaDayKey(now)
+  const [manual, agendas, agendasDelDia] = await Promise.all([
+    ultimaActividadManual(db, abiertosIds),
+    proximasAgendas(db, abiertosIds),
+    // Contactos agendados que tocan hoy o ya se pasaron (pedido de Abba,
+    // Seba 25/10: "a los tres días le aparece que tiene que contactar a
+    // Juan"). Uno por agenda, al responsable.
+    db.task.findMany({
+      where: {
+        organizationId: orgId, dealId: { not: null }, status: { in: ['PENDIENTE', 'EN_CURSO'] },
+        dueDate: { not: null, lt: argentinaTimeToInstant(argentinaDayStart(now), 24, 0) },
+      },
+      select: { id: true, title: true, description: true, dueDate: true, assignedToId: true, dealId: true },
+      orderBy: { dueDate: 'asc' },
+      take: 50,
+    }),
+  ])
   const limite = now.getTime() - DIAS_SIN_CONTACTO * 24 * 60 * 60 * 1000
   const sinContactoPorOwner = new Map<string, { name: string; count: number }>()
   for (const d of dealsAbiertos) {
+    if (tieneAgendaVigente(agendas.get(d.id), hoyKey)) continue
     if (ultimoContacto(d.updatedAt, manual.get(d.id)).getTime() >= limite) continue
     const row = sinContactoPorOwner.get(d.ownerId) ?? { name: d.owner?.name ?? 'Sin asignar', count: 0 }
     row.count++
@@ -168,6 +199,55 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       countsTowardUnread: true,
       assigneeId: t.assignedToId,
       collaboratorIds: t.collaborators.map((c: { userId: string }) => c.userId),
+    })
+  }
+
+  // Uno por persona (asignado + colaboradores); los sin asignar, uno solo
+  // que ven los Admin+ (assigneeId null → sólo involvesMe de admin).
+  const sinAtenderPorUsuario = new Map<string, { name: string; count: number }>()
+  for (const t of ticketsSinAtender) {
+    const personas = [
+      ...(t.assignedToId ? [{ id: t.assignedToId, name: t.assignedTo?.name ?? '' }] : [{ id: '', name: 'Sin asignar' }]),
+      ...t.collaborators.map((c: any) => ({ id: c.userId, name: c.user?.name ?? '' })),
+    ]
+    for (const p of personas) {
+      const row = sinAtenderPorUsuario.get(p.id) ?? { name: p.name, count: 0 }
+      row.count++
+      sinAtenderPorUsuario.set(p.id, row)
+    }
+  }
+  const inicioHoy = argentinaTimeToInstant(argentinaDayStart(now), 0, 0).toISOString()
+  for (const [userId, r] of Array.from(sinAtenderPorUsuario)) {
+    notifications.push({
+      id: `tickets-sin-atender-${userId || 'nadie'}-${hoyKey}`,
+      type: 'tickets_sin_atender',
+      title: userId ? `${r.count} ticket${r.count !== 1 ? 's' : ''} sin atender` : `${r.count} ticket${r.count !== 1 ? 's' : ''} sin asignar`,
+      body: userId
+        ? `${r.name} — abiertos hace más de un día. Pasalos a "En proceso" cuando los tomes.`
+        : 'Abiertos hace más de un día y sin nadie a cargo.',
+      href: '/tickets',
+      severity: 'danger',
+      createdAt: inicioHoy,
+      countsTowardUnread: true,
+      assigneeId: userId || null,
+    })
+  }
+
+  for (const t of agendasDelDia) {
+    const dia = diaDeAgenda(t.dueDate)
+    const esHoy = dia === hoyKey
+    notifications.push({
+      id: `agenda-${t.id}`,
+      type: 'agenda_contacto',
+      title: esHoy ? 'Hoy tenés que contactar' : `Contacto agendado vencido (${fmtDateOnly(dia)})`,
+      body: t.description ? `${t.title.replace(/^Contactar: /, '')} — ${t.description}` : t.title.replace(/^Contactar: /, ''),
+      href: `/pipeline?dealId=${t.dealId}`,
+      severity: esHoy ? 'warning' : 'danger',
+      // El inicio del día agendado → figura "no leída" ese día, no cuando se
+      // agendó.
+      createdAt: argentinaTimeToInstant(argentinaDateKeyToDayStart(dia), 0, 0).toISOString(),
+      countsTowardUnread: true,
+      assigneeId: t.assignedToId,
     })
   }
 
@@ -295,6 +375,8 @@ export async function GET() {
         if (n.type === 'ajuste_abono') return canSeeServicios
         // El vendedor ve el suyo; Admin+ ve el de cada uno (involvesMe).
         if (n.type === 'deals_sin_contacto') return canSeeLeads && involvesMe(n)
+        if (n.type === 'agenda_contacto') return involvesMe(n)
+        if (n.type === 'tickets_sin_atender') return involvesMe(n)
         return true
       })
       .map(({ assigneeId: _assigneeId, collaboratorIds: _collaboratorIds, ...n }) => ({

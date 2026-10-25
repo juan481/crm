@@ -24,10 +24,27 @@ export async function POST(req: NextRequest) {
   const numeroAbonado = normalizarAbonado(body?.numeroAbonado)
   if (!numeroAbonado) return NextResponse.json({ error: 'Número de abonado o contraseña incorrectos.' }, { status: 404 })
 
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { numeroAbonado },
     select: { email: true, role: true, status: true, empresaId: true },
   })
+
+  // "Con el dealer-abonado o con el abonado solo" (Seba, 25/10): si tipeó
+  // sólo el número ("3434"), se busca el código completo que termina en ese
+  // número detrás de las letras del dealer ("ABB3434"). Sólo si hay UNO
+  // activo — si dos dealers comparten número, tiene que poner las letras.
+  if (!user && /^\d+$/.test(numeroAbonado)) {
+    const candidatos = await prisma.user.findMany({
+      where: { numeroAbonado: { endsWith: numeroAbonado }, role: 'CLIENTE', status: 'ACTIVE' },
+      select: { email: true, role: true, status: true, empresaId: true, numeroAbonado: true },
+      take: 5,
+    })
+    const exactos = candidatos.filter((c) => new RegExp(`^[A-Z]+${numeroAbonado}$`).test(c.numeroAbonado ?? ''))
+    if (exactos.length > 1) {
+      return NextResponse.json({ error: 'Ese número existe en más de un dealer — ingresalo con las letras adelante (ej. ABB3434).' }, { status: 409 })
+    }
+    if (exactos.length === 1) user = exactos[0]
+  }
 
   // Mismo criterio de privacidad que sendPortalMagicLink: no se filtra si el
   // número existe o no con un status/mensaje distinto.
