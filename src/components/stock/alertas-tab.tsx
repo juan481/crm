@@ -20,6 +20,7 @@ interface Alerta {
   estado: string
   nota: string | null
   createdAt: string
+  revisadoPorId: string | null
   product: { id: string; name: string; sku: string | null; currency: string }
 }
 
@@ -64,8 +65,9 @@ export function AlertasTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="w-44"><Select value={estado} onChange={(e) => setEstado(e.target.value)} options={ESTADO_OPTS} /></div>
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Aplicar el costo nuevo actualiza el producto; el costo alimenta el margen de las cotizaciones.
+        <p className="text-xs max-w-xl text-right" style={{ color: 'var(--color-text-muted)' }}>
+          Los cambios de costo que vienen del Drive se aplican solos (quedan en &quot;Aplicadas&quot; como historial).
+          Acá pendientes quedan sólo las que necesitan que decidas: costos de una factura de compra, o un salto raro de la planilla.
         </p>
       </div>
 
@@ -132,7 +134,9 @@ export function AlertasTab() {
                     </div>
                   ) : (
                     <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}>
-                      {a.estado === 'APLICADA' ? 'Aplicada' : 'Descartada'}
+                      {a.estado === 'APLICADA'
+                        ? (a.origen === 'SYNC' && !a.revisadoPorId ? 'Aplicada sola (Drive)' : 'Aplicada')
+                        : 'Descartada'}
                     </span>
                   )}
                 </div>

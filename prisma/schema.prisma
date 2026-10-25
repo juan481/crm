@@ -320,6 +320,7 @@ model Organization {
   vigiladores             Vigilador[]
   vigiladorTurnos         VigiladorTurno[]
   ajustesAbono            AjusteAbono[]
+  gastos                  Gasto[]
   tasks                   Task[]
   tickets                 Ticket[]
   empresas                Empresa[]
@@ -471,6 +472,38 @@ model AjusteAbono {
   @@index([organizationId, proximoAjuste])
 }
 
+// Gastos del día a día (nafta, librería, un service, viáticos) — pedido de
+// Abba (Seba, 25/10): "algo rápido y sencillo, y que después de la primera
+// carga ya quede registrado el proveedor". NO es Compras: una Compra es la
+// factura de mercadería del proveedor (mueve stock, costos, cuentas por
+// pagar); un Gasto ya está pagado y sólo se registra. El proveedor es una
+// Empresa con esProveedor=true — si se tipea uno nuevo al cargar el gasto,
+// se crea ahí mismo y queda en /proveedores para la próxima.
+model Gasto {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fecha           DateTime     @db.Date
+  proveedorId     String?
+  proveedor       Empresa?     @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  // Lista curada + libre (src/lib/gastos.ts), mismo criterio que canalIngreso.
+  categoria       String
+  concepto        String?
+  monto           Float
+  moneda          String       @default("ARS")
+  medioPago       String? // 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'MERCADOPAGO' | 'CHEQUE' | 'OTRO'
+  // Foto del ticket/factura (opcional), en el mismo bucket que Documentos.
+  comprobanteUrl  String?
+  comprobantePath String?
+  creadoPorId     String?
+  creadoPor       User?        @relation("GastoCreador", fields: [creadoPorId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, fecha])
+  @@index([organizationId, proveedorId])
+}
+
 // Emails that opted out of marketing/campaign sends for an org. Checked before
 // creating campaign recipients and again right before sending (in case someone
 // unsubscribes while a large campaign is still batching out).
@@ -587,6 +620,7 @@ model User {
   commissionLedgers        CommissionLedger[]
   deletionRequestsMade     DeletionRequest[]        @relation("DeletionRequestedBy")
   deletionRequestsResolved DeletionRequest[]        @relation("DeletionRequestResolvedBy")
+  gastosCargados           Gasto[]                  @relation("GastoCreador")
 
   @@index([organizationId])
   @@index([empresaId])
@@ -1722,6 +1756,7 @@ model Empresa {
   serviciosRecurrentes  ServicioRecurrente[]
   compras               Compra[]
   solicitudesCompra     SolicitudCompra[]
+  gastos                Gasto[]
   entregasStock         EntregaStock[]
   // Usuarios de portal de cliente atados a esta Empresa (role === 'CLIENTE').
   portalUsers           User[]                 @relation("PortalUser")

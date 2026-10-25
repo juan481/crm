@@ -242,12 +242,21 @@ export async function syncCatalogFromGoogleSheet(
     const cambioReal = !!existing?.id && costoRes.conservado == null &&
       esCambioDeCostoRelevante(anteriorCosto, normalized.costo, 0.01)
     const cambioAbsurdo = !!existing?.id && costoRes.conservado === 'absurdo'
+    // El cambio real YA se escribe en el producto más abajo (el Drive es la
+    // fuente de verdad) → la alerta nace APLICADA, es sólo historial. Antes
+    // nacía PENDIENTE: Abba juntó 2174 "pendientes" que no había que tocar
+    // (pregunta de Seba, 25/10, "¿qué significa esto?"), y "Aplicar" en una
+    // vieja (14/10) volvía el costo al valor de esa fecha, pisando el del
+    // Drive más nuevo. Sólo el salto absurdo (que NO se aplicó) queda
+    // PENDIENTE para que una persona decida.
     if (cambioReal || cambioAbsurdo) {
       try {
-        const yaHay = await db.alertaCosto.findFirst({
-          where: { organizationId: orgId, productId: existing.id, estado: 'PENDIENTE' },
-          select: { id: true },
-        })
+        const yaHay = cambioAbsurdo
+          ? await db.alertaCosto.findFirst({
+              where: { organizationId: orgId, productId: existing.id, estado: 'PENDIENTE' },
+              select: { id: true },
+            })
+          : null
         if (!yaHay) {
           await db.alertaCosto.create({
             data: {
@@ -259,9 +268,9 @@ export async function syncCatalogFromGoogleSheet(
               precioNuevo: normalized.price ?? null,
               variacionPct: variacionPct(anteriorCosto as number, normalized.costo as number),
               origen: 'SYNC',
-              nota: cambioAbsurdo
-                ? 'La planilla del proveedor trajo un salto de más de 500% — probable mezcla de monedas (USD/ARS) o error de carga. NO se actualizó el costo; corregí la planilla o aplicá el valor a mano si es correcto.'
-                : null,
+              ...(cambioAbsurdo
+                ? { nota: 'La planilla del proveedor trajo un salto de más de 500% — probable mezcla de monedas (USD/ARS) o error de carga. NO se actualizó el costo; corregí la planilla o aplicá el valor a mano si es correcto.' }
+                : { estado: 'APLICADA', revisadoEn: new Date() }),
             },
           })
         }

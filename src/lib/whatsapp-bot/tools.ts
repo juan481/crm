@@ -10,6 +10,8 @@ import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
 import { appBaseUrl } from '@/lib/app-url'
 import { buscarCatalogoParaBot } from '@/lib/catalogo-search'
+import { NOTA_AUTOMATICA_META } from '@/lib/deal-contacto'
+import { guardarCvsDeConversacion, CVS_FOLDER_NAME } from '@/lib/cvs-documentos'
 import type { WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 
 // Herramientas que NISSI puede invocar durante la charla. A propósito son
@@ -214,12 +216,35 @@ async function attachTranscript(
     const content = await buildConversationTranscript(conversationId)
     if (!content) return
     if ('dealId' in target) {
-      await db.dealNota.create({ data: { dealId: target.dealId, organizationId: orgId, userId, tipo: 'CHAT', content } })
+      await db.dealNota.create({ data: { dealId: target.dealId, organizationId: orgId, userId, tipo: 'CHAT', content, metadata: NOTA_AUTOMATICA_META } })
     } else {
       await db.ticketMessage.create({ data: { ticketId: target.ticketId, userId, isInternal: true, content } })
     }
   } catch (err) {
     console.error('[NISSI] no se pudo adjuntar el transcript al registro', err)
+  }
+}
+
+/** Guarda los CVs de la conversación en Documentos → CVs y, si guardó
+ *  alguno, lo deja anotado en el ticket de RRHH (mensaje interno) para que
+ *  el área sepa dónde está. Falla suave. */
+export async function guardarCvsYAvisar(
+  db: any,
+  opts: { orgId: string; conversationId: string; ticketId: string; personName: string | null; userId: string },
+): Promise<void> {
+  try {
+    const conv = await db.whatsAppConversation.findUnique({ where: { id: opts.conversationId }, select: { contextResetAt: true, customerName: true } })
+    const n = await guardarCvsDeConversacion(db, {
+      orgId: opts.orgId, conversationId: opts.conversationId, uploadedById: opts.userId,
+      personName: opts.personName || conv?.customerName || null, desde: conv?.contextResetAt ?? null,
+    })
+    if (n > 0) {
+      await db.ticketMessage.create({
+        data: { ticketId: opts.ticketId, userId: opts.userId, isInternal: true, content: `📎 ${n === 1 ? 'El CV quedó guardado' : `${n} archivos quedaron guardados`} en Documentos → ${CVS_FOLDER_NAME}.` },
+      })
+    }
+  } catch (err) {
+    console.error('[NISSI] no se pudo guardar el CV en Documentos', err)
   }
 }
 
@@ -446,6 +471,11 @@ export async function runWhatsAppBotTool(name: string, input: Record<string, unk
       }
       await db.whatsAppConversation.update({ where: { id: ctx.conversationId }, data: { status: 'HANDED_OFF', handedOffTo: ticketKind.handedOffTo, ticketId: ticket.id } })
       await attachTranscript(db, { ticketId: ticket.id }, ctx.conversationId, ctx.orgId, createdById)
+      // CVs adjuntos → Documentos / CVs (pedido de Abba, 25/10). Los que
+      // lleguen después de derivar los toma engine.ts.
+      if (name === 'create_rrhh_ticket') {
+        await guardarCvsYAvisar(db, { orgId: ctx.orgId, conversationId: ctx.conversationId, ticketId: ticket.id, personName: customerName, userId: createdById })
+      }
       fireWebhook(ctx.orgId, 'ticket.created', { id: ticket.id, number: ticket.number, title, category: ticketKind.category, source: 'whatsapp-ai-bot' })
 
       const notifyTarget = contactUser ?? (contactEmail ? { name: null, email: contactEmail } : null)

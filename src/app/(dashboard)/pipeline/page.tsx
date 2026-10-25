@@ -22,6 +22,7 @@ import { ObjetivosPanel } from '@/components/pipeline/objetivos-panel'
 import { ComisionesPanel } from '@/components/pipeline/comisiones-panel'
 import { RecurrentesPanel } from '@/components/pipeline/recurrentes-panel'
 import { ContactoPicker } from '@/components/pipeline/contacto-picker'
+import { DIAS_SIN_CONTACTO, diasDesde } from '@/lib/deal-contacto'
 import type { Deal, DealStage } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -42,16 +43,16 @@ const LEAD_REASON_LABEL: Record<string, string> = {
   asesor: 'Pidió un asesor',
 }
 
-// Días sin cambios (updatedAt) para marcar una oportunidad como estancada.
-// No aplica a etapas ya cerradas.
-const STALE_DAYS = 14
-
-function daysSinceUpdate(deal: Deal) {
-  return Math.floor((Date.now() - new Date(deal.updatedAt).getTime()) / (1000 * 60 * 60 * 24))
+// Días sin contacto para marcar una oportunidad abierta (antes 14 días y
+// sólo contaba updatedAt — pedido de Abba, Seba 25/10: alertar a los 5, y
+// que una llamada/nota cargada en la Actividad cuente como contacto). El
+// "último contacto" lo arma la API (lastContactAt, ver deal-contacto.ts).
+function daysSinceContact(deal: Deal) {
+  return diasDesde(deal.lastContactAt ?? deal.updatedAt)
 }
 
 function isDealStale(deal: Deal) {
-  return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO' && daysSinceUpdate(deal) >= STALE_DAYS
+  return deal.stage !== 'GANADO' && deal.stage !== 'PERDIDO' && daysSinceContact(deal) >= DIAS_SIN_CONTACTO
 }
 
 // Para el buscador del tablero: "Martín" encuentra "martin".
@@ -689,7 +690,15 @@ export default function PipelinePage() {
   // de todo para mover al costado" y "tengo que buscar con Ctrl+F lo que
   // está gestionando Emilio, uno por uno"). Los paneles de arriba (forecast,
   // objetivos, derivaciones) siguen mirando TODO — el filtro es del tablero.
-  const [ownerFilter, setOwnerFilter] = useState('')
+  // ?owner= / ?sinContacto=1 — llegada desde la campanita ("N oportunidades
+  // sin contacto").
+  const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('owner') ?? '')
+  const [soloSinContacto, setSoloSinContacto] = useState(() => searchParams.get('sinContacto') === '1')
+  useEffect(() => {
+    if (searchParams.get('sinContacto') === '1') setSoloSinContacto(true)
+    const o = searchParams.get('owner')
+    if (o) setOwnerFilter(o)
+  }, [searchParams])
   const [search, setSearch] = useState('')
   const [fullscreen, setFullscreen] = useState(false)
   const [selecting, setSelecting] = useState(false)
@@ -718,11 +727,13 @@ export default function PipelinePage() {
   const term = fold(search.trim())
   const boardDeals = deals.filter(d => {
     if (ownerFilter && d.ownerId !== ownerFilter) return false
+    if (soloSinContacto && !isDealStale(d)) return false
     if (!term) return true
     const contacto = d.contacto ? `${d.contacto.firstName} ${d.contacto.lastName}` : ''
     return fold([d.title, d.empresa?.name ?? '', contacto, d.owner?.name ?? ''].join(' ')).includes(term)
   })
-  const boardFiltered = !!ownerFilter || !!term
+  const boardFiltered = !!ownerFilter || !!term || soloSinContacto
+  const sinContactoCount = deals.filter(isDealStale).length
 
   const dealsByStage = STAGES.reduce((acc, s) => {
     acc[s.key] = boardDeals.filter(d => d.stage === s.key)
@@ -894,8 +905,13 @@ export default function PipelinePage() {
           <h1 className="text-2xl font-bold text-[var(--color-text)]">Pipeline de Ventas</h1>
           <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
             {deals.filter(d => d.stage !== 'PERDIDO' && d.stage !== 'GANADO').length} deals activos
-            {deals.some(isDealStale) && (
-              <span className="text-amber-400"> · {deals.filter(isDealStale).length} estancadas (+{STALE_DAYS}d sin actividad)</span>
+            {sinContactoCount > 0 && (
+              <>
+                {' · '}
+                <button type="button" className="text-amber-400 hover:underline" onClick={() => setSoloSinContacto(true)}>
+                  {sinContactoCount} sin contacto hace +{DIAS_SIN_CONTACTO} días
+                </button>
+              </>
             )}
             {' '}· Arrastrá las tarjetas para moverlas entre etapas
           </p>
@@ -954,10 +970,21 @@ export default function PipelinePage() {
               />
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setSoloSinContacto(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl border transition-colors"
+            style={soloSinContacto
+              ? { background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.5)', color: '#f59e0b' }
+              : { borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+            title={`Oportunidades abiertas sin contacto hace ${DIAS_SIN_CONTACTO} días o más (una nota de actividad, una cotización o un cambio de etapa cuentan como contacto)`}
+          >
+            <Clock size={13} /> Sin contacto +{DIAS_SIN_CONTACTO} días{sinContactoCount > 0 ? ` (${sinContactoCount})` : ''}
+          </button>
           {boardFiltered && (
             <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
               Mostrando {boardDeals.length} de {deals.length} ·{' '}
-              <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => { setOwnerFilter(''); setSearch('') }}>
+              <button type="button" className="underline hover:text-[var(--color-text)]" onClick={() => { setOwnerFilter(''); setSearch(''); setSoloSinContacto(false) }}>
                 ver todas
               </button>
             </span>
@@ -1128,7 +1155,7 @@ export default function PipelinePage() {
 
                             {stale && (
                               <p className="text-[10px] flex items-center gap-1 mt-1 font-medium text-amber-400">
-                                <Clock size={9} />{daysSinceUpdate(deal)} días sin actividad
+                                <Clock size={9} />{daysSinceContact(deal)} días sin contacto
                               </p>
                             )}
 

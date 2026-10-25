@@ -27,15 +27,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const db = prisma as any
     const alerta = await db.alertaCosto.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true, estado: true, productId: true, costoNuevo: true, precioNuevo: true },
+      select: { id: true, estado: true, productId: true, costoNuevo: true, precioNuevo: true, origen: true, nota: true, createdAt: true },
     })
     if (!alerta) return NextResponse.json({ error: 'Alerta no encontrada' }, { status: 404 })
     if (alerta.estado !== 'PENDIENTE') {
       return NextResponse.json({ error: 'Esta alerta ya fue resuelta' }, { status: 409 })
     }
 
+    // Una alerta del catálogo sin nota ya quedó aplicada por el propio sync
+    // (ver catalogo-sync.ts) → "aplicar" no toca el producto. Y si después de
+    // esta alerta hubo OTRO cambio de costo del mismo producto, aplicar la
+    // vieja pisaría el valor más nuevo — bug real (Abba, 25/10: alertas del
+    // 14/10 seguían pendientes con el costo del 23/10 ya cargado).
+    const yaAplicadaPorSync = alerta.origen === 'SYNC' && !alerta.nota
+    const hayUnaMasNueva = accion === 'aplicar' && !yaAplicadaPorSync && !!(await db.alertaCosto.findFirst({
+      where: { organizationId: payload.orgId, productId: alerta.productId, createdAt: { gt: alerta.createdAt } },
+      select: { id: true },
+    }))
+    if (hayUnaMasNueva) {
+      return NextResponse.json({ error: 'Después de esta alerta el costo de este producto ya volvió a cambiar (por el Drive o por otra compra). Aplicarla pisaría el costo más nuevo — descartala.' }, { status: 409 })
+    }
+
     await db.$transaction(async (tx: any) => {
-      if (accion === 'aplicar') {
+      if (accion === 'aplicar' && !yaAplicadaPorSync) {
         const data: Record<string, unknown> = { costo: alerta.costoNuevo }
         if (alerta.precioNuevo != null) data.price = alerta.precioNuevo
         await tx.product.update({ where: { id: alerta.productId }, data })

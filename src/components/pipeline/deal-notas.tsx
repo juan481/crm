@@ -205,6 +205,9 @@ export function DealNotas({ dealId }: Props) {
         ['deal-notas', dealId],
         old => ({ data: (old?.data ?? []).map(n => n.id === optimisticId ? json.data : n) })
       )
+      // Una nota cuenta como contacto: el tablero tiene que sacar el aviso
+      // de "X días sin contacto" de esta tarjeta (ver deal-contacto.ts).
+      qc.invalidateQueries({ queryKey: ['deals'] })
     } catch {
       qc.setQueryData<{ data: DealNotaItem[] }>(
         ['deal-notas', dealId],

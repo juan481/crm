@@ -83,6 +83,10 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // SELLER para admitir a ADMINISTRATIVO (rango 2.5) — las APIs de
   // /api/compras/* chequean canAccess('ADMIN') || roleHasModule(...).
   { id: 'compras',        label: 'Depósito · Compras', defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],               minRole: 'SELLER' },
+  // Gastos del día a día (nafta, librería, services) — pedido de Abba,
+  // Seba 25/10. Mismo criterio que Compras: dato de plata, default ADMIN+
+  // y Administrativo; las APIs de /api/gastos/* chequean puedeVerGastos().
+  { id: 'gastos',         label: 'Gastos',          defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],                  minRole: 'SELLER' },
   // Entregas / remitos internos — egresos de material a obra o mostrador.
   // Piso TECHNICIAN (el depósito prepara y entrega); default ADMIN+.
   { id: 'entregas',       label: 'Depósito · Entregas', defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO'],              minRole: 'TECHNICIAN' },

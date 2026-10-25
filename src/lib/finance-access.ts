@@ -12,3 +12,9 @@ export async function puedeVerServicios(orgId: string, role: Role): Promise<bool
 export async function puedeVerFacturacion(orgId: string, role: Role): Promise<boolean> {
   return canAccess(role, 'ADMIN') || roleHasModule(orgId, role, 'facturas')
 }
+
+// Gastos del día a día (/gastos) — mismo criterio: ADMIN+ siempre, el resto
+// (ej. ADMINISTRATIVO) por permiso de módulo.
+export async function puedeVerGastos(orgId: string, role: Role): Promise<boolean> {
+  return canAccess(role, 'ADMIN') || roleHasModule(orgId, role, 'gastos')
+}

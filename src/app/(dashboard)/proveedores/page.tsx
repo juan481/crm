@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Building2, Truck, MapPin, CreditCard } from 'lucide-react'
+import { Search, Building2, Truck, MapPin, CreditCard, Receipt } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Pagination } from '@/components/ui/table'
@@ -41,11 +41,18 @@ export default function ProveedoresPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Proveedores</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-          Empresas del directorio marcadas como proveedor · {total} en total
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text)' }}>Proveedores</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+            Empresas del directorio marcadas como proveedor · {total} en total
+          </p>
+        </div>
+        {/* Seba (25/10) buscó acá cómo cargar los gastos del día — el que se
+            carga en Gastos con un proveedor nuevo aparece acá solo. */}
+        <Button variant="outline" size="sm" leftIcon={<Receipt size={14} />} onClick={() => router.push('/gastos')}>
+          Cargar un gasto
+        </Button>
       </div>
 
       <div className="max-w-sm">

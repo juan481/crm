@@ -8,7 +8,7 @@ import {
   Puzzle, Shield, X, CreditCard, UserCog, CalendarDays, FolderOpen,
   TrendingUp, CheckSquare, LifeBuoy, Calculator, CalendarCheck, ClipboardCheck,
   Building2, UserCircle2, FileText, ClipboardList, KeyRound, Package, Boxes, Bug, MessageCircle, RefreshCw,
-  Warehouse, Truck, ShoppingCart, PackageCheck, ShieldCheck, Fingerprint,
+  Warehouse, Truck, ShoppingCart, PackageCheck, ShieldCheck, Fingerprint, Receipt,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -112,6 +112,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       { label: 'Stock',       href: '/stock',       icon: <Warehouse size={17} />,     roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'stock' },
       { label: 'Entregas',    href: '/entregas',    icon: <PackageCheck size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER', 'HR', 'TECHNICIAN'], moduleId: 'entregas' },
       { label: 'Compras',     href: '/compras',     icon: <ShoppingCart size={17} />,  roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],               moduleId: 'compras' },
+      { label: 'Gastos',      href: '/gastos',      icon: <Receipt size={17} />,       roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'SELLER'],               moduleId: 'gastos' },
       { label: 'Proveedores', href: '/proveedores', icon: <Truck size={17} />,         roles: ['SUPER_ADMIN', 'ADMIN', 'SELLER'],     moduleId: 'empresas' },
     ],
   },

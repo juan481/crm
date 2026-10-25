@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db'
 import { roleHasModule } from '@/lib/module-access'
 import { unstable_cache } from 'next/cache'
 import { puedeVerServicios } from '@/lib/finance-access'
-import { argentinaDayStart, fmtDateOnly } from '@/lib/timezone'
+import { argentinaDayStart, argentinaTimeToInstant, fmtDateOnly } from '@/lib/timezone'
+import { DIAS_SIN_CONTACTO, ultimaActividadManual, ultimoContacto } from '@/lib/deal-contacto'
 
 export interface AppNotification {
   id: string
@@ -33,7 +34,7 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
   const since72h = new Date(now.getTime() - 72 * 60 * 60 * 1000)
   const db = prisma as any
 
-  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions, ajustesVencidos] = await Promise.all([
+  const [overdueInvoices, newLeads, pendingTasks, newTickets, recentConvs, pendingDeletions, ajustesVencidos, dealsAbiertos] = await Promise.all([
     db.invoice.findMany({
       where: {
         organizationId: orgId,
@@ -100,7 +101,32 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
       orderBy: { proximoAjuste: 'asc' },
       take: 10,
     }),
+    // Oportunidades abiertas — para "sin contacto hace +N días" (pedido de
+    // Abba, Seba 25/10). Sólo las que no se tocan hace DIAS_SIN_CONTACTO
+    // pueden calificar, así que el filtro grueso por updatedAt va en la query
+    // y el fino (notas de actividad, cotizaciones) abajo.
+    db.deal.findMany({
+      where: {
+        organizationId: orgId,
+        stage: { notIn: ['GANADO', 'PERDIDO'] },
+        updatedAt: { lt: new Date(now.getTime() - DIAS_SIN_CONTACTO * 24 * 60 * 60 * 1000) },
+      },
+      select: { id: true, ownerId: true, updatedAt: true, owner: { select: { name: true } } },
+      take: 2000,
+    }),
   ])
+
+  // Un aviso por vendedor, no uno por oportunidad (Abba tiene decenas
+  // abiertas a la vez — uno por deal tapaba la campanita).
+  const manual = await ultimaActividadManual(db, dealsAbiertos.map((d: any) => d.id))
+  const limite = now.getTime() - DIAS_SIN_CONTACTO * 24 * 60 * 60 * 1000
+  const sinContactoPorOwner = new Map<string, { name: string; count: number }>()
+  for (const d of dealsAbiertos) {
+    if (ultimoContacto(d.updatedAt, manual.get(d.id)).getTime() >= limite) continue
+    const row = sinContactoPorOwner.get(d.ownerId) ?? { name: d.owner?.name ?? 'Sin asignar', count: 0 }
+    row.count++
+    sinContactoPorOwner.set(d.ownerId, row)
+  }
 
   const notifications: AppNotification[] = []
 
@@ -201,6 +227,23 @@ async function fetchNotifications(orgId: string): Promise<AppNotification[]> {
     })
   }
 
+  // Fecha del evento = inicio del día argentino → vuelve a figurar como "no
+  // leída" una vez por día mientras siga habiendo oportunidades sin contacto.
+  const hoy = argentinaTimeToInstant(argentinaDayStart(now), 0, 0).toISOString()
+  for (const [ownerId, r] of Array.from(sinContactoPorOwner)) {
+    notifications.push({
+      id: `sincontacto-${ownerId}-${hoy.slice(0, 10)}`,
+      type: 'deals_sin_contacto',
+      title: `${r.count} oportunidad${r.count !== 1 ? 'es' : ''} sin contacto`,
+      body: `${r.name} — hace más de ${DIAS_SIN_CONTACTO} días que nadie las contacta`,
+      href: `/pipeline?sinContacto=1&owner=${ownerId}`,
+      severity: 'warning',
+      createdAt: hoy,
+      countsTowardUnread: true,
+      assigneeId: ownerId,
+    })
+  }
+
   return notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
@@ -250,6 +293,8 @@ export async function GET() {
         if (n.type === 'pending_task' || n.type === 'new_ticket') return involvesMe(n)
         if (n.type === 'deletion_request') return payload.role === 'SUPER_ADMIN'
         if (n.type === 'ajuste_abono') return canSeeServicios
+        // El vendedor ve el suyo; Admin+ ve el de cada uno (involvesMe).
+        if (n.type === 'deals_sin_contacto') return canSeeLeads && involvesMe(n)
         return true
       })
       .map(({ assigneeId: _assigneeId, collaboratorIds: _collaboratorIds, ...n }) => ({

@@ -11,11 +11,12 @@ import {
 import { prisma } from '@/lib/db'
 import { DEFAULT_GEMINI_MODEL, type WhatsAppBotConfig } from '@/lib/whatsapp-bot/config'
 import { buildNissiSystemPrompt } from '@/lib/whatsapp-bot/system-prompt'
-import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool } from '@/lib/whatsapp-bot/tools'
+import { WHATSAPP_BOT_TOOLS, runWhatsAppBotTool, guardarCvsYAvisar } from '@/lib/whatsapp-bot/tools'
 import { sendWhatsAppBotMessage } from '@/lib/whatsapp-bot/send'
 import { notifyHuman } from '@/lib/whatsapp-bot/notify'
 import { looksAbusive, ABUSE_MAX_REPLIES_PER_HOUR, ABUSE_MAX_REPLIES_PER_DAY } from '@/lib/whatsapp-bot/abuse-guard'
 import { findContactoIdByPhone, resolveContactoForConversation } from '@/lib/whatsapp-bot/contacto'
+import { NOTA_AUTOMATICA_META } from '@/lib/deal-contacto'
 
 // NISSI corre sobre Gemini Flash-Lite — un flujo guiado por herramientas como
 // este no necesita razonamiento profundo, sí baja latencia (WhatsApp espera
@@ -260,7 +261,9 @@ async function appendToHandoffRecord(
   try {
     if (conversation.dealId) {
       const deal = await db.deal.findUnique({ where: { id: conversation.dealId }, select: { ownerId: true } })
-      if (deal) await db.dealNota.create({ data: { dealId: conversation.dealId, organizationId: orgId, userId: deal.ownerId, tipo: 'CHAT', content } })
+      // metadata automática: que el cliente escriba no cuenta como "lo
+      // contactamos" para la alerta de días sin contacto (deal-contacto.ts).
+      if (deal) await db.dealNota.create({ data: { dealId: conversation.dealId, organizationId: orgId, userId: deal.ownerId, tipo: 'CHAT', content, metadata: NOTA_AUTOMATICA_META } })
     } else if (conversation.ticketId) {
       const ticket = await db.ticket.findUnique({ where: { id: conversation.ticketId }, select: { createdById: true } })
       if (ticket) await db.ticketMessage.create({ data: { ticketId: conversation.ticketId, userId: ticket.createdById, isInternal: true, content } })
@@ -606,10 +609,22 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     if (stillOpen) {
       const turnMsgs = await db.whatsAppMessage.findMany({
         where: { conversationId: conversation.id, role: 'user', processedAt: null },
-        orderBy: { createdAt: 'asc' }, select: { content: true },
+        orderBy: { createdAt: 'asc' }, select: { content: true, mediaUrl: true },
       })
       await markUserMessagesProcessed(db, conversation.id)
       const turnText = turnMsgs.map((m: any) => m.content).join('\n').trim()
+
+      // Derivado a RRHH y llegó el CV después ("ahí te lo mando") → también
+      // va a Documentos / CVs. Idempotente, no duplica los ya guardados.
+      if (conversation.handedOffTo === 'RRHH' && conversation.ticketId && turnMsgs.some((m: any) => m.mediaUrl)) {
+        const ticket = await db.ticket.findUnique({ where: { id: conversation.ticketId }, select: { createdById: true, recipientName: true } })
+        if (ticket) {
+          await guardarCvsYAvisar(db, {
+            orgId: msg.orgId, conversationId: conversation.id, ticketId: conversation.ticketId,
+            personName: ticket.recipientName, userId: ticket.createdById,
+          })
+        }
+      }
 
       // "ok" / "gracias" / 👍 → nada que contestar ni que sumar. Se marca
       // leída para que no salte el badge del inbox por un cierre de cortesía.

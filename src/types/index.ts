@@ -593,6 +593,8 @@ export interface Deal {
   owner?: { id: string; name: string }
   organizationId: string
   cotizaciones?: Array<{ id: string; ref: string; finalTotal: number; currency: string; status: string; createdAt: string }>
+  // Sólo en el listado (GET /api/deals) — ver src/lib/deal-contacto.ts.
+  lastContactAt?: string
   createdAt: string
   updatedAt: string
 }
