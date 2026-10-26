@@ -380,6 +380,7 @@ export default function EmpresaDetailPage() {
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                         {s.nombre}
                         {s.numeroAbonado && <span className="ml-2 text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }} title="N° de abonado (Ultra)">#{s.numeroAbonado}</span>}
+                        {s.dealer && <span className="ml-2 text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }} title={s.modulos?.length ? `Módulos: ${s.modulos.join(', ')}` : 'Código de Dealer'}>Dealer {s.dealer}</span>}
                         {s.incluyeMonitoreo && <span className="ml-2 text-[10px] text-emerald-500">monitoreo</span>}
                         {s.estado !== 'ACTIVO' && <span className="ml-2 text-[10px] text-[var(--color-text-subtle)]">({ESTADO_LABEL[s.estado] ?? s.estado})</span>}
                       </p>

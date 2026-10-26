@@ -155,3 +155,43 @@ export function sumarMesesDateKey(dateKey: string, meses: number): string {
   const nd = Math.min(d, ultimoDia)
   return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(nd).padStart(2, '0')}`
 }
+
+// ── Tipo de servicio (sólo UI) ─────────────────────────────────────────────
+// Pedido de Abba (Seba, 27/10): el formulario pedía los mismos campos para
+// todo, y la mitad no aplica según qué se vende. No es una columna: sale de
+// modoLicencia + incluyeMonitoreo, así los abonos viejos se clasifican solos.
+export type TipoServicio = 'MONITOREO' | 'SAAS' | 'PERPETUA' | 'OTRO'
+
+export const TIPOS_SERVICIO: { value: TipoServicio; label: string; hint: string }[] = [
+  { value: 'MONITOREO', label: 'Monitoreo 24/7', hint: 'Abono mensual de monitoreo — lo indispensable es el N° de abonado.' },
+  { value: 'SAAS', label: 'Licencia SaaS', hint: 'Software por suscripción — código de Dealer y módulos contratados.' },
+  { value: 'PERPETUA', label: 'Licencia perpetua', hint: 'Licencia de compra única con serial y puestos.' },
+  { value: 'OTRO', label: 'Otro servicio', hint: 'Mantenimiento, soporte, cualquier otro abono.' },
+]
+
+export function tipoDeServicio(s: { modoLicencia: string; incluyeMonitoreo: boolean }): TipoServicio {
+  if (s.modoLicencia === 'SAAS') return 'SAAS'
+  if (s.modoLicencia === 'PERPETUA') return 'PERPETUA'
+  return s.incluyeMonitoreo ? 'MONITOREO' : 'OTRO'
+}
+
+// Código de Dealer de una licencia SaaS: 3 letras + 3 números ("ABC123").
+// Mismo contrato que normalizarAbonado: null = vacío, '' = formato inválido.
+export const DEALER_FORMATO = /^[A-Z]{3}\d{3}$/
+export function normalizarDealer(v: unknown): string | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim().toUpperCase().replace(/[\s-]+/g, '')
+  if (!s) return null
+  return DEALER_FORMATO.test(s) ? s : ''
+}
+
+// Módulos y aplicaciones de una licencia SaaS — lista libre, sin repetidos.
+export function normalizarModulos(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  const out: string[] = []
+  for (const x of v) {
+    const s = typeof x === 'string' ? x.trim().slice(0, 60) : ''
+    if (s && !out.some((o) => o.toLowerCase() === s.toLowerCase())) out.push(s)
+  }
+  return out.slice(0, 40)
+}

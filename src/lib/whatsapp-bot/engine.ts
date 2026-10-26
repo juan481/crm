@@ -32,11 +32,13 @@ import { NOTA_AUTOMATICA_META } from '@/lib/deal-contacto'
 // Respuestas de WhatsApp son cortas, pero en Gemini 3.x el "thinking" (aun
 // con thinkingLevel LOW, ver thinkingConfigFor) se paga del MISMO budget
 // que el texto visible — con 600 se vio cortar respuestas a mitad de frase
-// bien antes de llegar al largo real de una respuesta de WhatsApp. 1024 le
-// da margen al thinking sin dejar de frenar una respuesta que se fue larga.
-// Si aun así se corta por MAX_TOKENS, hay reintento (ver más abajo) — nunca
-// se manda al cliente un texto a medias.
-const MAX_OUTPUT_TOKENS = 1024
+// bien antes de llegar al largo real de una respuesta de WhatsApp. Con 1024
+// también se cortaba (Abba, 26/10: sus instrucciones de ~11k caracteres
+// piden respuestas consultivas — dos cortes seguidos con un proveedor que
+// se presentaba). 2048: sólo se paga lo que se genera de verdad, el tope es
+// un freno, no un costo fijo. Si aun así se corta por MAX_TOKENS, hay
+// reintento (ver más abajo) — nunca se manda al cliente un texto a medias.
+const MAX_OUTPUT_TOKENS = 2048
 // Tope de vueltas de tool-calling dentro de UN SOLO turno del cliente — un
 // turno realista necesita como mucho buscar_catalogo + save_customer_info +
 // una herramienta de handoff. Freno de seguridad contra un loop.
@@ -156,7 +158,10 @@ const OUTBOUND_LEAK_PATTERN = new RegExp(
   [
     '(?:\\$|us\\$|u\\$s|usd|ars|eur|€)\\s?\\d',          // $1000, US$ 50, USD30
     '\\d[\\d.,]*\\s?(?:pesos|d[oó]lares|usd|ars|euros?)\\b', // 1000 pesos, 50 dólares
-    '\\b(?:contrase[nñ]a|password|credencial(?:es)?|clave de acceso|usuario y (?:clave|contrase[nñ]a))\\b',
+    // "credencial" sola NO: en seguridad física es la credencial del
+    // vigilador (Abba, 26/10: una candidata dijo "tengo la credencial de
+    // seguridad tramitada", la respuesta se bloqueó y nunca se derivó a RRHH).
+    '\\b(?:contrase[nñ]a|password|credencial(?:es)? de acceso|clave de acceso|usuario y (?:clave|contrase[nñ]a))\\b',
     'https?://',                                          // NISSI nunca manda links
   ].join('|'),
   'i',
@@ -846,8 +851,14 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
       // Misma protección que en el loop de arriba: un segundo corte por
       // MAX_TOKENS no se manda tal cual — mejor el fallback genérico de
       // abajo que otro mensaje a medias.
-      if (t && cand?.finishReason !== 'MAX_TOKENS') finalText = t
-      else if (cand?.finishReason === 'MAX_TOKENS') {
+      if (t && cand?.finishReason !== 'MAX_TOKENS') {
+        finalText = t
+        // La vuelta de arriba se había cortado por MAX_TOKENS y ESTA salió
+        // bien → no es una falla. Antes quedaba marcada igual: nota de error
+        // en el inbox y, dentro de las 24 hs, la respuesta buena no se
+        // mandaba (Abba, 26/10, conversación con un proveedor).
+        couldNotAnswer = null
+      } else if (cand?.finishReason === 'MAX_TOKENS') {
         console.error('[NISSI ENGINE] la vuelta final sin tools TAMBIÉN se cortó por MAX_TOKENS', { orgId: msg.orgId, conversationId: conversation.id })
       }
     } catch (err) {
@@ -871,10 +882,38 @@ export async function handleIncomingWhatsAppMessage(msg: IncomingMessage): Promi
     console.error('[NISSI ENGINE] respuesta bloqueada por el filtro de salida', {
       conversationId: conversation.id, sample: finalText.slice(0, 200),
     })
-    finalText = handedOff
-      ? handoffConfirmationText(handedOff.to)
-      : 'Eso te lo confirma un asesor. Ya le paso tu consulta así te contactan.'
-    if (!handedOff) couldNotAnswer = couldNotAnswer ?? 'el filtro de salida detectó un precio / dato sensible'
+    // Antes de rendirse: UNA reescritura pidiéndole que saque lo que no
+    // puede decir. Un falso positivo (ej. mencionar un "$" de pasada) ya no
+    // corta la charla; si la reescritura también cae en el filtro, sigue
+    // el reemplazo de siempre.
+    let reescrita = ''
+    if (!handedOff) {
+      try {
+        const res = await generateWithRetry(ai, {
+          model,
+          // La respuesta bloqueada va como turno del modelo (contexto de qué
+          // reescribir; nunca se manda al cliente) — así además los roles
+          // siguen alternados, que es lo que espera Gemini.
+          contents: [
+            ...contents,
+            { role: 'model', parts: [{ text: finalText }] },
+            { role: 'user', parts: [{ text: '(Nota interna del sistema, no es del cliente: tu respuesta anterior incluía un precio, un link o datos de acceso, que no podés compartir. Respondé de nuevo lo mismo sin eso.)' }] },
+          ],
+          config: configFor(false),
+        })
+        const cand = res.candidates?.[0]
+        const t = extractText(cand)
+        if (t && cand?.finishReason !== 'MAX_TOKENS' && !isBlockedResponse(res) && !OUTBOUND_LEAK_PATTERN.test(t)) reescrita = t
+      } catch (err) {
+        console.error('[NISSI ENGINE] falló la reescritura después del filtro de salida', err)
+      }
+    }
+    if (reescrita) {
+      finalText = reescrita
+    } else {
+      finalText = handedOff ? handoffConfirmationText(handedOff.to) : FALLBACK_TEXT
+      if (!handedOff) couldNotAnswer = couldNotAnswer ?? 'el filtro de salida detectó un precio / dato sensible'
+    }
   }
 
   // Marcar procesado siempre (los dos caminos lo hacen) + chequear si un

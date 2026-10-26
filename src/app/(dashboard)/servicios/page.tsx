@@ -288,6 +288,14 @@ export default function ServiciosPage() {
                             <Hash size={10} />{s.numeroAbonado}
                           </span>
                         )}
+                        {s.dealer && (
+                          <span className="text-[10px] font-mono text-[var(--color-text-muted)]" title="Código de Dealer (licencia SaaS)">Dealer {s.dealer}</span>
+                        )}
+                        {s.modulos?.length > 0 && (
+                          <span className="text-[10px] text-[var(--color-text-subtle)]" title={s.modulos.join(', ')}>
+                            {s.modulos.length} módulo{s.modulos.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
                         {s.incluyeMonitoreo && (
                           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500"><Radio size={10} /> monitoreo</span>
                         )}

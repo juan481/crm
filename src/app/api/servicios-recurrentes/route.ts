@@ -3,7 +3,7 @@ import { getCurrentUser, canAccess } from '@/lib/auth'
 import { puedeVerServicios } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import {
-  montoMensualizado, sanitizeMoneda, clampDiaVencimiento, diasHastaFin, normalizarAbonado,
+  montoMensualizado, sanitizeMoneda, clampDiaVencimiento, diasHastaFin, normalizarAbonado, normalizarDealer, normalizarModulos,
   CICLO_LABEL, type Ciclo,
 } from '@/lib/servicios-recurrentes'
 import { argentinaDayStart, argentinaDayKey } from '@/lib/timezone'
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
         monto: true, moneda: true, ciclo: true, diaVencimiento: true, medioCobro: true,
         contratoInicio: true, contratoFin: true, estado: true, canalIngreso: true,
         subProvider: true, subStatus: true, subAuthUrl: true,
-        serial: true, version: true, puestos: true, notas: true, numeroAbonado: true,
+        serial: true, version: true, puestos: true, notas: true, numeroAbonado: true, dealer: true, modulos: true,
         createdAt: true, updatedAt: true,
         empresa: { select: { id: true, name: true, isCliente: true } },
       },
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     const hoy = argentinaDayStart()
     const data = rows
       .filter((r) => !q || r.nombre.toLowerCase().includes(q) || r.empresa.name.toLowerCase().includes(q)
-        || (r.numeroAbonado ?? '').toLowerCase().includes(q))
+        || (r.numeroAbonado ?? '').toLowerCase().includes(q) || (r.dealer ?? '').toLowerCase().includes(q))
       .map((r) => ({
         ...r,
         cicloLabel: CICLO_LABEL[r.ciclo as Ciclo] ?? r.ciclo,
@@ -190,6 +190,10 @@ export async function POST(req: NextRequest) {
     if (numeroAbonado === '') {
       return NextResponse.json({ error: 'El N° de abonado sólo puede tener letras, números o guiones (2 a 20 caracteres)' }, { status: 400 })
     }
+    const dealer = normalizarDealer(b.dealer)
+    if (dealer === '') {
+      return NextResponse.json({ error: 'El código de Dealer tiene que ser 3 letras y 3 números (ej. ABC123)' }, { status: 400 })
+    }
 
     const row = await prisma.servicioRecurrente.create({
       data: {
@@ -212,6 +216,8 @@ export async function POST(req: NextRequest) {
         puestos,
         notas: str(b.notas) || null,
         numeroAbonado,
+        dealer,
+        modulos: normalizarModulos(b.modulos),
       },
     })
 

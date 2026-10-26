@@ -757,6 +757,9 @@ export interface ServicioRecurrente {
   notas: string | null
   // N° de abonado en el software de monitoreo (Ultra)
   numeroAbonado: string | null
+  // Licencia SaaS: código de Dealer (ABC123) y módulos/aplicaciones
+  dealer: string | null
+  modulos: string[]
   // Débito automático (Pagos & Portal, Fase 4)
   subProvider: PaymentProvider | null
   subExternalId: string | null

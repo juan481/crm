@@ -417,6 +417,14 @@ model ServicioRecurrente {
   // sin espacios (ver normalizarAbonado en src/lib/servicios-recurrentes.ts).
   numeroAbonado String?
 
+  // Licencia SaaS (pedido de Abba, Seba 27/10 — ej. Municipalidad de
+  // Moreno): no lleva número de serie sino el código de Dealer de la
+  // plataforma (3 letras + 3 números, "ABC123"), y se vende por módulos y
+  // aplicaciones contratadas (los puestos quedan como dato secundario).
+  // Normalizado en src/lib/servicios-recurrentes.ts (normalizarDealer).
+  dealer  String?
+  modulos String[] @default([])
+
   // ── Débito automático (Pagos & Portal, Fase 4) — 100% aditivo/nullable ──
   // Cuando subStatus === 'ACTIVO', este abono lo cobra el proveedor externo
   // (Whop / Mercado Pago) por su cuenta cada ciclo: el cron invoice-automation
