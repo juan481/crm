@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import {
   CICLO_OPTIONS, ESTADO_OPTIONS, MODO_LICENCIA_OPTIONS, CANAL_OPTIONS, MONEDAS_VALIDAS,
 } from '@/lib/servicios-recurrentes'
+import { useAuthStore } from '@/store/auth-store'
 import type { ServicioRecurrente } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -70,11 +71,42 @@ const MEDIO_COBRO_OPTIONS = [
 
 const isoToDateInput = (v: string | null) => (v ? v.slice(0, 10) : '')
 
+// Contraseña inicial del portal: fácil de dictar por teléfono (sin 0/O/1/l).
+function passwordInicial(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'
+  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
 export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empresaNombre }: Props) {
   const editing = !!servicio
+  const { user } = useAuthStore()
+  // Dar acceso al portal es Admin+ (ver /api/empresas/[id]/portal-acceso).
+  const puedeDarPortal = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN'
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
   const [showLicencia, setShowLicencia] = useState(false)
+  // Alta del abonado de monitoreo → usuario del portal en el mismo paso
+  // (Seba, 26/10: "cargo los datos + servicio + número que le asigné en la
+  // plataforma, y ahí ya me genera el user del portal").
+  const [crearPortal, setCrearPortal] = useState(true)
+  const [portalPassword, setPortalPassword] = useState('')
+  const [portalCreado, setPortalCreado] = useState<{ usuario: string; password: string } | null>(null)
+
+  // Accesos al portal que ya tiene la empresa — para no ofrecer crear uno
+  // que ya existe (ese número ya entra).
+  const { data: portalUsers } = useQuery<{ numeroAbonado: string | null }[]>({
+    queryKey: ['portal-acceso', form.empresaId],
+    queryFn: async () => {
+      const r = await fetch(`/api/empresas/${form.empresaId}/portal-acceso`)
+      if (!r.ok) return []
+      return ((await r.json()).data ?? []) as { numeroAbonado: string | null }[]
+    },
+    enabled: open && puedeDarPortal && !!form.empresaId,
+    staleTime: 30_000,
+  })
+  const abonadoNormalizado = form.numeroAbonado.trim().toUpperCase().replace(/[\s-]+/g, '')
+  const yaTienePortal = !!abonadoNormalizado && (portalUsers ?? []).some((u) => u.numeroAbonado === abonadoNormalizado)
+  const ofrecerPortal = puedeDarPortal && !!abonadoNormalizado && portalUsers !== undefined && !yaTienePortal
 
   const { data: empresas } = useQuery<EmpresaOption[]>({
     queryKey: ['empresas-options'],
@@ -114,6 +146,9 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
 
   useEffect(() => {
     if (!open) return
+    setCrearPortal(true)
+    setPortalPassword(passwordInicial())
+    setPortalCreado(null)
     if (servicio) {
       setForm({
         empresaId: servicio.empresaId,
@@ -191,14 +226,53 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
       if (!res.ok) { toast.error(json.error || 'No se pudo guardar'); return }
       toast.success(editing ? 'Servicio actualizado' : 'Servicio creado')
       onSaved()
+
+      // Acceso al portal con el mismo abonado. El abono ya quedó guardado:
+      // si esto falla, se avisa y se puede dar a mano desde la ficha.
+      if (ofrecerPortal && crearPortal) {
+        const nombreEmpresa = empresaNombre || servicio?.empresa?.name || (empresas ?? []).find((e) => e.id === form.empresaId)?.name || abonadoNormalizado
+        const r = await fetch(`/api/empresas/${form.empresaId}/portal-acceso`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'abonado', name: nombreEmpresa, numeroAbonado: abonadoNormalizado, password: portalPassword }),
+        })
+        const pj = await r.json().catch(() => ({}))
+        if (r.ok) {
+          setPortalCreado({ usuario: pj.data?.numeroAbonado ?? abonadoNormalizado, password: portalPassword })
+          return // queda abierto mostrando usuario y contraseña
+        }
+        toast.error(`El servicio se guardó, pero no se pudo crear el acceso al portal: ${pj.error ?? 'error'}`, { duration: 7000 })
+      }
       onClose()
     } catch { toast.error('Error de conexión') } finally { setSaving(false) }
   }
+
+  // Cerrar después de mostrar las credenciales del portal.
+  const cerrar = () => { setPortalCreado(null); onClose() }
 
   const empresaOptions = [
     { value: '', label: '— elegí la empresa —' },
     ...(empresas ?? []).map(e => ({ value: e.id, label: e.name })),
   ]
+
+  if (portalCreado) {
+    const texto = `Acceso al portal de clientes\nUsuario: ${portalCreado.usuario}\nContraseña: ${portalCreado.password}`
+    return (
+      <Modal open={open} onClose={cerrar} title="Servicio guardado — acceso al portal creado" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-text-muted)]">Pasale estos datos al cliente (los de ese abonado entran todos con estos mismos):</p>
+          <div className="rounded-xl p-4 font-mono text-sm space-y-1" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text)' }}>
+            <p>Usuario: <strong>{portalCreado.usuario}</strong></p>
+            <p>Contraseña: <strong>{portalCreado.password}</strong></p>
+          </div>
+          <p className="text-[11px] text-[var(--color-text-subtle)]">La contraseña no se vuelve a mostrar. Si se la olvidan, se resetea desde la ficha de la empresa → Portal de clientes.</p>
+          <ModalFooter>
+            <Button variant="ghost" onClick={() => { navigator.clipboard?.writeText(texto).then(() => toast.success('Copiado')).catch(() => {}) }}>Copiar</Button>
+            <Button onClick={cerrar}>Listo</Button>
+          </ModalFooter>
+        </div>
+      </Modal>
+    )
+  }
 
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Editar servicio' : 'Nuevo servicio recurrente'} size="lg">
@@ -299,9 +373,37 @@ export function ServicioForm({ open, onClose, onSaved, servicio, empresaId, empr
 
         <Textarea label="Notas (opcional)" rows={2} value={form.notas} onChange={e => set('notas', e.target.value)} />
 
+        {/* Usuario del portal con el mismo abonado del Ultra — sólo si
+            todavía no existe uno con ese número. */}
+        {ofrecerPortal && (
+          <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" checked={crearPortal} onChange={e => setCrearPortal(e.target.checked)} className="w-4 h-4 accent-[var(--color-primary)]" />
+              <span className="text-sm font-medium text-[var(--color-text)]">Crear el acceso al portal con el abonado {abonadoNormalizado}</span>
+            </label>
+            {crearPortal && (
+              <Input
+                label="Contraseña inicial (podés poner el DNI del cliente)"
+                value={portalPassword}
+                onChange={e => setPortalPassword(e.target.value)}
+                hint={`Entran con ${abonadoNormalizado} (o el número solo) y esta contraseña. Un acceso por abonado: lo usan todos los de ese abonado.`}
+              />
+            )}
+          </div>
+        )}
+        {puedeDarPortal && yaTienePortal && (
+          <p className="text-xs text-[var(--color-text-subtle)]">El abonado {abonadoNormalizado} ya tiene acceso al portal.</p>
+        )}
+
         <ModalFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} loading={saving}>{editing ? 'Guardar cambios' : 'Crear servicio'}</Button>
+          <Button
+            onClick={handleSave}
+            loading={saving}
+            disabled={ofrecerPortal && crearPortal && portalPassword.length < 6}
+          >
+            {editing ? 'Guardar cambios' : 'Crear servicio'}
+          </Button>
         </ModalFooter>
       </div>
     </Modal>

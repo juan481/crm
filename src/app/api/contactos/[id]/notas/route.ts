@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { roleHasModule } from '@/lib/module-access'
+import { notasRelacionadasDeContacto, mezclarPorFecha } from '@/lib/historial-cliente'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     })
 
-    const data = notas.map((n: any) => ({ ...n, createdAt: n.createdAt.toISOString() }))
+    // + lo hablado en sus oportunidades (sólo lectura, con `origen`) — ver
+    // src/lib/historial-cliente.ts.
+    const relacionadas = await notasRelacionadasDeContacto(db, payload, params.id)
+    const data = mezclarPorFecha(notas.map((n: any) => ({ ...n, createdAt: n.createdAt.toISOString() })), relacionadas)
     return NextResponse.json({ data })
   } catch (error) {
     console.error('[CONTACTO NOTAS GET]', error)

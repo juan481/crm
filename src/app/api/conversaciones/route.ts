@@ -30,7 +30,12 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = { organizationId: payload.orgId }
     // Ficha de cliente (vista 360°, Resumen) pide ?empresaId= para traer sus
     // chats de WhatsApp reales — pedido de Abba/Seba, 2026-10-01.
-    if (empresaId) where.empresaId = empresaId
+    // También por el contacto: Conversation.empresaId es una copia que se
+    // llena al vincular, y queda vacía si la persona pasó a una empresa
+    // después (ej. "Marcar como cliente" crea la empresa del particular) —
+    // caso real de Abba (26/10, "💙Tec💙"): el chat existía pero la ficha no
+    // lo mostraba. AND (no OR suelto) porque `q` usa su propio OR.
+    if (empresaId) where.AND = [{ OR: [{ empresaId }, { contacto: { empresaId } }] }]
     if (filter === 'nissi') Object.assign(where, { status: 'ACTIVE', humanTakeoverAt: null })
     else if (filter === 'humano') where.humanTakeoverAt = { not: null }
     else if (filter === 'derivadas') where.status = 'HANDED_OFF'

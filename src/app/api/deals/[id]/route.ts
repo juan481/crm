@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { fireWebhook } from '@/lib/webhooks'
 import { marcarClienteAlGanar, type DealWonClienteResult } from '@/lib/deal-won'
 import { sellerOwnerScope, isScopedPipelineRole } from '@/lib/deal-access'
+import { argentinaDayKey, fmtDateOnly } from '@/lib/timezone'
 
 interface Params { params: { id: string } }
 
@@ -140,7 +141,35 @@ export async function DELETE(_: NextRequest, { params }: Params) {
     if (!['SUPER_ADMIN', 'ADMIN'].includes(payload.role))
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    await prisma.deal.deleteMany({ where: { id: params.id, organizationId: payload.orgId } })
+    // Lo hablado NO se pierde al borrar la oportunidad (Seba, 26/10: "si lo
+    // saco del pipeline pierdo todo lo que hablé") — antes las DealNota se
+    // iban en cascada. Se copian a la ficha de la empresa, o del contacto si
+    // la oportunidad no tenía empresa, con la fecha original y una marca de
+    // dónde venían. Sin empresa ni contacto no hay a dónde pasarlas.
+    const db = prisma as any
+    const deal = await db.deal.findFirst({
+      where: { id: params.id, organizationId: payload.orgId },
+      select: {
+        id: true, title: true, empresaId: true, contactoId: true,
+        notas: { select: { tipo: true, content: true, estimatedMinutes: true, metadata: true, createdAt: true, userId: true } },
+      },
+    })
+    if (!deal) return NextResponse.json({ message: 'Deal eliminado' })
+
+    const marca = `[De la oportunidad «${deal.title}», borrada el ${fmtDateOnly(argentinaDayKey())}]\n`
+    const copia = (n: any) => ({
+      organizationId: payload.orgId, userId: n.userId, tipo: n.tipo, content: marca + n.content,
+      estimatedMinutes: n.estimatedMinutes, metadata: n.metadata, createdAt: n.createdAt,
+    })
+    const ops = []
+    if (deal.notas.length > 0 && deal.empresaId) {
+      ops.push(db.empresaNota.createMany({ data: deal.notas.map((n: any) => ({ ...copia(n), empresaId: deal.empresaId })) }))
+    } else if (deal.notas.length > 0 && deal.contactoId) {
+      ops.push(db.directorioContactoNota.createMany({ data: deal.notas.map((n: any) => ({ ...copia(n), contactoId: deal.contactoId })) }))
+    }
+    ops.push(db.deal.delete({ where: { id: deal.id } }))
+    await db.$transaction(ops)
+
     return NextResponse.json({ message: 'Deal eliminado' })
   } catch (error) {
     console.error('[DEAL DELETE]', error)

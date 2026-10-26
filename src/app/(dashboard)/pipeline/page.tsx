@@ -907,7 +907,9 @@ export default function PipelinePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este deal? Esta acción no se puede deshacer.')) return
+    // Lo hablado ya no se pierde al borrar (pasa a la ficha del cliente, ver
+    // DELETE /api/deals/[id]) — pero si no se concretó, Perdida es mejor.
+    if (!confirm('¿Eliminar esta oportunidad?\n\nLo hablado (la Actividad) pasa a la ficha del cliente, no se pierde. Si no se concretó, mejor marcala como Perdida: así queda en el historial con su etapa.')) return
     const res = await fetch(`/api/deals/${id}`, { method: 'DELETE' })
     if (res.ok) { qc.invalidateQueries({ queryKey: ['deals'] }); toast.success('Deal eliminado') }
   }

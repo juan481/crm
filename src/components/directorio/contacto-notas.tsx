@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { timeAgo, formatDate } from '@/lib/utils'
 import { useAuthStore } from '@/store/auth-store'
+import { NotaOrigenBadge, type NotaOrigen } from '@/components/directorio/nota-origen'
 import toast from 'react-hot-toast'
 
 type Tipo = 'NOTA' | 'LLAMADA' | 'REUNION' | 'CHAT' | 'ENVIO_COTIZACION' | 'CONVERSACION' | 'SOPORTE'
@@ -27,6 +28,8 @@ interface ContactoNotaItem {
   metadata?:        string | null
   createdAt:        string
   user: { id: string; name: string; avatarUrl: string | null }
+  // Nota de una oportunidad de este contacto (sólo lectura).
+  origen?:          NotaOrigen
 }
 
 interface Props {
@@ -375,6 +378,7 @@ export const ContactoNotas = forwardRef<ContactoNotasHandle, Props>(function Con
                     >
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-xs font-semibold" style={{ color: m.color }}>{m.label}</span>
+                        {nota.origen && <NotaOrigenBadge origen={nota.origen} />}
                         {nota.estimatedMinutes > 0 && (
                           <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full"
                             style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-subtle)' }}>
@@ -387,7 +391,7 @@ export const ContactoNotas = forwardRef<ContactoNotasHandle, Props>(function Con
                         <span className="text-xs ml-auto" style={{ color: 'var(--color-text-muted)' }} title={formatDate(nota.createdAt)}>
                           {timeAgo(nota.createdAt)}
                         </span>
-                        {user?.role === 'SUPER_ADMIN' && (
+                        {user?.role === 'SUPER_ADMIN' && !nota.origen && (
                           <button
                             type="button"
                             onClick={() => handleDelete(nota.id)}

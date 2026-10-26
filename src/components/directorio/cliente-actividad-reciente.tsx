@@ -81,7 +81,9 @@ export function ClienteActividadReciente({ empresaId, onVerActividad, onVerCotiz
   })
 
   const items = useMemo<Item[]>(() => {
-    const notas = (notasData?.data ?? []) as Array<{ id: string; tipo: NotaTipo; content: string; createdAt: string; user: { name: string } }>
+    // `origen`: nota traída de una oportunidad o de un contacto de la
+    // empresa (ver src/lib/historial-cliente.ts).
+    const notas = (notasData?.data ?? []) as Array<{ id: string; tipo: NotaTipo; content: string; createdAt: string; user: { name: string }; origen?: { tipo: string; label: string } }>
     const cotizaciones = (cotizData?.data ?? []) as Array<{ id: string; ref: string; total: number; finalTotal?: number | null; currency: string; status: string; createdAt: string }>
     const chats = (chatsData?.data ?? []) as Array<{ id: string; displayName: string | null; preview: string; lastMessageAt: string | null }>
 
@@ -89,7 +91,7 @@ export function ClienteActividadReciente({ empresaId, onVerActividad, onVerCotiz
       const m = NOTA_META[n.tipo] ?? NOTA_META.NOTA
       return {
         id: `nota-${n.id}`, date: n.createdAt, icon: m.icon, color: m.color,
-        title: `${m.label} · ${n.user?.name ?? ''}`.trim(),
+        title: `${m.label} · ${n.user?.name ?? ''}${n.origen ? ` · ${n.origen.tipo === 'oportunidad' ? 'en' : 'de'} ${n.origen.label}` : ''}`.trim(),
         subtitle: n.content,
         onClick: onVerActividad,
       }
@@ -108,7 +110,9 @@ export function ClienteActividadReciente({ empresaId, onVerActividad, onVerCotiz
         id: `chat-${c.id}`, date: c.lastMessageAt as string, icon: <MessageCircle size={13} />, color: '#25D366',
         title: `WhatsApp${c.displayName ? ` · ${c.displayName}` : ''}`,
         subtitle: c.preview || 'Sin mensajes',
-        onClick: () => router.push(`/conversaciones?id=${c.id}`),
+        // ?c= es el parámetro que lee el inbox (antes ?id= abría el inbox
+        // sin elegir la conversación).
+        onClick: () => router.push(`/conversaciones?c=${c.id}`),
       }))
 
     return [...fromNotas, ...fromCotizaciones, ...fromChats]
