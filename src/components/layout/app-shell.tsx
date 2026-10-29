@@ -28,6 +28,13 @@ const ROLE_DEFAULT: Partial<Record<User['role'], string>> = {
   HR:         '/rrhh',
   TECHNICIAN: '/mi-dia',
 }
+// Módulo de esa pantalla de inicio — si un Super Admin lo apagó (ej. Abba,
+// 29/10: un Técnico que SÓLO gestiona Legajos), el usuario va a lo primero
+// que sí tiene habilitado en vez de quedarse en una pantalla vacía.
+const ROLE_DEFAULT_MODULE: Partial<Record<User['role'], string>> = {
+  HR:         'rrhh',
+  TECHNICIAN: 'mi-dia',
+}
 // Prefijos que un rol restringido podría ganar por permiso de módulo — mientras
 // la lista de permisos no resolvió, NO se redirige desde estas rutas (fail-open,
 // igual que el sidebar).
@@ -120,6 +127,10 @@ export function AppShell({ user, branding, children }: AppShellProps) {
           .map(([, route]) => route)
       : []
     const allowed = [...base, ...earned]
+
+    const homeModule = ROLE_DEFAULT_MODULE[user.role]
+    const homeApagado = permsResolved && !!homeModule && modulePerms.find(r => r.id === homeModule)?.roles[user.role] === false
+    if (homeApagado && pathname === fallback && earned.length > 0) { router.replace(earned[0]); return }
 
     const ok = allowed.some(p => pathname === p || pathname.startsWith(p + '/'))
     // Mientras los permisos no resolvieron, no expulsar de una ruta que el rol

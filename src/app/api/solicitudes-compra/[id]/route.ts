@@ -109,12 +109,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
       select: { id: true, estado: true },
     })
     if (!existing) return NextResponse.json({ error: 'No encontrada' }, { status: 404 })
-    if (existing.estado !== 'BORRADOR') {
-      return NextResponse.json({ error: 'Ya se envió — usá "Anular" en vez de borrar' }, { status: 409 })
+    // Borrador o anulado se pueden borrar (Seba, 29/10: "¿cómo borro los
+    // pedidos de prueba?"). Uno enviado y vigente primero se anula — así
+    // nunca desaparece de golpe un pedido que el proveedor tiene en la mano.
+    if (existing.estado !== 'BORRADOR' && existing.estado !== 'ANULADA') {
+      return NextResponse.json({ error: 'Ya se envió al proveedor — primero anulalo y después lo podés borrar' }, { status: 409 })
     }
 
     await db.solicitudCompra.delete({ where: { id: params.id } })
-    return NextResponse.json({ message: 'Borrador eliminado' })
+    return NextResponse.json({ message: existing.estado === 'BORRADOR' ? 'Borrador eliminado' : 'Pedido eliminado' })
   } catch (error) {
     console.error('[SOLICITUD COMPRA DELETE]', error)
     return NextResponse.json({ error: 'Error al eliminar' }, { status: 500 })

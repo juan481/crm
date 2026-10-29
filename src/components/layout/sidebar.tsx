@@ -140,7 +140,7 @@ const NAV_SECTIONS: { label: string | null; items: NavItem[] }[] = [
       // confundir con RRHH interno de arriba (esa es la asistencia del
       // STAFF del CRM; los vigiladores no son usuarios, ver Vigilador en
       // schema.prisma). Mismos roles que el módulo 'legajos' en modules.ts.
-      { label: 'Legajos',       href: '/legajos',       icon: <Fingerprint size={17} />,    roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'HR'], moduleId: 'legajos' },
+      { label: 'Legajos',       href: '/legajos',       icon: <Fingerprint size={17} />,    roles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'HR', 'TECHNICIAN'], moduleId: 'legajos' },
     ],
   },
 ]

@@ -67,6 +67,53 @@ export default function SolicitudCompraDetailPage() {
   const isBorrador = data?.estado === 'BORRADOR'
   const isAnulada = data?.estado === 'ANULADA'
 
+  // Condiciones de pago editables por organización (Seba, 29/10) — antes
+  // eran una lista fija en el código.
+  const { data: condiciones } = useQuery<string[]>({
+    queryKey: ['condiciones-pago'],
+    queryFn: async () => {
+      const r = await fetch('/api/compras/condiciones-pago')
+      if (!r.ok) return CONDICIONES_PAGO
+      return (await r.json()).data ?? CONDICIONES_PAGO
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+  const listaCondiciones = condiciones ?? CONDICIONES_PAGO
+  const [editandoCondiciones, setEditandoCondiciones] = useState(false)
+  const [condicionesDraft, setCondicionesDraft] = useState<string[]>([])
+  const [nuevaCondicion, setNuevaCondicion] = useState('')
+  const [guardandoCondiciones, setGuardandoCondiciones] = useState(false)
+  const abrirCondiciones = () => { setCondicionesDraft(listaCondiciones); setNuevaCondicion(''); setEditandoCondiciones(true) }
+  const guardarCondiciones = async () => {
+    const lista = nuevaCondicion.trim() ? [...condicionesDraft, nuevaCondicion.trim()] : condicionesDraft
+    setGuardandoCondiciones(true)
+    try {
+      const res = await fetch('/api/compras/condiciones-pago', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ condiciones: lista }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo guardar'); return }
+      qc.setQueryData(['condiciones-pago'], json.data)
+      toast.success('Condiciones de pago actualizadas')
+      setEditandoCondiciones(false)
+    } catch { toast.error('Error de conexión') } finally { setGuardandoCondiciones(false) }
+  }
+
+  // Borrar un borrador o un pedido anulado (ej. los de prueba).
+  const [borrando, setBorrando] = useState(false)
+  const handleEliminar = async () => {
+    if (!confirm('¿Eliminar este pedido? No se puede deshacer.')) return
+    setBorrando(true)
+    try {
+      const res = await fetch(`/api/solicitudes-compra/${id}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo eliminar'); return }
+      toast.success(json.message)
+      qc.invalidateQueries({ queryKey: ['solicitudes-compra'] })
+      router.push('/compras')
+    } catch { toast.error('Error de conexión') } finally { setBorrando(false) }
+  }
+
   // Entra a modo libre si el valor guardado no está en la lista curada
   // (ej. se abrió una solicitud que ya tenía una condición de pago rara) —
   // sólo se inicializa UNA vez por solicitud, la primera vez que `data`
@@ -77,7 +124,7 @@ export default function SolicitudCompraDetailPage() {
   useEffect(() => {
     if (!data || condicionInitRef.current === data.id) return
     condicionInitRef.current = data.id
-    if (data.condicionPago && !CONDICIONES_PAGO.includes(data.condicionPago)) {
+    if (data.condicionPago && !listaCondiciones.includes(data.condicionPago)) {
       setUseOtraCondicion(true)
       setCondicionDraft(data.condicionPago)
     } else {
@@ -248,6 +295,9 @@ export default function SolicitudCompraDetailPage() {
           {!isBorrador && !isAnulada && (
             <Button variant="outline" onClick={handleAnular} loading={anulando} leftIcon={<Ban size={14} />}>Anular</Button>
           )}
+          {(isBorrador || isAnulada) && (
+            <Button variant="ghost" onClick={handleEliminar} loading={borrando} leftIcon={<Trash2 size={14} />}>Eliminar</Button>
+          )}
         </div>
       </div>
 
@@ -268,7 +318,12 @@ export default function SolicitudCompraDetailPage() {
           )}
         </div>
         <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Condición de pago</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>Condición de pago</label>
+            <button type="button" onClick={abrirCondiciones} className="text-[11px] hover:underline" style={{ color: 'var(--color-primary)' }}>
+              Editar lista
+            </button>
+          </div>
           {isBorrador ? (
             <>
               <Select
@@ -284,7 +339,7 @@ export default function SolicitudCompraDetailPage() {
                 }}
                 options={[
                   { value: '', label: '— sin especificar —' },
-                  ...CONDICIONES_PAGO.map(c => ({ value: c, label: c })),
+                  ...listaCondiciones.map(c => ({ value: c, label: c })),
                   { value: OTRA_CONDICION_PAGO, label: OTRA_CONDICION_PAGO },
                 ]}
               />
@@ -405,6 +460,46 @@ export default function SolicitudCompraDetailPage() {
         <ModalFooter>
           <Button variant="ghost" onClick={() => setSendModalOpen(false)}>Cancelar</Button>
           <Button onClick={handleSend} loading={sending} leftIcon={<Send size={14} />}>Enviar</Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal open={editandoCondiciones} onClose={() => setEditandoCondiciones(false)} title="Condiciones de pago" size="sm">
+        <div className="space-y-3">
+          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Las que se ofrecen en todos los pedidos a proveedores. Los pedidos ya cargados no cambian.
+          </p>
+          <div className="space-y-1.5">
+            {condicionesDraft.map((c, i) => (
+              <div key={`${c}-${i}`} className="flex items-center gap-2">
+                <Input
+                  value={c}
+                  onChange={e => setCondicionesDraft(d => d.map((x, j) => (j === i ? e.target.value : x)))}
+                />
+                <button type="button" onClick={() => setCondicionesDraft(d => d.filter((_, j) => j !== i))}
+                  className="p-1.5 rounded-lg hover:bg-red-500/10 hover:text-red-400" style={{ color: 'var(--color-text-muted)' }} title="Sacar">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Agregar una (ej: Transferencia 15 días)"
+              value={nuevaCondicion}
+              onChange={e => setNuevaCondicion(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && nuevaCondicion.trim()) { setCondicionesDraft(d => [...d, nuevaCondicion.trim()]); setNuevaCondicion('') }
+              }}
+            />
+            <Button variant="outline" leftIcon={<Plus size={14} />} disabled={!nuevaCondicion.trim()}
+              onClick={() => { setCondicionesDraft(d => [...d, nuevaCondicion.trim()]); setNuevaCondicion('') }}>
+              Agregar
+            </Button>
+          </div>
+        </div>
+        <ModalFooter>
+          <Button variant="ghost" onClick={() => setEditandoCondiciones(false)}>Cancelar</Button>
+          <Button onClick={guardarCondiciones} loading={guardandoCondiciones} leftIcon={<Check size={14} />}>Guardar</Button>
         </ModalFooter>
       </Modal>
     </div>

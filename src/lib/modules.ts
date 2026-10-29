@@ -118,7 +118,15 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
   // jerarquía lineal. Default ADMINISTRATIVO+HR (quienes lo gestionan en la
   // práctica); que SELLER lo tenga requiere que un Super Admin lo prenda a
   // mano en Permisos — un fat-finger posible, no un agujero por default.
-  { id: 'legajos',        label: 'Legajos',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'HR'],           minRole: 'HR' },
+  // Piso bajado a TECHNICIAN (29/10, pedido de Abba/Seba): una persona que
+  // SÓLO gestiona vigiladores. Los permisos son por rol, no por persona: como
+  // Administrativo compartía todo con Norma y como RRHH todo con Sergio. Abba
+  // no usa el rol Técnico (sus técnicos pasaron a Vendedor), que es el más
+  // acotado de todos → Técnico con todo apagado menos Legajos. El default
+  // sigue sin TECHNICIAN: nadie lo gana sin que un Super Admin lo prenda.
+  // Todo Legajos (pantallas, /api/legajos, documentos del legajo) chequea
+  // roleHasModule('legajos'), no canAccess(), así que este piso alcanza.
+  { id: 'legajos',        label: 'Legajos',         defaultRoles: ['SUPER_ADMIN', 'ADMIN', 'ADMINISTRATIVO', 'HR'],           minRole: 'TECHNICIAN' },
 ]
 
 export function getModule(id: string): ModuleDefinition | undefined {

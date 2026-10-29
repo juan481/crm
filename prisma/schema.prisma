@@ -241,6 +241,10 @@ model Organization {
   // que el equipo compare entre sí cuando no hace falta. La prende/apaga un
   // ADMIN+ desde el propio panel de Objetivos (ver /api/organization/en-baja).
   enBaja                     Boolean      @default(false)
+  // Condiciones de pago que se ofrecen en el pedido a proveedor (Seba,
+  // 29/10: "¿cómo agrego/cambio las que están?"). Vacío = la lista de
+  // siempre (CONDICIONES_PAGO en src/lib/solicitudes-compra.ts).
+  condicionesPago            String[]     @default([])
   // Recargo por tarjeta / descuento por efectivo (reestructuración Abba
   // 2026-10, Seba): "al seleccionar cobro con tarjeta, el sistema tiene que
   // sumar automáticamente ese 25%" — se resuelve en el cotizador
