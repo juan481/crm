@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { findEmpresaMatch } from '@/lib/directorio-link'
+import { addContactosToBase, findOrgBase } from '@/lib/contacto-bases'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,13 +22,22 @@ export async function POST(req: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const body = await req.json() as { rows: ImportRow[]; offset?: number }
+    const body = await req.json() as { rows: ImportRow[]; offset?: number; baseId?: string }
     const rows = body.rows ?? []
     if (rows.length === 0) return NextResponse.json({ error: 'No se recibieron filas' }, { status: 400 })
     const baseFila = (Number(body.offset) || 0) + 2
 
     const db    = prisma as any
     const orgId = payload.orgId
+
+    // Base de contactos elegida al importar (opcional). Se valida contra la
+    // org en cada lote — nunca confiar en el id que manda el navegador.
+    const base = body.baseId ? await findOrgBase(orgId, body.baseId) : null
+    if (body.baseId && !base) return NextResponse.json({ error: 'La base elegida no existe (¿la borraron?). Volvé a elegirla.' }, { status: 400 })
+    // Contactos (nuevos Y repetidos) a sumar a la base: un repetido es la
+    // misma persona que ya estaba en el CRM y también vino de este origen
+    // (ej. visitante de Exposeg que ya era contacto).
+    const idsParaBase: string[] = []
 
     const empresas = await db.empresa.findMany({
       where:  { organizationId: orgId },
@@ -41,9 +51,11 @@ export async function POST(req: NextRequest) {
 
     const existingContacts = await db.directorioContacto.findMany({
       where: { organizationId: orgId },
-      select: { firstName: true, lastName: true, empresaId: true }
+      select: { id: true, firstName: true, lastName: true, empresaId: true }
     })
-    const existingSet = new Set(existingContacts.map((c: any) => `${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}|${c.empresaId || ''}`))
+    const existingByKey = new Map<string, string>(existingContacts.map((c: any) => [`${c.firstName.toLowerCase()}|${c.lastName.toLowerCase()}|${c.empresaId || ''}`, c.id]))
+    // Claves de filas de ESTE lote que se van a crear (todavía sin id).
+    const pendingKeys = new Set<string>()
 
     const toCreate = []
 
@@ -86,10 +98,12 @@ export async function POST(req: NextRequest) {
         const empresaId = findEmpresaMatch(email, companyRaw, empresas)
 
         const key = `${firstName.toLowerCase()}|${lastName.toLowerCase()}|${empresaId || ''}`
-        if (existingSet.has(key)) { dupes++; continue }
+        const existingId = existingByKey.get(key)
+        if (existingId) { dupes++; if (base) idsParaBase.push(existingId); continue }
+        if (pendingKeys.has(key)) { dupes++; continue }
 
         toCreate.push({ organizationId: orgId, firstName, lastName, companyRaw, role, email, phone, empresaId })
-        existingSet.add(key)
+        pendingKeys.add(key)
         created++
       } catch (rowErr) {
         const msg = rowErr instanceof Error ? rowErr.message : 'error desconocido'
@@ -98,10 +112,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (toCreate.length > 0) {
-      await db.directorioContacto.createMany({ data: toCreate })
+      if (base) {
+        const creados = await db.directorioContacto.createManyAndReturn({ data: toCreate, select: { id: true } })
+        idsParaBase.push(...creados.map((c: { id: string }) => c.id))
+      } else {
+        await db.directorioContacto.createMany({ data: toCreate })
+      }
     }
 
-    return NextResponse.json({ created, dupes, skipped, omitidas })
+    const agregadosABase = base ? await addContactosToBase(base.id, idsParaBase) : 0
+
+    return NextResponse.json({ created, dupes, skipped, omitidas, agregadosABase })
   } catch (error) {
     console.error('[CONTACTOS IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el lote' }, { status: 500 })

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { isOrgEmailConfigured } from '@/lib/email'
 import { filterSuppressed } from '@/lib/suppression'
 import { getEmailUsage } from '@/lib/email-usage'
+import { findOrgBase } from '@/lib/contacto-bases'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,7 @@ export async function GET() {
 
     const campaigns = await prisma.emailCampaign.findMany({
       where:   { organizationId: payload.orgId },
-      include: { _count: { select: { recipients: true } } },
+      include: { _count: { select: { recipients: true } }, base: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -54,13 +55,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
     }
 
-    const { name, subject, body, recipients, sendNow } = await req.json() as {
+    const { name, subject, body, recipients, sendNow, baseId } = await req.json() as {
       name:       string
       subject:    string
       body:       string
       recipients: Array<{ email: string; name: string; empresa?: string }>
       sendNow:    boolean
+      baseId?:    string | null
     }
+
+    // Base de contactos de la que salió la campaña (pestaña "Base" del
+    // armador) — sólo trazabilidad, validada contra la org.
+    const base = baseId ? await findOrgBase(payload.orgId, baseId) : null
 
     if (!name || !subject || !body)
       return NextResponse.json({ error: 'Nombre, asunto y cuerpo son requeridos' }, { status: 400 })
@@ -119,6 +125,7 @@ export async function POST(req: NextRequest) {
         body,
         status:         sendNow ? 'SENDING' : 'DRAFT',
         organizationId: payload.orgId,
+        baseId:         base?.id ?? null,
       },
       select: { id: true, name: true, status: true },
     })

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { EmpresaForm } from '@/components/directorio/empresa-form'
+import { CONTACTO_BASES_KEY, ImportBaseModal } from '@/components/directorio/contacto-bases'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
 import { usePlugin } from '@/hooks/use-plugin'
@@ -43,6 +44,8 @@ interface ImportProgress {
   omitidas: OmitidaRow[]
   done?: boolean
   error?: string
+  baseName?: string
+  agregadosABase?: number
 }
 
 export default function EmpresasPage() {
@@ -82,6 +85,7 @@ export default function EmpresasPage() {
   const [deleteId,        setDeleteId]        = useState<string | null>(null)
   const [deleting,        setDeleting]        = useState(false)
   const [progress,        setProgress]        = useState<ImportProgress | null>(null)
+  const [pendingDirImport, setPendingDirImport] = useState<{ fileName: string; rows: Record<string, unknown>[] } | null>(null)
 
   // Merge state
   const [showMerge,    setShowMerge]    = useState(false)
@@ -187,9 +191,14 @@ export default function EmpresasPage() {
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
 
     if (rows.length === 0) { toast.error('El archivo está vacío'); return }
+    // Antes de importar: ¿a qué base de contactos van? (ImportBaseModal)
+    setPendingDirImport({ fileName: file.name, rows })
+  }
 
+  const runImportDirectorio = async (rows: Record<string, unknown>[], base: { id: string; name: string } | null) => {
     setImporting(true)
-    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, empresasActualizadas: 0, contactosCreados: 0, contactosActualizados: 0, filasOmitidas: 0, omitidas: [] })
+    setProgress({ processed: 0, total: rows.length, empresasCreadas: 0, empresasExistentes: 0, empresasActualizadas: 0, contactosCreados: 0, contactosActualizados: 0, filasOmitidas: 0, omitidas: [], baseName: base?.name, agregadosABase: 0 })
+    let agregadosABase = 0
 
     let empresasCreadas      = 0
     let empresasExistentes   = 0
@@ -205,7 +214,7 @@ export default function EmpresasPage() {
         const res   = await fetch('/api/directorio/importar', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ rows: chunk, offset: i }),
+          body:    JSON.stringify({ rows: chunk, offset: i, baseId: base?.id }),
         })
 
         if (!res.ok) {
@@ -220,6 +229,7 @@ export default function EmpresasPage() {
         empresasActualizadas += result.empresasActualizadas ?? 0
         contactosCreados     += result.contactosCreados     ?? 0
         contactosActualizados += result.contactosActualizados ?? 0
+        agregadosABase       += result.agregadosABase       ?? 0
         filasOmitidas        += result.filasOmitidas        ?? 0
         if (Array.isArray(result.omitidas)) omitidas.push(...result.omitidas)
 
@@ -233,6 +243,8 @@ export default function EmpresasPage() {
           contactosActualizados,
           filasOmitidas,
           omitidas,
+          baseName: base?.name,
+          agregadosABase,
         })
 
         if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
@@ -241,6 +253,7 @@ export default function EmpresasPage() {
       setProgress(p => p ? { ...p, processed: rows.length, done: true, omitidas } : null)
       qc.invalidateQueries({ queryKey: ['empresas'] })
       qc.invalidateQueries({ queryKey: ['contactos'] })
+      qc.invalidateQueries({ queryKey: CONTACTO_BASES_KEY })
     } catch {
       toast.error('Error de conexión')
       setProgress(p => p ? { ...p, error: 'Error de conexión' } : null)
@@ -749,6 +762,18 @@ export default function EmpresasPage() {
       )}
 
       {/* Create modal */}
+      <ImportBaseModal
+        open={!!pendingDirImport}
+        fileName={pendingDirImport?.fileName ?? ''}
+        rowCount={pendingDirImport?.rows.length ?? 0}
+        onCancel={() => setPendingDirImport(null)}
+        onConfirm={(base) => {
+          const rows = pendingDirImport?.rows ?? []
+          setPendingDirImport(null)
+          runImportDirectorio(rows, base)
+        }}
+      />
+
       <Modal open={showForm} onClose={() => setShowForm(false)} title="Nueva empresa" size="md">
         <EmpresaForm onSuccess={() => { setShowForm(false); qc.invalidateQueries({ queryKey: ['empresas'] }) }} />
       </Modal>
@@ -882,6 +907,11 @@ export default function EmpresasPage() {
               ))}
             </div>
 
+            {progress.baseName && (
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Base <span className="font-medium" style={{ color: 'var(--color-text)' }}>{progress.baseName}</span>: {progress.agregadosABase ?? 0} contacto{progress.agregadosABase !== 1 ? 's' : ''} sumado{progress.agregadosABase !== 1 ? 's' : ''} (nuevos + ya existentes)
+              </p>
+            )}
             {progress.done && (
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
                 <CheckCircle2 size={16} /> Importación completada exitosamente

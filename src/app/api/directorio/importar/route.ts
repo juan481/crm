@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser, canAccess } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { addContactosToBase, findOrgBase } from '@/lib/contacto-bases'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
     // importar en lote llamándola directo, sin pasar por la UI).
     if (!canAccess(payload.role, 'SELLER')) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const body = await req.json() as { rows: ImportRow[]; offset?: number }
+    const body = await req.json() as { rows: ImportRow[]; offset?: number; baseId?: string }
     const rows = body.rows ?? []
     // Fila del Excel de la primera fila de este lote (1-based + fila de
     // encabezados) — para poder decirle al usuario exactamente qué fila
@@ -61,6 +62,13 @@ export async function POST(req: NextRequest) {
 
     const db    = prisma as any
     const orgId = payload.orgId
+
+    // Base de contactos elegida al importar (opcional), validada contra la
+    // org. Se suman a la base los contactos creados Y los que ya existían
+    // (repetidos / actualizados): son la misma persona viniendo de este origen.
+    const base = body.baseId ? await findOrgBase(orgId, body.baseId) : null
+    if (body.baseId && !base) return NextResponse.json({ error: 'La base elegida no existe (¿la borraron?). Volvé a elegirla.' }, { status: 400 })
+    const idsParaBase: string[] = []
 
     let empresasCreadas      = 0
     let empresasExistentes   = 0
@@ -162,6 +170,7 @@ export async function POST(req: NextRequest) {
         })
 
         if (existing) {
+          if (base) idsParaBase.push(existing.id)
           const contactoPatch: Record<string, unknown> = {}
           if (!existing.role  && newRole)  contactoPatch.role  = newRole
           if (!existing.email && email)    contactoPatch.email = email
@@ -170,12 +179,14 @@ export async function POST(req: NextRequest) {
             await db.directorioContacto.update({ where: { id: existing.id }, data: contactoPatch })
             contactosActualizados++
           } else {
-            omitir('Contacto repetido, sin datos nuevos (mismo nombre + apellido + empresa)')
+            omitir(base
+              ? `Contacto repetido (ya estaba cargado, sin datos nuevos) — igual se sumó a la base "${base.name}"`
+              : 'Contacto repetido, sin datos nuevos (mismo nombre + apellido + empresa)')
           }
           continue
         }
 
-        await db.directorioContacto.create({
+        const nuevo = await db.directorioContacto.create({
           data: {
             organizationId: orgId,
             firstName,
@@ -186,7 +197,9 @@ export async function POST(req: NextRequest) {
             phone:       newPhone || null,
             empresaId:   empresa.id,
           },
+          select: { id: true },
         })
+        if (base) idsParaBase.push(nuevo.id)
         contactosCreados++
       } catch (rowErr) {
         // Fila individual falla → omitir y continuar con el resto
@@ -196,7 +209,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ empresasCreadas, empresasExistentes, empresasActualizadas, contactosCreados, contactosActualizados, filasOmitidas, omitidas })
+    const agregadosABase = base ? await addContactosToBase(base.id, idsParaBase) : 0
+
+    return NextResponse.json({ empresasCreadas, empresasExistentes, empresasActualizadas, contactosCreados, contactosActualizados, filasOmitidas, omitidas, agregadosABase })
   } catch (error) {
     console.error('[DIRECTORIO IMPORTAR]', error)
     return NextResponse.json({ error: 'Error al procesar el lote' }, { status: 500 })

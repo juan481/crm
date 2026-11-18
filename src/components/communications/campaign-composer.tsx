@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
 import {
   Users, Send, Save, Filter, ChevronDown, ChevronUp,
-  Search, FileText, Building2, Info, MapPin, Tag, MessageCircle,
+  Search, FileText, Building2, Info, MapPin, Tag, MessageCircle, Layers,
 } from 'lucide-react'
+import { useContactoBases } from '@/components/directorio/contacto-bases'
 import { Input } from '@/components/ui/input'
 import { RichEditor, type RichEditorHandle } from '@/components/ui/rich-editor'
 import { toEditorHtml } from '@/lib/rich-text'
@@ -41,7 +42,7 @@ interface UnifiedContact {
   source:   'client' | 'directorio'
 }
 
-type Source = 'clients' | 'directorio' | 'empresas' | 'todos'
+type Source = 'clients' | 'directorio' | 'empresas' | 'todos' | 'base'
 
 const STATUS_OPTIONS = [
   { value: '',                 label: 'Todos los estados'  },
@@ -73,6 +74,13 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const [activityFilter, setActivityFilter] = useState('')
   const [cityFilter,     setCityFilter]     = useState('')
   const [source,         setSource]         = useState<Source>('clients')
+  // Pestaña 'Base': lista/origen elegida (Expo Rosario 2026, Exposeg…).
+  const [baseSel,        setBaseSel]        = useState('')
+  // Para preseleccionar los contactos de la base UNA vez por base elegida —
+  // no en cada refetch de contactosData (que reharía la selección y
+  // pisaría los destildados a mano).
+  const autoSelectedFor = useRef<string | null>(null)
+  const { data: basesData } = useContactoBases(source === 'base')
 
   const editorRef = useRef<RichEditorHandle>(null)
 
@@ -89,7 +97,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
     refetchOnMount: 'always',
   })
 
-  const { data: contactosData } = useQuery({
+  const { data: contactosData, isFetching: contactosFetching } = useQuery({
     queryKey: ['directorio-all'],
     queryFn:  async () => {
       const r = await fetch('/api/contactos?limit=50000')
@@ -99,9 +107,10 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
         email: string | null
         empresa?: { id: string; name: string } | null
         companyRaw?: string | null
+        bases?: Array<{ id: string; name: string }>
       }>
     },
-    enabled: source === 'directorio' || source === 'todos' || source === 'empresas',
+    enabled: source === 'directorio' || source === 'todos' || source === 'empresas' || source === 'base',
     staleTime: 0,
     refetchOnMount: 'always',
   })
@@ -158,13 +167,41 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       }
     }
 
+    if (source === 'base' && baseSel) {
+      for (const d of (contactosData ?? [])) {
+        if (!d.email?.trim()) continue
+        if (!d.bases?.some(b => b.id === baseSel)) continue
+        const fullName = `${d.firstName} ${d.lastName}`.trim()
+        const empName  = d.empresa?.name ?? d.companyRaw ?? ''
+        list.push({
+          id:       `d:${d.id}`,
+          email:    d.email.trim(),
+          name:     fullName,
+          empresa:  empName,
+          subtitle: [d.email, empName].filter(Boolean).join(' · '),
+          source:   'directorio',
+        })
+      }
+    }
+
     const seen = new Set<string>()
     return list.filter(c => {
       const key = c.email.toLowerCase()
       if (seen.has(key)) return false
       seen.add(key); return true
     })
-  }, [clientsData, contactosData, source])
+  }, [clientsData, contactosData, source, baseSel])
+
+  // Al elegir una base: quedan tildados todos sus contactos con email
+  // (después se pueden destildar uno por uno).
+  useEffect(() => {
+    // Esperar al fetch fresco: con caché viejo (Excel recién importado) quedaban
+    // contactos nuevos de la base sin tildar.
+    if (source !== 'base' || !baseSel || !contactosData || contactosFetching) return
+    if (autoSelectedFor.current === baseSel) return
+    autoSelectedFor.current = baseSel
+    setSelectedIds(new Set(allContacts.map(c => c.id)))
+  }, [source, baseSel, contactosData, contactosFetching, allContacts])
 
   const filteredContacts = useMemo(() => {
     return allContacts.filter(c => {
@@ -272,6 +309,8 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
   const switchSource = (s: Source) => {
     setSource(s)
     setSelectedIds(new Set())
+    setBaseSel('')
+    autoSelectedFor.current = null
     setStatusFilter('')
     setSearchFilter('')
     setActivityFilter('')
@@ -309,6 +348,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
         return
       }
     } else {
+      if (source === 'base' && !baseSel) { toast.error('Elegí una base de contactos'); return }
       if (selectedIds.size === 0) { toast.error('Seleccioná al menos un destinatario'); return }
       recipients = allContacts
         .filter(c => selectedIds.has(c.id))
@@ -320,7 +360,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
       const res = await fetch('/api/communications/campaigns', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ...data, body, recipients, sendNow }),
+        body:    JSON.stringify({ ...data, body, recipients, sendNow, baseId: source === 'base' && baseSel ? baseSel : null }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -458,11 +498,12 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
         </div>
 
         {/* Source tabs */}
-        <div className="grid grid-cols-4 rounded-xl overflow-hidden border border-[var(--color-border)] p-0.5 bg-[var(--color-surface-raised)] mb-3">
+        <div className="grid grid-cols-5 rounded-xl overflow-hidden border border-[var(--color-border)] p-0.5 bg-[var(--color-surface-raised)] mb-3">
           {([
             { key: 'clients',    label: 'Clientes',   icon: <Users size={11} /> },
             { key: 'empresas',   label: 'Empresas',   icon: <Building2 size={11} /> },
             { key: 'directorio', label: 'Directorio', icon: <Users size={11} /> },
+            { key: 'base',       label: 'Base',       icon: <Layers size={11} /> },
             { key: 'todos',      label: 'Todos',      icon: null },
           ] as { key: Source; label: string; icon: React.ReactNode }[]).map(opt => (
             <button
@@ -473,10 +514,36 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
                 source === opt.key ? 'gradient-bg text-white shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
               }`}
             >
-              {opt.icon}{opt.label}
+              <span className="hidden sm:inline-flex">{opt.icon}</span><span className="truncate">{opt.label}</span>
             </button>
           ))}
         </div>
+
+        {/* Base de contactos (lista/origen) */}
+        {source === 'base' && (
+          <div className="mb-2 space-y-1.5">
+            <select
+              value={baseSel}
+              onChange={e => { setBaseSel(e.target.value); autoSelectedFor.current = null; setSelectedIds(new Set()) }}
+              className="w-full text-sm rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 cursor-pointer"
+              style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+              aria-label="Base de contactos"
+            >
+              <option value="">{(basesData ?? []).length === 0 ? 'No hay bases creadas todavía' : 'Elegí una base de contactos…'}</option>
+              {(basesData ?? []).map(b => (
+                <option key={b.id} value={b.id}>{b.name} — {b.conEmail} con email</option>
+              ))}
+            </select>
+            {(basesData ?? []).length === 0 && (
+              <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>
+                Las bases se crean en Contactos → Bases, o al importar un Excel de contactos.
+              </p>
+            )}
+            {baseSel && contactosFetching && (
+              <p className="text-xs" style={{ color: 'var(--color-text-subtle)' }}>Cargando contactos actualizados…</p>
+            )}
+          </div>
+        )}
 
         {/* Quick status chips (clients only) */}
         {(source === 'clients' || source === 'todos') && Object.keys(statusCounts).length > 0 && (
@@ -613,7 +680,7 @@ export function CampaignComposer({ onSuccess, onCancel }: CampaignComposerProps)
             /* Contact rows */
             filteredContacts.length === 0 ? (
               <p className="p-4 text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
-                {allContacts.length === 0 ? 'No hay contactos en esta fuente' : 'Sin resultados para ese filtro'}
+                {source === 'base' && !baseSel ? 'Elegí una base arriba' : allContacts.length === 0 ? 'No hay contactos con email en esta fuente' : 'Sin resultados para ese filtro'}
               </p>
             ) : (
               <>

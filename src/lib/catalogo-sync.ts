@@ -55,11 +55,25 @@ export interface CatalogSyncResult {
 // anterior — una celda vacía o una mezcla de monedas en la planilla del
 // proveedor no debe corromper el costo del catálogo (que alimenta el margen
 // de las cotizaciones). Devuelve el valor a persistir + por qué se conservó.
+//
+// `ceroEsSinPrecio` (sólo Precio Gremio): un 0 EXPLÍCITO en la planilla
+// ("0,00") es el proveedor diciendo "este producto no tiene precio gremio",
+// no una celda rota → se escribe null (= no disponible; el cotizador en
+// modo Gremio cae al público y el catálogo deja de mostrar la etiqueta
+// Gremio). Antes se trataba igual que una celda vacía y quedaba el precio
+// viejo (KIT-SOLAR-200AH-2X450W-INV1000W, 18/11: Sheet 0,00, CRM seguía en
+// USD 1.539,74). Se guarda null y no 0 porque todo el código chequea
+// `precioGremio != null` — un 0 guardado cotizaría el producto a USD 0.
+// La celda VACÍA sigue conservando el anterior (blindaje original).
 export function precioSaneado(
   nuevo: number | null | undefined,
   anterior: number | null | undefined,
+  opts: { ceroEsSinPrecio?: boolean } = {},
 ): { valor: number | null; conservado: 'vacio' | 'absurdo' | null } {
   const ant = typeof anterior === 'number' && Number.isFinite(anterior) ? anterior : null
+  if (opts.ceroEsSinPrecio && nuevo === 0) {
+    return { valor: null, conservado: null }
+  }
   if (nuevo == null || !Number.isFinite(nuevo) || nuevo <= 0) {
     // Sólo se "conserva" (y se reporta) si había un valor real que proteger.
     return { valor: ant, conservado: ant != null && ant > 0 ? 'vacio' : null }
@@ -215,7 +229,7 @@ export async function syncCatalogFromGoogleSheet(
     // NO deben pisar lo que ya tenemos — corrompen el margen del cotizador.
     const costoRes  = precioSaneado(normalized.costo, existing?.costo)
     const priceRes  = precioSaneado(normalized.price, existing?.price)
-    const gremioRes = precioSaneado(normalized.precioGremio, existing?.precioGremio)
+    const gremioRes = precioSaneado(normalized.precioGremio, existing?.precioGremio, { ceroEsSinPrecio: true })
     if (existing) {
       if (costoRes.conservado === 'vacio' || priceRes.conservado === 'vacio' || gremioRes.conservado === 'vacio') preciosVaciosConservados++
       if (costoRes.conservado === 'absurdo' || priceRes.conservado === 'absurdo' || gremioRes.conservado === 'absurdo') preciosAbsurdosConservados++

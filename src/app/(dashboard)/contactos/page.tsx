@@ -3,11 +3,12 @@
 import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle, AlertTriangle, Download } from 'lucide-react'
+import { Plus, Search, Upload, UserCircle2, Mail, Phone, Building2, Trash2, Link2Off, Pencil, CheckCircle2, MessageCircle, AlertTriangle, Download, Layers } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { ContactoForm } from '@/components/directorio/contacto-form'
+import { BaseChips, BasesManagerModal, CONTACTO_BASES_KEY, ImportBaseModal, useContactoBases } from '@/components/directorio/contacto-bases'
 import { Pagination } from '@/components/ui/table'
 import { useAuthStore } from '@/store/auth-store'
 import { useModuleAccess } from '@/hooks/use-module-access'
@@ -36,6 +37,8 @@ interface ImportProgress {
   omitidas:  OmitidaRow[]
   done?:     boolean
   error?:    string
+  baseName?: string
+  agregadosABase?: number
 }
 
 export default function ContactosPage() {
@@ -58,6 +61,15 @@ export default function ContactosPage() {
   const [progress,     setProgress]     = useState<ImportProgress | null>(null)
   const [deleteId,     setDeleteId]     = useState<string | null>(null)
   const [deleting,     setDeleting]     = useState(false)
+  const [pendingImport, setPendingImport] = useState<{ fileName: string; rows: Record<string, unknown>[] } | null>(null)
+  const [baseFilter,   setBaseFilter]   = useState('')
+  const [showBases,    setShowBases]    = useState(false)
+  const { data: bases = [], isSuccess: basesLoaded } = useContactoBases()
+  // Si borraron la base por la que se estaba filtrando, soltar el filtro
+  // (si no, la lista queda vacía y el select ya no muestra esa opción).
+  useEffect(() => {
+    if (basesLoaded && baseFilter && !bases.some(b => b.id === baseFilter)) { setBaseFilter(''); setPage(1) }
+  }, [basesLoaded, bases, baseFilter])
 
   const canManage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN'
   // Importar Excel sigue siendo sólo Admin+ (bulk) — crear/editar un
@@ -70,10 +82,11 @@ export default function ContactosPage() {
   const canCreate = canManage || (user ? roleAtLeast(user.role, 'SELLER') : false) || hasContactosModule === true
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['contactos', search, page],
+    queryKey: ['contactos', search, page, baseFilter],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: '20' })
       if (search.length >= 2) p.set('search', search)
+      if (baseFilter) p.set('baseId', baseFilter)
       const res = await fetch(`/api/contactos?${p}`)
       if (!res.ok) throw new Error('Error al cargar contactos')
       return res.json()
@@ -85,6 +98,7 @@ export default function ContactosPage() {
   const total: number                   = data?.total ?? 0
   const totalPages: number              = data?.totalPages ?? 1
 
+  // Paso 1: leer el Excel y preguntar a qué base van (ImportBaseModal).
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -99,13 +113,18 @@ export default function ContactosPage() {
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
 
     if (rows.length === 0) { toast.error('El archivo está vacío'); return }
+    setPendingImport({ fileName: file.name, rows })
+  }
 
+  // Paso 2: importar en lotes, con la base elegida (o sin base).
+  const runImport = async (rows: Record<string, unknown>[], base: { id: string; name: string } | null) => {
     setImporting(true)
-    setProgress({ processed: 0, total: rows.length, created: 0, dupes: 0, skipped: 0, omitidas: [] })
+    setProgress({ processed: 0, total: rows.length, created: 0, dupes: 0, skipped: 0, omitidas: [], baseName: base?.name, agregadosABase: 0 })
 
     let created = 0
     let dupes   = 0
     let skipped = 0
+    let agregadosABase = 0
     const omitidas: OmitidaRow[] = []
 
     try {
@@ -114,7 +133,7 @@ export default function ContactosPage() {
         const res   = await fetch('/api/contactos/importar', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ rows: chunk, offset: i }),
+          body:    JSON.stringify({ rows: chunk, offset: i, baseId: base?.id }),
         })
 
         if (!res.ok) {
@@ -127,15 +146,17 @@ export default function ContactosPage() {
         created += result.created ?? 0
         dupes   += result.dupes   ?? 0
         skipped += result.skipped ?? 0
+        agregadosABase += result.agregadosABase ?? 0
         if (Array.isArray(result.omitidas)) omitidas.push(...result.omitidas)
 
-        setProgress({ processed: Math.min(i + CHUNK, rows.length), total: rows.length, created, dupes, skipped, omitidas })
+        setProgress({ processed: Math.min(i + CHUNK, rows.length), total: rows.length, created, dupes, skipped, omitidas, baseName: base?.name, agregadosABase })
 
         if (i + CHUNK < rows.length) await new Promise(r => setTimeout(r, 300))
       }
 
       setProgress(p => p ? { ...p, processed: rows.length, done: true, omitidas } : null)
       qc.invalidateQueries({ queryKey: ['contactos'] })
+      qc.invalidateQueries({ queryKey: CONTACTO_BASES_KEY })
     } catch {
       toast.error('Error de conexión')
       setProgress(p => p ? { ...p, error: 'Error de conexión' } : null)
@@ -174,6 +195,11 @@ export default function ContactosPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {canCreate && (
+            <Button variant="outline" onClick={() => setShowBases(true)}>
+              <Layers size={15} /> Bases
+            </Button>
+          )}
           {canManage && (
             <>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
@@ -191,13 +217,27 @@ export default function ContactosPage() {
         </div>
       </div>
 
-      <div className="max-w-sm">
-        <Input
-          placeholder="Buscar por nombre, mail, cargo, empresa..."
-          value={searchInput}
-          onChange={e => setSearchInput(e.target.value)}
-          leftIcon={<Search size={15} />}
-        />
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="w-full max-w-sm">
+          <Input
+            placeholder="Buscar por nombre, mail, cargo, empresa..."
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            leftIcon={<Search size={15} />}
+          />
+        </div>
+        {bases.length > 0 && (
+          <select
+            value={baseFilter}
+            onChange={e => { setBaseFilter(e.target.value); setPage(1) }}
+            className="px-3 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+            style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+            aria-label="Filtrar por base"
+          >
+            <option value="">Todas las bases</option>
+            {bases.map(b => <option key={b.id} value={b.id}>{b.name} ({b.total})</option>)}
+          </select>
+        )}
       </div>
 
       {isError && (
@@ -251,6 +291,7 @@ export default function ContactosPage() {
                     >
                       {c.firstName} {c.lastName}
                     </button>
+                    <BaseChips bases={c.bases} />
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell" style={{ color: 'var(--color-text-muted)' }}>
                     {c.role ?? '—'}
@@ -383,6 +424,13 @@ export default function ContactosPage() {
               ))}
             </div>
 
+            {progress.baseName && (
+              <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-text-muted)' }}>
+                <Layers size={12} style={{ color: 'var(--color-primary)' }} />
+                Base <span className="font-medium" style={{ color: 'var(--color-text)' }}>{progress.baseName}</span>: {progress.agregadosABase ?? 0} contacto{progress.agregadosABase !== 1 ? 's' : ''} sumado{progress.agregadosABase !== 1 ? 's' : ''} (nuevos + ya existentes)
+              </p>
+            )}
+
             {progress.done && (
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#10b981' }}>
                 <CheckCircle2 size={16} /> Importación completada exitosamente
@@ -424,6 +472,25 @@ export default function ContactosPage() {
           </div>
         )}
       </Modal>
+
+      <ImportBaseModal
+        open={!!pendingImport}
+        fileName={pendingImport?.fileName ?? ''}
+        rowCount={pendingImport?.rows.length ?? 0}
+        onCancel={() => setPendingImport(null)}
+        onConfirm={(base) => {
+          const rows = pendingImport?.rows ?? []
+          setPendingImport(null)
+          runImport(rows, base)
+        }}
+      />
+
+      <BasesManagerModal
+        open={showBases}
+        onClose={() => setShowBases(false)}
+        canDelete={canManage}
+        onVer={(id) => { setBaseFilter(id); setPage(1) }}
+      />
 
       <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Eliminar contacto" size="sm">
         <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>

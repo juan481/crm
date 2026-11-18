@@ -298,7 +298,15 @@ export default function ComunicacionesPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[var(--color-text)] truncate">{campaign.name}</p>
-                    <p className="text-sm text-[var(--color-text-muted)] truncate">{campaign.subject}</p>
+                    <p className="text-sm text-[var(--color-text-muted)] truncate">
+                      {campaign.base?.name && (
+                        <span className="text-[10px] px-1.5 py-0.5 mr-1.5 rounded-full align-middle"
+                          style={{ background: 'rgba(99,102,241,0.1)', color: 'var(--color-primary)' }}>
+                          Base: {campaign.base.name}
+                        </span>
+                      )}
+                      {campaign.subject}
+                    </p>
                   </div>
                   <div className="hidden sm:flex items-center gap-3 shrink-0 flex-wrap justify-end">
                     <div className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)]">

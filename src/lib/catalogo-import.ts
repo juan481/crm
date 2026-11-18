@@ -59,8 +59,15 @@ function toTrimmedString(value: unknown): string | null {
 }
 
 function toNumberOrNull(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null
-  const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.').trim())
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  // Trim ANTES de mirar si está vacía: " " daba Number("") === 0, y desde que
+  // un Gremio en 0 explícito se guarda como "sin precio gremio" (ver
+  // precioSaneado en catalogo-sync.ts), una celda con un espacio borraba el
+  // precio. Una celda en blanco tiene que ser null (= se conserva el anterior).
+  const s = String(value).trim()
+  if (s === '') return null
+  const n = Number(s.replace(',', '.'))
   return Number.isFinite(n) ? n : null
 }
 

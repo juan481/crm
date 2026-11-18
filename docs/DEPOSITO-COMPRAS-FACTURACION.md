@@ -102,6 +102,11 @@ costos válidos con celdas vacías/0 de la planilla del proveedor.
   es null/0/vacío, o si el salto es absurdo (±500%), **conserva el valor
   anterior** y deja constancia en `AlertaCosto.nota` en vez de pisar el
   catálogo a ciegas.
+  **Excepción (18/11/2026): Precio Gremio en 0 explícito** ("0,00" en la
+  planilla) significa "sin precio gremio" → se guarda `null` (no disponible:
+  el cotizador en modo Gremio usa el público y el catálogo no muestra la
+  etiqueta Gremio). La celda VACÍA sigue conservando el valor anterior.
+  Caso real: KIT-SOLAR-200AH-2X450W-INV1000W quedaba en USD 1.539,74.
 - `esCambioDeCostoRelevante()` / `esVariacionAbsurda()` (`src/lib/compras.ts`):
   al confirmar una compra, sólo se calcula/muestra el delta de costo si
   `costoMoneda` de la factura coincide con la moneda guardada del producto.

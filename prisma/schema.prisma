@@ -329,6 +329,7 @@ model Organization {
   tickets                 Ticket[]
   empresas                Empresa[]
   directorioContactos     DirectorioContacto[]
+  contactoBases           ContactoBase[]
   empresaNotas            EmpresaNota[]
   dealNotas               DealNota[]
   directorioContactoNotas DirectorioContactoNota[]
@@ -1232,6 +1233,11 @@ model EmailCampaign {
   totalSpam      Int            @default(0)
   totalOpened    Int            @default(0)
   totalClicked   Int            @default(0)
+  // Base de contactos desde la que se armó la campaña (si se eligió una en
+  // la pestaña "Base" del armador). Sólo trazabilidad: los destinatarios
+  // reales quedan congelados en CampaignRecipient al crearla.
+  baseId         String?
+  base           ContactoBase?  @relation(fields: [baseId], references: [id], onDelete: SetNull)
 
   recipients CampaignRecipient[]
 }
@@ -1803,10 +1809,43 @@ model DirectorioContacto {
   deals                 Deal[]
   tickets               Ticket[]
   whatsAppConversations WhatsAppConversation[]
+  bases                 ContactoBaseMiembro[]
 
   @@index([organizationId])
   @@index([empresaId])
   @@index([email])
+}
+
+// ─── Bases de contactos (listas / origen) ─────────────────────────────────
+// Agrupa contactos del Directorio por origen ("Expo Rosario 2026",
+// "Exposeg") para filtrar envíos masivos. Se asignan al importar un Excel
+// (elegir base existente o crear una nueva en el momento) o a mano. Un
+// contacto puede estar en varias bases; borrar una base NO borra contactos.
+model ContactoBase {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  miembros  ContactoBaseMiembro[]
+  campaigns EmailCampaign[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model ContactoBaseMiembro {
+  baseId     String
+  base       ContactoBase       @relation(fields: [baseId], references: [id], onDelete: Cascade)
+  contactoId String
+  contacto   DirectorioContacto @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  createdAt  DateTime           @default(now())
+
+  @@id([baseId, contactoId])
+  @@index([contactoId])
 }
 
 // ─── Actividad / Notas de Empresa ─────────────────────────────────────────

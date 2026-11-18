@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
 import { ContactoForm } from '@/components/directorio/contacto-form'
+import { ContactoBasesEditor } from '@/components/directorio/contacto-bases'
 import { ContactoNotas, type ContactoNotasHandle } from '@/components/directorio/contacto-notas'
 import { WhatsAppSendButton } from '@/components/integrations/whatsapp-send-button'
 import { useAuthStore } from '@/store/auth-store'
@@ -180,6 +181,12 @@ export default function ContactoDetailPage() {
           {!data.email && !data.phone && (
             <p className="text-sm" style={{ color: 'var(--color-text-subtle)' }}>Sin mail ni teléfono cargados.</p>
           )}
+          <ContactoBasesEditor
+            contactoId={data.id}
+            bases={data.bases ?? []}
+            canEdit={canEdit}
+            onChanged={() => qc.invalidateQueries({ queryKey: ['contacto', id] })}
+          />
         </div>
       </div>
 

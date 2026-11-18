@@ -483,6 +483,9 @@ export interface EmailCampaign {
   createdAt: string
   updatedAt: string
   _count?: { recipients: number }
+  // Base de contactos de la que se armó (pestaña "Base" del armador).
+  baseId?: string | null
+  base?: { id: string; name: string } | null
   // Destinatarios con status='sent' realmente — a diferencia de
   // _count.recipients (todos, cualquier status). Ver GET
   // /api/communications/campaigns.
@@ -769,6 +772,17 @@ export interface ServicioRecurrente {
   updatedAt: string
 }
 
+// Base de contactos (lista/origen: "Expo Rosario 2026", "Exposeg"…) con
+// conteos, tal como la devuelve GET /api/contactos/bases.
+export interface ContactoBase {
+  id: string
+  name: string
+  description: string | null
+  createdAt: string
+  total: number
+  conEmail: number
+}
+
 export interface DirectorioContacto {
   id: string
   firstName: string
@@ -779,6 +793,8 @@ export interface DirectorioContacto {
   phone: string | null
   empresaId: string | null
   empresa?: { id: string; name: string } | null
+  // Bases de contactos (listas/origen) a las que pertenece — ver ContactoBase.
+  bases?: Array<{ id: string; name: string }>
   organizationId: string
   createdAt: string
   updatedAt: string

@@ -20,6 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where: { id: params.id, organizationId: payload.orgId },
       include: {
         empresa: { select: { id: true, name: true } },
+        bases: { select: { base: { select: { id: true, name: true } } } },
         deals: {
           orderBy: { updatedAt: 'desc' },
           select: { id: true, title: true, stage: true, amount: true, currency: true, expectedCloseDate: true },
@@ -32,6 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({
       data: {
         ...contacto,
+        bases: (contacto.bases ?? []).map((m: any) => m.base),
         deals: (contacto.deals ?? []).map((d: any) => ({
           ...d,
           expectedCloseDate: d.expectedCloseDate ? d.expectedCloseDate.toISOString() : null,

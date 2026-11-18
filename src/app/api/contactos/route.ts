@@ -24,8 +24,13 @@ export async function GET(req: NextRequest) {
     const limit     = Math.min(50000, Math.max(1, Number(searchParams.get('limit') ?? 20)))
     const skip      = (page - 1) * limit
 
+    const baseId    = searchParams.get('baseId')    ?? ''
+
     const where: Record<string, unknown> = { organizationId: payload.orgId }
     if (empresaId) where.empresaId = empresaId
+    // Filtro por base de contactos (Expo Rosario 2026, Exposeg…). La base
+    // también tiene organizationId, pero el filtro de arriba ya acota la org.
+    if (baseId) where.bases = { some: { baseId } }
     if (search.length >= 2) {
       // Insensible a tildes además de mayúsculas — un contacto cargado
       // "Mónica" no aparecía al buscar "Monica" (reporte de Abba,
@@ -62,6 +67,7 @@ export async function GET(req: NextRequest) {
           role: true, email: true, phone: true, empresaId: true,
           createdAt: true, updatedAt: true,
           empresa: { select: { id: true, name: true } },
+          bases: { select: { base: { select: { id: true, name: true } } } },
         },
       }),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,6 +77,7 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = raw.map((c: any) => ({
       ...c,
+      bases: (c.bases ?? []).map((m: any) => m.base),
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
     }))
