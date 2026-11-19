@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Search, Plus, Trash2, Send, Ban, Check, X, Building2 } from 'lucide-react'
+import { ArrowLeft, Search, Plus, Trash2, Send, Ban, Check, X, Building2, RotateCcw, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -49,6 +49,8 @@ export default function SolicitudCompraDetailPage() {
   const [sendNombre, setSendNombre] = useState('')
   const [sending, setSending] = useState(false)
   const [anulando, setAnulando] = useState(false)
+  const [reactivando, setReactivando] = useState(false)
+  const [duplicando, setDuplicando] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(productSearch), 300)
@@ -258,6 +260,32 @@ export default function SolicitudCompraDetailPage() {
     } catch { toast.error('Error de conexión') } finally { setAnulando(false) }
   }
 
+  // Deshacer un "Anular" (Abba, 19/11) — vuelve al estado que tenía, sin
+  // reenviar el mail al proveedor.
+  const handleReactivar = async () => {
+    setReactivando(true)
+    try {
+      const res = await fetch(`/api/solicitudes-compra/${id}/reactivar`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo reactivar'); return }
+      toast.success(json.message)
+      invalidate()
+    } catch { toast.error('Error de conexión') } finally { setReactivando(false) }
+  }
+
+  // Borrador nuevo con los mismos ítems, para corregir y reenviar.
+  const handleDuplicar = async () => {
+    setDuplicando(true)
+    try {
+      const res = await fetch(`/api/solicitudes-compra/${id}/duplicar`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error ?? 'No se pudo duplicar'); return }
+      toast.success(json.message)
+      qc.invalidateQueries({ queryKey: ['solicitudes-compra'] })
+      router.push(`/compras/solicitudes/${json.data.id}`)
+    } catch { toast.error('Error de conexión') } finally { setDuplicando(false) }
+  }
+
   if (isLoading || !data) {
     return (
       <div className="space-y-4">
@@ -288,9 +316,15 @@ export default function SolicitudCompraDetailPage() {
             {ESTADO_SOLICITUD_LABEL[data.estado] ?? data.estado}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isBorrador && (
             <Button onClick={openSendModal} leftIcon={<Send size={14} />}>Enviar al proveedor</Button>
+          )}
+          {isAnulada && (
+            <Button onClick={handleReactivar} loading={reactivando} leftIcon={<RotateCcw size={14} />}>Reactivar</Button>
+          )}
+          {!isBorrador && data.items.length > 0 && (
+            <Button variant="outline" onClick={handleDuplicar} loading={duplicando} leftIcon={<Copy size={14} />}>Duplicar como borrador</Button>
           )}
           {!isBorrador && !isAnulada && (
             <Button variant="outline" onClick={handleAnular} loading={anulando} leftIcon={<Ban size={14} />}>Anular</Button>
