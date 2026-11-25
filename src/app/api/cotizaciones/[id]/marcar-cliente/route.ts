@@ -31,15 +31,20 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
     let contactoId: string | null = null
     if (!cot.empresaId && cot.recipientEmail) {
-      const contacto = await db.directorioContacto.findFirst({
+      // take 2: si MÁS de un contacto tiene ese mail, es un mail de relleno
+      // ("sin@mail.com" — caso real de Abba, cotización "Poder Judicial") y
+      // agarrar el primero enganchaba la cotización a la empresa de OTRO
+      // cliente. Sólo se usa cuando el match es único.
+      const contactos = await db.directorioContacto.findMany({
         where: { organizationId: payload.orgId, email: { equals: cot.recipientEmail, mode: 'insensitive' } },
         select: { id: true },
+        take: 2,
       })
-      contactoId = contacto?.id ?? null
+      contactoId = contactos.length === 1 ? contactos[0].id : null
     }
 
     if (!cot.empresaId && !contactoId) {
-      return NextResponse.json({ error: 'Esta cotización no tiene empresa ni contacto vinculado — no hay a quién marcar como cliente.' }, { status: 400 })
+      return NextResponse.json({ error: 'Esta cotización no tiene empresa ni un contacto identificable — usá "Asignar cliente" para elegir o crear la empresa.' }, { status: 400 })
     }
 
     const cliente = await marcarClienteAlGanar(db, { id: cot.id, empresaId: cot.empresaId, contactoId, ownerId: cot.userId }, payload.orgId)

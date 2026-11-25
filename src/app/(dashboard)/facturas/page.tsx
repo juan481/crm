@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle, Download, Link as LinkIcon } from 'lucide-react'
+import { Plus, CreditCard, DollarSign, AlertCircle, CheckCircle, Filter, RefreshCw, Eye, Search, AlertTriangle, Download, Link as LinkIcon, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -15,8 +15,9 @@ import { Avatar } from '@/components/ui/avatar'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
 import { InvoicePreview } from '@/components/invoices/invoice-preview'
 import { PaymentDetailsModal } from '@/components/invoices/payment-details-modal'
-import type { PagoDetalle } from '@/lib/medios-pago'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { PagosFacturaModal } from '@/components/invoices/pagos-factura-modal'
+import { CuentasCorrientesModal } from '@/components/invoices/cuenta-corriente'
+import { formatCurrency, formatMoneyExact, formatDate } from '@/lib/utils'
 import { argentinaDayStart } from '@/lib/timezone'
 import { useAuthStore } from '@/store/auth-store'
 import { usePlugin } from '@/hooks/use-plugin'
@@ -87,27 +88,6 @@ function RecurringModal({ open, onClose, onGenerated }: { open: boolean; onClose
   )
 }
 
-// Carga el detalle (factura + último Payment MANUAL) antes de mostrar el
-// modal de "Editar pago" — la lista de facturas no trae ese detalle, sólo
-// lo necesita este caso puntual.
-function EditPaymentLoader({ invoiceId, onClose, onSaved }: { invoiceId: string; onClose: () => void; onSaved: () => void }) {
-  const { data } = useQuery({
-    queryKey: ['invoice-for-payment-edit', invoiceId],
-    queryFn: async () => (await fetch(`/api/invoices/${invoiceId}`)).json().then((j) => j.data),
-  })
-  if (!data) return null
-  const payment = (data.payments ?? [])[0]
-  if (!payment) { toast.error('No se encontró el pago registrado'); onClose(); return null }
-  return (
-    <PaymentDetailsModal
-      open onClose={onClose} onSaved={onSaved}
-      invoiceId={invoiceId} amount={data.amount} currency={data.currency}
-      empresaName={data.empresa?.name ?? data.client?.name ?? null}
-      paymentId={payment.id} initialMetodo={payment.metodo} initialDetalle={payment.rawPayload as PagoDetalle | null}
-    />
-  )
-}
-
 interface InvoiceRow {
   id: string; amount: number; currency: string; status: string
   description: string | null; dueDate: string; paidAt: string | null; createdAt: string; sentAt?: string | null
@@ -119,6 +99,9 @@ interface InvoiceRow {
   payToken?: string | null
   paymentProvider?: string | null
   payments?: { provider: string; status: string; createdAt: string }[]
+  // Pagos parciales (Abba 2026-11) — calculados en GET /api/invoices.
+  cobrado?: number
+  saldo?: number
 }
 interface InvoicesResponse {
   data: InvoiceRow[]; total: number; totalPages: number
@@ -160,7 +143,8 @@ export default function FacturasPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRow | null>(null)
   const [payInvoice, setPayInvoice] = useState<InvoiceRow | null>(null)
-  const [editPayInvoiceId, setEditPayInvoiceId] = useState<string | null>(null)
+  const [pagosInvoiceId, setPagosInvoiceId] = useState<string | null>(null)
+  const [showCuentas, setShowCuentas] = useState(false)
   // ADMINISTRATIVO ya tiene permiso real a nivel API (puedeVerFacturacion,
   // ver src/lib/finance-access.ts) desde que se armó ese rol — acá faltaba
   // sumarlo, así que veía la pantalla (el módulo estaba prendido) pero sin
@@ -227,6 +211,8 @@ export default function FacturasPage() {
           Cliente: r.empresa?.name ?? r.client?.name ?? 'Sin cliente',
           Descripción: r.description ?? '',
           Monto: r.amount,
+          Pagado: r.cobrado ?? (r.status === 'PAID' ? r.amount : 0),
+          Saldo: r.saldo ?? 0,
           Moneda: r.currency,
           Estado: STATUS_LABELS[r.status] ?? r.status,
           Vencimiento: formatDate(r.dueDate),
@@ -270,6 +256,7 @@ export default function FacturasPage() {
                 {exporting ? 'Exportando...' : 'Exportar'}
               </Button>
             )}
+            <Button variant="outline" leftIcon={<BookOpen size={16} />} onClick={() => setShowCuentas(true)}>Cuentas corrientes</Button>
             <Button variant="secondary" leftIcon={<RefreshCw size={16} />} onClick={() => setShowRecurring(true)}>Generar del Mes</Button>
             <Button leftIcon={<Plus size={16} />} onClick={() => setShowCreate(true)}>Nueva Factura</Button>
           </div>
@@ -336,15 +323,25 @@ export default function FacturasPage() {
           // ("Servicio" en la mayoría de los casos) es el dato menos
           // importante de los 6 y sólo agrega ruido a la tarjeta.
           { key: 'description', header: 'Descripción', hideOnMobileCard: true, render: (row) => <span className="text-[var(--color-text-muted)]">{row.description ?? 'Servicio'}</span> },
-          { key: 'amount', header: 'Monto', align: 'right', render: (row) => <span className="font-semibold text-[var(--color-text)]">{formatCurrency(row.amount, row.currency)}</span> },
+          { key: 'amount', header: 'Monto', align: 'right', render: (row) => {
+            const parcial = (row.cobrado ?? 0) > 0 && (row.saldo ?? 0) > 0
+            return (
+              <div className="flex flex-col items-end">
+                <span className="font-semibold text-[var(--color-text)]">{formatCurrency(row.amount, row.currency)}</span>
+                {parcial && <span className="text-[11px] font-medium text-amber-500">Saldo {formatMoneyExact(row.saldo!, row.currency)}</span>}
+              </div>
+            )
+          } },
           { key: 'dueDate', header: 'Vencimiento', render: (row) => <span className={isOverdue(row) && row.status !== 'PAID' ? 'text-red-400 font-medium' : 'text-[var(--color-text-muted)]'}>{formatDate(row.dueDate)}</span> },
           { key: 'status', header: 'Estado', align: 'center', render: (row) => {
             const v = isOverdue(row) && row.status !== 'PAID' && row.status !== 'CANCELLED' ? 'danger' : STATUS_VARIANTS[row.status] ?? 'neutral'
             const l = isOverdue(row) && row.status === 'PENDING' ? 'Vencida' : STATUS_LABELS[row.status] ?? row.status
             const sinEnviar = (row.status === 'PENDING' || row.status === 'OVERDUE') && !row.sentAt
+            const parcial = (row.cobrado ?? 0) > 0 && (row.saldo ?? 0) > 0
             return (
               <div className="flex flex-col items-center gap-0.5">
                 <Badge variant={v} dot size="sm">{l}</Badge>
+                {parcial && <span className="text-[10px] font-medium text-amber-500">pago parcial</span>}
                 {sinEnviar && <span className="text-[10px] font-medium text-amber-500">sin enviar</span>}
               </div>
             )
@@ -362,8 +359,8 @@ export default function FacturasPage() {
               {canManage && row.status !== 'PAID' && row.status !== 'CANCELLED' && (
                 <button onClick={(e) => { e.stopPropagation(); setPayInvoice(row) }} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 hover:border-emerald-400 px-2.5 py-1 rounded-lg transition-all">Registrar pago</button>
               )}
-              {canManage && row.status === 'PAID' && (
-                <button onClick={(e) => { e.stopPropagation(); setEditPayInvoiceId(row.id) }} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-all">Editar pago</button>
+              {canManage && (row.status === 'PAID' || (row.cobrado ?? 0) > 0) && (
+                <button onClick={(e) => { e.stopPropagation(); setPagosInvoiceId(row.id) }} className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-primary)] border border-[var(--color-border)] hover:border-[var(--color-primary)] px-2.5 py-1 rounded-lg transition-all">Pagos</button>
               )}
               {canManage && (
                 <button onClick={(e) => { e.stopPropagation(); setDeletingId(row.id) }} className="text-xs text-red-400 hover:text-red-300 border border-red-400/30 hover:border-red-400 px-2.5 py-1 rounded-lg transition-all">Eliminar</button>
@@ -394,16 +391,18 @@ export default function FacturasPage() {
           open onClose={() => setPayInvoice(null)}
           onSaved={() => { setPayInvoice(null); qc.invalidateQueries({ queryKey: ['invoices'] }) }}
           invoiceId={payInvoice.id} amount={payInvoice.amount} currency={payInvoice.currency}
+          saldo={payInvoice.saldo ?? payInvoice.amount}
           empresaName={payInvoice.empresa?.name ?? payInvoice.client?.name ?? null}
         />
       )}
-      {editPayInvoiceId && (
-        <EditPaymentLoader
-          invoiceId={editPayInvoiceId}
-          onClose={() => setEditPayInvoiceId(null)}
-          onSaved={() => { setEditPayInvoiceId(null); qc.invalidateQueries({ queryKey: ['invoices'] }) }}
+      {pagosInvoiceId && (
+        <PagosFacturaModal
+          invoiceId={pagosInvoiceId}
+          onClose={() => setPagosInvoiceId(null)}
+          onChanged={() => qc.invalidateQueries({ queryKey: ['invoices'] })}
         />
       )}
+      {showCuentas && <CuentasCorrientesModal onClose={() => setShowCuentas(false)} />}
     </div>
   )
 }

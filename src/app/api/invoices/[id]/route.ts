@@ -9,6 +9,8 @@ import { recordManualPayment } from '@/lib/payments/reconcile'
 import { sendPaymentReceiptEmail } from '@/lib/invoice-email'
 import { MEDIO_PAGO_VALUES } from '@/lib/medios-pago'
 import { recordCommissionForPaidInvoice, removeCommissionForInvoice } from '@/lib/commissions'
+import { saldoFactura, SALDO_EPSILON } from '@/lib/invoice-saldo'
+import { CobroError } from '@/lib/cobros'
 
 interface Params { params: { id: string } }
 
@@ -128,7 +130,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // "Pagada" sin ningún Payment asociado (sin rastro de cómo se cobró).
     // Ahora, si el registro del pago falla, todo el PATCH falla y el
     // cliente ve el error — no hay forma de que quede a medio camino.
+    let montoCobrado: number | null = null
     const invoice = await prisma.$transaction(async (tx) => {
+      // Pagos parciales: no se puede bajar el total de la factura por debajo
+      // de lo que el cliente ya pagó (el saldo quedaría negativo).
+      if (amountChanged) {
+        const { cobrado } = await saldoFactura(params.id, existing.amount, tx)
+        if (Number(amount) < cobrado - SALDO_EPSILON) {
+          throw new CobroError(`El cliente ya pagó ${cobrado.toFixed(2)} ${existing.currency} de esta factura — el total no puede ser menor`)
+        }
+      }
       const inv = await tx.invoice.update({
         where: { id: params.id },
         data: {
@@ -157,15 +168,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         // que un cobro por pasarela, para que el detalle de la factura y los
         // reportes de cobros no tengan un "agujero" cuando se paga por
         // transferencia (Abba), efectivo, cheque o tarjeta.
-        await recordManualPayment({
-          invoiceId: inv.id,
-          organizationId: payload.orgId,
-          amount: inv.amount,
-          currency: inv.currency,
-          metodo,
-          detalle: detalle && typeof detalle === 'object' ? detalle : null,
-          client: tx,
-        })
+        // Por el SALDO, no por el total: si ya hubo pagos parciales (ver
+        // src/lib/cobros.ts), marcarla pagada cobra sólo lo que faltaba.
+        const { saldo } = await saldoFactura(inv.id, inv.amount, tx)
+        montoCobrado = saldo
+        if (saldo > 0) {
+          await recordManualPayment({
+            invoiceId: inv.id,
+            organizationId: payload.orgId,
+            amount: saldo,
+            currency: inv.currency,
+            metodo,
+            detalle: detalle && typeof detalle === 'object' ? detalle : null,
+            client: tx,
+          })
+        }
       }
       if (marcandoPagada) {
         // Motor de comisiones (reestructuración Abba 2026-10) — "se gana"
@@ -189,7 +206,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       // criterio que src/lib/task-notifications.ts y el resto de los
       // envíos best-effort del CRM.
       waitUntil(
-        sendPaymentReceiptEmail({ invoiceId: invoice.id, organizationId: payload.orgId, metodo, detalle: detalle ?? null })
+        sendPaymentReceiptEmail({ invoiceId: invoice.id, organizationId: payload.orgId, metodo, detalle: detalle ?? null, montoCobro: montoCobrado || null })
           .catch((err) => console.error('[INVOICE PATCH] sendPaymentReceiptEmail falló:', err)),
       )
 
@@ -201,6 +218,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     return NextResponse.json({ data: invoice })
   } catch (error) {
+    if (error instanceof CobroError) return NextResponse.json({ error: error.message }, { status: error.status })
     console.error('[INVOICE PATCH]', error)
     return NextResponse.json({ error: 'Error al actualizar factura' }, { status: 500 })
   }

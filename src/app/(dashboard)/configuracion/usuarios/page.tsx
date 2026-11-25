@@ -72,7 +72,10 @@ export default function UsuariosPage() {
   // modules.ts. Sin esto, ROLE_LEVEL[...] daba undefined → el `?? 99` de
   // canManage() hacía que NINGÚN rol pudiera gestionar (editar/suspender/
   // resetear password) una cuenta de portal desde este panel.
-  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, ADMINISTRATIVO: 2.5, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1, SUPPORT_EXTERNAL: -1 }
+  // CLIENTE (acceso al portal de clientes) también -1: sin él, esas cuentas
+  // aparecían en la lista sin ningún botón y no había forma de borrarlas
+  // desde acá (pedido de Abba, 2026-11 — "eliminar usuarios").
+  const ROLE_LEVEL: Record<string, number> = { SUPER_ADMIN: 4, ADMIN: 3, ADMINISTRATIVO: 2.5, SELLER: 2, HR: 1, TECHNICIAN: 0, GREMIO: -1, SUPPORT_EXTERNAL: -1, CLIENTE: -1 }
   const canManage = (targetRole: string) => (ROLE_LEVEL[me?.role ?? ''] ?? -1) >= (ROLE_LEVEL[targetRole] ?? 99)
 
   const { data, isLoading } = useQuery<User[]>({
@@ -122,14 +125,49 @@ export default function UsuariosPage() {
     setNewRole('')
   }
 
+  // Al eliminar: qué tiene abierto a su nombre y a quién pasárselo.
+  const [reasignarA, setReasignarA] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const { data: pendientesData, isLoading: loadingPendientes } = useQuery<{ pendientes: Record<string, number> }>({
+    queryKey: ['user-pendientes', actionUser?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/settings/users/${actionUser!.id}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Error')
+      return json.data
+    },
+    enabled: action === 'delete' && !!actionUser,
+    staleTime: 0,
+  })
+  const pendientes = pendientesData?.pendientes
+  const totalPendientes = pendientes ? Object.values(pendientes).reduce((s, n) => s + n, 0) : 0
+  const PENDIENTE_LABEL: Record<string, [string, string]> = {
+    deals: ['oportunidad abierta', 'oportunidades abiertas'],
+    empresas: ['empresa a cargo', 'empresas a cargo'],
+    tareas: ['tarea pendiente', 'tareas pendientes'],
+    tickets: ['ticket abierto', 'tickets abiertos'],
+    pedidos: ['pedido en curso', 'pedidos en curso'],
+  }
+  const receptores = users.filter((u) =>
+    u.id !== actionUser?.id && u.status === 'ACTIVE' && !['GREMIO', 'CLIENTE', 'SUPPORT_EXTERNAL'].includes(u.role))
+
+  const closeAction = () => { setActionUser(null); setAction(null); setReasignarA('') }
+
   const deleteUser = async (id: string) => {
-    const res = await fetch(`/api/settings/users/${id}`, { method: 'DELETE' })
-    const json = await res.json()
-    if (!res.ok) { toast.error(json.error); return }
-    toast.success('Usuario eliminado')
-    qc.invalidateQueries({ queryKey: ['users'] })
-    setActionUser(null)
-    setAction(null)
+    setDeleting(true)
+    try {
+      const qs = reasignarA && reasignarA !== '__none__' ? `?reasignarA=${encodeURIComponent(reasignarA)}` : ''
+      const res = await fetch(`/api/settings/users/${id}${qs}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
+      const movidos = json.data?.movidos as Record<string, number> | undefined
+      const totalMovidos = movidos ? Object.values(movidos).reduce((s, n) => s + n, 0) : 0
+      toast.success(totalMovidos > 0 ? `Usuario eliminado — ${totalMovidos} pendiente${totalMovidos !== 1 ? 's' : ''} pasado${totalMovidos !== 1 ? 's' : ''} a ${receptores.find((u) => u.id === reasignarA)?.name ?? 'otro usuario'}` : 'Usuario eliminado')
+      qc.invalidateQueries({ queryKey: ['users'] })
+      closeAction()
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -214,7 +252,7 @@ export default function UsuariosPage() {
                         <Eye size={15} />
                       </button>
                     )}
-                    {isSuperAdmin && (
+                    {isSuperAdmin && user.role !== 'CLIENTE' && (
                       <button
                         onClick={() => { setActionUser(user); setNewRole(user.role); setAction('role') }}
                         className="p-2 rounded-lg text-[var(--color-text-subtle)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-primary)] transition-all"
@@ -316,13 +354,42 @@ export default function UsuariosPage() {
         </ModalFooter>
       </Modal>
 
-      <Modal open={action === 'delete' && !!actionUser} onClose={() => { setActionUser(null); setAction(null) }} title="Eliminar Usuario" size="sm">
-        <p className="text-sm text-[var(--color-text-muted)] mb-4">
-          ¿Eliminar a <strong className="text-[var(--color-text)]">{actionUser?.name}</strong>? Esta acción no se puede deshacer.
+      <Modal open={action === 'delete' && !!actionUser} onClose={closeAction} title="Eliminar Usuario" size="sm">
+        <p className="text-sm text-[var(--color-text-muted)] mb-3">
+          ¿Eliminar a <strong className="text-[var(--color-text)]">{actionUser?.name}</strong>? Ya no va a poder entrar al CRM. Su historial (notas, cotizaciones, ventas cerradas) se conserva a su nombre.
         </p>
+        {loadingPendientes ? (
+          <Skeleton className="h-16 rounded-xl mb-3" />
+        ) : totalPendientes > 0 && pendientes ? (
+          <div className="rounded-xl p-3 mb-3 space-y-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+            <p className="text-sm text-[var(--color-text)]">Tiene a su nombre:</p>
+            <ul className="text-sm text-[var(--color-text-muted)] list-disc pl-5">
+              {Object.entries(pendientes).filter(([, n]) => n > 0).map(([k, n]) => (
+                <li key={k}>{n} {PENDIENTE_LABEL[k]?.[n === 1 ? 0 : 1] ?? k}</li>
+              ))}
+            </ul>
+            <Select
+              label="¿A quién se los pasás?"
+              options={[
+                { value: '', label: 'Elegí un usuario…' },
+                ...receptores.map((u) => ({ value: u.id, label: `${u.name} (${getRoleLabel(u.role, vertical)})` })),
+                { value: '__none__', label: 'A nadie — que queden a su nombre' },
+              ]}
+              value={reasignarA}
+              onChange={(e) => setReasignarA(e.target.value)}
+            />
+          </div>
+        ) : null}
         <ModalFooter>
-          <Button variant="ghost" onClick={() => setActionUser(null)}>Cancelar</Button>
-          <Button variant="danger" onClick={() => deleteUser(actionUser!.id)}>Eliminar</Button>
+          <Button variant="ghost" onClick={closeAction}>Cancelar</Button>
+          <Button
+            variant="danger"
+            loading={deleting}
+            disabled={loadingPendientes || (totalPendientes > 0 && !reasignarA)}
+            onClick={() => deleteUser(actionUser!.id)}
+          >
+            Eliminar
+          </Button>
         </ModalFooter>
       </Modal>
     </div>

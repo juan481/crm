@@ -15,28 +15,51 @@ interface Props {
   onClose: () => void
   onSaved: () => void
   invoiceId: string
+  /** Total de la factura. */
   amount: number
   currency: string
   empresaName?: string | null
-  /** Presente = editar un pago ya registrado (PATCH /api/payments/[id]). Ausente = registrar el pago y marcar la factura como pagada. */
+  /** Saldo pendiente de la factura (pagos parciales). Ausente = el total. */
+  saldo?: number | null
+  /** Presente = editar un pago ya registrado (PATCH /api/payments/[id]). Ausente = registrar un cobro nuevo (total o parcial). */
   paymentId?: string | null
+  /** Monto del pago que se está editando. */
+  initialMonto?: number | null
   initialMetodo?: string | null
   initialDetalle?: PagoDetalle | null
 }
 
-// Modal único para "Registrar pago" (factura PENDING → PAID, pedido de
-// Abba: antes de marcar pagada hay que gestionar el pago) y "Editar pago"
-// (corregir banco/cuotas/etc. de un pago ya cargado, sin anular la
-// factura — Norma confirma sola, sin segunda validación).
+const round2 = (n: number) => Math.round(n * 100) / 100
+const hoyKey = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Modal único para "Registrar pago" (pedido de Abba: antes de marcar pagada
+// hay que gestionar el pago) y "Editar pago" (corregir monto/banco/cuotas/
+// etc. de un pago ya cargado, sin anular la factura — Norma confirma sola,
+// sin segunda validación).
+// Pagos parciales (Seba, 2026-11 — caso "Poder Judicial"): el monto a cobrar
+// es editable. Si es menor al saldo, la factura sigue pendiente y lo que
+// falta queda en la cuenta corriente del cliente; si cubre el saldo, la
+// factura queda Pagada como siempre.
 export function PaymentDetailsModal({
   open, onClose, onSaved, invoiceId, amount, currency, empresaName,
-  paymentId, initialMetodo, initialDetalle,
+  saldo, paymentId, initialMonto, initialMetodo, initialDetalle,
 }: Props) {
   const isEdit = !!paymentId
+  const saldoActual = saldo ?? amount
   const [metodo, setMetodo] = useState(initialMetodo ?? '')
   const [detalle, setDetalle] = useState<PagoDetalle>(initialDetalle ?? {})
+  const [montoStr, setMontoStr] = useState(String(round2(isEdit ? (initialMonto ?? amount) : saldoActual)))
+  const [fecha, setFecha] = useState(hoyKey())
   const [saving, setSaving] = useState(false)
   const [uploadingFoto, setUploadingFoto] = useState(false)
+
+  const monto = Number(String(montoStr).replace(',', '.'))
+  const montoValido = Number.isFinite(monto) && monto > 0
+  const esParcial = !isEdit && montoValido && monto < saldoActual - 0.005
+  const restante = round2(saldoActual - (montoValido ? monto : 0))
 
   const setField = (patch: Partial<PagoDetalle>) => setDetalle((d) => ({ ...d, ...patch }))
 
@@ -55,19 +78,24 @@ export function PaymentDetailsModal({
 
   const submit = async () => {
     if (!metodo) { toast.error('Elegí el medio de pago'); return }
+    if (!montoValido) { toast.error('Ingresá el monto cobrado'); return }
+    if (!isEdit && monto > saldoActual + 0.005) { toast.error(`El monto supera el saldo pendiente (${formatMoneyExact(saldoActual, currency)})`); return }
     setSaving(true)
     try {
-      const url = isEdit ? `/api/payments/${paymentId}` : `/api/invoices/${invoiceId}`
-      const body = isEdit
-        ? { metodo, detalle }
-        : { status: 'PAID', metodo, detalle }
-      const res = await fetch(url, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      const res = isEdit
+        ? await fetch(`/api/payments/${paymentId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metodo, detalle, monto }),
+          })
+        : await fetch(`/api/invoices/${invoiceId}/pagos`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metodo, detalle, monto, fecha }),
+          })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(json.error ?? 'Error al guardar'); return }
-      toast.success(isEdit ? 'Pago actualizado' : 'Pago registrado — factura marcada como pagada')
+      if (isEdit) toast.success('Pago actualizado')
+      else if (json.data?.pagada) toast.success('Pago registrado — factura pagada')
+      else toast.success(`Pago parcial registrado — quedan ${formatMoneyExact(json.data?.saldo ?? restante, currency)} en cuenta corriente`)
       onSaved()
     } catch {
       toast.error('Error de conexión')
@@ -79,10 +107,40 @@ export function PaymentDetailsModal({
   return (
     <Modal open={open} onClose={onClose} title={isEdit ? 'Editar pago' : 'Registrar pago'} size="md">
       <div className="space-y-4">
-        <div className="rounded-xl p-3 text-sm" style={{ background: 'var(--color-surface-raised)' }}>
-          <p className="font-semibold" style={{ color: 'var(--color-text)' }}>{formatMoneyExact(amount, currency)}</p>
+        <div className="rounded-xl p-3 text-sm space-y-0.5" style={{ background: 'var(--color-surface-raised)' }}>
+          <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Total factura: {formatMoneyExact(amount, currency)}</p>
+          {!isEdit && saldoActual < amount - 0.005 && (
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Ya pagado: {formatMoneyExact(round2(amount - saldoActual), currency)} · <strong style={{ color: 'var(--color-text)' }}>Saldo: {formatMoneyExact(saldoActual, currency)}</strong>
+            </p>
+          )}
           {empresaName && <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{empresaName}</p>}
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label={`Monto cobrado (${currency})`}
+            type="number" step="0.01" min="0"
+            value={montoStr}
+            onChange={(e) => setMontoStr(e.target.value)}
+            hint={isEdit ? undefined : 'Poné menos que el saldo si es un pago parcial'}
+          />
+          {!isEdit && (
+            <Input label="Fecha del cobro" type="date" value={fecha} max={hoyKey()} onChange={(e) => setFecha(e.target.value)} />
+          )}
+        </div>
+        {!isEdit && montoValido && (
+          <p className="text-xs rounded-lg px-3 py-2" style={{
+            background: esParcial ? 'rgba(245,158,11,0.10)' : 'rgba(34,197,94,0.10)',
+            color: esParcial ? '#d97706' : '#16a34a',
+          }}>
+            {esParcial
+              ? <>Pago parcial: la factura sigue pendiente y quedan <strong>{formatMoneyExact(restante, currency)}</strong> en la cuenta corriente del cliente.</>
+              : monto > saldoActual + 0.005
+                ? <>El monto supera el saldo pendiente ({formatMoneyExact(saldoActual, currency)}).</>
+                : <>Cubre el saldo: la factura queda pagada.</>}
+          </p>
+        )}
 
         <Select
           label="Medio de pago"
@@ -143,7 +201,7 @@ export function PaymentDetailsModal({
         <ModalFooter>
           <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button type="button" onClick={submit} loading={saving} disabled={uploadingFoto}>
-            {isEdit ? 'Guardar' : 'Registrar y marcar pagada'}
+            {isEdit ? 'Guardar' : esParcial ? 'Registrar pago parcial' : 'Registrar y marcar pagada'}
           </Button>
         </ModalFooter>
       </div>

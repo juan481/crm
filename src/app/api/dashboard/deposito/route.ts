@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { puedeVerStock } from '@/lib/stock-access'
+import { cobradoPorFactura, saldoDe } from '@/lib/invoice-saldo'
 import type { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,7 @@ export async function GET(_req: NextRequest) {
       db.product.findMany({ where: { organizationId: payload.orgId, trackStock: true }, select: { stock: true, costo: true, currency: true } }),
       db.alertaCosto.count({ where: { organizationId: payload.orgId, estado: 'PENDIENTE' } }),
       db.compra.findMany({ where: { organizationId: payload.orgId, estado: 'CONFIRMADA', estadoPago: { in: ['PENDIENTE', 'PARCIAL'] } }, select: { total: true, moneda: true, pagos: { select: { monto: true } } } }),
-      db.invoice.findMany({ where: { organizationId: payload.orgId, status: { in: ['PENDING', 'OVERDUE'] } }, select: { amount: true, currency: true } }),
+      db.invoice.findMany({ where: { organizationId: payload.orgId, status: { in: ['PENDING', 'OVERDUE'] } }, select: { id: true, amount: true, currency: true } }),
     ])
 
     const valorInventario: Record<string, number> = {}
@@ -35,7 +36,9 @@ export async function GET(_req: NextRequest) {
     }
 
     const porCobrar: Record<string, number> = {}
-    for (const f of facturasAbiertas) porCobrar[f.currency] = (porCobrar[f.currency] ?? 0) + f.amount
+    // Saldo real (pagos parciales, Abba 2026-11): lo ya pagado a cuenta no se cobra de nuevo.
+    const cobradoMap = await cobradoPorFactura(facturasAbiertas.map((f: any) => f.id))
+    for (const f of facturasAbiertas) porCobrar[f.currency] = (porCobrar[f.currency] ?? 0) + saldoDe(f.amount, cobradoMap.get(f.id) ?? 0)
 
     return NextResponse.json({ data: { visible: true, valorInventario, alertasPendientes, porPagar, porCobrar } })
   } catch (error) {

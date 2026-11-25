@@ -15,6 +15,7 @@ import { loadLogoForPdf, drawPdfHeader, drawValidityNote, drawNotesBox, drawBran
 import { computeQuoteTotals, medioPagoLabel } from '@/lib/quote-totals'
 import { sanitizePdfText } from '@/lib/pdf-text'
 import { useAuthStore } from '@/store/auth-store'
+import { AsignarClienteModal } from '@/components/cotizaciones/asignar-cliente-modal'
 import toast from 'react-hot-toast'
 
 const BILLING_LABELS: Record<string, string> = {
@@ -75,6 +76,7 @@ export default function CotizacionDetailPage() {
   const [duplicating, setDuplicating] = useState(false)
   const [convertingCurrency, setConvertingCurrency] = useState(false)
   const [markingCliente, setMarkingCliente] = useState(false)
+  const [asignarOpen, setAsignarOpen] = useState(false)
   // Notas/N° de serie por ítem — pedido de Abba (respaldo de garantía). El
   // N° de serie se ingresa como texto libre separado por coma/salto de
   // línea (un equipo puede traer varios si la cantidad es > 1) y se
@@ -751,6 +753,35 @@ export default function CotizacionDetailPage() {
         </div>
       )}
 
+      {/* Aceptada pero sin cliente — no se puede facturar hasta asignarlo */}
+      {data.status === 'ACEPTADA' && !data.empresa?.id && (
+        <div className="rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap"
+          style={{ border: '1px solid rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(245,158,11,0.15)' }}>
+              <Building2 size={18} style={{ color: '#d97706' }} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Falta asignar el cliente</p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Para emitir la factura (y cobrarla en una o varias partes), la cotización tiene que estar a nombre de una empresa.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" onClick={() => setAsignarOpen(true)} leftIcon={<Building2 size={15} />}>
+            Asignar cliente
+          </Button>
+        </div>
+      )}
+      {asignarOpen && (
+        <AsignarClienteModal
+          cotizacionId={id}
+          sugerido={data.recipientName ?? ''}
+          onClose={() => setAsignarOpen(false)}
+          onDone={() => { setAsignarOpen(false); qc.invalidateQueries({ queryKey: ['cotizacion', id] }) }}
+        />
+      )}
+
       {/* Emitir factura — cotización aceptada con cliente asignado */}
       {data.status === 'ACEPTADA' && data.empresa?.id && (
         <div className="rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap"
@@ -767,6 +798,9 @@ export default function CotizacionDetailPage() {
                   : data.currency === 'USD'
                     ? 'Genera la factura en ARS al TC BNA vendedor del día (registro interno, sin CAE de AFIP).'
                     : 'Genera la factura (registro + numeración interna, sin CAE de AFIP) con las líneas y el total.'}
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+                ¿Lo paga en partes? Emití la factura completa y en Facturación usá “Registrar pago” con el monto de cada parte — lo que falta queda en la cuenta corriente del cliente.
               </p>
             </div>
           </div>

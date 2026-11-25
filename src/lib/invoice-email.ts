@@ -148,6 +148,11 @@ export async function sendPaymentReceiptEmail(opts: {
   organizationId: string
   metodo: string | null
   detalle: PagoDetalle | null
+  // Pagos parciales (Abba, 2026-11): monto de ESTE cobro y lo que queda
+  // debiendo después de él. Ausentes = cobro total de la factura (mail de
+  // siempre, con Invoice.amount).
+  montoCobro?: number | null
+  saldoRestante?: number | null
 }): Promise<SendInvoiceEmailResult> {
   const db = prisma as any
 
@@ -202,8 +207,11 @@ export async function sendPaymentReceiptEmail(opts: {
         <tr><td style="background:${accent};padding:24px 28px;color:#fff;font-weight:700;font-size:16px">${esc(orgName)}</td></tr>
         <tr><td style="padding:28px">
           <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:1.5px;color:${accent};text-transform:uppercase">Comprobante de pago</p>
-          <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a">${esc(money(inv.amount, inv.currency))}</p>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a">${esc(money(opts.montoCobro ?? inv.amount, inv.currency))}</p>
           <p style="margin:6px 0 0;font-size:13px;color:#64748b">Factura ${esc(numero)}${inv.description ? ` — ${esc(inv.description)}` : ''}</p>
+          ${opts.saldoRestante && opts.saldoRestante > 0
+            ? `<p style="margin:10px 0 0;font-size:13px;color:#334155">Pago parcial sobre un total de <strong>${esc(money(inv.amount, inv.currency))}</strong>. Saldo pendiente: <strong>${esc(money(opts.saldoRestante, inv.currency))}</strong>.</p>`
+            : ''}
           <div style="margin-top:18px;background:#f8fafc;border-radius:12px;padding:14px 18px;font-size:13px;color:#334155;line-height:1.8">
             <strong style="color:#0f172a">Medio de pago:</strong> ${esc(metodoLabel)}
             ${detailLines.length ? `<br/>${detailLines.join('<br/>')}` : ''}

@@ -4,6 +4,7 @@ import { puedeVerFacturacion } from '@/lib/finance-access'
 import { prisma } from '@/lib/db'
 import { argentinaDayStart, dateOnlyArgentina } from '@/lib/timezone'
 import { recordCommissionForPaidInvoice } from '@/lib/commissions'
+import { cobradoPorFactura, saldoDe, round2 } from '@/lib/invoice-saldo'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
       ...(Object.keys(empresaFilter).length > 0 && { empresa: empresaFilter }),
     }
 
-    const [data, total, pendingGroups, paidWithPayments, overdueCount] = await Promise.all([
+    const [data, total, pendingGroups, pendingCobradoGroups, paymentsThisMonth, paidSinPagosThisMonth, overdueCount] = await Promise.all([
       prisma.invoice.findMany({
         where,
         skip,
@@ -79,17 +80,34 @@ export async function GET(req: NextRequest) {
         where: { ...baseWhere, status: { in: ['PENDING', 'OVERDUE'] } },
         _sum: { amount: true },
       }) : Promise.resolve([]),
+      // Pagos parciales (Abba 2026-11): lo ya cobrado de facturas que siguen
+      // pendientes se descuenta de "Por cobrar" — el número es el SALDO real
+      // que deben los clientes, no la cara de las facturas.
+      includeSummary ? prisma.payment.groupBy({
+        by: ['currency'],
+        where: { organizationId: orgId, status: 'APPROVED', invoice: { status: { in: ['PENDING', 'OVERDUE'] } } },
+        _sum: { amount: true },
+      }) : Promise.resolve([]),
       // "Cobrado este mes" tiene que ser lo que efectivamente entró, no la
       // cara de la factura — si Whop/MP descontaron su comisión antes de
-      // acreditar, sumamos su netAmount, no Invoice.amount (por eso esto es
-      // un findMany con los pagos, no un groupBy sobre Invoice directo).
-      includeSummary ? prisma.invoice.findMany({
-        where: { ...baseWhere, status: 'PAID', paidAt: { gte: startOfMonth } },
-        select: {
-          currency: true,
-          amount: true,
-          payments: { where: { status: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { netAmount: true } },
+      // acreditar, sumamos su netAmount, no Invoice.amount. Desde los pagos
+      // parciales se suma por COBRO (Payment) con fecha de este mes, no por
+      // factura pagada: un anticipo de este mes cuenta aunque la factura
+      // todavía no esté saldada, y la segunda cuota cuenta el mes que entra.
+      includeSummary ? prisma.payment.findMany({
+        where: {
+          organizationId: orgId,
+          status: 'APPROVED',
+          OR: [{ paidAt: { gte: startOfMonth } }, { paidAt: null, createdAt: { gte: startOfMonth } }],
         },
+        select: { currency: true, amount: true, netAmount: true },
+      }) : Promise.resolve([]),
+      // Facturas marcadas Pagadas sin ningún Payment (flujo viejo / "Nueva
+      // factura" creada ya Pagada) — no tienen cobro que sumar, así que
+      // cuentan por su total, igual que antes.
+      includeSummary ? prisma.invoice.findMany({
+        where: { ...baseWhere, status: 'PAID', paidAt: { gte: startOfMonth }, payments: { none: { status: 'APPROVED' } } },
+        select: { currency: true, amount: true },
       }) : Promise.resolve([]),
       // dueDate < todayStart (medianoche Argentina de hoy), no `now` crudo —
       // una factura vencía en el contador hasta casi 24hs antes de que
@@ -110,21 +128,38 @@ export async function GET(req: NextRequest) {
     // el proveedor en ese pago puntual: el neto ES el bruto, no hay
     // comisión que restar — nunca al revés (nunca inflar lo cobrado).
     const paidByCurrency: Record<string, number> = {}
-    for (const inv of paidWithPayments) {
-      const received = inv.payments[0]?.netAmount ?? inv.amount
-      paidByCurrency[inv.currency] = (paidByCurrency[inv.currency] ?? 0) + received
+    for (const p of paymentsThisMonth) {
+      paidByCurrency[p.currency] = (paidByCurrency[p.currency] ?? 0) + (p.netAmount ?? p.amount)
     }
+    for (const inv of paidSinPagosThisMonth) {
+      paidByCurrency[inv.currency] = (paidByCurrency[inv.currency] ?? 0) + inv.amount
+    }
+
+    const pendingByCurrency = toByCurrency(pendingGroups)
+    for (const g of pendingCobradoGroups) {
+      if (pendingByCurrency[g.currency] != null) {
+        pendingByCurrency[g.currency] = Math.max(0, round2(pendingByCurrency[g.currency] - (g._sum.amount ?? 0)))
+      }
+    }
+
+    // Cobrado/saldo por fila (pagos parciales) — una sola query agrupada
+    // para la página, no un include de todos los pagos de cada factura.
+    const cobradoMap = await cobradoPorFactura(data.map((d) => d.id))
+    const rows = data.map((d) => {
+      const cobrado = cobradoMap.get(d.id) ?? 0
+      return { ...d, cobrado, saldo: d.status === 'PAID' || d.status === 'CANCELLED' ? 0 : saldoDe(d.amount, cobrado) }
+    })
 
     return NextResponse.json(
       {
-        data,
+        data: rows,
         total,
         page,
         limit,
         totalPages: Math.ceil(total / limit),
         ...(includeSummary && {
           summary: {
-            pendingByCurrency: toByCurrency(pendingGroups),
+            pendingByCurrency,
             paidByCurrency,
             overdueCount,
           },

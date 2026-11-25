@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getPortalUser } from '@/lib/auth'
 import { paymentsEnabledForOrg } from '@/lib/payments/config'
+import { cobradoPorFactura, saldoDe } from '@/lib/invoice-saldo'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,12 +25,17 @@ export async function GET() {
     },
   })
 
+  // Pagos parciales: "amount" de una factura impaga es lo que FALTA pagar
+  // (es lo que el cliente necesita ver y lo que cobra el link); total = cara.
+  const cobradoMap = await cobradoPorFactura(invoices.filter((i) => i.status === 'PENDING' || i.status === 'OVERDUE').map((i) => i.id))
+
   return NextResponse.json({
     data: invoices.map((inv) => ({
       id: inv.id,
       numero: inv.numeroInterno ?? inv.id.slice(-8).toUpperCase(),
       concepto: inv.description ?? 'Servicio',
-      amount: inv.amount,
+      amount: cobradoMap.has(inv.id) ? saldoDe(inv.amount, cobradoMap.get(inv.id)!) : inv.amount,
+      total: inv.amount,
       currency: inv.currency,
       status: inv.status,
       dueDate: inv.dueDate.toISOString(),

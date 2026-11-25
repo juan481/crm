@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getPortalUser } from '@/lib/auth'
 import { CICLO_LABEL, type Ciclo } from '@/lib/servicios-recurrentes'
+import { cobradoPorFactura, saldoDe } from '@/lib/invoice-saldo'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,14 +23,16 @@ export async function GET() {
     }),
     prisma.invoice.findMany({
       where: { ...scope, status: { in: ['PENDING', 'OVERDUE'] } },
-      select: { amount: true, currency: true },
+      select: { id: true, amount: true, currency: true },
     }),
     prisma.empresa.findFirst({ where: { id: portal.empresaId }, select: { name: true } }),
   ])
 
+  // Saldo real: lo pagado a cuenta (pagos parciales) ya no se debe.
+  const cobradoMap = await cobradoPorFactura(pendientes.map((i) => i.id))
   const saldoPorMoneda: Record<string, number> = {}
   for (const inv of pendientes) {
-    saldoPorMoneda[inv.currency] = (saldoPorMoneda[inv.currency] ?? 0) + inv.amount
+    saldoPorMoneda[inv.currency] = (saldoPorMoneda[inv.currency] ?? 0) + saldoDe(inv.amount, cobradoMap.get(inv.id) ?? 0)
   }
 
   return NextResponse.json({

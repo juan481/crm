@@ -55,6 +55,27 @@ export async function POST(req: NextRequest) {
     const exists = await (prisma.user as any).findFirst({ where: { email: email.toLowerCase(), status: { not: 'DELETED' } } })
     if (exists) return NextResponse.json({ error: 'El email ya está registrado' }, { status: 400 })
 
+    // User.email es @unique en toda la base — una fila DELETED vieja (de
+    // antes de que el DELETE renombrara el email al dar de baja) seguía
+    // ocupándolo y el create de abajo reventaba con 500. Se libera igual
+    // que hace hoy el DELETE. Los CLIENTE se dejan: el portal-acceso de la
+    // empresa reactiva esa misma fila por email.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const borrado = await (prisma.user as any).findFirst({
+      where: { email: email.toLowerCase(), status: 'DELETED' },
+      select: { id: true, role: true },
+    })
+    if (borrado) {
+      if (borrado.role === 'CLIENTE') {
+        return NextResponse.json({ error: 'Ese email era de un acceso al portal de clientes — usá otro, o volvé a darle acceso desde la ficha de la empresa' }, { status: 400 })
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (prisma.user as any).update({
+        where: { id: borrado.id },
+        data: { email: `eliminado-${borrado.id}+${email.toLowerCase()}` },
+      })
+    }
+
     // 1. Create the user in Supabase Auth (admin API — no email verification needed)
     const supabaseAdmin = createAdminClient()
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({

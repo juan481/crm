@@ -8,8 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Edit, Trash2, Building2, MapPin, Globe,
   Briefcase, Plus, Mail, UserCircle2, UserCheck, UserX, MessageCircle, Phone, PhoneCall,
-  Send, X, CheckSquare, DollarSign, Calculator,
+  Send, X, CheckSquare, DollarSign, Calculator, BookOpen,
 } from 'lucide-react'
+import { CuentaCorrienteModal } from '@/components/invoices/cuenta-corriente'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,12 @@ export default function EmpresaDetailPage() {
   const hasEmpresasModule = useModuleAccess('empresas')
   const hasClientesModule = useModuleAccess('clientes')
   const canSell   = canManage || user?.role === 'SELLER' || hasEmpresasModule === true || hasClientesModule === true
+  // Cuenta corriente (pagos parciales, Abba 2026-11) — mismo piso que la
+  // pantalla de Facturación (ver canManage en facturas/page.tsx); la API
+  // igual lo valida con puedeVerFacturacion.
+  const hasFacturasModule = useModuleAccess('facturas')
+  const canVerCuenta = canManage || user?.role === 'ADMINISTRATIVO' || hasFacturasModule === true
+  const [cuentaOpen, setCuentaOpen] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['empresa', id],
@@ -258,6 +265,12 @@ export default function EmpresaDetailPage() {
         >
           <ArrowLeft size={15} /> Empresas
         </button>
+        <div className="flex gap-2 flex-wrap justify-end">
+        {canVerCuenta && (
+          <Button variant="outline" onClick={() => setCuentaOpen(true)}>
+            <BookOpen size={14} /> Cuenta corriente
+          </Button>
+        )}
         {(canManage || canSell) && (
           <div className="flex gap-2 flex-wrap">
             <Button
@@ -285,7 +298,9 @@ export default function EmpresaDetailPage() {
             )}
           </div>
         )}
+        </div>
       </div>
+      {cuentaOpen && <CuentaCorrienteModal empresaId={id} onClose={() => setCuentaOpen(false)} />}
 
       {/* Empresa info card */}
       <div className="rounded-2xl p-6" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>

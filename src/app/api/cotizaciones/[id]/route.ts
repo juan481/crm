@@ -74,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!payload) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (!canAccess(payload.role, 'SELLER') && !(await roleHasModule(payload.orgId, payload.role, 'cotizaciones'))) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
 
-    const { status, dealId, sellerId, notes, items } = await req.json()
+    const { status, dealId, sellerId, notes, items, empresaId, crearEmpresa } = await req.json()
     const allowed = ['GUARDADA', 'ENVIADA', 'ACEPTADA', 'RECHAZADA', 'VENCIDA']
     if (status !== undefined && !allowed.includes(status)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
 
@@ -85,9 +85,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         organizationId: payload.orgId,
         ...(payload.role === 'SELLER' && { userId: payload.userId }),
       },
-      select: { id: true, dealId: true, items: true },
+      select: { id: true, dealId: true, items: true, empresaId: true, userId: true },
     })
     if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
+
+    // Asignar el cliente a una cotización que quedó sin empresa (pedido de
+    // Abba, 2026-11 — "Poder Judicial": cotizada a un destinatario suelto con
+    // mail de relleno, así que "Emitir factura" fallaba por "no tiene un
+    // cliente asignado" y "Marcar como cliente" no tenía a quién enganchar).
+    //   empresaId     → una Empresa existente de la org
+    //   crearEmpresa  → nombre de una Empresa nueva (se crea acá)
+    // No se puede cambiar una vez facturada: la factura ya quedó a nombre
+    // del cliente anterior.
+    let resolvedEmpresaId: string | undefined
+    if ((typeof empresaId === 'string' && empresaId) || (typeof crearEmpresa === 'string' && crearEmpresa.trim())) {
+      const facturada = await db.invoice.findFirst({ where: { organizationId: payload.orgId, cotizacionId: existing.id }, select: { id: true } })
+      if (facturada) return NextResponse.json({ error: 'La cotización ya está facturada — no se puede cambiar el cliente' }, { status: 400 })
+      if (typeof empresaId === 'string' && empresaId) {
+        const emp = await db.empresa.findFirst({ where: { id: empresaId, organizationId: payload.orgId }, select: { id: true } })
+        if (!emp) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 400 })
+        resolvedEmpresaId = emp.id
+      } else {
+        const nombre = String(crearEmpresa).trim().slice(0, 200)
+        const ya = await db.empresa.findFirst({
+          where: { organizationId: payload.orgId, name: { equals: nombre, mode: 'insensitive' } },
+          select: { id: true },
+        })
+        resolvedEmpresaId = ya?.id ?? (await db.empresa.create({
+          data: { organizationId: payload.orgId, name: nombre, ownerId: existing.userId },
+          select: { id: true },
+        })).id
+      }
+    }
 
     // Notas/N° de serie por ítem (pedido de Abba, respaldo de garantía) — se
     // cargan después de creada, cuando se conoce el equipo entregado. Nunca
@@ -160,8 +189,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ...(resolvedSellerId && { userId: resolvedSellerId }),
         ...(typeof notes === 'string' && { notes: notes.trim() || null }),
         ...(resolvedItems !== undefined && { items: resolvedItems }),
+        ...(resolvedEmpresaId && { empresaId: resolvedEmpresaId }),
       },
     })
+
+    // El deal vinculado que tampoco tenía empresa queda con la misma (para
+    // que la oportunidad y la ficha del cliente se vean entre sí).
+    const dealDeLaCot = resolvedDealId !== undefined ? resolvedDealId : existing.dealId
+    if (resolvedEmpresaId && dealDeLaCot) {
+      await db.deal.updateMany({
+        where: { id: dealDeLaCot, organizationId: payload.orgId, empresaId: null },
+        data: { empresaId: resolvedEmpresaId },
+      })
+    }
 
     // Deal vinculado (el que ya tenía, o el que se acaba de vincular en
     // este mismo PATCH) — se reasigna junto, no queda la cotización a

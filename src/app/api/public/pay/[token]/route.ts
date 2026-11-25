@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { getClientIp, checkRateLimit } from '@/lib/rate-limit'
 import { ensureInvoiceCheckout } from '@/lib/payments/checkout'
 import { paymentsEnabledForOrg } from '@/lib/payments/config'
+import { saldoFactura } from '@/lib/invoice-saldo'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,11 +41,15 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!org) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
 
   const pago = invoice.payments[0]
+  // Pagos parciales: una factura impaga con un pago a cuenta muestra (y
+  // cobra, ver ensureInvoiceCheckout) sólo el saldo.
+  const pendiente = invoice.status === 'PENDING' || invoice.status === 'OVERDUE'
+  const { saldo } = pendiente ? await saldoFactura(invoice.id, invoice.amount) : { saldo: 0 }
   return NextResponse.json({
     data: {
       numero: invoice.numeroInterno ?? `#${invoice.id.slice(-6).toUpperCase()}`,
       concepto: invoice.description || 'Pago de servicios',
-      amount: invoice.amount,
+      amount: pendiente ? saldo : invoice.amount,
       currency: invoice.currency,
       status: invoice.status,
       dueDate: invoice.dueDate.toISOString(),

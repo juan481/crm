@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db'
 import { appBaseUrl } from '@/lib/app-url'
 import { providerForCurrency } from './types'
 import { paymentsEnabledForOrg } from './config'
+import { saldoFactura } from '@/lib/invoice-saldo'
 import { createWhopInvoiceCheckout, whopConfigured } from './whop'
 import { createMpInvoicePreference, mercadoPagoConfigured } from './mercadopago'
 
@@ -69,12 +70,18 @@ export async function ensureInvoiceCheckout(
 
   const appUrl = appBaseUrl(req)
   const concepto = invoice.description || 'Pago de servicios'
+  // Pagos parciales (2026-11): si el cliente ya pagó una parte (cobro
+  // manual), el link cobra sólo el saldo. registrarCobro/anularCobro limpian
+  // checkoutUrl en cada cambio, así que la URL cacheada de arriba siempre
+  // corresponde al saldo vigente.
+  const { saldo: saldoCobrable } = await saldoFactura(invoice.id, invoice.amount)
+  if (!(saldoCobrable > 0)) throw new Error('Esta factura no tiene saldo pendiente')
   const redirectUrl = `${appUrl}/pagar/${invoice.payToken}/gracias`
 
   let result: { url: string; ref: string }
   if (provider === 'WHOP') {
     result = await createWhopInvoiceCheckout({
-      amount: invoice.amount,
+      amount: saldoCobrable,
       currency: invoice.currency,
       concepto,
       invoiceId: invoice.id,
@@ -84,7 +91,7 @@ export async function ensureInvoiceCheckout(
   } else {
     const payerEmail = await payerEmailForEmpresa(organizationId, invoice.empresaId)
     result = await createMpInvoicePreference({
-      amount: invoice.amount,
+      amount: saldoCobrable,
       currency: invoice.currency,
       concepto,
       invoiceId: invoice.id,
