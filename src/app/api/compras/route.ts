@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { puedeVerCompras } from '@/lib/stock-access'
 import { crearCompra, confirmarCompra } from '@/lib/compras'
+import { saldoCompra, estadoPagoPara, normalizarPagos, toleranciaSaldo, diaDe, hoyAR } from '@/lib/compras-pagos'
 import type { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -51,14 +52,16 @@ export async function GET(req: NextRequest) {
           documentoId: true, createdAt: true,
           proveedor: { select: { id: true, name: true } },
           _count: { select: { items: true, pagos: true } },
-          pagos: { select: { monto: true } },
+          pagos: { select: { monto: true, fecha: true } },
         },
       }),
       db.compra.count({ where }),
     ])
 
+    const hoy = hoyAR()
     const data = rows.map((c: any) => {
       const pagado = c.pagos.reduce((s: number, p: any) => s + p.monto, 0)
+      const aDebitar = c.pagos.filter((p: any) => diaDe(p.fecha) >= hoy).reduce((s: number, p: any) => s + p.monto, 0)
       return {
         id: c.id,
         numero: c.numero,
@@ -70,7 +73,9 @@ export async function GET(req: NextRequest) {
         iva: c.iva,
         total: c.total,
         estado: c.estado,
-        estadoPago: c.estadoPago,
+        // Recalculado (no el guardado): compras viejas quedaron PARCIAL por
+        // centavos de redondeo antes de la tolerancia de saldo.
+        estadoPago: c.estado === 'CONFIRMADA' ? estadoPagoPara(c.total, pagado, c.moneda) : c.estadoPago,
         vencimiento: c.vencimiento ? c.vencimiento.toISOString() : null,
         dealId: c.dealId,
         documentoId: c.documentoId,
@@ -78,7 +83,8 @@ export async function GET(req: NextRequest) {
         proveedor: c.proveedor,
         itemsCount: c._count.items,
         pagado,
-        saldo: Math.max(0, c.total - pagado),
+        saldo: saldoCompra(c.total, pagado, c.moneda),
+        aDebitar,
       }
     })
 
@@ -126,6 +132,16 @@ export async function POST(req: NextRequest) {
       if (found !== productIds.length) return NextResponse.json({ error: 'Algún producto no es de esta organización' }, { status: 400 })
     }
 
+    // Pagos / cheques cargados junto con la factura (Seba, 2026-11-24: se le
+    // paga al proveedor con varios cheques diferidos, cada uno con su monto y
+    // su fecha de débito).
+    const pagos = normalizarPagos(body.pagos)
+    const totalBody = Number(body.total) || 0
+    const sumaPagos = pagos.reduce((s, p) => s + p.monto, 0)
+    if (pagos.length && sumaPagos > totalBody + toleranciaSaldo(body.moneda)) {
+      return NextResponse.json({ error: 'Los pagos suman más que el total de la factura' }, { status: 400 })
+    }
+
     const result = await db.$transaction(async (tx: any) => {
       const { id } = await crearCompra(tx, {
         organizationId: payload.orgId,
@@ -145,6 +161,13 @@ export async function POST(req: NextRequest) {
         ocrRaw: body.ocrRaw,
         items: body.items,
       })
+
+      if (pagos.length) {
+        await tx.compraPago.createMany({
+          data: pagos.map((p) => ({ compraId: id, ...p, creadoPorId: payload.userId })),
+        })
+        await tx.compra.update({ where: { id }, data: { estadoPago: estadoPagoPara(totalBody, sumaPagos, body.moneda) } })
+      }
 
       if (body.confirmar === true) {
         const conf = await confirmarCompra(tx, id, payload.orgId, payload.userId)

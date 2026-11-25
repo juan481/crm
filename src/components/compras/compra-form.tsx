@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { ModalFooter } from '@/components/ui/modal'
 import { ProductoPicker } from '@/components/shared/producto-picker'
 import { formatMoneyExact } from '@/lib/utils'
+import { hoyAR, sumarDias, dividirEnCuotas, toleranciaSaldo } from '@/lib/compras-pagos'
 import toast from 'react-hot-toast'
 
 export interface OcrSeed {
@@ -78,6 +79,21 @@ const MONEDA_OPTS = [
 let keySeq = 0
 const newKey = () => `it-${keySeq++}-${Math.random().toString(36).slice(2, 6)}`
 
+interface PagoRow {
+  key: string
+  monto: string
+  fecha: string
+  medio: string
+  nota: string
+}
+
+const MEDIO_PAGO_OPTS = [
+  { value: 'Cheque', label: 'Cheque' },
+  { value: 'Transferencia', label: 'Transferencia' },
+  { value: 'Efectivo', label: 'Efectivo' },
+  { value: 'Tarjeta', label: 'Tarjeta' },
+]
+
 function emptyRow(): ItemRow {
   return {
     key: newKey(), productId: null, productName: null, productSku: null, costoActual: null, costoMoneda: null,
@@ -95,7 +111,7 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
   const [proveedorId, setProveedorId] = useState(seed?.proveedorSugerido?.id ?? '')
   const [numeroComprobante, setNumeroComprobante] = useState(seed?.ocr.numeroComprobante ?? '')
   const [tipoComprobante, setTipoComprobante] = useState(seed?.ocr.tipoComprobante ?? '')
-  const [fecha, setFecha] = useState(seed?.ocr.fecha ?? new Date().toISOString().slice(0, 10))
+  const [fecha, setFecha] = useState(seed?.ocr.fecha ?? hoyAR())
   const [moneda, setMoneda] = useState((seed?.ocr.moneda ?? 'ARS').toUpperCase())
   const [vencimiento, setVencimiento] = useState('')
   const [dealId, setDealId] = useState('')
@@ -120,6 +136,9 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
         }))
       : [emptyRow()],
   )
+  const [pagos, setPagos] = useState<PagoRow[]>([])
+  const [cuotasN, setCuotasN] = useState('2')
+  const [cuotasCada, setCuotasCada] = useState('30')
   const [saving, setSaving] = useState(false)
   const [pickerRow, setPickerRow] = useState<string | null>(null)
   const [nuevoProvOpen, setNuevoProvOpen] = useState(false)
@@ -148,6 +167,29 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
   const totalFinal = totalManual !== '' ? Number(totalManual) || 0 : totalCalc
   const totalMismatch = totalManual !== '' && Math.abs((Number(totalManual) || 0) - totalCalc) > 1
 
+  const sumaPagos = pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0)
+  const faltaPagos = Math.round((totalFinal - sumaPagos) * 100) / 100
+  const setPago = (key: string, patch: Partial<PagoRow>) =>
+    setPagos((ps) => ps.map((p) => (p.key === key ? { ...p, ...patch } : p)))
+  const agregarPago = () =>
+    setPagos((ps) => [...ps, {
+      key: newKey(),
+      monto: faltaPagos > 0 ? String(faltaPagos) : '',
+      fecha: ps.length ? sumarDias(ps[ps.length - 1].fecha || hoyAR(), 30) : (vencimiento || hoyAR()),
+      medio: 'Cheque', nota: '',
+    }])
+  // "Dividir en N cheques cada X días": reparte el total al centavo (el último
+  // absorbe el redondeo) empezando por el vencimiento o, si no hay, por hoy.
+  const dividir = () => {
+    const n = Math.min(24, Math.max(1, Math.round(Number(cuotasN) || 1)))
+    const cada = Math.max(0, Math.round(Number(cuotasCada) || 0))
+    if (totalFinal <= 0) { toast.error('Primero cargá el total de la factura'); return }
+    const desde = vencimiento || hoyAR()
+    setPagos(dividirEnCuotas(totalFinal, n).map((monto, i) => ({
+      key: newKey(), monto: String(monto), fecha: sumarDias(desde, cada * i), medio: 'Cheque', nota: '',
+    })))
+  }
+
   const setRow = (key: string, patch: Partial<ItemRow>) =>
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
 
@@ -163,6 +205,12 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
       }))
     if (items.length === 0) { toast.error('Cargá al menos un ítem'); return }
     if (confirmar && !proveedorId) { toast.error('Elegí el proveedor antes de confirmar'); return }
+    const pagosBody = pagos
+      .filter((p) => Number(p.monto) > 0)
+      .map((p) => ({ monto: Number(p.monto), fecha: p.fecha || hoyAR(), medio: p.medio || null, nota: p.nota.trim() || null }))
+    if (pagosBody.length && sumaPagos > totalFinal + toleranciaSaldo(moneda)) {
+      toast.error('Los pagos / cheques suman más que el total de la factura'); return
+    }
 
     setSaving(true)
     try {
@@ -179,6 +227,7 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
           subtotal: subtotalItems,
           total: totalFinal,
           vencimiento: vencimiento || null,
+          pagos: pagosBody,
           dealId: dealId || null,
           notas: notas.trim() || null,
           documentoId: seed?.documentoId ?? null,
@@ -219,7 +268,7 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
           <span>
             Son muchos ítems. Si esto es <strong>la lista de precios del proveedor</strong> (no una compra puntual),
             los precios se actualizan solos con el sync del catálogo (Configuración → Catálogo). Confirmar acá
-            <strong> suma stock</strong> y registra un pago por el total.
+            <strong> suma stock</strong>.
           </span>
         </div>
       )}
@@ -254,7 +303,7 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
           <Select value={moneda} onChange={(e) => setMoneda(e.target.value)} options={MONEDA_OPTS} />
         </div>
         <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Vencimiento (pago)</label>
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>Vencimiento factura</label>
           <Input type="date" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} />
         </div>
         <div className="col-span-2 md:col-span-3">
@@ -379,6 +428,86 @@ export function CompraForm({ seed, onClose, onSaved }: Props) {
             </p>
           )}
         </div>
+      </div>
+
+      {/* Pagos / cheques al proveedor */}
+      <div>
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-subtle)' }}>
+            Pagos / cheques al proveedor <span className="normal-case font-normal">(opcional)</span>
+          </span>
+          <div className="flex items-center gap-1.5 text-xs flex-wrap" style={{ color: 'var(--color-text-muted)' }}>
+            Dividir en
+            <input type="number" min="1" max="24" value={cuotasN} onChange={(e) => setCuotasN(e.target.value)}
+              className="w-12 text-center rounded-lg px-1 py-1 outline-none" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+            cheques cada
+            <input type="number" min="0" value={cuotasCada} onChange={(e) => setCuotasCada(e.target.value)}
+              className="w-12 text-center rounded-lg px-1 py-1 outline-none" style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+            días
+            <Button size="sm" variant="outline" onClick={dividir}>Armar</Button>
+            <Button size="sm" variant="ghost" leftIcon={<Plus size={13} />} onClick={agregarPago}>Agregar</Button>
+          </div>
+        </div>
+        {pagos.length === 0 ? (
+          <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-subtle)' }}>
+            Si ya le diste cheques (o pagaste), cargalos acá: cada uno con su monto y su fecha de cobro. Los de fecha futura
+            aparecen en &quot;Por pagar → Cheques a debitar&quot;. También se pueden cargar después, desde la compra.
+          </p>
+        ) : (
+          <div className="rounded-xl overflow-x-auto" style={{ border: '1px solid var(--color-border)' }}>
+            <table className="w-full text-xs">
+              <thead style={{ background: 'var(--color-surface-raised)' }}>
+                <tr>
+                  <th className="px-2 py-2 text-left font-semibold w-8" style={{ color: 'var(--color-text-muted)' }}>#</th>
+                  <th className="px-2 py-2 text-right font-semibold w-32" style={{ color: 'var(--color-text-muted)' }}>Monto</th>
+                  <th className="px-2 py-2 text-left font-semibold w-36" style={{ color: 'var(--color-text-muted)' }}>Fecha de cobro</th>
+                  <th className="px-2 py-2 text-left font-semibold w-32" style={{ color: 'var(--color-text-muted)' }}>Medio</th>
+                  <th className="px-2 py-2 text-left font-semibold" style={{ color: 'var(--color-text-muted)' }}>N° cheque / banco</th>
+                  <th className="px-2 py-2 w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {pagos.map((p, i) => (
+                  <tr key={p.key} style={{ borderTop: '1px solid var(--color-border)' }}>
+                    <td className="px-2 py-1.5" style={{ color: 'var(--color-text-subtle)' }}>{i + 1}</td>
+                    <td className="px-2 py-1.5">
+                      <input type="number" min="0" step="0.01" value={p.monto} onChange={(e) => setPago(p.key, { monto: e.target.value })}
+                        className="w-full bg-transparent outline-none py-1 text-right" style={{ color: 'var(--color-text)' }} placeholder="0.00" />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input type="date" value={p.fecha} onChange={(e) => setPago(p.key, { fecha: e.target.value })}
+                        className="w-full bg-transparent outline-none py-1" style={{ color: 'var(--color-text)' }} />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <select value={p.medio} onChange={(e) => setPago(p.key, { medio: e.target.value })}
+                        className="w-full bg-transparent outline-none py-1" style={{ color: 'var(--color-text)' }}>
+                        {MEDIO_PAGO_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input value={p.nota} onChange={(e) => setPago(p.key, { nota: e.target.value })}
+                        className="w-full bg-transparent outline-none py-1" style={{ color: 'var(--color-text)' }} placeholder="opcional" />
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <button type="button" onClick={() => setPagos((ps) => ps.filter((x) => x.key !== p.key))}
+                        className="p-1 rounded hover:bg-red-500/10 hover:text-red-400" style={{ color: 'var(--color-text-subtle)' }}>
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end gap-4 px-3 py-2 text-xs" style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>Suman <strong style={{ color: 'var(--color-text)' }}>{formatMoneyExact(sumaPagos, moneda)}</strong></span>
+              {Math.abs(faltaPagos) >= toleranciaSaldo(moneda) && (
+                <span style={{ color: faltaPagos < 0 ? '#ef4444' : '#f59e0b' }}>
+                  {faltaPagos < 0 ? `Se pasan por ${formatMoneyExact(-faltaPagos, moneda)}` : `Falta ${formatMoneyExact(faltaPagos, moneda)}`}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div>

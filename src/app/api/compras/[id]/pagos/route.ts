@@ -2,18 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { puedeVerCompras } from '@/lib/stock-access'
+import { estadoPagoPara, saldoCompra, toleranciaSaldo, parseFechaDia, hoyAR } from '@/lib/compras-pagos'
 import type { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
-function estadoPagoPara(total: number, pagado: number): 'PENDIENTE' | 'PARCIAL' | 'PAGADA' {
-  if (pagado <= 0) return 'PENDIENTE'
-  if (pagado + 0.01 >= total) return 'PAGADA'
-  return 'PARCIAL'
-}
 
 // POST /api/compras/[id]/pagos — registra un pago (parcial o total) a una
 // compra y recalcula estadoPago. Body: { monto, fecha?, medio?, nota? }.
+// Fecha futura = cheque diferido / pago programado (aparece en "Por pagar"
+// como a debitar). `nota` = N° de cheque / banco.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const payload = await getCurrentUser()
@@ -31,26 +29,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const db = prisma as any
     const compra = await db.compra.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true, total: true, estado: true, pagos: { select: { monto: true } } },
+      select: { id: true, total: true, moneda: true, estado: true, pagos: { select: { monto: true } } },
     })
     if (!compra) return NextResponse.json({ error: 'Compra no encontrada' }, { status: 404 })
     if (compra.estado === 'ANULADA') return NextResponse.json({ error: 'La compra está anulada' }, { status: 409 })
+    const pagadoAntes = compra.pagos.reduce((s: number, p: any) => s + p.monto, 0)
+    if (pagadoAntes + monto > compra.total + toleranciaSaldo(compra.moneda)) {
+      return NextResponse.json({ error: 'Ese pago supera el saldo de la compra' }, { status: 400 })
+    }
 
     const result = await db.$transaction(async (tx: any) => {
       const pago = await tx.compraPago.create({
         data: {
           compraId: compra.id,
-          monto,
-          fecha: body?.fecha && !isNaN(Date.parse(body.fecha)) ? new Date(body.fecha) : new Date(),
+          monto: Math.round(monto * 100) / 100,
+          fecha: parseFechaDia(body?.fecha) ?? parseFechaDia(hoyAR()),
           medio: body?.medio?.trim() || null,
           nota: body?.nota?.trim() || null,
           creadoPorId: payload.userId,
         },
       })
-      const pagadoAntes = compra.pagos.reduce((s: number, p: any) => s + p.monto, 0)
       const pagado = pagadoAntes + monto
-      await tx.compra.update({ where: { id: compra.id }, data: { estadoPago: estadoPagoPara(compra.total, pagado) } })
-      return { pago, pagado, saldo: Math.max(0, compra.total - pagado) }
+      await tx.compra.update({ where: { id: compra.id }, data: { estadoPago: estadoPagoPara(compra.total, pagado, compra.moneda) } })
+      return { pago, pagado, saldo: saldoCompra(compra.total, pagado, compra.moneda) }
     })
 
     return NextResponse.json({ data: result }, { status: 201 })
@@ -74,7 +75,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const db = prisma as any
     const compra = await db.compra.findFirst({
       where: { id: params.id, organizationId: payload.orgId },
-      select: { id: true, total: true, pagos: { select: { id: true, monto: true } } },
+      select: { id: true, total: true, moneda: true, pagos: { select: { id: true, monto: true } } },
     })
     if (!compra) return NextResponse.json({ error: 'Compra no encontrada' }, { status: 404 })
     if (!compra.pagos.some((p: any) => p.id === pagoId)) {
@@ -84,7 +85,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     await db.$transaction(async (tx: any) => {
       await tx.compraPago.delete({ where: { id: pagoId } })
       const pagado = compra.pagos.filter((p: any) => p.id !== pagoId).reduce((s: number, p: any) => s + p.monto, 0)
-      await tx.compra.update({ where: { id: compra.id }, data: { estadoPago: estadoPagoPara(compra.total, pagado) } })
+      await tx.compra.update({ where: { id: compra.id }, data: { estadoPago: estadoPagoPara(compra.total, pagado, compra.moneda) } })
     })
 
     return NextResponse.json({ message: 'Pago eliminado' })

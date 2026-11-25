@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { puedeVerCompras } from '@/lib/stock-access'
+import { parseFechaDia, saldoCompra } from '@/lib/compras-pagos'
 import type { Role } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -55,7 +56,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         updatedAt: c.updatedAt.toISOString(),
         pagos: c.pagos.map((p: any) => ({ ...p, fecha: p.fecha.toISOString(), createdAt: p.createdAt.toISOString() })),
         pagado,
-        saldo: Math.max(0, c.total - pagado),
+        saldo: saldoCompra(c.total, pagado, c.moneda),
         documento,
         deal,
         movimientos,
@@ -109,12 +110,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
     if (body.numeroComprobante !== undefined) data.numeroComprobante = body.numeroComprobante?.trim() || null
     if (body.tipoComprobante !== undefined) data.tipoComprobante = body.tipoComprobante?.trim() || null
-    if (body.fecha !== undefined && body.fecha && !isNaN(Date.parse(body.fecha))) data.fecha = new Date(body.fecha)
+    if (body.fecha !== undefined && parseFechaDia(body.fecha)) data.fecha = parseFechaDia(body.fecha)
     if (body.moneda !== undefined) data.moneda = (body.moneda || 'ARS').toUpperCase()
     if (body.iva !== undefined) data.iva = num(body.iva)
     if (body.subtotal !== undefined) data.subtotal = num(body.subtotal)
     if (body.total !== undefined) data.total = num(body.total)
-    if (body.vencimiento !== undefined) data.vencimiento = body.vencimiento && !isNaN(Date.parse(body.vencimiento)) ? new Date(body.vencimiento) : null
+    if (body.vencimiento !== undefined) data.vencimiento = parseFechaDia(body.vencimiento)
     if (body.notas !== undefined) data.notas = body.notas?.trim() || null
     if (body.documentoId !== undefined) data.documentoId = body.documentoId || null
 

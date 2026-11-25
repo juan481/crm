@@ -13,6 +13,7 @@ import { Pagination } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useModuleAccess } from '@/hooks/use-module-access'
 import { formatMoneyExact } from '@/lib/utils'
+import { fmtDia, diaDe, hoyAR } from '@/lib/compras-pagos'
 import { CompraForm, type OcrSeed } from '@/components/compras/compra-form'
 import { CompraDetail } from '@/components/compras/compra-detail'
 import { CuentasPorPagar } from '@/components/compras/cuentas-por-pagar'
@@ -200,7 +201,7 @@ export default function ComprasPage() {
             ) : rows.map((c: any) => {
               const eb = ESTADO_BADGE[c.estado] ?? ESTADO_BADGE.BORRADOR
               const pb = PAGO_BADGE[c.estadoPago] ?? PAGO_BADGE.PENDIENTE
-              const venceVencido = c.vencimiento && c.estado === 'CONFIRMADA' && c.estadoPago !== 'PAGADA' && new Date(c.vencimiento) < new Date()
+              const venceVencido = c.vencimiento && c.estado === 'CONFIRMADA' && c.estadoPago !== 'PAGADA' && diaDe(c.vencimiento) < hoyAR()
               return (
                 <tr key={c.id} onClick={() => setDetailId(c.id)}
                   className="cursor-pointer transition-colors hover:bg-[var(--color-surface-raised)]" style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -212,7 +213,7 @@ export default function ComprasPage() {
                     {[c.tipoComprobante?.replace('_', ' '), c.numeroComprobante].filter(Boolean).join(' ') || '—'}
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {new Date(c.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: '2-digit' })}
+                    {fmtDia(c.fecha, { day: '2-digit', month: 'short', year: '2-digit' })}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--color-text)' }}>
                     {formatMoneyExact(c.total, c.moneda)}
@@ -221,11 +222,14 @@ export default function ComprasPage() {
                   <td className="px-4 py-3 text-center">
                     <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: eb.bg, color: eb.color }}>{eb.label}</span>
                     {c.estado === 'CONFIRMADA' && (
-                      <div className="text-[10px] mt-0.5 font-medium" style={{ color: pb.color }}>{pb.label}</div>
+                      <div className="text-[10px] mt-0.5 font-medium" style={{ color: pb.color }}>
+                        {pb.label}
+                        {c.aDebitar > 0 && <span style={{ color: '#f59e0b' }}> · cheques a debitar</span>}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell text-xs" style={{ color: venceVencido ? '#ef4444' : 'var(--color-text-muted)' }}>
-                    {c.vencimiento ? new Date(c.vencimiento).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' }) : '—'}
+                    {c.vencimiento ? fmtDia(c.vencimiento, { day: '2-digit', month: 'short' }) : '—'}
                     {venceVencido ? ' ⚠' : ''}
                   </td>
                 </tr>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatMoneyExact } from '@/lib/utils'
+import { fmtDia, diaDe, hoyAR } from '@/lib/compras-pagos'
 import toast from 'react-hot-toast'
 
 const ESTADO_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -31,7 +32,8 @@ export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: str
   const qc = useQueryClient()
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoMedio, setPagoMedio] = useState('')
-  const [pagoFecha, setPagoFecha] = useState(new Date().toISOString().slice(0, 10))
+  const [pagoFecha, setPagoFecha] = useState(hoyAR())
+  const [pagoNota, setPagoNota] = useState('')
   const [busy, setBusy] = useState(false)
 
   const { data, isLoading, refetch } = useQuery({
@@ -98,12 +100,13 @@ export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: str
     try {
       const res = await fetch(`/api/compras/${compraId}/pagos`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monto, medio: pagoMedio || null, fecha: pagoFecha }),
+        body: JSON.stringify({ monto, medio: pagoMedio || null, fecha: pagoFecha, nota: pagoNota.trim() || null }),
       })
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'Error'); return }
-      toast.success('Pago registrado')
+      toast.success(pagoFecha > hoyAR() ? 'Cheque / pago a debitar registrado' : 'Pago registrado')
       setPagoMonto('')
+      setPagoNota('')
       invalidate()
     } catch { toast.error('Error de conexión') } finally { setBusy(false) }
   }
@@ -120,6 +123,9 @@ export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: str
   if (isLoading || !c) return <p className="text-sm py-8 text-center" style={{ color: 'var(--color-text-muted)' }}>Cargando...</p>
 
   const estado = ESTADO_META[c.estado] ?? ESTADO_META.BORRADOR
+  const hoy = hoyAR()
+  const aDebitar = (c.pagos ?? []).filter((p: any) => diaDe(p.fecha) >= hoy).reduce((s: number, p: any) => s + p.monto, 0)
+  const pagosOrdenados = [...(c.pagos ?? [])].sort((a: any, b: any) => (a.fecha < b.fecha ? -1 : 1))
   const pago = PAGO_META[c.estadoPago] ?? PAGO_META.PENDIENTE
 
   return (
@@ -135,8 +141,8 @@ export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: str
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <Field label="Proveedor" value={c.proveedor?.name ?? '—'} />
         <Field label="Comprobante" value={[c.tipoComprobante?.replace('_', ' '), c.numeroComprobante].filter(Boolean).join(' ') || '—'} />
-        <Field label="Fecha" value={new Date(c.fecha).toLocaleDateString('es-AR')} />
-        <Field label="Vencimiento" value={c.vencimiento ? new Date(c.vencimiento).toLocaleDateString('es-AR') : '—'} />
+        <Field label="Fecha" value={fmtDia(c.fecha)} />
+        <Field label="Vencimiento" value={c.vencimiento ? fmtDia(c.vencimiento) : '—'} />
         {c.deal && <Field label="Obra" value={c.deal.title} />}
         <Field label="Total" value={`${formatMoneyExact(c.total, c.moneda)} (${c.moneda})`} />
       </div>
@@ -189,40 +195,58 @@ export function CompraDetail({ compraId, onChanged, onDeleted }: { compraId: str
           </button>
         </div>
       )}
-      {c.estado === 'CONFIRMADA' && (
+      {c.estado !== 'ANULADA' && (c.estado === 'CONFIRMADA' || c.pagos.length > 0) && (
         <div className="space-y-4">
-          {/* Pagos */}
+          {/* Pagos y cheques */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-text-subtle)' }}>
-              Pagos — saldo {formatMoneyExact(c.saldo, c.moneda)}
+              Pagos y cheques — {c.saldo > 0 ? `falta pagar ${formatMoneyExact(c.saldo, c.moneda)}` : 'cubierto'}
+              {aDebitar > 0 && <span className="normal-case font-normal" style={{ color: '#f59e0b' }}> · {formatMoneyExact(aDebitar, c.moneda)} a debitar</span>}
             </p>
-            {c.pagos.length > 0 && (
+            {pagosOrdenados.length > 0 && (
               <div className="space-y-1 mb-2">
-                {c.pagos.map((p: any) => (
-                  <div key={p.id} className="flex items-center justify-between text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-raised)' }}>
-                    <span style={{ color: 'var(--color-text)' }}>
-                      {formatMoneyExact(p.monto, c.moneda)} · {new Date(p.fecha).toLocaleDateString('es-AR')} {p.medio ? `· ${p.medio}` : ''}
-                    </span>
-                    <button onClick={() => borrarPago(p.id)} className="p-1 hover:text-red-400" style={{ color: 'var(--color-text-subtle)' }}><Trash2 size={11} /></button>
-                  </div>
-                ))}
+                {pagosOrdenados.map((p: any) => {
+                  const futuro = diaDe(p.fecha) >= hoy
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-raised)' }}>
+                      <span style={{ color: 'var(--color-text)' }}>
+                        {formatMoneyExact(p.monto, c.moneda)} · {fmtDia(p.fecha)}{p.medio ? ` · ${p.medio}` : ''}
+                        {p.nota && <span style={{ color: 'var(--color-text-subtle)' }}> · {p.nota}</span>}
+                        {futuro && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>a debitar</span>}
+                      </span>
+                      <button onClick={() => borrarPago(p.id)} className="p-1 hover:text-red-400 shrink-0" style={{ color: 'var(--color-text-subtle)' }}><Trash2 size={11} /></button>
+                    </div>
+                  )
+                })}
               </div>
             )}
-            {c.estadoPago !== 'PAGADA' && (
-              <div className="flex items-end gap-2 flex-wrap">
-                <div className="w-28"><label className="block text-[10px] mb-0.5" style={{ color: 'var(--color-text-muted)' }}>Monto</label>
-                  <Input type="number" min="0" step="0.01" value={pagoMonto} onChange={(e) => setPagoMonto(e.target.value)} placeholder="0.00" /></div>
-                <div className="w-36"><Select value={pagoMedio} onChange={(e) => setPagoMedio(e.target.value)} options={MEDIO_PAGO} /></div>
-                <div className="w-36"><Input type="date" value={pagoFecha} onChange={(e) => setPagoFecha(e.target.value)} /></div>
-                <Button size="sm" onClick={agregarPago} loading={busy} leftIcon={<Plus size={13} />}>Registrar pago</Button>
-              </div>
+            {c.saldo > 0 && (
+              <>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div className="w-32"><label className="block text-[10px] mb-0.5" style={{ color: 'var(--color-text-muted)' }}>Monto</label>
+                    <Input type="number" min="0" step="0.01" value={pagoMonto} onChange={(e) => setPagoMonto(e.target.value)} placeholder="0.00" /></div>
+                  <button type="button" onClick={() => setPagoMonto(String(c.saldo))} className="text-[11px] pb-2.5" style={{ color: 'var(--color-primary)' }}>Todo el saldo</button>
+                  <div className="w-36"><label className="block text-[10px] mb-0.5" style={{ color: 'var(--color-text-muted)' }}>Medio</label>
+                    <Select value={pagoMedio} onChange={(e) => setPagoMedio(e.target.value)} options={MEDIO_PAGO} /></div>
+                  <div className="w-36"><label className="block text-[10px] mb-0.5" style={{ color: 'var(--color-text-muted)' }}>{pagoMedio === 'Cheque' ? 'Fecha de cobro' : 'Fecha'}</label>
+                    <Input type="date" value={pagoFecha} onChange={(e) => setPagoFecha(e.target.value)} /></div>
+                  <div className="w-40"><label className="block text-[10px] mb-0.5" style={{ color: 'var(--color-text-muted)' }}>N° cheque / nota</label>
+                    <Input value={pagoNota} onChange={(e) => setPagoNota(e.target.value)} placeholder="opcional" /></div>
+                  <Button size="sm" onClick={agregarPago} loading={busy} leftIcon={<Plus size={13} />}>Registrar</Button>
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: 'var(--color-text-subtle)' }}>
+                  ¿Varios cheques? Registrá uno por uno, cada uno con su monto y su fecha. Los de fecha futura quedan en &quot;Por pagar → Cheques a debitar&quot;.
+                </p>
+              </>
             )}
           </div>
 
+          {c.estado === 'CONFIRMADA' && (
           <button onClick={anular} disabled={busy}
             className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg" style={{ color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
             <Ban size={13} /> Anular compra (revierte el stock)
           </button>
+          )}
         </div>
       )}
     </div>

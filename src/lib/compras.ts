@@ -1,4 +1,5 @@
 import { registrarMovimiento } from '@/lib/stock'
+import { parseFechaDia } from '@/lib/compras-pagos'
 
 // Umbral para crear una AlertaCosto — abs(Δ) > 1 centavo Y variación >= minPct
 // (default 0,5%). Filtra ruido de redondeo sin dejar pasar un cambio real.
@@ -71,14 +72,14 @@ export async function crearCompra(tx: any, input: CrearCompraInput): Promise<{ i
       proveedorId: input.proveedorId || null,
       numeroComprobante: input.numeroComprobante?.trim() || null,
       tipoComprobante: input.tipoComprobante?.trim() || null,
-      fecha: input.fecha && !isNaN(Date.parse(input.fecha)) ? new Date(input.fecha) : new Date(),
+      fecha: parseFechaDia(input.fecha) ?? new Date(),
       moneda: (input.moneda || 'ARS').toUpperCase(),
       subtotal: input.subtotal != null ? n(input.subtotal) : subtotalItems,
       iva: n(input.iva),
       total: input.total != null ? n(input.total) : subtotalItems + n(input.iva),
       dealId: input.dealId || null,
       documentoId: input.documentoId || null,
-      vencimiento: input.vencimiento && !isNaN(Date.parse(input.vencimiento)) ? new Date(input.vencimiento) : null,
+      vencimiento: parseFechaDia(input.vencimiento),
       notas: input.notas?.trim() || null,
       ocrRaw: input.ocrRaw ?? undefined,
       estado: 'BORRADOR',
