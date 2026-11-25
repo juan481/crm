@@ -25,6 +25,7 @@ import { ProductCard } from '@/components/catalogo/product-card'
 import { ProductDetailModal } from '@/components/catalogo/product-detail-modal'
 import type { Service, Product, ProductCategory, ProductBrand } from '@/types'
 import toast from 'react-hot-toast'
+import { cantidadPdf, sufijoPeriodoPdf } from '@/lib/quote-labels'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -498,6 +499,57 @@ export default function CotizadorPage() {
   const subtotalGremio  = cartItems.reduce((s, i) => s + getPrice(i, 'GREMIO')  * i.quantity, 0)
   const hasGremioSavings = subtotalGremio < subtotalPublico
 
+  // ── Ganancia (uso interno — nunca sale en el PDF, mail ni WhatsApp) ──────
+  // Pedido de Seba (Abba, 2026-11-25): ver la ganancia mientras cotiza y
+  // ajustar el precio de cada ítem. Sólo la ve quien ya puede ver costos
+  // (ADMIN+ o Compras/Catálogo): sin permiso el endpoint da 403 y no aparece.
+  const productIdsEnCarrito = cartItems.filter(ci => ci.type === 'PRODUCT').map(ci => ci.item.id).sort().join(',')
+  const { data: costosData } = useQuery<{ ok: boolean; data: Record<string, { costo: number | null; parcial: boolean }> }>({
+    queryKey: ['cotizador-costos', productIdsEnCarrito],
+    enabled: productIdsEnCarrito.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const r = await fetch('/api/cotizador/costos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productIds: productIdsEnCarrito.split(',') }),
+      })
+      if (!r.ok) return { ok: false, data: {} }
+      return { ok: true, data: (await r.json()).data ?? {} }
+    },
+  })
+  const puedeVerGanancia = costosData?.ok === true
+  // Costo unitario en la moneda de la cotización (el costo del catálogo está en USD).
+  const costoUnitario = (ci: CartItem): { costo: number; parcial: boolean } | null => {
+    if (!puedeVerGanancia || ci.type !== 'PRODUCT') return null
+    const c = costosData?.data[ci.item.id]
+    if (!c || c.costo == null) return null
+    if (currency === 'USD') return { costo: c.costo, parcial: c.parcial }
+    if (currency === 'ARS' && arsRate) return { costo: c.costo * arsRate, parcial: c.parcial }
+    return null
+  }
+  // El descuento y el recargo/descuento por medio de pago cambian lo que
+  // realmente se cobra: se reparten proporcionalmente entre los renglones.
+  const factorAjuste = totals.neto > 0 ? totals.netoGravado / totals.neto : 1
+  const ganancia = (() => {
+    let venta = 0, costo = 0, sinCosto = 0, parcial = false
+    for (const ci of cartItems) {
+      const cu = costoUnitario(ci)
+      if (!cu) { sinCosto++; continue }
+      venta += getPrice(ci, priceMode) * ci.quantity * factorAjuste
+      costo += cu.costo * ci.quantity
+      if (cu.parcial) parcial = true
+    }
+    const monto = venta - costo
+    return {
+      venta, costo, monto, sinCosto, parcial,
+      sobreCosto: costo > 0 ? (monto / costo) * 100 : 0,
+      margen: venta > 0 ? (monto / venta) * 100 : 0,
+    }
+  })()
+  const colorGanancia = (pctSobreCosto: number, monto: number) =>
+    monto < 0 ? '#ef4444' : pctSobreCosto < 10 ? '#f59e0b' : '#10b981'
+  const pct1 = (n: number) => (Math.round(n * 10) / 10).toLocaleString('es-AR')
+
   const selectedEmpresa = empresas.find(e => e.id === selectedEmpresaId)
 
   const formatPrice = (usd: number, cur: string) => {
@@ -529,6 +581,12 @@ export default function CotizadorPage() {
     const n = Number(t)
     const priceOverride = t === '' ? null : (Number.isFinite(n) && n >= 0 ? n : null)
     setCart(p => (p[key] ? { ...p, [key]: { ...p[key], priceOverride } } : p))
+  }
+  // "% sobre costo" del renglón → recalcula el precio unitario (pisa el de catálogo).
+  const setItemMarkup = (key: string, costo: number, raw: string) => {
+    const pct = Number(raw.replace(',', '.'))
+    if (raw.trim() === '' || !Number.isFinite(pct)) return
+    setItemPrice(key, String(Math.round(costo * (1 + pct / 100) * 100) / 100))
   }
   const clearCart = () => setCart({})
 
@@ -657,10 +715,9 @@ export default function CotizadorPage() {
       const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3.2 + 1 : 0) + 4
 
       const lineTotal = getPrice(ci, quote.priceMode) * ci.quantity
-      const priceStr  = formatMoneyExact(lineTotal, quote.currency)
-      const typeLabel = ci.type === 'SERVICE'
-        ? (BILLING_LABELS[((ci.item as Service).billingCycle ?? 'MONTHLY')] ?? 'mes')
-        : `× ${(ci.item as Product).unit}`
+      const billingCycle = ci.type === 'SERVICE' ? ((ci.item as Service).billingCycle ?? 'MONTHLY') : null
+      const priceStr  = formatMoneyExact(lineTotal, quote.currency) + sufijoPeriodoPdf(ci.type, billingCycle)
+      const cantStr   = cantidadPdf(ci.type, ci.quantity, billingCycle, ci.type === 'PRODUCT' ? (ci.item as Product).unit : null)
 
       // Draw Name
       doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
@@ -692,7 +749,7 @@ export default function CotizadorPage() {
 
       // Draw Quantity & Total
       doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-      doc.text(`${ci.quantity} ${typeLabel}`, mg + cw * 0.72, y + 7.5, { align: 'center' })
+      doc.text(cantStr, mg + cw * 0.72, y + 7.5, { align: 'center' })
       if (showLinePrices) {
         doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
         doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
@@ -1425,6 +1482,34 @@ export default function CotizadorPage() {
                         )}
                         <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>· {priceLabel}</span>
                       </div>
+                      {(() => {
+                        const cu = costoUnitario(ci)
+                        if (!cu) return null
+                        const gan = (unitPrice - cu.costo) * ci.quantity
+                        const pct = cu.costo > 0 ? ((unitPrice - cu.costo) / cu.costo) * 100 : 0
+                        const color = colorGanancia(pct, gan)
+                        return (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>
+                            <span title={cu.parcial ? 'Kit con algún componente sin costo cargado: la ganancia real es menor' : undefined}>
+                              Costo {formatMoneyExact(cu.costo, currency)}{cu.parcial ? '*' : ''}
+                            </span>
+                            <span>·</span>
+                            <span className="font-semibold" style={{ color }}>Ganancia {formatMoneyExact(gan, currency)}</span>
+                            <span>·</span>
+                            <input
+                              key={`${k}-${unitPrice}`}
+                              type="number" step="0.1"
+                              defaultValue={Math.round(pct * 10) / 10}
+                              onBlur={e => setItemMarkup(k, cu.costo, e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                              title="Cambiá el % y el precio se recalcula"
+                              className="w-14 text-[10px] rounded border px-1 py-0.5 outline-none text-right"
+                              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', color }}
+                            />
+                            <span>% sobre costo</span>
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button onClick={() => removeItem(k)}
@@ -1794,6 +1879,54 @@ export default function CotizadorPage() {
           )}
         </div>
       </section>
+
+      {/* ── Ganancia (uso interno, pasos 1 y 3) ────────────────────────────── */}
+      {puedeVerGanancia && cartItems.length > 0 && (
+        <section hidden={currentStep === 2} className="mb-5">
+          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.25)' }}>
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <p className="text-xs font-semibold uppercase tracking-widest flex items-center gap-1.5" style={{ color: '#10b981' }}>
+                <TrendingUp size={13} /> Ganancia
+              </p>
+              <span className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>Sólo la ves vos · no sale en el presupuesto</span>
+            </div>
+            {ganancia.costo > 0 ? (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>Venta (neta, con descuentos)</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatMoneyExact(ganancia.venta, currency)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>Costo</p>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatMoneyExact(ganancia.costo, currency)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>Ganancia</p>
+                  <p className="text-sm font-bold" style={{ color: colorGanancia(ganancia.sobreCosto, ganancia.monto) }}>{formatMoneyExact(ganancia.monto, currency)}</p>
+                  <p className="text-[10px]" style={{ color: 'var(--color-text-subtle)' }}>
+                    {pct1(ganancia.sobreCosto)}% sobre costo · {pct1(ganancia.margen)}% de la venta
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {currency === 'ARS' && !arsRate
+                  ? 'No se pudo calcular: falta la cotización del dólar para pasar los costos (USD) a pesos.'
+                  : 'Ningún producto del carrito tiene costo cargado en el catálogo.'}
+              </p>
+            )}
+            {(ganancia.sinCosto > 0 || ganancia.parcial) && (
+              <p className="text-[10px] mt-2" style={{ color: 'var(--color-text-subtle)' }}>
+                {ganancia.sinCosto > 0 && `${ganancia.sinCosto} ítem${ganancia.sinCosto !== 1 ? 's' : ''} sin costo cargado (servicios o productos sin costo) no entra${ganancia.sinCosto !== 1 ? 'n' : ''} en la cuenta. `}
+                {ganancia.parcial && '* Kit con algún componente sin costo: la ganancia real es menor.'}
+              </p>
+            )}
+            <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-subtle)' }}>
+              Para mejorar el precio cambiá el &quot;Precio unit.&quot; o el &quot;% sobre costo&quot; de cada producto (paso 1).
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* ── STEP 3: Notas ─────────────────────────────────────────────────── */}
       <section className="mb-5" hidden={currentStep !== 3}>

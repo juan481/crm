@@ -17,6 +17,7 @@ import { sanitizePdfText } from '@/lib/pdf-text'
 import { useAuthStore } from '@/store/auth-store'
 import { AsignarClienteModal } from '@/components/cotizaciones/asignar-cliente-modal'
 import toast from 'react-hot-toast'
+import { cantidadPdf, sufijoPeriodoPdf } from '@/lib/quote-labels'
 
 const BILLING_LABELS: Record<string, string> = {
   MONTHLY:  'mes',
@@ -224,10 +225,8 @@ export default function CotizacionDetailPage() {
         const rowH = 4 + (nameLines.length * 4) + (extraLines.length ? extraLines.length * 3.2 + 1 : 0) + 4
 
         const lineTotal = item.price * item.quantity
-        const priceStr  = formatMoneyExact(lineTotal, item.currency)
-        const typeLabel = item.type === 'SERVICE'
-          ? (BILLING_LABELS[item.billingCycle] ?? 'mes')
-          : `× ${item.unit || 'unidad'}`
+        const priceStr  = formatMoneyExact(lineTotal, item.currency) + sufijoPeriodoPdf(item.type, item.billingCycle)
+        const cantStr   = cantidadPdf(item.type, item.quantity, item.billingCycle, item.unit)
 
         // Draw Name
         doc.setTextColor(30, 41, 59); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
@@ -259,7 +258,7 @@ export default function CotizacionDetailPage() {
 
         // Draw Quantity & Total
         doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-        doc.text(`${item.quantity} ${typeLabel}`, mg + cw * 0.72, y + 7.5, { align: 'center' })
+        doc.text(cantStr, mg + cw * 0.72, y + 7.5, { align: 'center' })
         if (showLinePrices) {
           doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
           doc.text(priceStr, mg + cw - 3, y + 7.5, { align: 'right' })
